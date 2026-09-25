@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Manual Entry — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+<a href="/dashboard" class="nav-link">Dashboard</a>
+<a href="/people/" class="nav-link">People</a>
+<a href="/data/" class="nav-link active">Data Import</a>
+<a href="/settings/" class="nav-link">Settings</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .entry-tabs {
+    display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--border);
+  }
+  .entry-tabs button {
+    padding: 10px 20px; font-size: .875rem; font-weight: 500;
+    color: var(--text-muted); background: none; border: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .entry-tabs button:hover { color: var(--text); }
+  .entry-tabs button.active {
+    color: var(--brand-accent); border-bottom-color: var(--brand-accent); font-weight: 600;
+  }
+  .entry-panel { display: none; }
+  .entry-panel.active { display: block; }
+
+  .interval-row {
+    display: grid; grid-template-columns: 120px 80px 1fr 1fr auto;
+    gap: .5rem; align-items: end; margin-bottom: .5rem;
+  }
+  .interval-row.req-row { grid-template-columns: 120px 80px 1fr auto; }
+
+  .interval-row .form-group { margin-bottom: 0; }
+  .interval-row .form-group label { font-size: .75rem; }
+
+  .result-msg {
+    margin-top: 1rem; padding: 12px 16px; border-radius: 8px; font-size: .9rem;
+  }
+  .result-msg.success { background: #d1fae5; color: #065f46; }
+  .result-msg.error { background: #fee2e2; color: #991b1b; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .result-msg.success { background: #064e3b; color: #6ee7b7; }
+    :root:not([data-theme="light"]) .result-msg.error { background: #7f1d1d; color: #fca5a5; }
+  }
+
+  @media (max-width: 600px) {
+    .interval-row, .interval-row.req-row {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Manual Data Entry</h1>
+  <p class="subtitle">Add individual forecast or requirement intervals</p>
+</div>
+
+<div style="margin-bottom:1.5rem;">
+  <a href="/data/" class="btn btn-outline">&larr; Back to Data Import</a>
+</div>
+
+<div class="entry-tabs">
+  <button class="active" onclick="switchTab('forecast', this)">Forecast</button>
+  <button onclick="switchTab('requirements', this)">Requirements</button>
+</div>
+
+<!-- ── Forecast Entry ── -->
+<div id="panel-forecast" class="entry-panel active">
+  <div class="card" style="max-width:720px;">
+    <h3>Add Forecast Intervals</h3>
+    <p class="text-muted" style="font-size:.85rem; margin-bottom:1rem;">
+      Enter offered call volume and average handle time per interval.
+    </p>
+
+    <div class="form-group">
+      <label for="fc_unit">Planning Unit / LOB *</label>
+      <input type="text" id="fc_unit" required placeholder="e.g. Customer Service" list="fcUnitList">
+      <datalist id="fcUnitList"></datalist>
+    </div>
+
+    <div class="form-group">
+      <label for="fc_date">Date *</label>
+      <input type="date" id="fc_date" required>
+    </div>
+
+    <div id="fcRows">
+      <div class="interval-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" class="fc-date-input" value="">
+        </div>
+        <div class="form-group">
+          <label>Time</label>
+          <input type="time" class="fc-time-input" value="08:00" step="900">
+        </div>
+        <div class="form-group">
+          <label>Offered</label>
+          <input type="number" class="fc-offered" min="0" step="0.1" value="0">
+        </div>
+        <div class="form-group">
+          <label>AHT (sec)</label>
+          <input type="number" class="fc-aht" min="0" step="1" value="0">
+        </div>
+        <button type="button" class="btn btn-sm btn-outline" onclick="this.closest('.interval-row').remove()" title="Remove">&times;</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:.5rem; margin-top:.75rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="addFcRow()">+ Add Interval</button>
+      <button type="button" class="btn btn-sm btn-outline" onclick="addFcDay()">+ Fill Day (30-min)</button>
+    </div>
+
+    <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1.5rem;">
+      <button class="btn btn-primary" onclick="saveForecast()">Save Forecast Data</button>
+    </div>
+    <div id="fcResult"></div>
+  </div>
+</div>
+
+<!-- ── Requirements Entry ── -->
+<div id="panel-requirements" class="entry-panel">
+  <div class="card" style="max-width:720px;">
+    <h3>Add Requirement Intervals</h3>
+    <p class="text-muted" style="font-size:.85rem; margin-bottom:1rem;">
+      Enter agents required (staffing need) per interval.
+    </p>
+
+    <div class="form-group">
+      <label for="rq_unit">Planning Unit / LOB *</label>
+      <input type="text" id="rq_unit" required placeholder="e.g. Customer Service" list="rqUnitList">
+      <datalist id="rqUnitList"></datalist>
+    </div>
+
+    <div class="form-group">
+      <label for="rq_date">Date *</label>
+      <input type="date" id="rq_date" required>
+    </div>
+
+    <div id="rqRows">
+      <div class="interval-row req-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" class="rq-date-input" value="">
+        </div>
+        <div class="form-group">
+          <label>Time</label>
+          <input type="time" class="rq-time-input" value="08:00" step="900">
+        </div>
+        <div class="form-group">
+          <label>Agents Required</label>
+          <input type="number" class="rq-agents" min="0" step="0.1" value="0">
+        </div>
+        <button type="button" class="btn btn-sm btn-outline" onclick="this.closest('.interval-row').remove()" title="Remove">&times;</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:.5rem; margin-top:.75rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="addRqRow()">+ Add Interval</button>
+      <button type="button" class="btn btn-sm btn-outline" onclick="addRqDay()">+ Fill Day (30-min)</button>
+    </div>
+
+    <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1.5rem;">
+      <button class="btn btn-primary" onclick="saveRequirements()">Save Requirements Data</button>
+    </div>
+    <div id="rqResult"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Tab switching ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.entry-tabs button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.entry-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ── Load planning units for datalists ──
+async function loadUnits() {
+  try {
+    const resp = await fetch('/api/planning-units');
+    const data = await resp.json();
+    ['fcUnitList','rqUnitList'].forEach(id => {
+      const dl = document.getElementById(id);
+      dl.innerHTML = '';
+      (data.units || []).forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.name;
+        dl.appendChild(opt);
+      });
+    });
+  } catch(e) {}
+}
+loadUnits();
+
+// Set default date to today
+const today = new Date().toISOString().slice(0,10);
+document.getElementById('fc_date').value = today;
+document.getElementById('rq_date').value = today;
+document.querySelector('.fc-date-input').value = today;
+document.querySelector('.rq-date-input').value = today;
+
+// ── Forecast rows ──
+function addFcRow(time) {
+  const date = document.getElementById('fc_date').value || today;
+  const t = time || '08:00';
+  const div = document.createElement('div');
+  div.className = 'interval-row';
+  div.innerHTML = `
+    <div class="form-group"><input type="date" class="fc-date-input" value="${date}"></div>
+    <div class="form-group"><input type="time" class="fc-time-input" value="${t}" step="900"></div>
+    <div class="form-group"><input type="number" class="fc-offered" min="0" step="0.1" value="0"></div>
+    <div class="form-group"><input type="number" class="fc-aht" min="0" step="1" value="0"></div>
+    <button type="button" class="btn btn-sm btn-outline" onclick="this.closest('.interval-row').remove()" title="Remove">&times;</button>
+  `;
+  document.getElementById('fcRows').appendChild(div);
+}
+
+function addFcDay() {
+  // Clear existing rows and add 30-min intervals from 00:00 to 23:30
+  document.getElementById('fcRows').innerHTML = '';
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      addFcRow(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    }
+  }
+}
+
+async function saveForecast() {
+  const unit = document.getElementById('fc_unit').value.trim();
+  if (!unit) return showResult('fcResult', 'error', 'Planning unit is required.');
+
+  const rows = document.querySelectorAll('#fcRows .interval-row');
+  const intervals = [];
+  rows.forEach(row => {
+    const date = row.querySelector('.fc-date-input').value;
+    const time = row.querySelector('.fc-time-input').value;
+    const offered = row.querySelector('.fc-offered').value;
+    const aht = row.querySelector('.fc-aht').value;
+    if (date && time) {
+      intervals.push({ date, time, offered: parseFloat(offered)||0, aht: parseFloat(aht)||0 });
+    }
+  });
+
+  if (!intervals.length) return showResult('fcResult', 'error', 'Add at least one interval.');
+
+  try {
+    const resp = await fetch('/api/forecast/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ planning_unit: unit, intervals }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showResult('fcResult', 'success', `${data.count} forecast interval(s) saved.`);
+    } else {
+      showResult('fcResult', 'error', data.error);
+    }
+  } catch(e) {
+    showResult('fcResult', 'error', 'Network error: ' + e.message);
+  }
+}
+
+// ── Requirements rows ──
+function addRqRow(time) {
+  const date = document.getElementById('rq_date').value || today;
+  const t = time || '08:00';
+  const div = document.createElement('div');
+  div.className = 'interval-row req-row';
+  div.innerHTML = `
+    <div class="form-group"><input type="date" class="rq-date-input" value="${date}"></div>
+    <div class="form-group"><input type="time" class="rq-time-input" value="${t}" step="900"></div>
+    <div class="form-group"><input type="number" class="rq-agents" min="0" step="0.1" value="0"></div>
+    <button type="button" class="btn btn-sm btn-outline" onclick="this.closest('.interval-row').remove()" title="Remove">&times;</button>
+  `;
+  document.getElementById('rqRows').appendChild(div);
+}
+
+function addRqDay() {
+  document.getElementById('rqRows').innerHTML = '';
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      addRqRow(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    }
+  }
+}
+
+async function saveRequirements() {
+  const unit = document.getElementById('rq_unit').value.trim();
+  if (!unit) return showResult('rqResult', 'error', 'Planning unit is required.');
+
+  const rows = document.querySelectorAll('#rqRows .interval-row');
+  const intervals = [];
+  rows.forEach(row => {
+    const date = row.querySelector('.rq-date-input').value;
+    const time = row.querySelector('.rq-time-input').value;
+    const agents = row.querySelector('.rq-agents').value;
+    if (date && time) {
+      intervals.push({ date, time, agents_required: parseFloat(agents)||0 });
+    }
+  });
+
+  if (!intervals.length) return showResult('rqResult', 'error', 'Add at least one interval.');
+
+  try {
+    const resp = await fetch('/api/requirements/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ planning_unit: unit, intervals }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showResult('rqResult', 'success', `${data.count} requirement interval(s) saved.`);
+    } else {
+      showResult('rqResult', 'error', data.error);
+    }
+  } catch(e) {
+    showResult('rqResult', 'error', 'Network error: ' + e.message);
+  }
+}
+
+function showResult(id, type, msg) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="result-msg ${type}">${msg}</div>`;
+}
+</script>
+{% endblock %}

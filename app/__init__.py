@@ -49,6 +49,7 @@ def create_app():
     from app.routes.realtime import realtime_bp
     from app.routes.data_import import data_import_bp
     from app.routes.settings import settings_bp
+    from app.routes.manual_entry import manual_entry_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -59,6 +60,7 @@ def create_app():
     app.register_blueprint(realtime_bp)
     app.register_blueprint(data_import_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(manual_entry_bp)
 
     # ---- health check ----
     @app.route("/health")

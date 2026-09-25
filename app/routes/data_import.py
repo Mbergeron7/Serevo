@@ -64,6 +64,13 @@ def index():
     )
 
 
+@data_import_bp.route("/manual")
+@login_required
+def manual_entry():
+    user = get_current_user()
+    return render_template("data_import/manual_entry.html", user=user)
+
+
 @data_import_bp.route("/upload", methods=["POST"])
 @login_required
 def upload():

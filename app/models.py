@@ -81,6 +81,7 @@ class Employee(db.Model):
         """Return a dict matching the flat format existing templates expect."""
         pu = self.planning_unit
         return {
+            "_db_id": self.id,
             "Status": self.status,
             "First Name": self.first_name,
             "Last Name": self.last_name,

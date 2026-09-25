@@ -2,17 +2,16 @@
 {% block title %}People — {{ brand_name }}{% endblock %}
 
 {% block nav %}
-  <a href="/" class="nav-link">Dashboard</a>
-  <a href="/people/accommodations" class="nav-link">Accommodations</a>
-  <a href="/people/pto" class="nav-link">Time Off</a>
-  <span class="user-name">{{ user.name }}</span>
-  <a href="/logout" class="nav-link">Sign out</a>
+<a href="/dashboard" class="nav-link">Dashboard</a>
+<a href="/people/" class="nav-link active">People</a>
+<a href="/data/" class="nav-link">Data Import</a>
+<a href="/settings/" class="nav-link">Settings</a>
 {% endblock %}
 
 {% block head %}
 <style>
-  .people-header { margin-bottom: 28px; }
-  .people-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .people-header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .people-header div h1 { font-size: 1.5rem; margin-bottom: 2px; }
   .people-header .subtitle { color: var(--text-muted); font-size: .9rem; }
 
   .stat-row {
@@ -30,6 +29,18 @@
     font-size: .78rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: .04em; color: var(--text-muted); margin-top: 2px;
   }
+
+  .tab-bar {
+    display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border);
+  }
+  .tab-bar a {
+    padding: 10px 20px; font-size: .875rem; font-weight: 500;
+    color: var(--text-muted); text-decoration: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-bar a:hover { color: var(--text); }
+  .tab-bar a.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); font-weight: 600; }
 
   .roster-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -93,18 +104,34 @@
     text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
   }
 
+  .edit-btn {
+    background: none; border: none; color: var(--brand-accent); cursor: pointer;
+    font-size: .8rem; padding: 2px 6px; text-decoration: underline;
+  }
+  .edit-btn:hover { opacity: .7; }
+
   @media (max-width: 600px) {
     .stat-row { flex-direction: column; }
     .filter-bar { flex-direction: column; }
     .filter-bar input { min-width: unset; width: 100%; }
+    .people-header { flex-direction: column; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="people-header">
-  <h1>People</h1>
-  <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  <div>
+    <h1>People</h1>
+    <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  </div>
+  <button class="btn btn-primary" onclick="openEmpModal()">+ Add Employee</button>
+</div>
+
+<div class="tab-bar">
+  <a href="/people/" class="active">Roster</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/people/pto">Time Off</a>
 </div>
 
 <div class="stat-row">
@@ -129,7 +156,7 @@
 {% if emp_error %}
 <div class="no-data">
   Could not load employee data: {{ emp_error }}<br>
-  Check your data source configuration in the <a href="/capacity">Capacity Panel</a>.
+  Check your data source configuration.
 </div>
 {% elif employees %}
 
@@ -163,6 +190,7 @@
           <th>LOB / Skill</th>
           <th>Skill Start</th>
           <th>Flags</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -190,6 +218,11 @@
               <span class="badge-pto">{{ pto_map[full_name]|length }} PTO</span>
             {% endif %}
           </td>
+          <td>
+            {% if emp.get('_db_id') %}
+            <button class="edit-btn" onclick='editEmp({{ emp | tojson }})'>Edit</button>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -199,9 +232,83 @@
 
 {% else %}
 <div class="no-data">
-  No employee data on file. Check your data source configuration in the <a href="/capacity">Capacity Panel</a>.
+  No employee data on file yet.<br>
+  <button class="btn btn-primary" style="margin-top:12px;" onclick="openEmpModal()">+ Add Your First Employee</button>
+  <p style="margin-top:8px;">Or use <a href="/data/">Data Import</a> for bulk CSV/Excel uploads.</p>
 </div>
 {% endif %}
+
+<!-- Employee Add/Edit Modal -->
+<div id="empModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeEmpModal()">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="empModalTitle">Add Employee</h2>
+    <form id="empForm">
+      <input type="hidden" id="emp_pk">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_first">First Name *</label>
+          <input type="text" id="emp_first" required>
+        </div>
+        <div class="form-group">
+          <label for="emp_last">Last Name *</label>
+          <input type="text" id="emp_last" required>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_eid">Employee ID *</label>
+          <input type="text" id="emp_eid" required placeholder="e.g. EMP001">
+        </div>
+        <div class="form-group">
+          <label for="emp_status">Status</label>
+          <select id="emp_status">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="On Leave">On Leave</option>
+            <option value="Training">Training</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="emp_lob">LOB / Skill</label>
+        <input type="text" id="emp_lob" placeholder="e.g. Customer Service" list="lobList">
+        <datalist id="lobList"></datalist>
+      </div>
+
+      <div class="form-group">
+        <label for="emp_skills">All Skills</label>
+        <input type="text" id="emp_skills" placeholder="e.g. Billing, Sales, Tech Support">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_skill_start">Skill Start</label>
+          <input type="date" id="emp_skill_start">
+        </div>
+        <div class="form-group">
+          <label for="emp_skill_end">Skill End</label>
+          <input type="date" id="emp_skill_end">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="emp_end_date">End Date</label>
+        <input type="date" id="emp_end_date">
+      </div>
+
+      <div id="empError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeEmpModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="empSaveBtn">Save Employee</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -222,5 +329,88 @@ function filterTable() {
     row.style.display = show ? '' : 'none';
   });
 }
+
+// ── Employee Modal ──
+function openEmpModal(data) {
+  document.getElementById('empModalTitle').textContent = data ? 'Edit Employee' : 'Add Employee';
+  document.getElementById('emp_pk').value = data ? (data._db_id || data.id || '') : '';
+  document.getElementById('emp_first').value = data ? (data.first_name || data['First Name'] || '') : '';
+  document.getElementById('emp_last').value = data ? (data.last_name || data['Last Name'] || '') : '';
+  document.getElementById('emp_eid').value = data ? (data.employee_id || data['Employee ID'] || '') : '';
+  document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
+  document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
+  document.getElementById('emp_skills').value = data ? (data.all_skills || data['All Skills'] || '') : '';
+  document.getElementById('emp_skill_start').value = data ? (data.skill_start || data['Latest Skill Start'] || '') : '';
+  document.getElementById('emp_skill_end').value = data ? (data.skill_end || data['Latest Skill End'] || '') : '';
+  document.getElementById('emp_end_date').value = data ? (data.end_date || data['End Date'] || '') : '';
+  document.getElementById('empError').style.display = 'none';
+  document.getElementById('empModal').style.display = '';
+
+  // Populate LOB datalist
+  loadLOBs();
+}
+
+function closeEmpModal() {
+  document.getElementById('empModal').style.display = 'none';
+}
+
+function editEmp(empData) {
+  openEmpModal(empData);
+}
+
+async function loadLOBs() {
+  try {
+    const resp = await fetch('/api/planning-units');
+    const data = await resp.json();
+    const dl = document.getElementById('lobList');
+    dl.innerHTML = '';
+    (data.units || []).forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.name;
+      dl.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+document.getElementById('empForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('empSaveBtn');
+  const errDiv = document.getElementById('empError');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const body = {
+    id: document.getElementById('emp_pk').value || null,
+    employee_id: document.getElementById('emp_eid').value,
+    first_name: document.getElementById('emp_first').value,
+    last_name: document.getElementById('emp_last').value,
+    status: document.getElementById('emp_status').value,
+    lob: document.getElementById('emp_lob').value,
+    all_skills: document.getElementById('emp_skills').value,
+    skill_start: document.getElementById('emp_skill_start').value,
+    skill_end: document.getElementById('emp_skill_end').value,
+    end_date: document.getElementById('emp_end_date').value,
+  };
+
+  try {
+    const resp = await fetch('/api/employees/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      errDiv.textContent = data.error;
+      errDiv.style.display = '';
+    }
+  } catch(err) {
+    errDiv.textContent = 'Network error: ' + err.message;
+    errDiv.style.display = '';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save Employee';
+});
 </script>
 {% endblock %}
