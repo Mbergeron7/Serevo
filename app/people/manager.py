@@ -64,7 +64,12 @@ def get_employees(sheet=None):
       Latest Skill Name, Latest Skill Start, Latest Skill End,
       All Skills, End Date
     """
+    # Demo mode fallback
     if sheet is None:
+        from app.data_source import is_demo_source
+        if is_demo_source():
+            from app.demo_data import get_demo_employees
+            return get_demo_employees()
         sheet, err = _open_sheet()
         if err:
             return [], err
@@ -120,6 +125,10 @@ def get_employee_names(sheet=None):
 def get_accommodations(sheet=None):
     """Return (list_of_dicts, error) from the ACCOMMODATIONS tab."""
     if sheet is None:
+        from app.data_source import is_demo_source
+        if is_demo_source():
+            from app.demo_data import get_demo_accommodations
+            return get_demo_accommodations()
         sheet, err = _open_sheet()
         if err:
             return [], err
@@ -210,6 +219,10 @@ def delete_accommodation(employee_name, sheet=None):
 def get_pto(sheet=None):
     """Return (list_of_dicts, error) from the PTO tab."""
     if sheet is None:
+        from app.data_source import is_demo_source
+        if is_demo_source():
+            from app.demo_data import get_demo_pto
+            return get_demo_pto()
         sheet, err = _open_sheet()
         if err:
             return [], err

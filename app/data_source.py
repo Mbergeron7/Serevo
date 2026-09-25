@@ -190,6 +190,29 @@ class SheetSource:
 
 
 # =====================================================================
+# Demo — returns realistic fake data when no sheet is connected
+# =====================================================================
+class DemoSource:
+    """Self-contained demo data — no Google Sheets needed."""
+
+    def get_employees(self):
+        from app.demo_data import get_demo_employees
+        return get_demo_employees()
+
+    def get_planning_units(self):
+        from app.demo_data import get_demo_planning_units
+        return get_demo_planning_units()
+
+    def get_requirements(self, unit_id, day):
+        from app.demo_data import get_demo_requirements
+        return get_demo_requirements(unit_id, day)
+
+    def get_forecast(self, workload_id, day):
+        from app.demo_data import get_demo_forecast
+        return get_demo_forecast(workload_id, day)
+
+
+# =====================================================================
 # Selector
 # =====================================================================
 _INSTANCE = None
@@ -199,5 +222,19 @@ def get_source():
     global _INSTANCE
     if _INSTANCE is None:
         mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
-        _INSTANCE = PeopleWareSource() if mode == "peopleware" else SheetSource()
+        if mode == "peopleware":
+            _INSTANCE = PeopleWareSource()
+        else:
+            # Try SheetSource; fall back to DemoSource if no sheet key
+            sheet_key = os.environ.get("CAPACITY_SHEET_KEY", "").strip()
+            demo = os.environ.get("DEMO_MODE", "false").strip().lower() == "true"
+            if demo and not sheet_key:
+                _INSTANCE = DemoSource()
+            else:
+                _INSTANCE = SheetSource()
     return _INSTANCE
+
+
+def is_demo_source():
+    """Check if the current data source is the demo provider."""
+    return isinstance(get_source(), DemoSource)
