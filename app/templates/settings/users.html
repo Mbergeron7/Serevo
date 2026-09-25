@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Users — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+<a href="/">Dashboard</a>
+<a href="/people/">People</a>
+<a href="/data/">Data Import</a>
+<a href="/settings/" class="active">Settings</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .user-row { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .user-row:last-child { border-bottom:none; }
+  .user-info { flex:1; min-width:180px; }
+  .user-info .name { font-weight:600; font-size:.95rem; }
+  .user-info .email { font-size:.8rem; color:var(--text-muted); }
+  .user-role { font-size:.75rem; font-weight:600; padding:3px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
+  .role-admin { background:var(--brand-accent-light); color:var(--brand-accent); }
+  .role-viewer { background:var(--bg); color:var(--text-muted); border:1px solid var(--border); }
+  .user-status { font-size:.75rem; }
+  .user-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .result-msg { margin-top:1rem; padding:10px 14px; border-radius:8px; font-size:.85rem; }
+  .result-msg.success { background:#d1fae5; color:#065f46; }
+  .result-msg.error { background:#fee2e2; color:#991b1b; }
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme="light"]) .result-msg.success { background:#064e3b; color:#6ee7b7; }
+    :root:not([data-theme="light"]) .result-msg.error { background:#7f1d1d; color:#fca5a5; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>User Management</h1>
+  <p class="subtitle">Add, edit, and manage user accounts</p>
+</div>
+
+<div style="margin-bottom:1.5rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+  <a href="/settings/" class="btn btn-outline">&larr; Back to Settings</a>
+  <button class="btn btn-primary" onclick="showAddUser()">+ Add User</button>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="userModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px;">
+    <h2 id="modalTitle">Add User</h2>
+    <input type="hidden" id="editUserId">
+    <div class="form-group">
+      <label for="userName">Display Name</label>
+      <input type="text" id="userName" placeholder="Jane Smith">
+    </div>
+    <div class="form-group">
+      <label for="userEmail">Email *</label>
+      <input type="email" id="userEmail" placeholder="user@example.com">
+    </div>
+    <div class="form-group">
+      <label for="userRole">Role</label>
+      <select id="userRole">
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="userPassword">Password <span id="pwHint" style="font-weight:400;color:var(--text-muted);"></span></label>
+      <input type="password" id="userPassword" placeholder="At least 6 characters">
+    </div>
+    <div class="form-group">
+      <label for="userConfirm">Confirm Password</label>
+      <input type="password" id="userConfirm" placeholder="Re-enter password">
+    </div>
+    <div id="modalResult"></div>
+    <div style="display:flex; gap:.5rem; margin-top:1rem; flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="saveUser()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- User List -->
+<div class="card" style="max-width:720px;">
+  {% for u in users %}
+  <div class="user-row" id="user-{{ u.id }}">
+    <div class="user-info">
+      <div class="name">{{ u.display_name or u.email.split('@')[0] }}</div>
+      <div class="email">{{ u.email }}</div>
+    </div>
+    <span class="user-role role-{{ u.role }}">{{ u.role }}</span>
+    {% if not u.is_active %}<span class="user-status" style="color:#ef4444;">Inactive</span>{% endif %}
+    <div class="user-actions">
+      <button class="btn btn-sm btn-outline" onclick='editUser({{ u.id }}, {{ u.email|tojson }}, {{ (u.display_name or "")|tojson }}, {{ u.role|tojson }})'>Edit</button>
+      {% if u.id != current_user.id %}
+      <button class="btn btn-sm btn-outline" onclick="toggleUser({{ u.id }}, {{ u.is_active|tojson }})"
+              style="{{ 'color:#22c55e;border-color:#22c55e;' if not u.is_active else 'color:#ef4444;border-color:#ef4444;' }}">
+        {{ "Activate" if not u.is_active else "Deactivate" }}
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if not users %}
+  <div style="padding:24px; text-align:center; color:var(--text-muted);">No users found.</div>
+  {% endif %}
+</div>
+
+<div id="pageResult"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAddUser() {
+  document.getElementById('modalTitle').textContent = 'Add User';
+  document.getElementById('editUserId').value = '';
+  document.getElementById('userName').value = '';
+  document.getElementById('userEmail').value = '';
+  document.getElementById('userEmail').disabled = false;
+  document.getElementById('userRole').value = 'viewer';
+  document.getElementById('userPassword').value = '';
+  document.getElementById('userConfirm').value = '';
+  document.getElementById('pwHint').textContent = '(required)';
+  document.getElementById('modalResult').innerHTML = '';
+  document.getElementById('userModal').style.display = 'flex';
+}
+
+function editUser(id, email, name, role) {
+  document.getElementById('modalTitle').textContent = 'Edit User';
+  document.getElementById('editUserId').value = id;
+  document.getElementById('userName').value = name;
+  document.getElementById('userEmail').value = email;
+  document.getElementById('userEmail').disabled = true;
+  document.getElementById('userRole').value = role;
+  document.getElementById('userPassword').value = '';
+  document.getElementById('userConfirm').value = '';
+  document.getElementById('pwHint').textContent = '(leave blank to keep current)';
+  document.getElementById('modalResult').innerHTML = '';
+  document.getElementById('userModal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('userModal').style.display = 'none';
+}
+
+function showMsg(el, type, msg) {
+  el.innerHTML = `<div class="result-msg ${type}">${msg}</div>`;
+}
+
+async function saveUser() {
+  const id = document.getElementById('editUserId').value;
+  const name = document.getElementById('userName').value.trim();
+  const email = document.getElementById('userEmail').value.trim();
+  const role = document.getElementById('userRole').value;
+  const pw = document.getElementById('userPassword').value;
+  const confirm = document.getElementById('userConfirm').value;
+  const resultEl = document.getElementById('modalResult');
+
+  if (!email) return showMsg(resultEl, 'error', 'Email is required.');
+  if (!id && !pw) return showMsg(resultEl, 'error', 'Password is required for new users.');
+  if (pw && pw.length < 6) return showMsg(resultEl, 'error', 'Password must be at least 6 characters.');
+  if (pw && pw !== confirm) return showMsg(resultEl, 'error', "Passwords don't match.");
+
+  try {
+    const resp = await fetch('/settings/users/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id: id || null, email, name, role, password: pw }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      showMsg(resultEl, 'error', data.error);
+    }
+  } catch(e) {
+    showMsg(resultEl, 'error', 'Network error: ' + e.message);
+  }
+}
+
+async function toggleUser(id, currentActive) {
+  const action = currentActive ? 'deactivate' : 'activate';
+  if (!confirm(`${currentActive ? 'Deactivate' : 'Activate'} this user?`)) return;
+  try {
+    const resp = await fetch('/settings/users/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    const data = await resp.json();
+    if (data.success) location.reload();
+    else showMsg(document.getElementById('pageResult'), 'error', data.error);
+  } catch(e) {
+    showMsg(document.getElementById('pageResult'), 'error', 'Network error: ' + e.message);
+  }
+}
+</script>
+{% endblock %}

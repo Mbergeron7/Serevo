@@ -6,15 +6,27 @@
   <h1>{{ brand_name }}</h1>
   <p>{{ brand_tagline }}</p>
 
+  {% if not has_users %}
+  <div style="margin-bottom:1rem; padding:12px; border-radius:8px; background:var(--brand-accent-light); font-size:.85rem;">
+    No accounts exist yet.
+    <a href="/setup" style="font-weight:600;">Create your admin account &rarr;</a>
+  </div>
+  {% endif %}
+
   <form method="POST" action="/login">
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email"
-           placeholder="you@demo.serevo.app" required>
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" required>
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+    </div>
 
     {% if is_demo %}
     <p class="hint">
-      Demo accounts: <code>viewer@demo.serevo.app</code> /
-      <code>admin@demo.serevo.app</code>
+      Demo accounts: <code>admin@demo.serevo.app</code> /
+      <code>viewer@demo.serevo.app</code> — password: <code>demo</code>
     </p>
     {% endif %}
 

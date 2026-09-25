@@ -12,7 +12,7 @@ from datetime import datetime
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, flash)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, admin_required, get_current_user
 from config import cfg
 
 log = logging.getLogger("serevo.data_import")
@@ -52,7 +52,7 @@ UPLOAD_TYPES = {
 
 
 @data_import_bp.route("/")
-@login_required
+@admin_required
 def index():
     user = get_current_user()
     from app.models import DataUpload
@@ -65,14 +65,14 @@ def index():
 
 
 @data_import_bp.route("/manual")
-@login_required
+@admin_required
 def manual_entry():
     user = get_current_user()
     return render_template("data_import/manual_entry.html", user=user)
 
 
 @data_import_bp.route("/upload", methods=["POST"])
-@login_required
+@admin_required
 def upload():
     user = get_current_user()
     upload_type = request.form.get("upload_type", "")

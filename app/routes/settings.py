@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from flask import (Blueprint, render_template, request, jsonify)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, admin_required, get_current_user
 from config import cfg
 
 log = logging.getLogger("serevo.settings")
@@ -59,7 +59,7 @@ PROVIDERS = {
 
 
 @settings_bp.route("/")
-@login_required
+@admin_required
 def index():
     from app.models import AppSetting
     sheets_key = AppSetting.get("google_sheet_key", "")
@@ -72,7 +72,7 @@ def index():
 
 
 @settings_bp.route("/google-sheets")
-@login_required
+@admin_required
 def google_sheets():
     from app.models import AppSetting
     sheets_key = AppSetting.get("google_sheet_key", "")
@@ -87,7 +87,7 @@ def google_sheets():
 
 
 @settings_bp.route("/google-sheets/save", methods=["POST"])
-@login_required
+@admin_required
 def save_google_sheets():
     from app.models import db, AppSetting
     data = request.get_json(silent=True) or {}
@@ -121,7 +121,7 @@ def save_google_sheets():
 
 
 @settings_bp.route("/google-sheets/test", methods=["POST"])
-@login_required
+@admin_required
 def test_google_sheets():
     from app.models import db, AppSetting
     from app.data_source import _open_capacity_sheet
@@ -146,7 +146,7 @@ def test_google_sheets():
 
 
 @settings_bp.route("/google-sheets/disconnect", methods=["POST"])
-@login_required
+@admin_required
 def disconnect_google_sheets():
     from app.models import db, AppSetting
     AppSetting.set("google_sheet_key", "")
@@ -161,7 +161,7 @@ def disconnect_google_sheets():
 
 
 @settings_bp.route("/api-connections")
-@login_required
+@admin_required
 def api_connections():
     from app.models import APIConnection
     connections = APIConnection.query.order_by(APIConnection.created_at.desc()).all()
@@ -173,7 +173,7 @@ def api_connections():
 
 
 @settings_bp.route("/api-connections/save", methods=["POST"])
-@login_required
+@admin_required
 def save_connection():
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
@@ -220,7 +220,7 @@ def save_connection():
 
 
 @settings_bp.route("/api-connections/test", methods=["POST"])
-@login_required
+@admin_required
 def test_connection():
     """Test an API connection by attempting a basic request."""
     from app.models import db, APIConnection
@@ -296,7 +296,7 @@ def test_connection():
 
 
 @settings_bp.route("/api-connections/delete", methods=["POST"])
-@login_required
+@admin_required
 def delete_connection():
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
@@ -312,7 +312,7 @@ def delete_connection():
 
 
 @settings_bp.route("/api-connections/toggle", methods=["POST"])
-@login_required
+@admin_required
 def toggle_connection():
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
@@ -323,3 +323,83 @@ def toggle_connection():
     conn.is_active = not conn.is_active
     db.session.commit()
     return jsonify({"success": True, "is_active": conn.is_active})
+
+
+# ═══════════════════════════════════════════════════════════════
+# USER MANAGEMENT (Phase 2.3)
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/users")
+@admin_required
+def users():
+    from app.models import User
+    all_users = User.query.order_by(User.created_at.desc()).all()
+    return render_template("settings/users.html",
+        user=get_current_user(),
+        users=all_users,
+    )
+
+
+@settings_bp.route("/users/save", methods=["POST"])
+@admin_required
+def save_user():
+    from app.models import db, User
+    from flask_bcrypt import generate_password_hash
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("id")
+    email = (data.get("email") or "").strip().lower()
+    name = (data.get("name") or "").strip()
+    role = data.get("role", "viewer")
+    password = data.get("password", "")
+
+    if not email:
+        return jsonify({"success": False, "error": "Email is required"})
+    if role not in ("viewer", "admin"):
+        role = "viewer"
+
+    if user_id:
+        # Edit existing
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"success": False, "error": "User not found"})
+        user.display_name = name or user.display_name
+        user.role = role
+        if password:
+            if len(password) < 6:
+                return jsonify({"success": False, "error": "Password must be at least 6 characters"})
+            user.password_hash = generate_password_hash(password).decode("utf-8")
+    else:
+        # New user
+        if User.query.filter_by(email=email).first():
+            return jsonify({"success": False, "error": "A user with that email already exists"})
+        if not password or len(password) < 6:
+            return jsonify({"success": False, "error": "Password must be at least 6 characters"})
+        user = User(
+            email=email,
+            password_hash=generate_password_hash(password).decode("utf-8"),
+            display_name=name or email.split("@")[0].title(),
+            role=role,
+        )
+        db.session.add(user)
+
+    db.session.commit()
+    return jsonify({"success": True, "id": user.id})
+
+
+@settings_bp.route("/users/toggle", methods=["POST"])
+@admin_required
+def toggle_user():
+    from app.models import db, User
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("id")
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"})
+    # Don't let admin deactivate themselves
+    current = get_current_user()
+    if current and current["id"] == user.id:
+        return jsonify({"success": False, "error": "You can't deactivate your own account"})
+    user.is_active = not user.is_active
+    db.session.commit()
+    return jsonify({"success": True, "is_active": user.is_active})

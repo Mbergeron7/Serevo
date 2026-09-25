@@ -4,43 +4,46 @@
 {% block nav %}
   <a href="/" class="active">Dashboard</a>
   <a href="/people/">People</a>
+  {% if current_user and current_user.is_admin %}
   <a href="/data/">Data Import</a>
   <a href="/settings/">Settings</a>
-  <span class="user-name" style="margin-left:auto;">{{ user.name }}</span>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
   <a href="/logout">Sign out</a>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard">
-  <h1>Welcome back, {{ user.name.split(' ')[0] }}</h1>
+  <h1>Welcome back, {{ current_user.name.split(' ')[0] if current_user else '' }}</h1>
   <p class="subtitle">{{ brand_name }} dashboard — more modules coming soon.</p>
 
   <div class="card-grid">
-    <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
+    <a href="/forecasting" class="card" style="text-decoration:none; color:inherit;">
       <h3>Forecasting</h3>
       <p>Interval-level volume forecasting and trend analysis.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
-    <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
+    <a href="/capacity" class="card" style="text-decoration:none; color:inherit;">
       <h3>Capacity Planning</h3>
       <p>Headcount requirements by LOB, skill, and interval.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
-    <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
+    <a href="/people" class="card" style="text-decoration:none; color:inherit;">
       <h3>People</h3>
       <p>Employee roster, accommodations, and time-off management.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
-    <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
+    <a href="/scheduling" class="card" style="text-decoration:none; color:inherit;">
       <h3>Scheduling</h3>
       <p>Shift generation, coverage analysis, and roster views.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
-    <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
+    <a href="/realtime" class="card" style="text-decoration:none; color:inherit;">
       <h3>Real-Time</h3>
       <p>Live queue monitoring, adherence, and staffing alerts.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
+    {% if current_user and current_user.is_admin %}
     <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Data Import</h3>
       <p>Upload CSV/Excel files or enter data manually.</p>
@@ -51,6 +54,7 @@
       <p>API connections, branding, and platform configuration.</p>
       <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

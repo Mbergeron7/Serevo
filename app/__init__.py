@@ -5,8 +5,12 @@ Creates and configures the Flask app. All routes are registered via
 blueprints (to be added as modules are ported in).
 """
 
+from datetime import timedelta
 from flask import Flask
+from flask_bcrypt import Bcrypt
 from config import cfg
+
+bcrypt = Bcrypt()
 
 
 def create_app():
@@ -17,12 +21,19 @@ def create_app():
     )
     app.secret_key = cfg.SECRET_KEY
 
+    # ---- session security ----
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = not cfg.is_demo  # HTTPS in prod
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+
     # ---- database ----
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.SQLALCHEMY_DATABASE_URI
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = cfg.SQLALCHEMY_TRACK_MODIFICATIONS
 
     from app.models import db
     db.init_app(app)
+    bcrypt.init_app(app)
 
     from flask_migrate import Migrate
     Migrate(app, db)
