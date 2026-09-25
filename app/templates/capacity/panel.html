@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}Capacity Planning — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/capacity/plan" class="nav-link">Plan View</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .cp-header { margin-bottom: 28px; }
+  .cp-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .cp-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  .cp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .cp-card-header {
+    padding: 12px 20px;
+    font-weight: 700;
+    font-size: .9rem;
+    background: var(--brand-accent);
+    color: #fff;
+  }
+  .cp-card-body { padding: 20px; }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: .875rem;
+  }
+  .status-row:last-child { border-bottom: none; }
+  .status-label { font-weight: 600; min-width: 200px; }
+  .status-val { color: var(--text-muted); flex: 1; }
+
+  .badge-ok   { display:inline-block; padding:2px 10px; border-radius:999px;
+                font-size:.75rem; font-weight:600;
+                background: color-mix(in srgb, var(--brand-accent) 15%, transparent);
+                color: var(--brand-accent); }
+  .badge-none { display:inline-block; padding:2px 10px; border-radius:999px;
+                font-size:.75rem; font-weight:600;
+                background: var(--bg); color: var(--text-muted); }
+  .badge-err  { display:inline-block; padding:2px 10px; border-radius:999px;
+                font-size:.75rem; font-weight:600;
+                background: #fef2f2; color: #b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .badge-err { background:#2d1515; color:#fca5a5; }
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .controls-grid label { font-size: .78rem; font-weight: 600; text-transform: uppercase;
+                         letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+                         display: block; }
+  .controls-grid input, .controls-grid select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .875rem; background: var(--bg); color: var(--text);
+  }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-cp {
+    padding: 9px 18px; border: none; border-radius: 6px;
+    font-size: .875rem; font-weight: 600; cursor: pointer;
+    transition: opacity .15s; color: #fff;
+  }
+  .btn-cp:hover { opacity: .88; }
+  .btn-forecast  { background: var(--brand-accent); }
+  .btn-req       { background: #059669; }
+  .btn-emp       { background: #2563eb; }
+  .btn-all       { background: #d97706; }
+
+  .alert-box {
+    padding: 12px 16px; border-radius: 8px; font-size: .85rem;
+    background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface));
+    border: 1px solid var(--border); margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  .progress-area { display: none; margin-top: 16px; }
+  .progress-area.show { display: block; }
+  .progress-bar-bg { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--brand-accent); border-radius: 4px;
+                       transition: width .3s; width: 0%; }
+
+  .workload-list { columns: 2; font-size: .82rem; color: var(--text-muted);
+                   list-style: none; padding: 0; }
+  .workload-list li { margin-bottom: 3px; padding-left: 12px;
+                      border-left: 2px solid var(--brand-accent); }
+
+  #toastContainer { position:fixed; bottom:24px; right:24px; z-index:9999;
+                    display:flex; flex-direction:column; gap:8px; }
+  .toast { padding:12px 18px; border-radius:8px; color:#fff; font-size:.875rem;
+           font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,.2);
+           opacity:0; transform:translateY(10px); transition:all .25s ease; min-width:220px; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.success { background:#198754; }
+  .toast.error   { background:#dc3545; }
+  .toast.info    { background: var(--brand-accent); }
+
+  @media (max-width: 600px) {
+    .status-row { flex-direction: column; gap: 4px; }
+    .status-label { min-width: unset; }
+    .workload-list { columns: 1; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cp-header">
+  <h1>Capacity Planning</h1>
+  <p class="subtitle">{{ brand_name }} — PeopleWare integration &amp; data management</p>
+</div>
+
+<!-- API Status -->
+<div class="cp-card">
+  <div class="cp-card-header">API Connection Status</div>
+  <div class="cp-card-body">
+    <div class="status-row">
+      <span class="status-label">New API (Forecasts)</span>
+      <span class="status-val">
+        <span class="{{ 'badge-ok' if api_status.new_api.ok else 'badge-err' }}">
+          {{ '✓ Connected' if api_status.new_api.ok else '✗ Error — HTTP ' + api_status.new_api.status|string }}
+        </span>
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Legacy API (Requirements / Employees)</span>
+      <span class="status-val">
+        <span class="{{ 'badge-ok' if api_status.legacy.ok else 'badge-err' }}">
+          {{ '✓ Connected' if api_status.legacy.ok else '✗ Error — HTTP ' + api_status.legacy.status|string }}
+        </span>
+      </span>
+    </div>
+    <div style="margin-top: 12px;">
+      <button class="btn-cp btn-forecast" onclick="testConnection()" style="padding:6px 14px; font-size:.8rem;">
+        Re-test Connection
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Cached Data Status -->
+<div class="cp-card">
+  <div class="cp-card-header">Cached Data Status</div>
+  <div class="cp-card-body">
+    <div class="status-row">
+      <span class="status-label">Forecast RAW</span>
+      <span class="status-val">
+        <span class="{{ 'badge-ok' if status.forecast_rows > 0 else 'badge-none' }}">
+          {{ status.forecast_rows|default(0)|int }} rows
+        </span>
+        {% if status.forecast_updated %}
+          — Last updated: {{ status.forecast_updated }}
+        {% else %}
+          — <em>Never pulled</em>
+        {% endif %}
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Requirements RAW</span>
+      <span class="status-val">
+        <span class="{{ 'badge-ok' if status.req_rows > 0 else 'badge-none' }}">
+          {{ status.req_rows|default(0)|int }} rows
+        </span>
+        {% if status.req_updated %}
+          — Last updated: {{ status.req_updated }}
+        {% else %}
+          — <em>Never pulled</em>
+        {% endif %}
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Employees</span>
+      <span class="status-val">
+        <span class="{{ 'badge-ok' if status.emp_count > 0 else 'badge-none' }}">
+          {{ status.emp_count|default(0)|int }} employees
+        </span>
+        {% if status.emp_updated %}
+          — Last updated: {{ status.emp_updated }}
+        {% else %}
+          — <em>Never pulled</em>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Refresh Controls -->
+<div class="cp-card">
+  <div class="cp-card-header">Refresh Data from PeopleWare</div>
+  <div class="cp-card-body">
+    <div class="alert-box">
+      <strong>Full year pulls take 15–30 minutes</strong> — the API is called once per workload per day.
+      Use <strong>Date Range</strong> to pull a specific month for faster updates.
+    </div>
+
+    <div class="controls-grid">
+      <div>
+        <label>Year</label>
+        <input type="number" id="pullYear" value="{{ current_year }}" min="2024" max="2030">
+      </div>
+      <div>
+        <label>Start Date</label>
+        <input type="date" id="pullStart" value="{{ current_year }}-01-01">
+      </div>
+      <div>
+        <label>End Date</label>
+        <input type="date" id="pullEnd" value="{{ current_year }}-12-31">
+      </div>
+      <div>
+        <label>UTC Offset</label>
+        <select id="utcOffset">
+          <option value="-4" selected>-4 (EDT)</option>
+          <option value="-5">-5 (EST)</option>
+        </select>
+      </div>
+      <div>
+        <label>Mode</label>
+        <select id="appendMode">
+          <option value="append">Append</option>
+          <option value="replace">Replace</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-cp btn-forecast" onclick="startRefresh('forecast')">Pull Forecast</button>
+      <button class="btn-cp btn-req" onclick="startRefresh('requirements')">Pull Requirements</button>
+      <button class="btn-cp btn-emp" onclick="startRefresh('employees')">Pull Employees</button>
+      <button class="btn-cp btn-all" onclick="startRefresh('all')">Pull All</button>
+    </div>
+
+    <div class="progress-area" id="progressArea">
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+        <span id="progressLabel" style="font-weight:600; font-size:.85rem;">Pulling data…</span>
+        <span id="progressPct" style="font-size:.85rem;">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+      <div id="progressDetail" style="font-size:.8rem; color:var(--text-muted); margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Workloads Reference -->
+<div class="cp-card">
+  <div class="cp-card-header">Workloads in Scope ({{ workloads|length }})</div>
+  <div class="cp-card-body">
+    <ul class="workload-list">
+      {% for name in workloads %}
+        <li>{{ name }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showToast(msg, type="success") {
+  const c = document.getElementById("toastContainer");
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("show")));
+  setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 4000);
+}
+
+async function testConnection() {
+  showToast("Testing API connection…", "info");
+  try {
+    const r = await fetch("/capacity/test_connection", { credentials:"same-origin" });
+    const data = await r.json();
+    if (data.ok) {
+      showToast("Both API endpoints connected successfully.");
+    } else {
+      showToast("Connection issue — check logs for details.", "error");
+    }
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) {
+    showToast("Connection test failed: " + e.message, "error");
+  }
+}
+
+async function startRefresh(type) {
+  const year = document.getElementById("pullYear").value;
+  const startDate = document.getElementById("pullStart").value;
+  const endDate = document.getElementById("pullEnd").value;
+  const utcOffset = document.getElementById("utcOffset").value;
+  const appendMode = document.getElementById("appendMode").value;
+
+  const labels = {
+    forecast: "Pulling Forecast data…",
+    requirements: "Pulling Requirements data…",
+    employees: "Pulling Employee roster…",
+    all: "Pulling all data…",
+  };
+
+  document.getElementById("progressArea").classList.add("show");
+  document.getElementById("progressLabel").textContent = labels[type] || "Pulling…";
+  document.getElementById("progressBar").style.width = "5%";
+  document.getElementById("progressDetail").textContent = "Starting — this may take several minutes…";
+  showToast(labels[type], "info");
+
+  try {
+    const r = await fetch("/capacity/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type, year, start_date: startDate, end_date: endDate,
+        utc_offset: utcOffset, append: appendMode === "append"
+      }),
+    });
+    const data = await r.json();
+
+    document.getElementById("progressBar").style.width = "100%";
+
+    if (data.success) {
+      document.getElementById("progressLabel").textContent = "Complete";
+      document.getElementById("progressDetail").textContent =
+        `Rows written: ${data.rows_written || 0}  |  Skipped: ${data.skipped || 0}  |  Duration: ${data.duration || ""}`;
+      showToast(`${type} pull complete — ${data.rows_written || 0} rows written.`);
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      document.getElementById("progressLabel").textContent = "Error";
+      document.getElementById("progressDetail").textContent = data.error || "Unknown error";
+      showToast("Pull failed: " + (data.error || "Unknown error"), "error");
+    }
+  } catch(e) {
+    document.getElementById("progressLabel").textContent = "Network error";
+    showToast("Request failed: " + e.message, "error");
+  }
+}
+</script>
+{% endblock %}

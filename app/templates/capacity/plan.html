@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Capacity Plan — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/capacity" class="nav-link">Control Panel</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .plan-header { margin-bottom: 24px; }
+  .plan-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .plan-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  .year-selector {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .year-selector label { font-size: .8rem; font-weight: 600; text-transform: uppercase;
+                         letter-spacing: .04em; color: var(--text-muted); }
+  .year-selector select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .875rem; background: var(--bg); color: var(--text);
+  }
+
+  .lob-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .lob-header {
+    background: var(--brand-accent);
+    color: #fff;
+    padding: 10px 18px;
+    font-weight: 700;
+    font-size: .95rem;
+  }
+
+  .plan-table-wrap { overflow-x: auto; }
+  .plan-table {
+    width: 100%; font-size: .78rem; border-collapse: collapse;
+  }
+  .plan-table th {
+    background: var(--bg); font-size: .72rem; text-align: center;
+    white-space: nowrap; padding: 6px 8px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .plan-table td {
+    text-align: center; padding: 5px 8px; white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  .metric-label {
+    text-align: left !important; font-weight: 600; color: var(--text-muted);
+    background: var(--bg) !important; padding-left: 12px !important;
+    min-width: 200px; border-right: 2px solid var(--border);
+  }
+  .val-positive { color: #059669; font-weight: 700; }
+  .val-negative { color: #dc2626; font-weight: 700; }
+  .val-neutral  { color: var(--text-muted); }
+  .highlight-row td { background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface)) !important; }
+  .divider-row td { padding: 2px !important; background: var(--border) !important; }
+
+  .no-data {
+    text-align: center; padding: 60px; color: var(--text-muted);
+    font-size: .95rem;
+  }
+
+  .plan-timestamp {
+    text-align: right; font-size: .78rem; color: var(--text-muted);
+    margin-top: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-header">
+  <h1>Monthly Capacity Plan</h1>
+  <p class="subtitle">FTE required vs actual headcount by LOB</p>
+</div>
+
+<div class="year-selector">
+  <label>Year</label>
+  <select onchange="location.href='/capacity/plan?year='+this.value">
+    {% for y in years %}
+      <option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+{% if plan %}
+  {% for lob in plan %}
+  <div class="lob-card">
+    <div class="lob-header">{{ lob.lob }}</div>
+    <div class="plan-table-wrap">
+      <table class="plan-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            {% for m in lob.months %}
+              <th>{{ m.month_label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="metric-label">Forecasted Calls</td>
+            {% for m in lob.months %}
+              <td>{{ "{:,}".format(m.fc_offered) }}</td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">Forecast Answered</td>
+            {% for m in lob.months %}
+              <td>{{ "{:,}".format(m.fc_answered) }}</td>
+            {% endfor %}
+          </tr>
+          <tr class="divider-row"><td colspan="{{ lob.months|length + 1 }}"></td></tr>
+          <tr>
+            <td class="metric-label">PSIH (no shrinkage)</td>
+            {% for m in lob.months %}
+              <td>{{ m.psih_raw }}</td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">PSIH (w/ {{ (lob.months[0].shrinkage * 100)|int }}% shrinkage)</td>
+            {% for m in lob.months %}
+              <td>{{ m.psih_shr }}</td>
+            {% endfor %}
+          </tr>
+          <tr class="divider-row"><td colspan="{{ lob.months|length + 1 }}"></td></tr>
+          <tr class="highlight-row">
+            <td class="metric-label">FTE Required</td>
+            {% for m in lob.months %}
+              <td><strong>{{ m.fte_req }}</strong></td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">Actual Headcount</td>
+            {% for m in lob.months %}
+              <td>{{ m.actual_hc }}</td>
+            {% endfor %}
+          </tr>
+          <tr class="highlight-row">
+            <td class="metric-label">Gap (HC − FTE Req)</td>
+            {% for m in lob.months %}
+              <td class="{{ 'val-positive' if m.gap > 0 else ('val-negative' if m.gap < 0 else 'val-neutral') }}">
+                {{ m.gap }}
+              </td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">Working Days</td>
+            {% for m in lob.months %}
+              <td>{{ m.working_days }}</td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="no-data">
+    No data available for {{ year }}. Use the <a href="/capacity">Control Panel</a> to pull data first.
+  </div>
+{% endif %}
+
+<div class="plan-timestamp">Generated: {{ now }}</div>
+{% endblock %}

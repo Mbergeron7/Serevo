@@ -32,9 +32,11 @@ def create_app():
     # ---- register blueprints ----
     from app.routes.auth import auth_bp
     from app.routes.dashboard import dashboard_bp
+    from app.routes.capacity import capacity_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(capacity_bp)
 
     # ---- health check ----
     @app.route("/health")
