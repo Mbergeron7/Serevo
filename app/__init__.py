@@ -36,6 +36,7 @@ def create_app():
     from app.routes.people import people_bp
     from app.routes.scheduling import scheduling_bp
     from app.routes.forecasting import forecasting_bp
+    from app.routes.realtime import realtime_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(people_bp)
     app.register_blueprint(scheduling_bp)
     app.register_blueprint(forecasting_bp)
+    app.register_blueprint(realtime_bp)
 
     # ---- health check ----
     @app.route("/health")

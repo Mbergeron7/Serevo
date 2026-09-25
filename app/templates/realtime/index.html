@@ -1,0 +1,751 @@
+{% extends "base.html" %}
+{% block title %}Real-Time — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/" class="nav-link">Dashboard</a>
+  <a href="/scheduling" class="nav-link">Scheduling</a>
+  <a href="/forecasting" class="nav-link">Forecasting</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 24px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  /* ── Top bar ───────────────────────────────────── */
+  .top-bar {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+    margin-bottom: 20px;
+  }
+  .config-group { display: flex; flex-direction: column; }
+  .config-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .config-group select, .config-group input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .btn-action {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 24px; border-radius: 6px; font-weight: 700;
+    font-size: .85rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .78rem; font-weight: 700; color: var(--text-muted);
+    margin-left: auto;
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #10b981; animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  .auto-refresh-toggle {
+    font-size: .78rem; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .auto-refresh-toggle input { margin: 0; }
+
+  /* ── View tabs ─────────────────────────────────── */
+  .view-tabs {
+    display: flex; gap: 2px; margin-bottom: 20px;
+    background: var(--bg); border-radius: 8px; padding: 3px;
+    width: fit-content;
+  }
+  .view-tab {
+    padding: 7px 18px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text-muted);
+    font-size: .82rem; font-weight: 600; cursor: pointer;
+    transition: all .15s;
+  }
+  .view-tab.active { background: var(--brand-accent); color: #fff; }
+
+  /* ── Big stats ─────────────────────────────────── */
+  .stats-row {
+    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px;
+    flex: 1; min-width: 120px; text-align: center;
+  }
+  .stat-label {
+    font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .stat-value { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat-ok { color: #10b981; }
+  .stat-warn { color: #f59e0b; }
+  .stat-crit { color: #ef4444; }
+
+  /* ── Alerts ────────────────────────────────────── */
+  .alerts-panel { margin-bottom: 22px; }
+  .alert-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 6px;
+    font-size: .82rem;
+  }
+  .alert-critical {
+    background: color-mix(in srgb, #ef4444 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, #ef4444 30%, var(--border));
+  }
+  .alert-warning {
+    background: color-mix(in srgb, #f59e0b 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, #f59e0b 30%, var(--border));
+  }
+  .alert-info {
+    background: color-mix(in srgb, #6366f1 8%, var(--surface));
+    border: 1px solid color-mix(in srgb, #6366f1 20%, var(--border));
+  }
+  .alert-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+  .alert-body { flex: 1; }
+  .alert-msg { font-weight: 700; }
+  .alert-detail { font-size: .76rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Heatmap strip ─────────────────────────────── */
+  .heatmap-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .heatmap-title {
+    font-size: .85rem; font-weight: 700; margin-bottom: 12px;
+  }
+  .heatmap-row {
+    display: flex; gap: 2px; min-width: min-content;
+  }
+  .heatmap-cell {
+    min-width: 28px; height: 36px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 700; color: #fff;
+    position: relative; cursor: default;
+  }
+  .heatmap-cell[title]:hover::after {
+    content: attr(title); position: absolute; bottom: 100%;
+    left: 50%; transform: translateX(-50%); white-space: nowrap;
+    background: var(--text); color: var(--bg); padding: 3px 8px;
+    border-radius: 4px; font-size: .7rem; font-weight: 400;
+    z-index: 10; pointer-events: none;
+  }
+  .hm-ok { background: #10b981; }
+  .hm-over { background: #6366f1; }
+  .hm-warn { background: #f59e0b; }
+  .hm-crit { background: #ef4444; }
+  .hm-empty { background: var(--border); color: var(--text-muted); }
+  .hm-now { outline: 2px solid var(--text); outline-offset: 1px; }
+
+  .heatmap-labels {
+    display: flex; gap: 2px; margin-top: 4px; min-width: min-content;
+  }
+  .heatmap-labels span {
+    min-width: 28px; text-align: center;
+    font-size: .6rem; color: var(--text-muted);
+  }
+
+  /* ── Chart ─────────────────────────────────────── */
+  .chart-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .chart-title { font-size: .85rem; font-weight: 700; margin-bottom: 14px; }
+  .chart-canvas { width: 100%; height: 240px; }
+  svg.chart { width: 100%; height: 100%; }
+  .chart-legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px;
+    font-size: .75rem; color: var(--text-muted);
+  }
+  .legend-dot {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%; margin-right: 4px; vertical-align: middle;
+  }
+
+  /* ── Tables ────────────────────────────────────── */
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: .82rem;
+  }
+  .data-table th {
+    text-align: left; padding: 8px 10px; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); border-bottom: 2px solid var(--border);
+    font-weight: 700;
+  }
+  .data-table td {
+    padding: 7px 10px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .data-table tr:hover td { background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
+
+  /* ── Adherence badges ──────────────────────────── */
+  .adh-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: .72rem; font-weight: 700;
+  }
+  .adh-on { background: color-mix(in srgb, #10b981 15%, var(--surface)); color: #10b981; }
+  .adh-off { background: color-mix(in srgb, var(--text-muted) 10%, var(--surface)); color: var(--text-muted); }
+  .adh-ended { background: color-mix(in srgb, #6366f1 12%, var(--surface)); color: #6366f1; }
+
+  /* ── Sections ──────────────────────────────────── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-muted);
+  }
+  .empty-state h3 { margin-bottom: 6px; }
+
+  /* ── Loading ───────────────────────────────────── */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.3); z-index: 999;
+    justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: var(--surface); padding: 30px 40px;
+    border-radius: 12px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--brand-accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Real-Time Monitoring</h1>
+  <p class="subtitle">Live queue status, staffing coverage, adherence tracking & alerts.</p>
+</div>
+
+<!-- ── Top bar ──────────────────────────────────── -->
+<div class="top-bar">
+  <div class="config-group">
+    <label>Line of Business</label>
+    <select id="selLob">
+      <option value="">— Select LOB —</option>
+      {% for lob in lobs %}
+      <option value="{{ lob }}">{{ lob }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="config-group">
+    <label>Date</label>
+    <input type="date" id="inpDate">
+  </div>
+  <button class="btn-action" id="btnLoad" onclick="loadSnapshot()">Load</button>
+  <div class="live-badge">
+    <span class="live-dot" id="liveDot"></span>
+    <span id="clockLabel">--:--:--</span>
+  </div>
+  <label class="auto-refresh-toggle">
+    <input type="checkbox" id="chkAutoRefresh" checked> Auto-refresh (60s)
+  </label>
+</div>
+
+<!-- ── Tabs ─────────────────────────────────────── -->
+<div class="view-tabs">
+  <button class="view-tab active" onclick="switchTab('overview')">Overview</button>
+  <button class="view-tab" onclick="switchTab('coverage')">Coverage</button>
+  <button class="view-tab" onclick="switchTab('adherence')">Adherence</button>
+  <button class="view-tab" onclick="switchTab('sl')">Service Level</button>
+</div>
+
+<!-- ═══════════ OVERVIEW ═══════════ -->
+<div class="section active" id="sec-overview">
+  <div id="overviewEmpty" class="empty-state">
+    <h3>Select a LOB to begin</h3>
+    <p>Choose a line of business and click <strong>Load</strong> to see real-time status.</p>
+  </div>
+  <div id="overviewContent" style="display:none;">
+
+    <!-- Current interval stats -->
+    <div class="stats-row" id="currentStats"></div>
+
+    <!-- Alerts -->
+    <div class="alerts-panel" id="alertsPanel"></div>
+
+    <!-- Intraday heatmap -->
+    <div class="heatmap-container">
+      <div class="heatmap-title">Intraday Coverage Heatmap</div>
+      <div class="heatmap-row" id="heatmapRow"></div>
+      <div class="heatmap-labels" id="heatmapLabels"></div>
+      <div class="chart-legend" style="margin-top: 10px;">
+        <span><span class="legend-dot" style="background:#10b981;"></span> Met/Over</span>
+        <span><span class="legend-dot" style="background:#f59e0b;"></span> Warning (&lt;90%)</span>
+        <span><span class="legend-dot" style="background:#ef4444;"></span> Critical (&lt;70%)</span>
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Overstaffed</span>
+      </div>
+    </div>
+
+    <!-- Today's shifts -->
+    <div class="chart-container">
+      <div class="chart-title">Today's Shifts</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblShifts">
+          <thead>
+            <tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="stats-row" id="summaryStats"></div>
+  </div>
+</div>
+
+<!-- ═══════════ COVERAGE ═══════════ -->
+<div class="section" id="sec-coverage">
+  <div id="coverageContent" style="display:none;">
+    <div class="chart-container">
+      <div class="chart-title">Required vs Scheduled (by interval)</div>
+      <div class="chart-canvas" id="chartCoverage"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#ef4444;"></span> Required</span>
+        <span><span class="legend-dot" style="background:#10b981;"></span> Scheduled</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Staffing Gap (Scheduled − Required)</div>
+      <div class="chart-canvas" id="chartGap"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Gap (positive = surplus)</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Interval Detail</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblCoverage">
+          <thead>
+            <tr>
+              <th>Time</th><th>Required</th><th>Scheduled</th><th>Gap</th>
+              <th>Coverage %</th><th>Volume</th><th>AHT</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div id="coverageEmpty" class="empty-state">
+    <h3>Load a LOB to view coverage detail</h3>
+  </div>
+</div>
+
+<!-- ═══════════ ADHERENCE ═══════════ -->
+<div class="section" id="sec-adherence">
+  <div id="adherenceContent" style="display:none;">
+    <div class="stats-row" id="adhStats"></div>
+    <div class="chart-container">
+      <div class="chart-title">Agent Status</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblAdherence">
+          <thead>
+            <tr>
+              <th>Employee</th><th>Shift</th><th>Hours</th>
+              <th>Type</th><th>Expected State</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div id="adherenceEmpty" class="empty-state">
+    <h3>Load a LOB to view adherence</h3>
+  </div>
+</div>
+
+<!-- ═══════════ SERVICE LEVEL ═══════════ -->
+<div class="section" id="sec-sl">
+  <div id="slContent" style="display:none;">
+    <div class="chart-container">
+      <div class="chart-title">Estimated Service Level (Erlang C)</div>
+      <div class="chart-canvas" id="chartSL"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Est. SL %</span>
+        <span style="color:var(--text-muted);">— 80% target</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Traffic Intensity (Erlangs)</div>
+      <div class="chart-canvas" id="chartTraffic"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#f59e0b;"></span> Erlangs</span>
+        <span><span class="legend-dot" style="background:#10b981;"></span> Agents</span>
+      </div>
+    </div>
+  </div>
+  <div id="slEmpty" class="empty-state">
+    <h3>Load a LOB to view service level estimates</h3>
+  </div>
+</div>
+
+<!-- ── Loading overlay ──────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div id="loadingMsg">Loading real-time data…</div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════ */
+let STATE = { snapshot: null, adherence: null, sl: null };
+let refreshTimer = null;
+
+function $(id) { return document.getElementById(id); }
+function showLoading(msg) { $('loadingMsg').textContent = msg || 'Loading…'; $('loadingOverlay').classList.add('show'); }
+function hideLoading() { $('loadingOverlay').classList.remove('show'); }
+
+async function api(url, body) {
+  const r = await fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+/* ── Clock ──────────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  $('clockLabel').textContent = now.toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ── Tabs ───────────────────────────────────────── */
+function switchTab(name) {
+  const tabs = ['overview','coverage','adherence','sl'];
+  document.querySelectorAll('.view-tab').forEach((t, i) => {
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  $('sec-' + name).classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════
+   SVG CHARTS
+   ══════════════════════════════════════════════════ */
+function drawLineChart(containerId, datasets, labels, opts = {}) {
+  const el = $(containerId);
+  if (!el) return;
+  const W = el.clientWidth || 700, H = opts.height || 240;
+  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  let allVals = [];
+  datasets.forEach(ds => ds.data.forEach(v => allVals.push(v)));
+  if (opts.refLine !== undefined) allVals.push(opts.refLine);
+  let minV = Math.min(...allVals, 0);
+  let maxV = Math.max(...allVals, 1);
+  if (maxV === minV) maxV = minV + 1;
+  const range = maxV - minV;
+  minV -= range * 0.05; maxV += range * 0.05;
+
+  function x(i) { return pad.left + (i / Math.max(labels.length - 1, 1)) * pw; }
+  function y(v) { return pad.top + (1 - (v - minV) / (maxV - minV)) * ph; }
+
+  let ticksHtml = '';
+  for (let i = 0; i <= 5; i++) {
+    const val = minV + (i / 5) * (maxV - minV);
+    const yp = y(val);
+    ticksHtml += `<line x1="${pad.left}" x2="${W - pad.right}" y1="${yp}" y2="${yp}" stroke="var(--border)" stroke-width="0.5"/>`;
+    ticksHtml += `<text x="${pad.left - 8}" y="${yp + 4}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(val * 10) / 10}</text>`;
+  }
+
+  // Reference line (e.g. 80% SL target)
+  let refHtml = '';
+  if (opts.refLine !== undefined) {
+    const ry = y(opts.refLine);
+    refHtml = `<line x1="${pad.left}" x2="${W - pad.right}" y1="${ry}" y2="${ry}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="6,4"/>`;
+  }
+
+  const step = Math.max(1, Math.floor(labels.length / 12));
+  let xlabels = '';
+  for (let i = 0; i < labels.length; i += step) {
+    xlabels += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
+  }
+
+  let lines = '';
+  datasets.forEach(ds => {
+    const pts = ds.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    lines += `<polyline points="${pts}" fill="none" stroke="${ds.color}" stroke-width="${ds.width || 2}" stroke-opacity="${ds.opacity || 1}"/>`;
+  });
+
+  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${ticksHtml}${refHtml}${xlabels}${lines}</svg>`;
+}
+
+function drawBarChart(containerId, posData, negData, labels, posColor, negColor) {
+  const el = $(containerId);
+  if (!el) return;
+  const W = el.clientWidth || 700, H = 240;
+  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  const data = posData || negData;
+  let maxV = Math.max(...data.map(Math.abs), 1);
+  const hasNeg = data.some(v => v < 0);
+  const zeroY = hasNeg ? pad.top + ph * 0.5 : pad.top + ph;
+  const scale = hasNeg ? ph * 0.5 / maxV : ph / maxV;
+  const barW = Math.max(2, (pw / data.length) * 0.7);
+  const gap = (pw / data.length) * 0.3;
+
+  let bars = '';
+  data.forEach((v, i) => {
+    const bx = pad.left + i * (barW + gap);
+    const bh = Math.abs(v) * scale;
+    const by = v >= 0 ? zeroY - bh : zeroY;
+    const col = v >= 0 ? (posColor || '#10b981') : (negColor || '#ef4444');
+    bars += `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${col}" rx="2"/>`;
+  });
+
+  // Zero line
+  let zline = hasNeg ? `<line x1="${pad.left}" x2="${W - pad.right}" y1="${zeroY}" y2="${zeroY}" stroke="var(--text-muted)" stroke-width="1"/>` : '';
+
+  const step = Math.max(1, Math.floor(labels.length / 12));
+  let xlabels = '';
+  for (let i = 0; i < labels.length; i += step) {
+    const bx = pad.left + i * (barW + gap) + barW / 2;
+    xlabels += `<text x="${bx}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
+  }
+
+  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${zline}${xlabels}${bars}</svg>`;
+}
+
+/* ══════════════════════════════════════════════════
+   LOAD SNAPSHOT
+   ══════════════════════════════════════════════════ */
+async function loadSnapshot(silent) {
+  const lob = $('selLob').value;
+  const date = $('inpDate').value;
+  if (!lob) { if (!silent) alert('Please select a LOB.'); return; }
+
+  if (!silent) showLoading('Loading real-time data…');
+  try {
+    const [snap, adh, sl] = await Promise.all([
+      api('/realtime/snapshot', { lob, date }),
+      api('/realtime/adherence', { lob, date }),
+      api('/realtime/service-level', { lob, date }),
+    ]);
+    if (!silent) hideLoading();
+
+    if (!snap.success) { if (!silent) alert(snap.error || 'Error'); return; }
+    STATE.snapshot = snap;
+    STATE.adherence = adh.success ? adh : null;
+    STATE.sl = sl.success ? sl : null;
+
+    renderOverview();
+    renderCoverage();
+    renderAdherence();
+    renderServiceLevel();
+
+    // Schedule auto-refresh
+    clearInterval(refreshTimer);
+    if ($('chkAutoRefresh').checked) {
+      refreshTimer = setInterval(() => loadSnapshot(true), 60000);
+    }
+  } catch (e) {
+    if (!silent) { hideLoading(); alert('Error: ' + e.message); }
+  }
+}
+
+$('chkAutoRefresh').addEventListener('change', function() {
+  clearInterval(refreshTimer);
+  if (this.checked && STATE.snapshot) {
+    refreshTimer = setInterval(() => loadSnapshot(true), 60000);
+  }
+});
+
+/* ══════════════════════════════════════════════════
+   RENDER: OVERVIEW
+   ══════════════════════════════════════════════════ */
+function renderOverview() {
+  const s = STATE.snapshot;
+  if (!s) return;
+  $('overviewEmpty').style.display = 'none';
+  $('overviewContent').style.display = '';
+
+  const cur = s.current;
+  const sum = s.summary;
+
+  // Determine coverage status class
+  let covCls = 'stat-ok';
+  if (cur.coverage_pct < 70) covCls = 'stat-crit';
+  else if (cur.coverage_pct < 90) covCls = 'stat-warn';
+
+  $('currentStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Current Interval</div><div class="stat-value">${cur.time}</div></div>
+    <div class="stat-card"><div class="stat-label">Required Now</div><div class="stat-value">${cur.required}</div></div>
+    <div class="stat-card"><div class="stat-label">Scheduled Now</div><div class="stat-value">${cur.scheduled}</div></div>
+    <div class="stat-card"><div class="stat-label">Gap</div><div class="stat-value ${cur.gap < 0 ? 'stat-crit' : cur.gap > 0 ? 'stat-ok' : ''}">${cur.gap >= 0 ? '+' : ''}${cur.gap}</div></div>
+    <div class="stat-card"><div class="stat-label">Coverage</div><div class="stat-value ${covCls}">${cur.coverage_pct}%</div></div>
+    <div class="stat-card"><div class="stat-label">Forecast Vol</div><div class="stat-value">${cur.forecast_offered}</div></div>
+  `;
+
+  // Alerts
+  const alerts = s.alerts || [];
+  if (alerts.length) {
+    const icons = { critical: '🔴', warning: '🟡', info: 'ℹ️' };
+    $('alertsPanel').innerHTML = alerts.map(a => `
+      <div class="alert-item alert-${a.severity}">
+        <span class="alert-icon">${icons[a.severity] || ''}</span>
+        <div class="alert-body">
+          <div class="alert-msg">${a.message}</div>
+          <div class="alert-detail">${a.details}</div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    $('alertsPanel').innerHTML = '';
+  }
+
+  // Heatmap
+  const ivs = s.intervals;
+  const curTime = s.current_interval;
+  $('heatmapRow').innerHTML = ivs.map(iv => {
+    const cls = iv.status === 'critical' ? 'hm-crit' :
+                iv.status === 'warning' ? 'hm-warn' :
+                iv.status === 'over' ? 'hm-over' :
+                iv.required === 0 ? 'hm-empty' : 'hm-ok';
+    const now = iv.time === curTime ? ' hm-now' : '';
+    return `<div class="heatmap-cell ${cls}${now}" title="${iv.time}: ${iv.scheduled}/${iv.required} (${iv.coverage_pct}%)">${iv.scheduled}</div>`;
+  }).join('');
+  $('heatmapLabels').innerHTML = ivs.map((iv, i) =>
+    i % 2 === 0 ? `<span>${iv.time}</span>` : `<span></span>`
+  ).join('');
+
+  // Shifts table
+  const shifts = s.shifts || [];
+  $('tblShifts').querySelector('tbody').innerHTML = shifts.map(sh => `
+    <tr>
+      <td>${sh.employee}</td><td>${sh.start}</td><td>${sh.end}</td>
+      <td>${sh.hours}</td><td>${sh.type}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No shifts scheduled</td></tr>';
+
+  // Summary
+  $('summaryStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Scheduled</div><div class="stat-value">${sum.total_scheduled}</div></div>
+    <div class="stat-card"><div class="stat-label">Unavailable</div><div class="stat-value">${sum.total_unassigned}</div></div>
+    <div class="stat-card"><div class="stat-label">Understaffed Intervals</div><div class="stat-value ${sum.understaffed_count > 0 ? 'stat-warn' : ''}">${sum.understaffed_count}</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Coverage</div><div class="stat-value">${sum.avg_coverage_pct}%</div></div>
+    <div class="stat-card"><div class="stat-label">Peak Required</div><div class="stat-value">${sum.peak_required}</div></div>
+    <div class="stat-card"><div class="stat-label">Worst Gap</div><div class="stat-value ${sum.peak_gap < 0 ? 'stat-crit' : ''}">${sum.peak_gap}</div></div>
+  `;
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER: COVERAGE
+   ══════════════════════════════════════════════════ */
+function renderCoverage() {
+  const s = STATE.snapshot;
+  if (!s || !s.intervals.length) {
+    $('coverageEmpty').style.display = ''; $('coverageContent').style.display = 'none'; return;
+  }
+  $('coverageEmpty').style.display = 'none'; $('coverageContent').style.display = '';
+
+  const ivs = s.intervals;
+  const labels = ivs.map(iv => iv.time);
+
+  drawLineChart('chartCoverage', [
+    { data: ivs.map(iv => iv.required), color: '#ef4444', width: 2 },
+    { data: ivs.map(iv => iv.scheduled), color: '#10b981', width: 2.5 },
+  ], labels);
+
+  drawBarChart('chartGap', null, ivs.map(iv => iv.gap), labels, '#6366f1', '#ef4444');
+
+  const tbody = $('tblCoverage').querySelector('tbody');
+  tbody.innerHTML = ivs.map(iv => {
+    const statusBadge = iv.status === 'critical' ? '<span style="color:#ef4444;font-weight:700;">Critical</span>' :
+                        iv.status === 'warning' ? '<span style="color:#f59e0b;font-weight:700;">Warning</span>' :
+                        iv.status === 'over' ? '<span style="color:#6366f1;">Over</span>' :
+                        '<span style="color:#10b981;">OK</span>';
+    return `<tr>
+      <td>${iv.time}</td><td>${iv.required}</td><td>${iv.scheduled}</td>
+      <td style="font-weight:700;${iv.gap < 0 ? 'color:#ef4444' : iv.gap > 0 ? 'color:#10b981' : ''}">${iv.gap >= 0 ? '+' : ''}${iv.gap}</td>
+      <td>${iv.coverage_pct}%</td><td>${iv.forecast_offered}</td><td>${iv.forecast_aht}s</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER: ADHERENCE
+   ══════════════════════════════════════════════════ */
+function renderAdherence() {
+  const a = STATE.adherence;
+  if (!a || !a.adherence || !a.adherence.length) {
+    $('adherenceEmpty').style.display = ''; $('adherenceContent').style.display = 'none'; return;
+  }
+  $('adherenceEmpty').style.display = 'none'; $('adherenceContent').style.display = '';
+
+  $('adhStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">On Shift Now</div><div class="stat-value stat-ok">${a.on_shift_count}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Scheduled</div><div class="stat-value">${a.total_scheduled}</div></div>
+    <div class="stat-card"><div class="stat-label">Unavailable</div><div class="stat-value">${(a.unassigned || []).length}</div></div>
+    <div class="stat-card"><div class="stat-label">Current Interval</div><div class="stat-value">${a.current_interval}</div></div>
+  `;
+
+  const tbody = $('tblAdherence').querySelector('tbody');
+  tbody.innerHTML = a.adherence.map(ag => {
+    const cls = ag.expected_state === 'On Queue' ? 'adh-on' :
+                ag.expected_state === 'Shift Ended' ? 'adh-ended' : 'adh-off';
+    return `<tr>
+      <td>${ag.employee}</td>
+      <td>${ag.shift_start} – ${ag.shift_end}</td>
+      <td>${ag.hours}h</td>
+      <td>${ag.shift_type}</td>
+      <td><span class="adh-badge ${cls}">${ag.expected_state}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER: SERVICE LEVEL
+   ══════════════════════════════════════════════════ */
+function renderServiceLevel() {
+  const sl = STATE.sl;
+  if (!sl || !sl.intervals || !sl.intervals.length) {
+    $('slEmpty').style.display = ''; $('slContent').style.display = 'none'; return;
+  }
+  $('slEmpty').style.display = 'none'; $('slContent').style.display = '';
+
+  const ivs = sl.intervals;
+  const labels = ivs.map(iv => iv.time);
+
+  drawLineChart('chartSL', [
+    { data: ivs.map(iv => iv.estimated_sl * 100), color: '#6366f1', width: 2.5 },
+  ], labels, { refLine: 80 });
+
+  drawLineChart('chartTraffic', [
+    { data: ivs.map(iv => iv.traffic_intensity), color: '#f59e0b', width: 2 },
+    { data: ivs.map(iv => iv.agents), color: '#10b981', width: 2 },
+  ], labels);
+}
+
+/* ── Init ──────────────────────────────────────── */
+(function init() {
+  $('inpDate').value = new Date().toISOString().slice(0, 10);
+})();
+</script>
+{% endblock %}
