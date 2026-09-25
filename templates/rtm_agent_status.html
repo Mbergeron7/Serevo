@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>RTM — Agent Status</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#1a237e,#283593); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:20px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .page-header p  { margin:4px 0 0; opacity:.85; font-size:.88rem; }
+    .nav-links { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+    .nav-links a { color:#1a237e; text-decoration:none; font-weight:500; font-size:.88rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .nav-sep { color:#ccc; }
+    .filter-bar { background:#fff; border-radius:10px; padding:14px 18px;
+                  margin-bottom:16px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+    .kpi-row { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+    .kpi { background:#fff; border-radius:10px; padding:14px 20px; flex:1; min-width:120px;
+           box-shadow:0 2px 8px rgba(0,0,0,.07); text-align:center; }
+    .kpi .val { font-size:1.8rem; font-weight:700; color:#1a237e; }
+    .kpi .lbl { font-size:.75rem; color:#888; margin-top:2px; }
+    .card { border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,.07); overflow:hidden; }
+    .rtm-table th { background:#1a237e; color:#fff; font-size:.78rem; padding:8px 10px;
+                    white-space:nowrap; cursor:pointer; user-select:none; }
+    .rtm-table th:hover { background:#283593; }
+    .rtm-table th .sort-arrow { font-size:.65rem; opacity:.5; margin-left:3px; }
+    .rtm-table th.sort-asc .sort-arrow,
+    .rtm-table th.sort-desc .sort-arrow { opacity:1; }
+    .rtm-table td { padding:6px 10px; font-size:.82rem; vertical-align:middle; }
+    .rtm-table tbody tr:nth-child(even) { background:#f8f9fa; }
+    .rtm-table tbody tr:hover { background:#e8eaf6; }
+    .status-ready   { background:#d1e7dd; color:#0a3622; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .status-oncall  { background:#cff4fc; color:#055160; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .status-offline { background:#e9ecef; color:#495057; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .status-break   { background:#fff3cd; color:#856404; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .status-unavail { background:#f8d7da; color:#842029; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .status-other   { background:#e2e3e5; color:#41464b; border-radius:8px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+    .dur-long { color:#dc3545; font-weight:700; }
+    .dur-mid  { color:#856404; font-weight:600; }
+
+    /* ── Status multi-select picker (same pattern as LOB picker) ── */
+    .lob-picker { position:relative; }
+    .lob-toggle { display:flex; align-items:center; justify-content:space-between;
+                  border:1px solid #ced4da; border-radius:6px; padding:6px 12px;
+                  cursor:pointer; background:#fff; min-width:200px; font-size:.85rem;
+                  user-select:none; }
+    .lob-toggle:hover { border-color:#1a237e; }
+    .lob-dropdown { position:absolute; top:calc(100% + 4px); left:0; z-index:1050;
+                    background:#fff; border:1px solid #dee2e6; border-radius:8px;
+                    box-shadow:0 6px 20px rgba(0,0,0,.13); width:260px;
+                    display:none; flex-direction:column; max-height:340px; }
+    .lob-dropdown.open { display:flex; }
+    .lob-search-wrap { padding:10px 12px; border-bottom:1px solid #eee; flex-shrink:0; }
+    .lob-search-wrap input { width:100%; border:1px solid #ced4da; border-radius:5px;
+                              padding:5px 9px; font-size:.83rem; outline:none; }
+    .lob-search-wrap input:focus { border-color:#1a237e; }
+    .lob-list { overflow-y:auto; flex:1; padding:4px 0; }
+    .lob-item { display:flex; align-items:center; gap:8px;
+                padding:5px 12px; cursor:pointer;
+                font-size:.83rem; color:#333; }
+    .lob-item:hover { background:#e8eaf6; }
+    .lob-item input[type=checkbox] { accent-color:#1a237e;
+                                     width:14px; height:14px; flex-shrink:0; }
+    .lob-footer { padding:8px 12px; border-top:1px solid #eee; flex-shrink:0;
+                  display:flex; gap:8px; align-items:center; }
+    .lob-footer button { font-size:.78rem; padding:3px 10px; border-radius:5px; cursor:pointer; }
+    .status-picker { position:relative; }
+    .status-toggle { display:flex; align-items:center; justify-content:space-between;
+                     border:1px solid #ced4da; border-radius:6px; padding:5px 10px;
+                     cursor:pointer; background:#fff; min-width:200px; font-size:.83rem;
+                     user-select:none; height:31px; }
+    .status-toggle:hover { border-color:#1a237e; }
+    .status-dropdown { position:absolute; top:calc(100% + 3px); left:0; z-index:1050;
+                       background:#fff; border:1px solid #dee2e6; border-radius:8px;
+                       box-shadow:0 6px 20px rgba(0,0,0,.13); width:240px;
+                       display:none; flex-direction:column; max-height:320px; }
+    .status-dropdown.open { display:flex; }
+    .status-list { overflow-y:auto; flex:1; padding:4px 0; }
+    .status-item { display:flex; align-items:center; gap:8px; padding:6px 12px;
+                   cursor:pointer; font-size:.83rem; color:#333; }
+    .status-item:hover { background:#e8eaf6; }
+    .status-item input[type=checkbox] { accent-color:#1a237e; width:14px; height:14px; flex-shrink:0; }
+    .status-footer { padding:7px 10px; border-top:1px solid #eee; flex-shrink:0;
+                     display:flex; gap:7px; align-items:center; }
+    .status-footer button { font-size:.75rem; padding:2px 9px; border-radius:5px; cursor:pointer; }
+    .status-count { font-size:.73rem; color:#888; margin-left:auto; }
+    .status-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; max-width:500px; }
+    .stag { background:#dce8ff; color:#1a237e; padding:2px 8px; border-radius:10px;
+            font-size:.74rem; display:flex; align-items:center; gap:4px; }
+    .stag-x { cursor:pointer; font-weight:700; opacity:.6; line-height:1; }
+    .stag-x:hover { opacity:1; }
+  </style>
+<link rel="stylesheet" href="/static/mobile.css">
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>👤 Agent Status History</h1>
+  <p>All status events today for all agents — {{ today }} as of {{ now }}</p>
+</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a><span class="nav-sep">|</span>
+  <strong style="color:#1a237e">RTM</strong><span class="nav-sep">|</span>
+  <a href="/rtm/dashboard">📊 Dashboard</a>
+  <a href="/rtm/schedule">📋 Schedule</a>
+  <a href="/rtm/absenteeism">📊 Absenteeism</a>
+  <a href="/rtm/pw-schedules">📅 PW Schedules</a>
+  <a href="/rtm/forecast">🔮 Forecast vs OTF</a>
+  <a href="/rtm/interval">⏱ Interval</a>
+  <a href="/rtm/svl">📈 SVL</a>
+  <a href="/rtm/cascades">🔀 Cascades</a>
+  <a href="/rtm/agent-status">👤 Agent Status</a>
+  <a href="/rtm/knowledge">🧠 Knowledge</a>
+  <a href="/rtm/call-log">📞 Call Log</a>
+  <a href="/logout">Logout</a>
+  <a href="/rtm/cache-clear" style="margin-left:auto;background:#dc3545;color:#fff;padding:3px 10px;border-radius:6px;font-size:.75rem;text-decoration:none;font-weight:600">🔄 Clear Cache</a> <button onclick="fpClear();location.href=location.pathname" style="background:#555;color:#fff;border:none;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer" title="Clear saved filters">✕ Reset Filters</button>
+</div>
+
+<div id="rtm-refresh-bar" style="background:#fff;border-radius:8px;padding:8px 16px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,.06);display:flex;align-items:center;gap:12px;font-size:.82rem;color:#555;">
+  <span id="rtm-last-refresh">Last refresh: <strong>--:--:--</strong></span>
+  <span style="color:#dee2e6">|</span>
+  <button onclick="rtmManualRefresh()" style="background:#1a237e;color:#fff;border:none;border-radius:6px;padding:3px 12px;font-size:.78rem;font-weight:600;cursor:pointer">🔄 Refresh Now</button>
+  <span style="color:#dee2e6">|</span>
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
+    <input type="checkbox" id="rtm-auto-toggle" onchange="rtmToggleAuto(this.checked)" style="accent-color:#1a237e;width:14px;height:14px"> Auto-refresh
+  </label>
+  <span id="rtm-countdown" style="color:#1a237e;font-weight:600;display:none"></span>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" id="filterForm" class="d-flex gap-3 align-items-start flex-wrap">
+
+    <!-- Employee dropdown -->
+    <div>
+      <label class="form-label fw-semibold mb-1 d-block" style="font-size:.78rem">Employee</label>
+      <div class="lob-picker" id="empPicker">
+        <div class="lob-toggle" id="empToggle" onclick="toggleDropdown(event,'empDropdown')">
+          <span id="empToggleLabel">All Employees</span>
+          <span style="font-size:.7rem;opacity:.5">▾</span>
+        </div>
+        <div class="lob-dropdown" id="empDropdown">
+          <div class="lob-search-wrap">
+            <input type="text" placeholder="Search employees..." oninput="filterItems(this,'empList')">
+          </div>
+          <div class="lob-list" id="empList">
+            {% for n in all_names %}
+            <label class="lob-item">
+              <input type="checkbox" name="name" value="{{ n }}"
+                     {% if n in selected_names %}checked{% endif %}
+                     onchange="updateToggleLabel('empList','empToggleLabel','Employee')">
+              {{ n }}
+            </label>
+            {% endfor %}
+          </div>
+          <div class="lob-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAll('empList','empToggleLabel','Employee')">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectNone('empList','empToggleLabel','Employee')">None</button>
+            <button type="submit" class="btn btn-sm text-white" style="background:#1a237e">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOB dropdown -->
+    <div>
+      <label class="form-label fw-semibold mb-1 d-block" style="font-size:.78rem">LOB</label>
+      <div class="lob-picker" id="lobPicker">
+        <div class="lob-toggle" id="lobToggle" onclick="toggleDropdown(event,'lobDropdown')">
+          <span id="lobToggleLabel">All LOBs</span>
+          <span style="font-size:.7rem;opacity:.5">▾</span>
+        </div>
+        <div class="lob-dropdown" id="lobDropdown">
+          <div class="lob-list" id="lobList">
+            {% for l in all_lobs %}
+            <label class="lob-item">
+              <input type="checkbox" name="lob" value="{{ l }}"
+                     {% if l in selected_lobs %}checked{% endif %}
+                     onchange="updateToggleLabel('lobList','lobToggleLabel','LOB')">
+              {{ l }}
+            </label>
+            {% endfor %}
+          </div>
+          <div class="lob-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAll('lobList','lobToggleLabel','LOB')">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectNone('lobList','lobToggleLabel','LOB')">None</button>
+            <button type="submit" class="btn btn-sm text-white" style="background:#1a237e">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status multi-select -->
+    <div>
+      <label class="form-label fw-semibold mb-1 d-block" style="font-size:.78rem">Status</label>
+      <div class="status-picker" id="statusPicker">
+        <div class="status-toggle" id="statusToggle" onclick="toggleStatusDropdown(event)">
+          <span id="statusToggleLabel">All Statuses</span>
+          <span style="font-size:.7rem;opacity:.5">▾</span>
+        </div>
+        <div class="status-dropdown" id="statusDropdown">
+          <div class="status-list" id="statusList">
+            {% for s in all_statuses %}
+            <label class="status-item">
+              <input type="checkbox" name="statuses" value="{{ s }}"
+                     {% if s in selected_statuses %}checked{% endif %}
+                     onchange="onStatusChange()">
+              {{ s }}
+            </label>
+            {% endfor %}
+          </div>
+          <div class="status-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllStatuses()">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllStatuses()">None</button>
+            <button type="submit" class="btn btn-sm text-white ms-1" style="background:#1a237e">Apply</button>
+            <span class="status-count" id="statusCount"></span>
+          </div>
+        </div>
+      </div>
+      <div class="status-tags" id="statusTags"></div>
+    </div>
+
+    <div class="align-self-center mt-3">
+      <a href="/rtm/agent-status" class="btn btn-sm btn-outline-secondary">Reset</a>
+    </div>
+
+  </form>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="val">{{ total }}</div><div class="lbl">Total Events Today</div></div>
+  <div class="kpi"><div class="val">{{ agents | length }}</div><div class="lbl">Showing</div></div>
+  <div class="kpi"><div class="val">{{ all_names | length }}</div><div class="lbl">Active Agents</div></div>
+  <div class="kpi"><div class="val">{{ all_statuses | length }}</div><div class="lbl">Distinct Statuses</div></div>
+</div>
+
+{% if not agents %}
+<div class="card"><div class="card-body text-center py-5 text-muted">
+  <h5>No agent status data for {{ today }}</h5>
+  <p>Try adjusting your filters or make sure the Call Potential script is running.</p>
+</div></div>
+{% else %}
+<div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+  <button onclick="exportAgentStatus()"
+          style="background:#1a237e;color:#fff;border:none;border-radius:7px;
+                 padding:6px 16px;font-size:.82rem;font-weight:700;cursor:pointer">
+    ⬇ Export to CSV
+  </button>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table rtm-table mb-0" id="agentTable">
+      <thead>
+        <tr>
+          <th data-col="0" data-type="alpha">Employee <span class="sort-arrow">⇅</span></th>
+          <th data-col="1" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+          <th data-col="2" data-type="alpha">Status <span class="sort-arrow">⇅</span></th>
+          <th data-col="3" data-type="alpha" class="text-center">Start Time <span class="sort-arrow">⇅</span></th>
+          <th data-col="4" data-type="alpha" class="text-center">End Time <span class="sort-arrow">⇅</span></th>
+          <th data-col="5" data-type="num" class="text-center">Minutes <span class="sort-arrow">⇅</span></th>
+          <th data-col="6" data-type="num" class="text-center">Seconds <span class="sort-arrow">⇅</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in agents %}
+        {% set total_sec = (e.duration_min * 60) | int %}
+        {% set mins = (total_sec // 60) | int %}
+        {% set secs = (total_sec % 60) | int %}
+        <tr>
+          <td><strong>{{ e.name }}</strong></td>
+          <td>{{ e.lob }}</td>
+          <td>
+            {% set s = e.status %}
+            {% if s == 'Ready' %}<span class="status-ready">{{ s }}</span>
+            {% elif s == 'On-call' %}<span class="status-oncall">{{ s }}</span>
+            {% elif s == 'Offline' %}<span class="status-offline">{{ s }}</span>
+            {% elif s in ['On Break', 'Lunch'] %}<span class="status-break">{{ s }}</span>
+            {% elif s == 'Unavailable' %}<span class="status-unavail">{{ s }}</span>
+            {% else %}<span class="status-other">{{ s }}</span>{% endif %}
+          </td>
+          <td class="text-center">{{ e.start_time }}</td>
+          <td class="text-center" style="{% if e.end_time == 'now' %}color:#1a237e;font-weight:600{% else %}color:#555{% endif %}">{{ e.end_time }}</td>
+          <td class="text-center" data-val="{{ mins }}">
+            {% if mins > 60 %}<span class="dur-long">{{ mins }}</span>
+            {% elif mins > 30 %}<span class="dur-mid">{{ mins }}</span>
+            {% else %}{{ mins }}{% endif %}
+          </td>
+          <td class="text-center" data-val="{{ secs }}">{{ secs }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  // ── Export agent status to CSV ──
+  function exportAgentStatus() {
+    var today = '{{ today }}';
+    var BOM = '\uFEFF';
+    var headers = ['Employee', 'LOB', 'Status', 'Start Time', 'End Time', 'Minutes', 'Seconds'];
+    var rows = [headers];
+
+    document.querySelectorAll('#agentTable tbody tr').forEach(function(tr) {
+      if (tr.style.display === 'none') return; // respect current filters
+      var cells = tr.querySelectorAll('td');
+      if (cells.length < 7) return;
+      rows.push([
+        cells[0].innerText.trim(),
+        cells[1].innerText.trim(),
+        cells[2].innerText.trim(),
+        cells[3].innerText.trim(),
+        cells[4].innerText.trim(),
+        cells[5].getAttribute('data-val') || cells[5].innerText.trim(),
+        cells[6].getAttribute('data-val') || cells[6].innerText.trim(),
+      ]);
+    });
+
+    var csv = BOM + rows.map(function(r) {
+      return r.map(function(v) {
+        v = String(v == null ? '' : v);
+        if (v.indexOf(',') !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1)
+          v = '"' + v.replace(/"/g, '""') + '"';
+        return v;
+      }).join(',');
+    }).join('\r\n');
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'agent_status_' + today + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Refresh bar ──
+  var RTM_AUTO_INTERVAL=120,rtmCountdown=null,rtmSecondsLeft=120;
+  function rtmUpdateLastRefresh(){var n=new Date(),t=n.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});document.getElementById('rtm-last-refresh').innerHTML='Last refresh: <strong>'+t+'</strong>';}
+  function rtmManualRefresh(){fetch('/rtm/cache-clear').then(function(){location.reload();});}
+  function rtmStartCountdown(){rtmSecondsLeft=RTM_AUTO_INTERVAL;var el=document.getElementById('rtm-countdown');el.style.display='inline';rtmCountdown=setInterval(function(){rtmSecondsLeft--;el.textContent='(next in '+rtmSecondsLeft+'s)';if(rtmSecondsLeft<=0){clearInterval(rtmCountdown);fetch('/rtm/cache-clear').then(function(){location.reload();});}},1000);}
+  function rtmStopCountdown(){if(rtmCountdown)clearInterval(rtmCountdown);document.getElementById('rtm-countdown').style.display='none';}
+  function rtmToggleAuto(on){localStorage.setItem('rtm_auto_refresh',on?'1':'0');if(on){rtmStartCountdown();}else{rtmStopCountdown();}}
+  rtmUpdateLastRefresh();
+  if(localStorage.getItem('rtm_auto_refresh')==='1'){document.getElementById('rtm-auto-toggle').checked=true;rtmStartCountdown();}
+
+  // ── Status multi-select ──
+  const SELECTED_STATUSES = new Set({{ selected_statuses | tojson }});
+
+  // ── Generic multi-picker (Employee, LOB) ──
+  function toggleDropdown(e, id) {
+    e.stopPropagation();
+    document.querySelectorAll('.lob-dropdown').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+    document.getElementById(id).classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('empPicker').contains(e.target))
+      document.getElementById('empDropdown').classList.remove('open');
+    if (!document.getElementById('lobPicker').contains(e.target))
+      document.getElementById('lobDropdown').classList.remove('open');
+  });
+  function filterItems(input, listId) {
+    const term = input.value.toLowerCase();
+    document.querySelectorAll('#' + listId + ' .lob-item').forEach(el => {
+      el.style.display = el.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  }
+  function selectAll(listId, labelId, noun) {
+    document.querySelectorAll('#' + listId + ' input[type=checkbox]').forEach(cb => cb.checked = true);
+    updateToggleLabel(listId, labelId, noun);
+  }
+  function selectNone(listId, labelId, noun) {
+    document.querySelectorAll('#' + listId + ' input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateToggleLabel(listId, labelId, noun);
+  }
+  function updateToggleLabel(listId, labelId, noun) {
+    const total   = document.querySelectorAll('#' + listId + ' input[type=checkbox]').length;
+    const checked = document.querySelectorAll('#' + listId + ' input[type=checkbox]:checked').length;
+    const label   = (checked === 0 || checked === total) ? ('All ' + noun + 's') : (checked + ' ' + noun + (checked > 1 ? 's' : '') + ' selected');
+    document.getElementById(labelId).textContent = label;
+  }
+  updateToggleLabel('empList','empToggleLabel','Employee');
+  updateToggleLabel('lobList','lobToggleLabel','LOB');
+
+  function toggleStatusDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('statusDropdown').classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('statusPicker').contains(e.target))
+      document.getElementById('statusDropdown').classList.remove('open');
+  });
+
+  function onStatusChange() { updateStatusCount(); renderStatusTags(); }
+
+  function selectAllStatuses() {
+    document.querySelectorAll('#statusList input[type=checkbox]').forEach(cb => cb.checked = true);
+    onStatusChange();
+  }
+  function clearAllStatuses() {
+    document.querySelectorAll('#statusList input[type=checkbox]').forEach(cb => cb.checked = false);
+    onStatusChange();
+  }
+
+  function updateStatusCount() {
+    const total   = document.querySelectorAll('#statusList input[type=checkbox]').length;
+    const checked = document.querySelectorAll('#statusList input[type=checkbox]:checked').length;
+    document.getElementById('statusCount').textContent =
+      checked === 0 || checked === total ? '' : `${checked} / ${total}`;
+    document.getElementById('statusToggleLabel').textContent =
+      checked === 0 || checked === total ? 'All Statuses' : `${checked} selected`;
+  }
+
+  function renderStatusTags() {
+    const checked = [...document.querySelectorAll('#statusList input[type=checkbox]:checked')];
+    const total   = document.querySelectorAll('#statusList input[type=checkbox]').length;
+    const tags    = document.getElementById('statusTags');
+    tags.innerHTML = '';
+    if (checked.length === 0 || checked.length === total) return;
+    checked.forEach(cb => {
+      const tag = document.createElement('span');
+      tag.className = 'stag';
+      tag.innerHTML = `${cb.value} <span class="stag-x" onclick="removeStatusTag('${cb.value}')">×</span>`;
+      tags.appendChild(tag);
+    });
+  }
+
+  function removeStatusTag(val) {
+    const cb = document.querySelector(`#statusList input[value="${val}"]`);
+    if (cb) { cb.checked = false; onStatusChange(); }
+  }
+
+  // Init picker state
+  updateStatusCount();
+  renderStatusTags();
+
+  // ── Table sorter ──
+  (function() {
+    var sortState = {};
+    function getVal(cell, type) {
+      if (type === 'num') {
+        var dv = cell.getAttribute('data-val');
+        if (dv !== null) return parseFloat(dv);
+        return parseFloat((cell.innerText||'').replace(/[^0-9.-]/g,'')) || -Infinity;
+      }
+      return (cell.innerText || cell.textContent || '').trim().toLowerCase();
+    }
+    function sortTable(table, col, type, dir) {
+      var tbody = table.querySelector('tbody');
+      var rows  = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a,b){
+        var av=getVal(a.cells[col],type), bv=getVal(b.cells[col],type);
+        if(typeof av==='number'&&typeof bv==='number') return dir==='asc'?av-bv:bv-av;
+        return dir==='asc'?(av<bv?-1:av>bv?1:0):(av<bv?1:av>bv?-1:0);
+      });
+      rows.forEach(function(r){tbody.appendChild(r);});
+    }
+    function updateArrows(table, activeCol, dir) {
+      table.querySelectorAll('th').forEach(function(th,i){
+        var arrow=th.querySelector('.sort-arrow');
+        if(!arrow)return;
+        th.classList.remove('sort-asc','sort-desc');
+        if(i===activeCol){th.classList.add(dir==='asc'?'sort-asc':'sort-desc');arrow.textContent=dir==='asc'?' ▲':' ▼';}
+        else arrow.textContent=' ⇅';
+      });
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('table[id]').forEach(function(table){
+        table.querySelectorAll('th[data-col]').forEach(function(th){
+          th.addEventListener('click',function(){
+            var col=parseInt(th.getAttribute('data-col'));
+            var type=th.getAttribute('data-type')||'alpha';
+            var key=table.id+'-'+col;
+            var dir=(sortState[key]==='asc')?'desc':'asc';
+            sortState[key]=dir;
+            sortTable(table,col,type,dir);
+            updateArrows(table,col,dir);
+          });
+        });
+      });
+    });
+  })();
+</script>
+
+
+<script>
+/* ── Filter persistence v2 — saves/restores form fields, no URL redirect ── */
+(function(){
+  var PK = 'fp2_' + location.pathname.replace(/\//g,'_');
+
+  function getFields() {
+    return Array.from(document.querySelectorAll(
+      'form[method="GET"] select[name], form[method="GET"] input[name],' +
+      'input[type="checkbox"].pu-cb, input[type="checkbox"].st-cb,' +
+      'input[type="checkbox"].u5-cb'
+    ));
+  }
+
+  function save() {
+    var s = {};
+    getFields().forEach(function(el) {
+      var k = el.name || el.className;
+      if (!k) return;
+      if (el.type === 'checkbox') {
+        if (!s[k]) s[k] = [];
+        if (el.checked) s[k].push(el.value || '1');
+      } else {
+        if (el.value) s[k] = el.value;
+      }
+    });
+    try { localStorage.setItem(PK, JSON.stringify(s)); } catch(e) {}
+  }
+
+  function restore() {
+    var raw;
+    try { raw = localStorage.getItem(PK); } catch(e) {}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(e) { return false; }
+
+    var changed = false;
+    getFields().forEach(function(el) {
+      var k = el.name || el.className;
+      if (!k || !(k in s)) return;
+      if (el.type === 'checkbox') {
+        var vals = s[k] || [];
+        var should = vals.indexOf(el.value || '1') > -1;
+        if (el.checked !== should) { el.checked = should; changed = true; }
+      } else {
+        if (s[k] && el.value !== s[k]) { el.value = s[k]; changed = true; }
+      }
+    });
+    return changed;
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // If URL already has params, just save them and don't touch fields
+    if (location.search) {
+      // Populate fields from URL params (browser already does this for GET forms)
+      save();
+      return;
+    }
+
+    // No URL params — try to restore from localStorage and auto-submit
+    var changed = restore();
+    if (changed) {
+      // Check if any field has a non-default value
+      var hasFilter = false;
+      getFields().forEach(function(el) {
+        if (el.type === 'checkbox') {
+          /* checkboxes: changed is enough */
+        } else if (el.tagName === 'SELECT' && el.value && el.selectedIndex > 0) {
+          hasFilter = true;
+        } else if (el.type !== 'checkbox' && el.value) {
+          hasFilter = true;
+        }
+      });
+      if (hasFilter) {
+        var form = document.querySelector('form[method="GET"]');
+        if (form) form.submit();
+      }
+    }
+
+    // Client-side filters
+    if (typeof filterDir     === 'function') filterDir();
+    if (typeof applyU5Filter === 'function') applyU5Filter();
+
+    // Save on any change or form submit
+    document.addEventListener('change', save);
+    document.addEventListener('input',  save);
+    document.querySelectorAll('form[method="GET"]').forEach(function(f) {
+      f.addEventListener('submit', save);
+    });
+    window.addEventListener('beforeunload', save);
+  });
+
+  window.fpClear = function() {
+    try { localStorage.removeItem(PK); } catch(e) {}
+    // Also clear old v1 key
+    try { localStorage.removeItem('fp_' + location.pathname.replace(/\//g,'_')); } catch(e) {}
+  };
+})();
+</script>
+
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+<script src="/static/picker_fit.js"></script>
+</body>
+</html>

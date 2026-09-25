@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>Capacity Plan</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#6a1b9a,#4a148c); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:24px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .page-header p  { margin:4px 0 0; opacity:.85; font-size:.88rem; }
+    .nav-links a { margin-right:14px; color:#6a1b9a; text-decoration:none; font-weight:500; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filter-bar { background:#fff; border-radius:10px; padding:18px 20px;
+                  margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .lob-list-box { border:1px solid #ced4da; border-radius:6px; overflow:hidden; width:300px; }
+    .lob-list-search { padding:8px 10px; border-bottom:1px solid #dee2e6; background:#f8f9fa; }
+    .lob-list-search input { width:100%; border:1px solid #ced4da; border-radius:4px;
+                              padding:4px 8px; font-size:.83rem; outline:none; }
+    .lob-list-items { max-height:250px; overflow-y:auto; }
+    .lob-item { display:flex; align-items:center; gap:8px; padding:6px 10px;
+                font-size:.84rem; cursor:pointer; }
+    .lob-item:hover { background:#f0e6ff; }
+    .lob-item input { accent-color:#6a1b9a; width:14px; height:14px;
+                      cursor:pointer; flex-shrink:0; }
+    .lob-list-footer { padding:8px 10px; border-top:1px solid #dee2e6; background:#f8f9fa;
+                       display:flex; gap:6px; align-items:center; }
+    .lob-card { background:#fff; border-radius:10px;
+                box-shadow:0 3px 10px rgba(0,0,0,.07);
+                margin-bottom:20px; overflow:hidden; }
+    .lob-header { background:#6a1b9a; color:#fff; padding:10px 18px;
+                  font-weight:700; font-size:.95rem; }
+    .plan-table { font-size:.78rem; margin:0; }
+    .plan-table th { background:#f8f9fa; font-size:.72rem; text-align:center;
+                     white-space:nowrap; padding:6px 8px; border-bottom:2px solid #dee2e6; }
+    .plan-table td { text-align:center; padding:5px 8px; white-space:nowrap;
+                     border-bottom:1px solid #f0f0f0; }
+    .metric-label { text-align:left !important; font-weight:600; color:#555;
+                    background:#fafafa !important; padding-left:12px !important;
+                    min-width:210px; border-right:2px solid #e9ecef; }
+    .val-positive { color:#198754; font-weight:700; }
+    .val-negative { color:#dc3545; font-weight:700; }
+    .val-neutral  { color:#555; }
+    .highlight-row td { background:#f0e6ff !important; }
+    .divider-row td   { padding:2px !important; background:#e9d8f7 !important; }
+    .no-data { text-align:center; padding:60px; color:#aaa; }
+    .cf-positive { background:#d1e7dd !important; color:#0a3622 !important; font-weight:700; }
+    .cf-negative { background:#f8d7da !important; color:#842029 !important; font-weight:700; }
+    .cf-fte-low  { background:#c6efce !important; color:#1b5e20 !important; }
+    .cf-fte-mid  { background:#ffeb84 !important; color:#333300 !important; }
+    .cf-fte-high { background:#f8696b !important; color:#fff !important; }
+    .export-btn  { background:#2e7d32; color:#fff; text-decoration:none; padding:5px 14px;
+                   border-radius:6px; font-weight:600; font-size:.83rem; margin-left:auto; }
+    .export-btn:hover { background:#1b5e20; color:#fff; }
+  </style>
+<link rel="stylesheet" href="/static/mobile.css">
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>📅 Monthly Capacity Plan</h1>
+  <p>FTE required vs actual headcount by LOB</p>
+</div>
+
+<div class="nav-links mb-3">
+  <a href="/landing">← Home</a>
+  <a href="/capacity">🏗 Control Panel</a>
+  <a href="/capacity/summary">📋 Summary</a>
+  <a href="/capacity/headcount">👥 Headcount</a>
+  <a href="/logout">Logout</a>
+  <a href="/capacity/plan/export{% if selected_lobs %}?{% for l in selected_lobs %}lobs={{ l|urlencode }}&{% endfor %}shrinkage={{ shrinkage_pct }}{% endif %}" class="export-btn">⬇ Export Excel</a>
+</div>
+
+<div class="filter-bar">
+  <form method="POST" action="/capacity/plan">
+    <div class="d-flex gap-4 align-items-start flex-wrap">
+
+      <div>
+        <label class="form-label fw-semibold mb-2 d-block">
+          Select LOBs
+          <small class="text-muted fw-normal">(leave all unchecked = show all)</small>
+        </label>
+        <div class="lob-list-box">
+          <div class="lob-list-search">
+            <input type="text" id="lobSearchInput" placeholder="Search LOBs…"
+                   oninput="searchLobs(this.value)">
+          </div>
+          <div class="lob-list-items" id="lobListItems">
+            {% if all_lobs_available %}
+              {% for lob in all_lobs_available %}
+              <label class="lob-item" data-lob="{{ lob | lower }}">
+                <input type="checkbox" name="lobs" value="{{ lob }}"
+                       onchange="updateCount()"
+                       {% if lob in selected_lobs %}checked{% endif %}>
+                {{ lob }}
+              </label>
+              {% endfor %}
+            {% else %}
+              <div class="p-3 text-muted text-center" style="font-size:.83rem">
+                No data — rebuild plan first
+              </div>
+            {% endif %}
+          </div>
+          <div class="lob-list-footer">
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    onclick="checkAll()">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    onclick="uncheckAll()">None</button>
+            <span id="checkedCount" class="ms-auto text-muted"
+                  style="font-size:.75rem"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-column gap-3 mt-1">
+        <div>
+          <label class="form-label fw-semibold mb-1">Shrinkage %</label>
+          <input type="number" class="form-control form-control-sm" name="shrinkage"
+                 value="{{ shrinkage_pct | default(30) }}" min="0" max="99" step="1"
+                 style="width:90px">
+        </div>
+        <div>
+          <label class="form-label fw-semibold mb-1">Occupancy %
+            <span class="text-muted fw-normal" style="font-size:.78rem">(industry std: 85%)</span>
+          </label>
+          <input type="number" class="form-control form-control-sm" name="occupancy"
+                 value="{{ occupancy_pct | default(85) }}" min="1" max="100" step="1"
+                 style="width:90px">
+        </div>
+        <div>
+          <label class="form-label fw-semibold mb-1">Answer Rate %
+            <span class="text-muted fw-normal" style="font-size:.78rem">(forecasted − abandons)</span>
+          </label>
+          <input type="number" class="form-control form-control-sm" name="answer_rate"
+                 value="{{ answer_rate_pct | default(92) }}" min="1" max="100" step="1"
+                 style="width:90px">
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-sm text-white"
+                  style="background:#6a1b9a">Apply</button>
+          <a href="/capacity/plan" class="btn btn-sm btn-outline-secondary">Reset</a>
+        </div>
+        <small class="text-muted">
+          {{ lob_count }} LOB{{ 's' if lob_count != 1 else '' }} shown
+          &nbsp;|&nbsp; {{ month_count }} month{{ 's' if month_count != 1 else '' }}
+        </small>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% if not plan %}
+<div class="no-data">
+  <h4>No capacity plan data</h4>
+  <p>Go to <a href="/capacity">Control Panel</a> → <strong>Build Capacity Plan</strong>.</p>
+</div>
+
+{% else %}
+{% for lob, months_data in plan.items() %}
+<div class="lob-card">
+  <div class="lob-header">{{ lob }}</div>
+  <div class="table-responsive">
+    <table class="table plan-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;min-width:210px;border-right:2px solid #dee2e6">
+            Metric
+          </th>
+          {% for m in all_months %}<th>{{ m | month_label }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td class="metric-label">Forecasted Calls Offered</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">
+            {{ d.forecasted_calls | int | format_number if d else '—' }}
+          </td>{% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">Forecast Calls Answered</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">
+            {{ d.calls_answered | int | format_number if d else '—' }}
+          </td>{% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">AHT (seconds)</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">{{ d.aht | int if d else '—' }}</td>
+          {% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">Occupancy</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">
+            {% if d %}{{ (d.occupancy | float * 100) | round(0) | int }}%{% else %}—{% endif %}
+          </td>{% endfor %}
+        </tr>
+
+        <tr class="divider-row">
+          <td colspan="{{ all_months | length + 1 }}"></td>
+        </tr>
+
+        <tr>
+          <td class="metric-label">PSIH without Shrinkage</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">{{ d.psih_no_shrink if d else '—' }}</td>
+          {% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">PSIH with Shrinkage</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">{{ d.psih_with_shrink if d else '—' }}</td>
+          {% endfor %}
+        </tr>
+
+        <tr class="divider-row">
+          <td colspan="{{ all_months | length + 1 }}"></td>
+        </tr>
+
+        {% set fte_vals = [] %}
+        {% for m in all_months %}{% set d = months_data.get(m) %}{% if d %}{% set _ = fte_vals.append(d.fte_required | float) %}{% endif %}{% endfor %}
+        {% set fte_min = fte_vals | min if fte_vals else 0 %}
+        {% set fte_max = fte_vals | max if fte_vals else 0 %}
+        {% set fte_rng = (fte_max - fte_min) if fte_max != fte_min else 1 %}
+        <tr>
+          <td class="metric-label" style="background:#fafafa">FTE Required</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          {% if d %}
+            {% set v = d.fte_required | float %}
+            {% set pct = (v - fte_min) / fte_rng %}
+            {% if pct < 0.33 %}
+              <td style="background:#c6efce;color:#1b5e20;font-weight:700;text-align:center;padding:5px 8px">{{ v }}</td>
+            {% elif pct < 0.66 %}
+              <td style="background:#ffeb84;color:#333300;font-weight:700;text-align:center;padding:5px 8px">{{ v }}</td>
+            {% else %}
+              <td style="background:#f8696b;color:#fff;font-weight:700;text-align:center;padding:5px 8px">{{ v }}</td>
+            {% endif %}
+          {% else %}
+            <td style="text-align:center;padding:5px 8px">—</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+
+        <tr class="highlight-row">
+          <td class="metric-label" title="Actual headcount. LOBs with English and French sides break out as Combined / EN / FR below.">Actual Head Count</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td style="text-align:center">
+            <strong>{{ d.actual_hc if d else '—' }}</strong>
+            {% if d and d.hc_has_lang %}
+              <div style="font-size:.7rem;color:#6a1b9a;margin-top:2px;white-space:nowrap">
+                Comb {{ d.hc_combined }} · EN {{ d.hc_en }} · FR {{ d.hc_fr }}
+              </div>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label" style="background:#fafafa">Required vs Actual</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          {% if d %}
+            {% set v = d.req_vs_actual | float %}
+            {% if v > 0 %}
+              <td style="background:#d1e7dd;text-align:center;padding:5px 8px">
+                <strong style="color:#0a3622">{{ "%+.1f" | format(v) }}</strong></td>
+            {% elif v < 0 %}
+              <td style="background:#f8d7da;text-align:center;padding:5px 8px">
+                <strong style="color:#842029">{{ "%+.1f" | format(v) }}</strong></td>
+            {% else %}
+              <td style="background:#e9ecef;text-align:center;padding:5px 8px">
+                <strong style="color:#555">0.0</strong></td>
+            {% endif %}
+          {% else %}
+            <td style="text-align:center;padding:5px 8px">—</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+
+        <tr class="divider-row">
+          <td colspan="{{ all_months | length + 1 }}"></td>
+        </tr>
+
+        <tr>
+          <td class="metric-label">Shrinkage %</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">
+            {% if d %}{{ (d.shrinkage | float * 100) | round(0) | int }}%{% else %}—{% endif %}
+          </td>{% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">Peak Agents Required</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">{{ d.peak_agents if d else '—' }}</td>
+          {% endfor %}
+        </tr>
+
+        <tr>
+          <td class="metric-label">Avg Agents Required</td>
+          {% for m in all_months %}{% set d = months_data.get(m) %}
+          <td class="val-neutral">
+            {{ "%.2f" | format(d.avg_agents | float) if d else '—' }}
+          </td>{% endfor %}
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+function searchLobs(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#lobListItems .lob-item').forEach(function(el) {
+    el.style.display = el.dataset.lob.indexOf(q) >= 0 ? '' : 'none';
+  });
+  updateCount();
+}
+function checkAll() {
+  document.querySelectorAll('#lobListItems input[type=checkbox]').forEach(function(cb) {
+    if (cb.closest('.lob-item').style.display !== 'none') cb.checked = true;
+  });
+  updateCount();
+}
+function uncheckAll() {
+  document.querySelectorAll('#lobListItems input[type=checkbox]').forEach(function(cb) {
+    cb.checked = false;
+  });
+  updateCount();
+}
+function updateCount() {
+  var checked = document.querySelectorAll('#lobListItems input[type=checkbox]:checked').length;
+  var total   = document.querySelectorAll('#lobListItems input[type=checkbox]').length;
+  var el = document.getElementById('checkedCount');
+  el.textContent = checked === 0 ? '' : checked + ' / ' + total + ' selected';
+}
+document.querySelectorAll('#lobListItems input[type=checkbox]').forEach(function(cb) {
+  cb.addEventListener('change', updateCount);
+});
+updateCount();
+
+// Apply conditional formatting to data cells
+document.querySelectorAll('.plan-table tbody tr').forEach(function(row) {
+  var label = row.querySelector('.metric-label');
+  if (!label) return;
+  var text = label.textContent.trim();
+  if (text === 'Required vs Actual') {
+    row.querySelectorAll('td:not(.metric-label)').forEach(function(td) {
+      var v = parseFloat(td.textContent);
+      if (!isNaN(v)) {
+        if (v > 0) td.className += ' cf-positive';
+        else if (v < 0) td.className += ' cf-negative';
+      }
+    });
+  }
+  // FTE Required row: colours applied by Jinja template — JS skips it
+});
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

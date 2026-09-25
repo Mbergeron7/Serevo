@@ -1,0 +1,63 @@
+/* ── Shared mobile responsiveness (identical block extracted from 15 templates) ── */
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+
+  /* Make all tables horizontally scrollable */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+
+  /* Stack filter bars vertically */
+  .toolbar, .filter-bar,
+  [style*="display:flex"], [style*="display: flex"] {
+    flex-wrap: wrap !important;
+  }
+
+  /* Nav links wrap */
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+
+  /* KPI cards stack */
+  .kpi-row, .kpi { min-width: 120px !important; }
+
+  /* Page headers smaller */
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+
+  /* Inputs full width — but not compact filter/picker dropdowns */
+  select:not(.compact-select):not([style*="width:auto"]):not([style*="width: auto"]),
+  input[type="date"]:not(.compact-input),
+  input[type="text"]:not(.compact-input) {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* RTM specific */
+  .lob-card { margin-bottom: 12px; }
+  .section { padding: 10px !important; }
+
+  /* Buttons smaller on mobile */
+  .btn, button { font-size: .82rem !important; padding: 6px 10px !important; }
+
+  /* Dark toggle stays visible */
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+
+  /* Interval Report header — keep filter controls tidy on narrow screens */
+  .int-report-head { flex-wrap: wrap !important; gap: 6px !important; row-gap: 6px !important; }
+  .int-report-head > span:first-child { flex: 1 1 100%; }
+  .int-report-head select {
+    width: auto !important;
+    max-width: 48% !important;
+    font-size: .72rem !important;
+    padding: 3px 6px !important;
+  }
+  .int-report-head #intLobToggle {
+    width: auto !important;
+    font-size: .72rem !important;
+    padding: 4px 8px !important;
+    margin-left: 0 !important;
+  }
+  /* LOB filter dropdown fits the viewport when reparented to body */
+  #intLobDrop {
+    min-width: 200px !important;
+    max-width: 90vw !important;
+    max-height: 60vh !important;
+  }
+}

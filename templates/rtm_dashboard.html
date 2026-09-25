@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>RTM — Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:20px; }
+    .page-header { background:linear-gradient(135deg,#1a237e,#283593); color:#fff;
+                   border-radius:10px; padding:16px 24px; margin-bottom:16px; }
+    .page-header h1 { margin:0; font-size:1.3rem; }
+    .page-header p  { margin:2px 0 0; opacity:.8; font-size:.82rem; }
+    .nav-links { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+    .nav-links a { color:#1a237e; text-decoration:none; font-weight:500; font-size:.85rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .nav-sep { color:#ccc; }
+    #snapshot { background:#f0f2f5; }
+    .snap-header { background:#1a237e; color:#fff; border-radius:8px; padding:7px 16px;
+                   font-size:.8rem; font-weight:600; margin-bottom:12px;
+                   display:flex; align-items:center; justify-content:space-between; }
+    .snap-row { display:flex; gap:12px; margin-bottom:12px; }
+    .snap-col  { flex:1; min-width:0; }
+    .sc { background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08); overflow:hidden; }
+    .sc-head { padding:6px 12px; font-size:.72rem; font-weight:700; text-transform:uppercase;
+               letter-spacing:.05em; color:#fff; background:#1a237e; }
+    .sc-head.purple { background:#6a1b9a; }
+    .sc-head.red    { background:#b71c1c; }
+    .sc-head.teal   { background:#006064; }
+    .sc-head.green  { background:#1b5e20; }
+
+    /* Mini tables */
+    .mt { width:100%; border-collapse:collapse; font-size:.74rem; }
+    .mt th { background:#e8eaf6; color:#1a237e; padding:5px 8px; font-weight:700;
+             font-size:.68rem; white-space:nowrap; border-bottom:2px solid #c5cae9;
+             text-align:center; cursor:pointer; user-select:none; }
+    .mt th:first-child { text-align:left; }
+    .mt th:hover { background:#d1d9f5; }
+    .mt th .sort-arrow { font-size:.6rem; opacity:.4; margin-left:3px; }
+    .mt th.sort-asc .sort-arrow,
+    .mt th.sort-desc .sort-arrow { opacity:1; color:#1a237e; }
+    .mt td { padding:4px 8px; border-bottom:1px solid #f0f0f0; white-space:nowrap;
+             text-align:center; vertical-align:middle; }
+    .mt td:first-child { text-align:left; font-weight:500; }
+    .mt tbody tr:hover { background:#f3f4ff; }
+    .mt tfoot td { background:#e8eaf6; font-weight:700; padding:5px 8px;
+                   border-top:2px solid #c5cae9; text-align:center; font-size:.74rem; }
+    .mt tfoot td:first-child { text-align:left; }
+
+    /* Value colours */
+    .sl-green  { color:#1b5e20; font-weight:700; }
+    .sl-amber  { color:#e65100; font-weight:700; }
+    .sl-red    { color:#b71c1c; font-weight:700; }
+    .otf-high  { color:#b71c1c; font-weight:700; }
+    .otf-ok    { color:#1b5e20; font-weight:700; }
+    .otf-low   { color:#e65100; font-weight:700; }
+    .abs-high  { color:#b71c1c; font-weight:700; }
+    .abs-mid   { color:#e65100; font-weight:700; }
+    .abs-ok    { color:#1b5e20; font-weight:700; }
+    .casc-high { color:#b71c1c; font-weight:700; }
+    .casc-mid  { color:#e65100; font-weight:700; }
+    .casc-ok   { color:#1b5e20; font-weight:700; }
+    .badge-absent { background:#fce4e4; color:#b71c1c; border-radius:4px;
+                    padding:1px 6px; font-size:.68rem; font-weight:700; }
+
+    /* ── Interval Report: quick-glance readability ── */
+    #tbl-interval { font-size:.95rem; }
+    #tbl-interval th { font-size:.82rem; padding:8px 12px; }
+    #tbl-interval td { padding:9px 12px; font-size:.95rem; }
+    #tbl-interval tfoot td { font-size:.9rem; padding:8px 12px; }
+    #tbl-interval tbody tr.row-critical { background:#fdecea; }
+    #tbl-interval tbody tr.row-warn     { background:#fff6e5; }
+    #tbl-interval tbody tr.row-ok       { background:#eef8ee; }
+    #tbl-interval tbody tr:hover        { filter:brightness(.97); }
+    .status-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+                  margin-right:7px; vertical-align:middle; }
+    .status-dot.red   { background:#b71c1c; }
+    .status-dot.amber { background:#e65100; }
+    .status-dot.green { background:#1b5e20; }
+
+    /* ── AHOD banner ── */
+    .ahod-banner { border-radius:8px; margin-bottom:14px; overflow:hidden;
+                   box-shadow:0 2px 8px rgba(0,0,0,.12); border:2px solid; }
+    .ahod-yellow { border-color:#e6a700; background:#fffbeb; }
+    .ahod-red    { border-color:#b71c1c; background:#fdecea; }
+    .ahod-head   { display:flex; align-items:center; gap:8px; padding:8px 14px;
+                   font-size:.78rem; font-weight:700; }
+    .ahod-yellow .ahod-head { background:#fff3cd; color:#7a5b00; }
+    .ahod-red    .ahod-head { background:#b71c1c; color:#fff; }
+    .ahod-icon   { font-size:.9rem; }
+    .ahod-title  { flex:1; letter-spacing:.02em; }
+    .ahod-svl    { font-size:.74rem; font-weight:700; }
+    .ahod-table  { width:100%; border-collapse:collapse; font-size:.74rem; }
+    .ahod-table th { text-align:left; padding:5px 12px; font-size:.68rem; font-weight:700;
+                      text-transform:uppercase; color:#555; border-bottom:1px solid rgba(0,0,0,.1); }
+    .ahod-table td { padding:5px 12px; border-bottom:1px solid rgba(0,0,0,.06); vertical-align:middle; }
+    .ahod-table tr.ahod-done td { opacity:.55; text-decoration:line-through; }
+    .ahod-table tr.ahod-done td:last-child { text-decoration:none; }
+    .ahod-status-active  { background:#b71c1c; color:#fff; border-radius:5px; padding:1px 7px; font-size:.68rem; font-weight:700; }
+    .ahod-status-standby { background:#fff3cd; color:#856404; border-radius:5px; padding:1px 7px; font-size:.68rem; font-weight:700; }
+    .ahod-check-wrap { display:flex; align-items:center; gap:6px; cursor:pointer; }
+    .ahod-check-wrap input { width:15px; height:15px; accent-color:#1b5e20; cursor:pointer; }
+    .ahod-check-meta { font-size:.65rem; color:#666; }
+
+    .btn-snap { background:#1a237e; color:#fff; border:none; border-radius:6px;
+                padding:3px 12px; font-size:.78rem; font-weight:600; cursor:pointer; }
+    .btn-snap:hover { background:#283593; }
+    .btn-copy { background:#006064; color:#fff; border:none; border-radius:6px;
+                padding:3px 12px; font-size:.78rem; font-weight:600; cursor:pointer; }
+    .btn-copy:hover { background:#00838f; }
+    .btn-snap.done, .btn-copy.done { background:#2e7d32; }
+    .snap-section-item { display:flex; align-items:center; gap:8px; padding:5px 12px;
+                         font-size:.82rem; cursor:pointer; color:#333; }
+    .snap-section-item:hover { background:#e8eaf6; }
+    .snap-section-item input { accent-color:#1a237e; width:14px; height:14px; flex-shrink:0; }
+    .refresh-bar { background:#fff; border-radius:8px; padding:7px 14px; margin-bottom:12px;
+                   box-shadow:0 2px 6px rgba(0,0,0,.06); display:flex; align-items:center;
+                   gap:10px; font-size:.8rem; color:#555; }
+    .refresh-bar button { background:#1a237e; color:#fff; border:none; border-radius:6px;
+                          padding:3px 10px; font-size:.75rem; font-weight:600; cursor:pointer; }
+  </style>
+<style>
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+
+  /* Make all tables horizontally scrollable */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+
+  /* Stack filter bars vertically */
+  .toolbar, .filter-bar,
+  [style*="display:flex"], [style*="display: flex"] {
+    flex-wrap: wrap !important;
+  }
+
+  /* Nav links wrap */
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+
+  /* KPI cards stack */
+  .kpi-row, .kpi { min-width: 120px !important; }
+
+  /* Page headers smaller */
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+
+  /* Inputs full width */
+  select, input[type="date"], input[type="text"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* RTM specific */
+  .lob-card { margin-bottom: 12px; }
+  .section { padding: 10px !important; }
+
+  /* Buttons smaller on mobile */
+  .btn, button { font-size: .82rem !important; padding: 6px 10px !important; }
+
+  /* Dark toggle stays visible */
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+
+  /* ── RTM Dashboard: stack merged rows instead of squishing columns ── */
+  .snap-row { flex-direction: column !important; }
+  .snap-col { flex: 1 1 100% !important; width: 100% !important; margin-bottom: 10px; }
+
+  /* Section headers with dual pickers wrap onto their own line cleanly */
+  .sc-head { flex-direction: column !important; align-items: flex-start !important; gap: 6px !important; }
+  .sc-head > div { width: 100%; display: flex !important; gap: 6px; }
+  .u5-toggle { flex: 1; text-align: center; }
+
+  /* Picker dropdowns: don't overflow off narrow screens */
+  #u5Dropdown, #empU5Dropdown, #snapDropdown, .lob-dropdown {
+    right: auto !important;
+    left: 0 !important;
+    width: min(260px, 90vw) !important;
+  }
+
+  /* AHOD banner: allow horizontal scroll instead of squishing columns */
+  .ahod-table { display: block; overflow-x: auto; white-space: nowrap; }
+  .ahod-head { flex-wrap: wrap; }
+  .ahod-title { font-size: .72rem !important; }
+
+  /* Snapshot header + refresh bar stack cleanly */
+  .snap-header { flex-direction: column; align-items: flex-start !important; gap: 4px; }
+}
+</style>
+<link rel="stylesheet" href="/static/dark.css">
+<link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>📊 RTM Combined Dashboard</h1>
+  <p>{{ today }} — {{ now }} EST</p>
+  <div id="mgrBar" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+       font-size:.9rem;color:#fff">
+    <span style="opacity:.85">🎧 Managing now:</span>
+    <strong id="mgrCurrent" style="font-size:1rem">—</strong>
+    <span id="mgrSince" style="opacity:.7;font-size:.8rem"></span>
+    <select id="mgrSelect" onchange="setManager(this.value)"
+            style="padding:4px 8px;border-radius:6px;border:none;font-size:.85rem;cursor:pointer">
+      <option value="">— take over —</option>
+    </select>
+    <button onclick="setManager('')" title="Clear"
+            style="padding:4px 10px;border-radius:6px;border:none;cursor:pointer;
+                   background:rgba(255,255,255,.2);color:#fff;font-size:.8rem">Clear</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var NAMES = [], polling;
+  function paint(d) {
+    document.getElementById('mgrCurrent').textContent = d.manager || 'Unassigned';
+    document.getElementById('mgrSince').textContent = d.manager && d.since ? '(since ' + d.since + ')' : '';
+    if (NAMES.length === 0 && d.names) {
+      NAMES = d.names;
+      var sel = document.getElementById('mgrSelect');
+      d.names.forEach(function(n){
+        var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+      });
+    }
+  }
+  window.loadManager = function() {
+    fetch('/api/rtm_manager').then(function(r){return r.json();}).then(paint).catch(function(){});
+  };
+  window.setManager = function(name) {
+    fetch('/api/rtm_manager', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ manager: name }) })
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d.success){ paint({manager:d.manager, since:d.since}); }
+        else { alert('Failed to save manager: ' + (d.error || 'unknown error')); }
+        document.getElementById('mgrSelect').value = ''; })
+      .catch(function(e){ alert('Network error saving manager: ' + e); });
+  };
+  loadManager();
+  setInterval(loadManager, 20000);  // keep in sync across everyone ~20s
+})();
+</script>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a><span class="nav-sep">|</span>
+  <strong style="color:#1a237e">RTM</strong><span class="nav-sep">|</span>
+  <a href="/rtm/dashboard">📊 Dashboard</a>
+  <a href="/rtm/schedule">📋 Schedule</a>
+  <a href="/rtm/absenteeism">📊 Absenteeism</a>
+  <a href="/rtm/pw-schedules">📅 PW Schedules</a>
+  <a href="/rtm/forecast">🔮 Forecast vs OTF</a>
+  <a href="/rtm/interval">⏱ Interval</a>
+  <a href="/rtm/svl">📈 SVL</a>
+  <a href="/rtm/efficiency">⚡ Efficiency</a>
+  <a href="/rtm/cascades">🔀 Cascades</a>
+  <a href="/rtm/agent-status">👤 Agent Status</a>
+  <a href="/rtm/knowledge">🧠 Knowledge</a>
+  <a href="/rtm/call-log">📞 Call Log</a>
+  <a href="/logout">Logout</a>
+  <!-- Snapshot section picker -->
+  <div class="snap-picker" id="snapPicker" style="margin-left:auto;position:relative">
+    <button class="btn-snap" id="snapBtn" onclick="toggleSnapPicker(event)">📸 Copy Snapshot ▾</button>
+    <div id="snapDropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;
+         background:#fff;border:1px solid #dee2e6;border-radius:8px;
+         box-shadow:0 6px 20px rgba(0,0,0,.15);width:230px;z-index:1050;padding:8px 0;">
+      <div style="padding:6px 12px 4px;font-size:.7rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em">Select Sections</div>
+      <label class="snap-section-item" data-section="snap-interval">
+        <input type="checkbox" checked> ⏱ Interval Report
+      </label>
+      <label class="snap-section-item" data-section="snap-attendance">
+        <input type="checkbox" checked> 👥 Attendance
+      </label>
+      <label class="snap-section-item" data-section="snap-absent">
+        <input type="checkbox" checked> 🚫 Absent Advisors
+      </label>
+      <label class="snap-section-item" data-section="snap-cascades">
+        <input type="checkbox" checked> 🔀 Cascades by Advisor
+      </label>
+      <label class="snap-section-item" data-section="snap-under5">
+        <input type="checkbox" checked> ⚡ Status Under 5 Sec
+      </label>
+      <div style="padding:7px 10px;border-top:1px solid #eee;display:flex;gap:6px;margin-top:4px;position:sticky;bottom:0;background:#fff" class="snap-footer">
+        <button onclick="setAllSnap(true)"  style="font-size:.73rem;padding:2px 8px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">All</button>
+        <button onclick="setAllSnap(false)" style="font-size:.73rem;padding:2px 8px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">None</button>
+        <button onclick="applySnap()"       style="font-size:.73rem;padding:3px 12px;border-radius:4px;cursor:pointer;background:#6a1b9a;color:#fff;border:none;margin-left:auto;font-weight:600">Apply</button>
+      </div>
+    </div>
+  </div>
+  <!-- Capture button — only visible after Apply is clicked -->
+  <button class="btn-snap" id="captureBtn" onclick="doSnapshot()" style="display:none">📸 Capture</button>
+  <button class="btn-copy" id="copyBtn" onclick="copyTextSummary()">📋 Copy Text for Teams</button>
+  <a href="/rtm/cache-clear" style="background:#dc3545;color:#fff;padding:3px 10px;border-radius:6px;font-size:.75rem;text-decoration:none;font-weight:600">🔄 Clear Cache</a> <button onclick="fpClear();location.href=location.pathname" style="background:#555;color:#fff;border:none;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer" title="Clear saved filters and reload">✕ Reset Filters</button>
+</div>
+
+<div class="refresh-bar">
+  <span id="rtm-last-refresh">Last refresh: <strong>--:--:--</strong></span>
+  <span style="color:#dee2e6">|</span>
+  <button onclick="rtmManualRefresh()">🔄 Refresh Now</button>
+  <span style="color:#dee2e6">|</span>
+  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;font-size:.8rem">
+    <input type="checkbox" id="rtm-auto-toggle" onchange="rtmToggleAuto(this.checked)"
+           style="accent-color:#1a237e;width:13px;height:13px"> Auto-refresh
+  </label>
+  <span id="rtm-countdown" style="color:#1a237e;font-weight:600;display:none"></span>
+</div>
+
+{% if ahod_tier %}
+<div class="ahod-banner ahod-{{ ahod_tier }}">
+  <div class="ahod-head">
+    <span class="ahod-icon">{% if ahod_tier == 'red' %}🔴{% else %}🟡{% endif %}</span>
+    <span class="ahod-title">
+      AHOD ACTIVE — SS Sales
+      {% if ahod_tier == 'red' %}JEOPARDIZED — ALL HANDS{% else %}SALVAGEABLE — TIGHTEN{% endif %}
+    </span>
+    <span class="ahod-svl">SVL: {{ ahod_svl }}%</span>
+  </div>
+  <table class="ahod-table">
+    <thead>
+      <tr>
+        <th style="width:36px">Lvl</th>
+        <th>Action</th>
+        <th style="width:130px">Owner</th>
+        <th style="width:90px">Status</th>
+        <th style="width:120px">Completed</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lvl in ahod_levels %}
+      <tr class="{% if lvl.checked %}ahod-done{% endif %}">
+        <td>{{ lvl.level }}</td>
+        <td>{{ lvl.action }}</td>
+        <td>{{ lvl.owner }}</td>
+        <td>
+          {% if lvl.default_status == 'Active' %}<span class="ahod-status-active">Active</span>
+          {% else %}<span class="ahod-status-standby">Standby</span>{% endif %}
+        </td>
+        <td>
+          <label class="ahod-check-wrap">
+            <input type="checkbox" data-level="{{ lvl.level }}"
+                   {% if lvl.checked %}checked{% endif %}
+                   onchange="ahodToggle(this)">
+            {% if lvl.checked %}
+            <span class="ahod-check-meta">{{ lvl.checked_by.split('@')[0] }} · {{ lvl.checked_at }}</span>
+            {% endif %}
+          </label>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ══════════════ SNAPSHOT AREA ══════════════ -->
+<div id="snapshot">
+
+  <div class="snap-header">
+    <span>📊 RTM Snapshot — {{ today }}</span>
+    <span>{{ now }} EST</span>
+  </div>
+
+  <!-- Row 1: Interval Report + Attendance + Attendance by Advisor (side by side) -->
+  <div id="snap-attendance-row" class="snap-row">
+    <div id="snap-interval" class="snap-col" style="flex:1.3">
+      <div class="sc">
+      <div class="sc-head int-report-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>⏱ Interval Report{% if interval_backup_active %} <span style="font-size:.72rem;background:rgba(255,200,0,.3);padding:2px 8px;border-radius:4px">📂 {{ interval_display_date }}</span>{% endif %}</span>
+        {% if interval_backup_dates | length > 1 %}
+        <select onchange="window.location='?backup_date='+this.value"
+                style="padding:3px 8px;border-radius:5px;border:1px solid rgba(255,255,255,.4);
+                       background:rgba(0,0,0,.25);color:#fff;font-size:.76rem;cursor:pointer">
+          {% for d in interval_backup_dates %}<option value="{{ d }}" {% if d == interval_display_date %}selected{% endif %}>{{ d }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <span style="margin-left:auto">
+          <button id="intLobToggle" onclick="toggleIntLobDrop()"
+                  style="padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;
+                         font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap">
+            Core LOBs ▾
+          </button>
+        </span>
+      </div>
+      <!-- LOB filter dropdown — appended to body via JS to escape overflow/filter -->
+      <div id="intLobDrop" style="display:none;position:fixed;background:#fff;border-radius:8px;
+           box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:9999;min-width:220px;max-height:320px;overflow-y:auto;padding:6px 0">
+        <div style="padding:4px 12px;display:flex;gap:8px">
+          <button onclick="intLobAll(true)" style="font-size:.72rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;padding:2px 8px">All</button>
+          <button onclick="intLobAll(false)" style="font-size:.72rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;padding:2px 8px">None</button>
+          <button onclick="intLobCore()" style="font-size:.72rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;padding:2px 8px">Core only</button>
+        </div>
+        {% for r in interval_by_lob %}
+        <label style="display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:.8rem;color:#333;cursor:pointer"
+               onmouseover="this.style.background='#e8eaf6'" onmouseout="this.style.background=''">
+          <input type="checkbox" class="int-lob-cb" value="{{ r.lob }}"
+                 {% if not r.lob.endswith(' EN') and not r.lob.endswith(' FR') %}checked{% endif %}
+                 style="accent-color:#1a237e;width:13px;height:13px"> {{ r.lob }}
+        </label>
+        {% endfor %}
+        <div style="padding:6px 12px;border-top:1px solid #eee;margin-top:4px">
+          <button onclick="applyIntLobFilter();document.getElementById('intLobDrop').style.display='none'"
+                  style="width:100%;padding:5px;background:#1a237e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">
+            Apply
+          </button>
+        </div>
+      </div>
+        <table class="mt" id="tbl-interval">
+          <thead>
+            <tr>
+              <th data-col="0" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+              <th data-col="1" data-type="num">SVL <span class="sort-arrow">⇅</span></th>
+              <th data-col="2" data-type="num">OTF <span class="sort-arrow">⇅</span></th>
+              <th data-col="3" data-type="num">Cascade % <span class="sort-arrow">⇅</span></th>
+              <th data-col="4" data-type="num">ABND % <span class="sort-arrow">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in interval_by_lob %}
+            <tr data-lob="{{ r.lob }}" class="{% if r.service_level is not none %}{% if r.service_level < 70 %}row-critical{% elif r.service_level < 80 %}row-warn{% else %}row-ok{% endif %}{% endif %}">
+              <td>{% if r.service_level is not none %}{% if r.service_level < 70 %}<span class="status-dot red"></span>{% elif r.service_level < 80 %}<span class="status-dot amber"></span>{% else %}<span class="status-dot green"></span>{% endif %}{% endif %}{{ r.lob }}</td>
+              <td data-val="{{ r.service_level if r.service_level is not none else -1 }}">{% if r.service_level is not none %}{% if r.service_level >= 80 %}<span class="sl-green">{{ r.service_level }}%</span>{% elif r.service_level >= 70 %}<span class="sl-amber">{{ r.service_level }}%</span>{% else %}<span class="sl-red">{{ r.service_level }}%</span>{% endif %}{% else %}—{% endif %}</td>
+              <td data-val="{{ r.otf if r.otf is not none else -1 }}">{% if r.otf is not none %}{% if r.otf > 110 %}<span class="otf-high">{{ r.otf }}%</span>{% elif r.otf < 90 %}<span class="otf-low">{{ r.otf }}%</span>{% else %}<span class="otf-ok">{{ r.otf }}%</span>{% endif %}{% else %}—{% endif %}</td>
+              <td data-val="{{ r.cascade_rate if r.cascade_rate is not none else -1 }}">{% if r.cascade_rate is not none %}{% if r.cascade_rate >= 15 %}<span class="casc-high">{{ r.cascade_rate }}%</span>{% elif r.cascade_rate >= 8 %}<span class="casc-mid">{{ r.cascade_rate }}%</span>{% else %}<span class="casc-ok">{{ r.cascade_rate }}%</span>{% endif %}{% else %}—{% endif %}</td>
+              <td data-val="{{ r.abandoned_pct if r.abandoned_pct is not none else -1 }}">{% if r.abandoned_pct is not none %}{% if r.abandoned_pct >= 5 %}<span class="sl-red">{{ r.abandoned_pct }}%</span>{% else %}<span class="sl-green">{{ r.abandoned_pct }}%</span>{% endif %}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td>{% if total_sl is not none %}<strong>{{ total_sl }}%</strong>{% else %}—{% endif %}</td>
+              <td>{% if total_otf is not none %}<strong>{{ total_otf }}%</strong>{% else %}—{% endif %}</td>
+              <td>{% if total_cascade_rate is not none %}<strong>{{ total_cascade_rate }}%</strong>{% else %}—{% endif %}</td>
+              <td>{% if total_offered > 0 %}<strong>{{ (total_aband / total_offered * 100) | round(1) }}%</strong>{% else %}—{% endif %}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <div id="snap-attendance" class="snap-col" style="flex:1.1">
+      <div class="sc">
+        <div class="sc-head purple">👥 Attendance</div>
+        <table class="mt" id="tbl-attendance">
+          <thead>
+            <tr>
+              <th data-col="0" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+              <th data-col="1" data-type="num">Scheduled <span class="sort-arrow">⇅</span></th>
+              <th data-col="2" data-type="num">Absent <span class="sort-arrow">⇅</span></th>
+              <th data-col="3" data-type="num">Absence % <span class="sort-arrow">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in attendance if r.total_absent > 0 %}
+            {% set pct = (r.total_absent / r.total_scheduled * 100) | round(0) | int if r.total_scheduled > 0 else 0 %}
+            <tr>
+              <td>{{ r.lob }}</td>
+              <td data-val="{{ r.total_scheduled }}">{{ r.total_scheduled }}</td>
+              <td data-val="{{ r.total_absent }}">{{ r.total_absent }}</td>
+              <td data-val="{{ pct }}">{% if pct >= 20 %}<span class="abs-high">{{ pct }}%</span>{% elif pct >= 10 %}<span class="abs-mid">{{ pct }}%</span>{% else %}<span class="abs-ok">{{ pct }}%</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              {% set ts = attendance | sum(attribute='total_scheduled') %}
+              {% set ta = attendance | sum(attribute='total_absent') %}
+              <td>Total</td>
+              <td><strong>{{ ts }}</strong></td>
+              <td><strong>{{ ta }}</strong></td>
+              <td><strong>{{ (ta / ts * 100) | round(0) | int if ts > 0 else 0 }}%</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <div id="snap-absent" class="snap-col" style="flex:1">
+      <div class="sc">
+        <div class="sc-head red">🚫 Attendance by Advisor</div>
+        {% if absent_advisors %}
+        <table class="mt" id="tbl-absent">
+          <thead>
+            <tr>
+              <th data-col="0" data-type="alpha">Employee <span class="sort-arrow">⇅</span></th>
+              <th data-col="1" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+              <th data-col="2" data-type="alpha">Status <span class="sort-arrow">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in absent_advisors %}
+            <tr>
+              <td>{{ r.employee }}</td>
+              <td>{{ r.lob }}</td>
+              <td><span class="badge-absent">Absent</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">Total</td>
+              <td><strong>{{ absent_advisors | length }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+        {% else %}
+        <div style="padding:10px 12px;font-size:.75rem;color:#555">✅ No absences</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Cascades by Advisor + Status Under 5 Sec -->
+  <div id="snap-cascade-row" class="snap-row">
+    <div id="snap-cascades" class="snap-col" style="flex:1.4">
+      <div class="sc">
+        <div class="sc-head teal">🔀 Cascades by Advisor</div>
+        {% if cascade_by_advisor %}
+        <table class="mt" id="tbl-cascades">
+          <thead>
+            <tr>
+              <th data-col="0" data-type="alpha">Employee <span class="sort-arrow">⇅</span></th>
+              <th data-col="1" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+              <th data-col="2" data-type="num">Calls Offered <span class="sort-arrow">⇅</span></th>
+              <th data-col="3" data-type="num">Cascades <span class="sort-arrow">⇅</span></th>
+              <th data-col="4" data-type="num">Cascade % <span class="sort-arrow">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in cascade_by_advisor %}
+            {% set pct = (r.count / r.calls_offered * 100) | round(0) | int if r.calls_offered > 0 else 0 %}
+            <tr>
+              <td>{{ r.name }}</td>
+              <td>{{ r.lob }}</td>
+              <td data-val="{{ r.calls_offered }}">{{ r.calls_offered }}</td>
+              <td data-val="{{ r.count }}">{{ r.count }}</td>
+              <td data-val="{{ pct }}">{% if pct >= 20 %}<span class="casc-high">{{ pct }}%</span>{% elif pct >= 8 %}<span class="casc-mid">{{ pct }}%</span>{% else %}<span class="casc-ok">{{ pct }}%</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">Total</td>
+              {% set to = cascade_by_advisor | sum(attribute='calls_offered') %}
+              {% set tc = cascade_by_advisor | sum(attribute='count') %}
+              <td><strong>{{ to }}</strong></td>
+              <td><strong>{{ tc }}</strong></td>
+              <td><strong>{{ (tc / to * 100) | round(0) | int if to > 0 else 0 }}%</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+        {% else %}
+        <div style="padding:10px 12px;font-size:.75rem;color:#555">✅ No cascades</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="snap-under5" class="snap-col" style="flex:1">
+      <div class="sc">
+        <div class="sc-head green" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span>⚡ Status Under 5 Sec</span>
+          <div style="display:flex;gap:6px">
+            <div class="u5-picker" id="empU5Picker" style="position:relative">
+              <button class="u5-toggle" id="empU5Toggle" onclick="toggleEmpU5(event)"
+                      style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);
+                             color:#fff;border-radius:5px;padding:2px 10px;font-size:.7rem;
+                             font-weight:600;cursor:pointer;white-space:nowrap">
+                All Employees ▾
+              </button>
+              <div id="empU5Dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;
+                   background:#fff;border:1px solid #dee2e6;border-radius:8px;
+                   box-shadow:0 6px 20px rgba(0,0,0,.15);width:200px;max-height:280px;
+                   overflow-y:auto;z-index:1060;padding:4px 0">
+                {% set u5_employees = under5 | map(attribute='name') | unique | sort | list %}
+                {% for n in u5_employees %}
+                <label style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+                               font-size:.8rem;color:#333;cursor:pointer" onmouseover="this.style.background='#e8f5e9'" onmouseout="this.style.background=''">
+                  <input type="checkbox" class="empu5-cb" value="{{ n }}" checked
+                         style="accent-color:#1b5e20;width:13px;height:13px"> {{ n }}
+                </label>
+                {% endfor %}
+                <div style="padding:6px 10px;border-top:1px solid #eee;display:flex;gap:6px;margin-top:2px;position:sticky;bottom:0;background:#fff">
+                  <button onclick="empU5SelectAll(true)"  style="font-size:.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">All</button>
+                  <button onclick="empU5SelectAll(false)" style="font-size:.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">None</button>
+                  <button onclick="applyU5Filter()"   style="font-size:.72rem;padding:2px 8px;border-radius:4px;cursor:pointer;background:#1b5e20;color:#fff;border:none;font-weight:600;margin-left:auto">Apply</button>
+                </div>
+              </div>
+            </div>
+            <div class="u5-picker" id="u5Picker" style="position:relative">
+              <button class="u5-toggle" id="u5Toggle" onclick="toggleU5(event)"
+                      style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);
+                             color:#fff;border-radius:5px;padding:2px 10px;font-size:.7rem;
+                             font-weight:600;cursor:pointer;white-space:nowrap">
+                Offline ▾
+              </button>
+              <div id="u5Dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;
+                   background:#fff;border:1px solid #dee2e6;border-radius:8px;
+                   box-shadow:0 6px 20px rgba(0,0,0,.15);width:180px;z-index:1060;padding:4px 0">
+                {% set u5_statuses = under5 | map(attribute='status') | unique | sort | list %}
+                {% for s in u5_statuses %}
+                <label style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+                               font-size:.8rem;color:#333;cursor:pointer" onmouseover="this.style.background='#e8f5e9'" onmouseout="this.style.background=''">
+                  <input type="checkbox" class="u5-cb" value="{{ s }}" {% if s == 'Offline' %}checked{% endif %}
+                         style="accent-color:#1b5e20;width:13px;height:13px"> {{ s }}
+                </label>
+                {% endfor %}
+                <div style="padding:6px 10px;border-top:1px solid #eee;display:flex;gap:6px;margin-top:2px;position:sticky;bottom:0;background:#fff">
+                  <button onclick="u5SelectAll(true)"  style="font-size:.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">All</button>
+                  <button onclick="u5SelectAll(false)" style="font-size:.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid #ced4da">None</button>
+                  <button onclick="applyU5Filter()"   style="font-size:.72rem;padding:2px 8px;border-radius:4px;cursor:pointer;background:#1b5e20;color:#fff;border:none;font-weight:600;margin-left:auto">Apply</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% if under5 %}
+        <table class="mt" id="tbl-under5">
+          <thead>
+            <tr>
+              <th data-col="0" data-type="alpha">Employee <span class="sort-arrow">⇅</span></th>
+              <th data-col="1" data-type="alpha">LOB <span class="sort-arrow">⇅</span></th>
+              <th data-col="2" data-type="alpha">Status <span class="sort-arrow">⇅</span></th>
+              <th data-col="3" data-type="num">Count <span class="sort-arrow">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="u5-tbody">
+            {% for r in under5 %}
+            <tr data-status="{{ r.status }}" data-employee="{{ r.name }}">
+              <td>{{ r.name }}</td>
+              <td>{{ r.lob }}</td>
+              <td>{{ r.status }}</td>
+              <td data-val="{{ r.count }}"><strong>{{ r.count }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Total</td>
+              <td id="u5-total"><strong>{{ under5 | sum(attribute='count') }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+        {% else %}
+        <div style="padding:10px 12px;font-size:.75rem;color:#555">✅ No under-5s</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div><!-- /snapshot -->
+
+
+<textarea id="copyText" style="position:absolute;left:-9999px">{{ copy_text }}</textarea>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// ── Refresh bar ──
+var RTM_AUTO_INTERVAL=120,rtmCountdown=null,rtmSecondsLeft=120;
+function rtmUpdateLastRefresh(){var n=new Date(),t=n.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});document.getElementById('rtm-last-refresh').innerHTML='Last refresh: <strong>'+t+'</strong>';}
+function rtmManualRefresh(){
+  var btn = document.querySelector('button[onclick="rtmManualRefresh()"]');
+  if (btn) { btn.textContent = '⏳ Refreshing…'; btn.disabled = true; }
+  fetch('/rtm/cache-clear').then(function(){ location.reload(); });
+}
+function rtmStartCountdown(){rtmSecondsLeft=RTM_AUTO_INTERVAL;var el=document.getElementById('rtm-countdown');el.style.display='inline';rtmCountdown=setInterval(function(){rtmSecondsLeft--;el.textContent='(next in '+rtmSecondsLeft+'s)';if(rtmSecondsLeft<=0){clearInterval(rtmCountdown);fetch('/rtm/cache-clear').then(function(){location.reload();});}},1000);}
+function rtmStopCountdown(){if(rtmCountdown)clearInterval(rtmCountdown);document.getElementById('rtm-countdown').style.display='none';}
+function rtmToggleAuto(on){localStorage.setItem('rtm_auto_refresh',on?'1':'0');if(on){rtmStartCountdown();}else{rtmStopCountdown();}}
+
+// ── AHOD acknowledgment ──
+function ahodToggle(input) {
+  var level   = input.getAttribute('data-level');
+  var checked = input.checked;
+  var wrap    = input.closest('.ahod-check-wrap');
+  var row     = input.closest('tr');
+
+  fetch('/rtm/ahod/ack', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'level=' + encodeURIComponent(level) + '&checked=' + (checked ? '1' : '0')
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (!data.ok) { input.checked = !checked; return; }
+    row.classList.toggle('ahod-done', checked);
+    var meta = wrap.querySelector('.ahod-check-meta');
+    if (checked) {
+      if (!meta) {
+        meta = document.createElement('span');
+        meta.className = 'ahod-check-meta';
+        wrap.appendChild(meta);
+      }
+      var nm = (data.by || '').split('@')[0] || 'you';
+      meta.textContent = nm + ' · ' + (data.at || '');
+    } else if (meta) {
+      meta.remove();
+    }
+  }).catch(function(){ input.checked = !checked; });
+}
+
+rtmUpdateLastRefresh();
+if(localStorage.getItem('rtm_auto_refresh')==='1'){document.getElementById('rtm-auto-toggle').checked=true;rtmStartCountdown();}
+// Restore U5 filter and ensure capture btn hidden on load
+document.addEventListener('DOMContentLoaded', function() {
+  var cb = document.getElementById('captureBtn');
+  if (cb) cb.style.display = 'none';
+  u5Restore();
+});
+
+// ── Table sorting ──
+(function() {
+  var LS_KEY = 'rtm_dash_sort_v1';
+  var sortState = {};
+  try { sortState = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) {}
+
+  function saveSortState() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(sortState)); } catch(e) {}
+  }
+
+  function getVal(cell, type) {
+    if (type === 'num') {
+      var dv = cell.getAttribute('data-val');
+      if (dv !== null) return parseFloat(dv);
+      var txt = (cell.innerText || cell.textContent || '').trim();
+      return parseFloat(txt.replace(/[%,s]/g, '')) || -Infinity;
+    }
+    return (cell.innerText || cell.textContent || '').trim().toLowerCase();
+  }
+
+  function sortTable(table, colIdx, type, dir) {
+    var tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort(function(a, b) {
+      var av = getVal(a.cells[colIdx], type);
+      var bv = getVal(b.cells[colIdx], type);
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return dir === 'asc' ? av - bv : bv - av;
+      }
+      if (av < bv) return dir === 'asc' ? -1 : 1;
+      if (av > bv) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+  }
+
+  function updateArrows(table, activeCol, dir) {
+    table.querySelectorAll('th').forEach(function(th, i) {
+      var arrow = th.querySelector('.sort-arrow');
+      if (!arrow) return;
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (i === activeCol) {
+        th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        arrow.textContent = dir === 'asc' ? ' ▲' : ' ▼';
+      } else {
+        arrow.textContent = ' ⇅';
+      }
+    });
+  }
+
+  function initSorting() {
+    document.querySelectorAll('.mt').forEach(function(table) {
+      var tid = table.id;
+      if (!tid) return; // only persist tables with a stable id
+
+      // Restore last-used sort for this table — guarded so it only
+      // applies once even though initSorting() runs more than once
+      if (table.dataset.sortInit !== '1') {
+        table.dataset.sortInit = '1';
+        var saved = sortState[tid + '-sort'];
+        if (saved) {
+          var th = table.querySelector('th[data-col="' + saved.col + '"]');
+          if (th) {
+            var type = th.getAttribute('data-type') || 'alpha';
+            sortTable(table, saved.col, type, saved.dir);
+            th.setAttribute('data-dir', saved.dir);
+            updateArrows(table, saved.col, saved.dir);
+          }
+        }
+      }
+
+      // Bind click handlers once — guard prevents double-firing if
+      // initSorting() is called more than once on the same page
+      table.querySelectorAll('th[data-col]').forEach(function(th) {
+        if (th.dataset.sortBound === '1') return;
+        th.dataset.sortBound = '1';
+        th.addEventListener('click', function() {
+          var col  = parseInt(th.getAttribute('data-col'));
+          var type = th.getAttribute('data-type') || 'alpha';
+          var dir  = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+          table.querySelectorAll('th[data-col]').forEach(function(t) {
+            t.removeAttribute('data-dir');
+          });
+          th.setAttribute('data-dir', dir);
+          sortTable(table, col, type, dir);
+          updateArrows(table, col, dir);
+          sortState[tid + '-sort'] = {col: col, dir: dir};
+          saveSortState();
+        });
+      });
+    });
+  }
+
+  // Script is at bottom of page — DOM is already ready, run immediately.
+  // Fall back to DOMContentLoaded just in case.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSorting);
+  } else {
+    initSorting();
+  }
+
+  // Expose for explicit call from end of page
+  window.initSorting = initSorting;
+})();
+
+// ── Snapshot picker ──
+function toggleSnapPicker(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('snapDropdown');
+  if (dd.style.display === 'none') {
+    if (dd.parentElement !== document.body) document.body.appendChild(dd);
+    var r = document.getElementById('snapBtn').getBoundingClientRect();
+    dd.style.position  = 'fixed';
+    dd.style.top       = (r.bottom + 4) + 'px';
+    dd.style.left      = 'auto';
+    dd.style.right     = (window.innerWidth - r.right) + 'px';
+    dd.style.zIndex    = '2000';
+    var space = window.innerHeight - r.bottom - 16;
+    dd.style.maxHeight = Math.max(200, Math.min(380, space)) + 'px';
+    dd.style.overflowY = 'auto';
+    dd.style.display   = 'block';
+  } else { dd.style.display = 'none'; }
+}
+document.addEventListener('click', function(e) {
+  var picker = document.getElementById('snapPicker');
+  var dd     = document.getElementById('snapDropdown');
+  if (picker && dd && !picker.contains(e.target) && !dd.contains(e.target))
+    dd.style.display = 'none';
+});
+function setAllSnap(val) {
+  document.querySelectorAll('.snap-section-item input').forEach(function(cb){ cb.checked = val; });
+}
+
+// Apply — shows/hides sections immediately so you can see exactly what will be captured
+function applySnap() {
+  document.getElementById('snapDropdown').style.display = 'none';
+
+  // Section → element ID mapping
+  // Row 1: Interval, Attendance, Attendance by Advisor now share one row
+  // Row 2: Cascades + Under5 share their own row
+  var sections = {
+    'snap-interval':    { el: 'snap-interval',      parent: 'snap-attendance-row' },
+    'snap-attendance':  { el: 'snap-attendance',    parent: 'snap-attendance-row' },
+    'snap-absent':      { el: 'snap-absent',        parent: 'snap-attendance-row' },
+    'snap-cascades':    { el: 'snap-cascades',      parent: 'snap-cascade-row' },
+    'snap-under5':      { el: 'snap-under5',        parent: 'snap-cascade-row' },
+  };
+
+  // Apply visibility per section
+  document.querySelectorAll('.snap-section-item').forEach(function(label) {
+    var id  = label.getAttribute('data-section');
+    var el  = document.getElementById(id);
+    if (!el) return;
+    el.style.display = label.querySelector('input').checked ? '' : 'none';
+  });
+
+  // Hide parent rows if ALL their children are hidden
+  ['snap-attendance-row', 'snap-cascade-row'].forEach(function(rowId) {
+    var row = document.getElementById(rowId);
+    if (!row) return;
+    var cols = row.querySelectorAll('.snap-col');
+    var allHidden = Array.from(cols).every(function(c){ return c.style.display === 'none'; });
+    row.style.display = allHidden ? 'none' : '';
+  });
+
+  // Show the Capture button, update main button label
+  document.getElementById('captureBtn').style.display = 'inline-block';
+  document.getElementById('snapBtn').textContent = '📸 Edit Selection ▾';
+}
+
+// Capture — just grabs whatever is currently visible, no manipulation needed
+function doSnapshot() {
+  var btn = document.getElementById('captureBtn');
+  btn.textContent = '⏳ Capturing…';
+
+  html2canvas(document.getElementById('snapshot'), { scale:2, backgroundColor:'#f0f2f5', useCORS:true })
+    .then(function(canvas) {
+      canvas.toBlob(function(blob) {
+        try {
+          navigator.clipboard.write([new ClipboardItem({'image/png': blob})]).then(function() {
+            btn.textContent = '✅ Copied!';
+            btn.classList.add('done');
+            setTimeout(function(){ btn.textContent = '📸 Capture'; btn.classList.remove('done'); }, 3000);
+          }).catch(function(){ fallbackDownload(canvas, btn); });
+        } catch(e) { fallbackDownload(canvas, btn); }
+      }, 'image/png');
+    }).catch(function() {
+      btn.textContent = '❌ Error';
+      setTimeout(function(){ btn.textContent = '📸 Capture'; }, 2500);
+    });
+}
+
+function fallbackDownload(canvas, btn) {
+  var link = document.createElement('a');
+  link.download = 'RTM_Snapshot.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  btn.textContent = '⬇ Downloaded';
+  btn.classList.add('done');
+  setTimeout(function(){ btn.textContent = '📸 Capture'; btn.classList.remove('done'); }, 3000);
+}
+
+// ── Status Under 5 Sec filter ──
+var U5_STORE_KEY    = 'rtm_dashboard_u5_filter';
+var EMPU5_STORE_KEY = 'rtm_dashboard_empu5_filter';
+
+function toggleU5(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('u5Dropdown');
+  if (dd.style.display === 'none') {
+    _openU5Dropdown(dd, document.getElementById('u5Toggle'));
+  } else { dd.style.display = 'none'; }
+}
+function toggleEmpU5(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('empU5Dropdown');
+  if (dd.style.display === 'none') {
+    _openU5Dropdown(dd, document.getElementById('empU5Toggle'));
+  } else { dd.style.display = 'none'; }
+}
+// Open a dropdown as position:fixed, re-parented to <body> so it can never
+// be clipped or mispositioned by ancestor overflow/filter/transform styles.
+function _openU5Dropdown(dd, toggle) {
+  if (dd.parentElement !== document.body) document.body.appendChild(dd);
+  var r = toggle.getBoundingClientRect();
+  dd.style.position  = 'fixed';
+  dd.style.top       = (r.bottom + 4) + 'px';
+  dd.style.left      = 'auto';
+  dd.style.right     = (window.innerWidth - r.right) + 'px';
+  dd.style.zIndex    = '2000';
+  var space = window.innerHeight - r.bottom - 16;
+  dd.style.maxHeight = Math.max(180, Math.min(320, space)) + 'px';
+  dd.style.overflowY = 'auto';
+  dd.style.display   = 'block';
+}
+// Close on window scroll/resize since fixed positioning doesn't follow the page
+['scroll','resize'].forEach(function(ev){
+  window.addEventListener(ev, function(){
+    var a = document.getElementById('u5Dropdown');
+    var b = document.getElementById('empU5Dropdown');
+    if (a) a.style.display = 'none';
+    if (b) b.style.display = 'none';
+  }, {passive:true});
+});
+document.addEventListener('click', function(e) {
+  var p  = document.getElementById('u5Picker');
+  var d1 = document.getElementById('u5Dropdown');
+  if (p && d1 && !p.contains(e.target) && !d1.contains(e.target))
+    d1.style.display = 'none';
+  var ep = document.getElementById('empU5Picker');
+  var d2 = document.getElementById('empU5Dropdown');
+  if (ep && d2 && !ep.contains(e.target) && !d2.contains(e.target))
+    d2.style.display = 'none';
+});
+function u5SelectAll(val) {
+  document.querySelectorAll('.u5-cb').forEach(function(cb){ cb.checked = val; });
+}
+function empU5SelectAll(val) {
+  document.querySelectorAll('.empu5-cb').forEach(function(cb){ cb.checked = val; });
+}
+
+// ── Interval Report LOB filter ──────────────────────────────────────
+function toggleIntLobDrop() {
+  var drop = document.getElementById('intLobDrop');
+  if (drop.style.display === 'block') { drop.style.display = 'none'; return; }
+  // Reparent to body if not already there (escapes overflow/filter traps)
+  if (drop.parentNode !== document.body) document.body.appendChild(drop);
+  var btn = document.getElementById('intLobToggle');
+  var rect = btn.getBoundingClientRect();
+  drop.style.display = 'block';   // show first so offsetWidth is measurable
+  var dw = drop.offsetWidth;
+  var left = rect.right - dw;
+  if (left < 6) left = 6;                                  // don't run off the left
+  if (left + dw > window.innerWidth - 6) left = window.innerWidth - dw - 6;
+  drop.style.top  = (rect.bottom + 4) + 'px';
+  drop.style.left = left + 'px';
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  var drop = document.getElementById('intLobDrop');
+  var btn  = document.getElementById('intLobToggle');
+  if (drop && drop.style.display === 'block' && !drop.contains(e.target) && e.target !== btn) {
+    drop.style.display = 'none';
+  }
+});
+
+function applyIntLobFilter() {
+  var allCbs = document.querySelectorAll('.int-lob-cb');
+  var checked = new Set(Array.from(document.querySelectorAll('.int-lob-cb:checked')).map(function(cb){ return cb.value; }));
+  // Safety: if nothing is checked, treat as "show all" rather than blanking
+  // the whole section (which looked like the data had disappeared).
+  var showAll = (checked.size === 0);
+  document.querySelectorAll('#tbl-interval tbody tr').forEach(function(tr) {
+    var lob = tr.getAttribute('data-lob');
+    tr.style.display = (showAll || !lob || checked.has(lob)) ? '' : 'none';
+  });
+  var label;
+  if (checked.size === 0 || checked.size === allCbs.length) label = 'All LOBs ▾';
+  else {
+    var coreLobs = Array.from(allCbs).filter(function(cb){ return !cb.value.endsWith(' EN') && !cb.value.endsWith(' FR'); });
+    var coreChecked = coreLobs.every(function(cb){ return cb.checked; });
+    var langChecked = Array.from(allCbs).some(function(cb){ return (cb.value.endsWith(' EN') || cb.value.endsWith(' FR')) && cb.checked; });
+    if (coreChecked && !langChecked) label = 'Core LOBs ▾';
+    else label = checked.size + ' LOBs ▾';
+  }
+  document.getElementById('intLobToggle').textContent = label;
+}
+function intLobAll(val) {
+  document.querySelectorAll('.int-lob-cb').forEach(function(cb){ cb.checked = val; });
+}
+function intLobCore() {
+  document.querySelectorAll('.int-lob-cb').forEach(function(cb){
+    cb.checked = !cb.value.endsWith(' EN') && !cb.value.endsWith(' FR');
+  });
+}
+// restore saved preference or apply default (core only)
+// No localStorage involved — always defaults to Core LOBs on every page load.
+// Called explicitly at the bottom of the body so the table always exists.
+function _initIntLobFilter() {
+  var allCbs = document.querySelectorAll('.int-lob-cb');
+  if (!allCbs.length) return;
+  allCbs.forEach(function(cb){
+    cb.checked = !cb.value.endsWith(' EN') && !cb.value.endsWith(' FR');
+  });
+  applyIntLobFilter();
+}
+
+function u5Save() {
+  var checked = Array.from(document.querySelectorAll('.u5-cb:checked')).map(function(cb){ return cb.value; });
+  var all     = Array.from(document.querySelectorAll('.u5-cb')).map(function(cb){ return cb.value; });
+  // null means "all selected" — don't bother storing
+  if (checked.length === all.length) {
+    try { localStorage.removeItem(U5_STORE_KEY); } catch(e) {}
+  } else {
+    try { localStorage.setItem(U5_STORE_KEY, JSON.stringify(checked)); } catch(e) {}
+  }
+}
+function empU5Save() {
+  var checked = Array.from(document.querySelectorAll('.empu5-cb:checked')).map(function(cb){ return cb.value; });
+  var all     = Array.from(document.querySelectorAll('.empu5-cb')).map(function(cb){ return cb.value; });
+  if (checked.length === all.length) {
+    try { localStorage.removeItem(EMPU5_STORE_KEY); } catch(e) {}
+  } else {
+    try { localStorage.setItem(EMPU5_STORE_KEY, JSON.stringify(checked)); } catch(e) {}
+  }
+}
+function u5Restore() {
+  var raw;
+  try { raw = localStorage.getItem(U5_STORE_KEY); } catch(e) {}
+  if (raw) {
+    var checked;
+    try { checked = JSON.parse(raw); } catch(e) { checked = null; }
+    if (checked) {
+      var checkedSet = new Set(checked);
+      document.querySelectorAll('.u5-cb').forEach(function(cb){
+        cb.checked = checkedSet.has(cb.value);
+      });
+    }
+  }
+  var rawEmp;
+  try { rawEmp = localStorage.getItem(EMPU5_STORE_KEY); } catch(e) {}
+  if (rawEmp) {
+    var checkedEmp;
+    try { checkedEmp = JSON.parse(rawEmp); } catch(e) { checkedEmp = null; }
+    if (checkedEmp) {
+      var checkedEmpSet = new Set(checkedEmp);
+      document.querySelectorAll('.empu5-cb').forEach(function(cb){
+        cb.checked = checkedEmpSet.has(cb.value);
+      });
+    }
+  }
+  applyU5Filter();  // always apply on load — honours saved prefs, or the Offline-only default
+}
+function applyU5Filter() {
+  document.getElementById('u5Dropdown').style.display = 'none';
+  document.getElementById('empU5Dropdown').style.display = 'none';
+  var checkedStatus = new Set(
+    Array.from(document.querySelectorAll('.u5-cb:checked')).map(function(cb){ return cb.value; })
+  );
+  var checkedEmp = new Set(
+    Array.from(document.querySelectorAll('.empu5-cb:checked')).map(function(cb){ return cb.value; })
+  );
+  var total = 0;
+  document.querySelectorAll('#u5-tbody tr').forEach(function(tr) {
+    var status = tr.getAttribute('data-status');
+    var emp    = tr.getAttribute('data-employee');
+    var show   = (checkedStatus.size === 0 || checkedStatus.has(status))
+              && (checkedEmp.size === 0 || checkedEmp.has(emp));
+    tr.style.display = show ? '' : 'none';
+    if (show) {
+      var countCell = tr.querySelector('td[data-val]');
+      if (countCell) total += parseInt(countCell.getAttribute('data-val')) || 0;
+    }
+  });
+  var tot = document.getElementById('u5-total');
+  if (tot) tot.innerHTML = '<strong>' + total + '</strong>';
+
+  var allCbs = document.querySelectorAll('.u5-cb');
+  var checkedArr = Array.from(document.querySelectorAll('.u5-cb:checked')).map(function(cb){ return cb.value; });
+  var label;
+  if (checkedStatus.size === 0 || checkedStatus.size === allCbs.length) label = 'All Statuses ▾';
+  else if (checkedArr.length === 1) label = checkedArr[0] + ' ▾';
+  else label = checkedStatus.size + ' selected ▾';
+  document.getElementById('u5Toggle').textContent = label;
+
+  var allEmpCbs = document.querySelectorAll('.empu5-cb');
+  var empLabel = checkedEmp.size === 0 || checkedEmp.size === allEmpCbs.length
+    ? 'All Employees ▾'
+    : checkedEmp.size + ' selected ▾';
+  document.getElementById('empU5Toggle').textContent = empLabel;
+
+  u5Save();     // persist after every apply
+  empU5Save();
+}
+
+function copyTextSummary() {
+  var btn = document.getElementById('copyBtn');
+  var txt = document.getElementById('copyText');
+  txt.select(); txt.setSelectionRange(0, 99999);
+  try {
+    navigator.clipboard.writeText(txt.value).then(function() { flashCopy(btn); })
+      .catch(function() { document.execCommand('copy'); flashCopy(btn); });
+  } catch(e) { document.execCommand('copy'); flashCopy(btn); }
+}
+function flashCopy(btn) {
+  btn.textContent = '✅ Copied!'; btn.classList.add('done');
+  setTimeout(function(){ btn.textContent = '📋 Copy Text for Teams'; btn.classList.remove('done'); }, 2500);
+}
+</script>
+
+
+<script>
+/* ── Filter persistence v2 — saves/restores form fields, no URL redirect ── */
+(function(){
+  var PK = 'fp2_' + location.pathname.replace(/\//g,'_');
+
+  function getFields() {
+    return Array.from(document.querySelectorAll(
+      'form[method="GET"] select[name], form[method="GET"] input[name],' +
+      'input[type="checkbox"].pu-cb, input[type="checkbox"].st-cb,' +
+      'input[type="checkbox"].u5-cb'
+    ));
+  }
+
+  function save() {
+    var s = {};
+    getFields().forEach(function(el) {
+      var k = el.name || el.className;
+      if (!k) return;
+      if (el.type === 'checkbox') {
+        if (!s[k]) s[k] = [];
+        if (el.checked) s[k].push(el.value || '1');
+      } else {
+        if (el.value) s[k] = el.value;
+      }
+    });
+    try { localStorage.setItem(PK, JSON.stringify(s)); } catch(e) {}
+  }
+
+  function restore() {
+    var raw;
+    try { raw = localStorage.getItem(PK); } catch(e) {}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(e) { return false; }
+
+    var changed = false;
+    getFields().forEach(function(el) {
+      var k = el.name || el.className;
+      if (!k || !(k in s)) return;
+      if (el.type === 'checkbox') {
+        var vals = s[k] || [];
+        var should = vals.indexOf(el.value || '1') > -1;
+        if (el.checked !== should) { el.checked = should; changed = true; }
+      } else {
+        if (s[k] && el.value !== s[k]) { el.value = s[k]; changed = true; }
+      }
+    });
+    return changed;
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // If URL already has params, just save them and don't touch fields
+    if (location.search) {
+      // Populate fields from URL params (browser already does this for GET forms)
+      save();
+      return;
+    }
+
+    // No URL params — try to restore from localStorage and auto-submit
+    var changed = restore();
+    if (changed) {
+      // Check if any field has a non-default value
+      var hasFilter = false;
+      getFields().forEach(function(el) {
+        if (el.type === 'checkbox') {
+          /* checkboxes: changed is enough */
+        } else if (el.tagName === 'SELECT' && el.value && el.selectedIndex > 0) {
+          hasFilter = true;
+        } else if (el.type !== 'checkbox' && el.value) {
+          hasFilter = true;
+        }
+      });
+      if (hasFilter) {
+        var form = document.querySelector('form[method="GET"]');
+        if (form) form.submit();
+      }
+    }
+
+    // Client-side filters
+    if (typeof filterDir     === 'function') filterDir();
+    if (typeof applyU5Filter === 'function') applyU5Filter();
+
+    // Save on any change or form submit
+    document.addEventListener('change', save);
+    document.addEventListener('input',  save);
+    document.querySelectorAll('form[method="GET"]').forEach(function(f) {
+      f.addEventListener('submit', save);
+    });
+    window.addEventListener('beforeunload', save);
+  });
+
+  window.fpClear = function() {
+    try { localStorage.removeItem(PK); } catch(e) {}
+    // Also clear old v1 key
+    try { localStorage.removeItem('fp_' + location.pathname.replace(/\//g,'_')); } catch(e) {}
+  };
+})();
+
+// Re-apply saved sort after all scripts and filters have initialised
+if (typeof initSorting === 'function') initSorting();
+</script>
+
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+<script src="/static/picker_fit.js"></script>
+<script>_initIntLobFilter();</script>
+</body>
+</html>

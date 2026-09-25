@@ -1,0 +1,203 @@
+"""
+data_source.py  —  pluggable data layer for the WFM Portal
+===========================================================
+
+Purpose
+-------
+The app originally read employees / planning units / requirements / forecast
+straight from PeopleWare. This module puts ONE seam in front of that so the same
+app can instead read the identical information from Google Sheets — which is what
+makes it deployable for any client (and safe for a demo).
+
+Two implementations sit behind one interface:
+
+    PeopleWareSource  -> the original behaviour (wraps capacity_planner)
+    SheetSource       -> reads the same shapes from the capacity Google Sheet
+                         (the "EMPLOYEES", "REQUIREMENTS RAW", "FORECAST RAW"
+                          tabs the app already uses as its cache)
+
+A single environment variable picks which is live:
+
+    DATA_SOURCE=generic       (default)  -> SheetSource
+    DATA_SOURCE=peopleware               -> PeopleWareSource
+
+IMPORTANT — return convention
+-----------------------------
+To stay drop-in compatible with the existing call sites, every method returns a
+(data, error) TUPLE, exactly like the capacity_planner.fetch_* functions do.
+    employees, err = src.get_employees()
+    if err: ...            # handle
+So you can literally replace:
+    employees, err = capacity_planner.fetch_employees()
+with:
+    employees, err = data_source.get_source().get_employees()
+
+Column names below MATCH the real tabs. If your Sheet uses different headers,
+change the constants in one place (COLS_*).
+"""
+
+import os
+import datetime
+
+# ---- tab names (match the app's existing capacity-sheet tabs) ----
+TAB_EMPLOYEES     = "EMPLOYEES"
+TAB_REQUIREMENTS  = "REQUIREMENTS RAW"
+TAB_FORECAST      = "FORECAST RAW"
+TAB_PLANNINGUNITS = "PlanningUnits"   # small tab: id | name (create it, or units are derived)
+
+# ---- REQUIREMENTS RAW / FORECAST RAW are LONG format: one row per interval ----
+COL_TIMESTAMP = "Timestamp"
+COL_LOB       = "LOB"
+COL_AGENTS    = "agents_required"
+COL_OFFERED   = "offered"
+COL_AHT       = "aht"
+
+
+def _open_capacity_sheet():
+    """Open the capacity Google Sheet via the service account. Returns (sheet, err)."""
+    try:
+        import gspread
+        from oauth2client.service_account import ServiceAccountCredentials
+        scope = ["https://spreadsheets.google.com/feeds",
+                 "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json"), scope)
+        client = gspread.authorize(creds)
+        key = os.environ.get("CAPACITY_SHEET_KEY", "")
+        if not key:
+            return None, "CAPACITY_SHEET_KEY not set"
+        return client.open_by_key(key), None
+    except Exception as e:
+        return None, f"could not open capacity sheet: {e}"
+
+
+def _date_str(day):
+    """Accept a date/datetime or an already-formatted 'YYYY-MM-DD' string."""
+    if isinstance(day, (datetime.date, datetime.datetime)):
+        return day.strftime("%Y-%m-%d")
+    return str(day)[:10]
+
+
+# =====================================================================
+# PeopleWare — original behaviour, unchanged
+# =====================================================================
+class PeopleWareSource:
+    def get_employees(self):
+        import capacity_planner
+        return capacity_planner.fetch_employees()
+
+    def get_planning_units(self):
+        import capacity_planner
+        return capacity_planner.fetch_planning_units()
+
+    def get_requirements(self, unit_id, day):
+        import capacity_planner
+        day_obj = day if isinstance(day, datetime.date) else \
+            datetime.datetime.strptime(_date_str(day), "%Y-%m-%d").date()
+        return capacity_planner.fetch_requirements_day(unit_id, day_obj)
+
+    def get_forecast(self, workload_id, day):
+        import capacity_planner
+        day_obj = day if isinstance(day, datetime.date) else \
+            datetime.datetime.strptime(_date_str(day), "%Y-%m-%d").date()
+        utc_offset = int(os.environ.get("PW_UTC_OFFSET", "-4"))
+        return capacity_planner.fetch_forecast_day(workload_id, day_obj, utc_offset)
+
+
+# =====================================================================
+# Generic — reads the same shapes from Google Sheets
+# =====================================================================
+class SheetSource:
+    def __init__(self):
+        self._sheet = None
+        self._err = None
+
+    def _sheet_or_err(self):
+        if self._sheet is None and self._err is None:
+            self._sheet, self._err = _open_capacity_sheet()
+        return self._sheet, self._err
+
+    def _records(self, tab):
+        sheet, err = self._sheet_or_err()
+        if err:
+            return None, err
+        try:
+            return sheet.worksheet(tab).get_all_records(), None
+        except Exception as e:
+            return None, f"tab '{tab}' unreadable: {e}"
+
+    def get_employees(self):
+        """Returns (list_of_employee_dicts, err). Columns match the EMPLOYEES tab:
+        Status, First Name, Last Name, Employee ID, Latest Skill Name,
+        Latest Skill Start, Latest Skill End, All Skills, End Date."""
+        return self._records(TAB_EMPLOYEES)
+
+    def get_planning_units(self):
+        """Returns (list_of_units, err). Uses a PlanningUnits tab if present,
+        otherwise derives the distinct LOBs found in REQUIREMENTS RAW."""
+        units, err = self._records(TAB_PLANNINGUNITS)
+        if not err and units:
+            return units, None
+        rows, err = self._records(TAB_REQUIREMENTS)
+        if err:
+            return None, err
+        seen, out = set(), []
+        for r in rows:
+            lob = str(r.get(COL_LOB, "")).strip()
+            if lob and lob not in seen:
+                seen.add(lob)
+                out.append({"id": lob, "name": lob})
+        return out, None
+
+    def get_requirements(self, unit_id, day):
+        """Returns (list_of_{time, agents_required}, err) for one unit + day."""
+        rows, err = self._records(TAB_REQUIREMENTS)
+        if err:
+            return None, err
+        target = _date_str(day)
+        out = []
+        for r in rows:
+            if str(r.get(COL_LOB, "")).strip() != str(unit_id).strip():
+                continue
+            ts = str(r.get(COL_TIMESTAMP, ""))
+            if ts[:10] != target:
+                continue
+            out.append({
+                "time": ts,
+                "agents_required": float(r.get(COL_AGENTS, 0) or 0),
+            })
+        return out, None
+
+    def get_forecast(self, workload_id, day):
+        """Returns (list_of_{time, offered, aht}, err) for one workload + day."""
+        rows, err = self._records(TAB_FORECAST)
+        if err:
+            return None, err
+        target = _date_str(day)
+        out = []
+        for r in rows:
+            if str(r.get(COL_LOB, "")).strip() != str(workload_id).strip():
+                continue
+            ts = str(r.get(COL_TIMESTAMP, ""))
+            if ts[:10] != target:
+                continue
+            out.append({
+                "time": ts,
+                "offered": float(r.get(COL_OFFERED, 0) or 0),
+                "aht": float(r.get(COL_AHT, 0) or 0),
+            })
+        return out, None
+
+
+# =====================================================================
+# Selector
+# =====================================================================
+_INSTANCE = None
+
+def get_source():
+    """Return the active data source (cached). Chosen by DATA_SOURCE env var."""
+    global _INSTANCE
+    if _INSTANCE is None:
+        mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
+        _INSTANCE = PeopleWareSource() if mode == "peopleware" else SheetSource()
+    return _INSTANCE

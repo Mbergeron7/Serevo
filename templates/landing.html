@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>WFM Portal — Home</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; }
+    .header { background: linear-gradient(135deg, #0078D4 0%, #005fa3 100%); color: #fff;
+              padding: 32px 40px 28px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: .02em; margin-bottom: 6px; }
+    .header p  { font-size: .95rem; opacity: .88; }
+    .user-badge { display: inline-block; background: rgba(255,255,255,0.18); border-radius: 20px;
+                  padding: 3px 14px; font-size: .85rem; margin-top: 8px; }
+    .main { max-width: 1100px; margin: 36px auto; padding: 0 20px 60px; }
+    .section-card { background: #fff; border-radius: 12px; box-shadow: 0 3px 12px rgba(0,0,0,0.07);
+                    margin-bottom: 28px; overflow: hidden; }
+    .section-header { display: flex; align-items: center; gap: 10px; padding: 14px 22px;
+                      font-weight: 700; font-size: 1rem; letter-spacing: .03em;
+                      text-transform: uppercase; color: #fff; }
+    .section-header.blue   { background: #0078D4; }
+    .section-header.teal   { background: #0097a7; }
+    .section-header.green  { background: #2e7d32; }
+    .section-header.purple { background: #6a1b9a; }
+    .section-header.slate  { background: #37474f; }
+    .section-header.rtm    { background: #1a237e; }
+    .section-body { padding: 20px 22px; display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px;
+           border-radius: 7px; font-size: .9rem; font-weight: 500; text-decoration: none;
+           border: none; cursor: pointer; transition: filter .15s ease, transform .1s ease;
+           white-space: nowrap; }
+    .btn:hover  { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); filter: brightness(.95); }
+    .btn-blue   { background: #0078D4; color: #fff; }
+    .btn-teal   { background: #0097a7; color: #fff; }
+    .btn-green  { background: #2e7d32; color: #fff; }
+    .btn-purple { background: #6a1b9a; color: #fff; }
+    .btn-slate  { background: #37474f; color: #fff; }
+    .btn-grey   { background: #e0e0e0; color: #333; }
+    .btn-rtm    { background: #1a237e; color: #fff; }
+    .btn-grey:hover { background: #bdbdbd; filter: none; }
+    .sub-label { width: 100%; font-size: .75rem; font-weight: 700; text-transform: uppercase;
+                 letter-spacing: .06em; color: #888; margin-top: 8px; margin-bottom: 2px; }
+    .sub-label:first-child { margin-top: 0; }
+    .footer { text-align: center; padding: 18px; font-size: .78rem; color: #aaa; }
+    /* ── Upcoming due banner ── */
+    .upcoming-banner { background:#fff3cd; border:1px solid #ffc107; border-radius:10px;
+                       padding:14px 18px; margin-bottom:20px; position:relative; }
+    .upcoming-banner h3 { margin:0 0 10px; font-size:.95rem; color:#856404; display:flex; align-items:center; gap:8px; }
+    .upcoming-banner ul { margin:0; padding-left:20px; }
+    .upcoming-banner li { font-size:.85rem; color:#555; margin-bottom:4px; }
+    .upcoming-banner li strong { color:#333; }
+    .dismiss-btn { position:absolute; top:10px; right:14px; background:none; border:none;
+                   font-size:1.1rem; cursor:pointer; color:#856404; opacity:.6; }
+    .dismiss-btn:hover { opacity:1; }
+    .badge-count { display:inline-block; background:#dc3545; color:#fff; border-radius:10px;
+                   padding:1px 7px; font-size:.7rem; font-weight:700; margin-left:5px;
+                   vertical-align:middle; line-height:1.4; }
+    .type-loa   { color:#0d47a1; font-weight:600; }
+    .type-accom { color:#1b5e20; font-weight:600; }
+    .days-soon  { color:#dc3545; font-weight:700; }
+    .days-ok    { color:#e65100; font-weight:600; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <script>if(localStorage.getItem('wfm_dark')==='1')document.documentElement.classList.add('dark');</script>
+<link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<div class="header">
+  <h1>📋 WFM Portal</h1>
+  <p>StorageVault Canada — Workforce Management</p>
+  <div class="user-badge">👤 {{ user_email }}</div>
+</div>
+
+<div class="main">
+
+{% if past_due %}
+<div class="upcoming-banner" style="background:#fde8e8;border-color:#f87171;margin-bottom:12px">
+  <h3 style="color:#991b1b">🚨 {{ past_due | length }} item{{ 's' if past_due | length != 1 else '' }} PAST DUE — action required</h3>
+  <ul>
+    {% for u in past_due %}
+    <li>
+      <span class="type-{{ 'loa' if u.type == 'LOA' else 'accom' }}">{{ u.type }}</span>
+      — <strong>{{ u.name }}</strong>
+      {% if u.lob %}({{ u.lob }}){% endif %}
+      · {{ u.label }}: <strong style="color:#dc2626">{{ u.date }}</strong>
+      · <span style="color:#dc2626;font-weight:700">{{ (u.days_left * -1) }} day{{ 's' if u.days_left != -1 else '' }} overdue</span>
+      · <a href="{{ u.url }}">View →</a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if upcoming %}
+<div class="upcoming-banner" id="upcomingBanner">
+  <button class="dismiss-btn" onclick="dismissBanner()" title="Dismiss">✕</button>
+  <h3>⚠️ {{ upcoming | length }} item{{ 's' if upcoming | length != 1 else '' }} coming due within 7 days</h3>
+  <ul>
+    {% for u in upcoming %}
+    <li>
+      <span class="type-{{ 'loa' if u.type == 'LOA' else 'accom' }}">{{ u.type }}</span>
+      — <strong>{{ u.name }}</strong> ({{ u.lob }})
+      · {{ u.label }}: <strong>{{ u.date }}</strong>
+      · <span class="{{ 'days-soon' if u.days_left <= 2 else 'days-ok' }}">
+          {% if u.days_left == 0 %}Today{% elif u.days_left == 1 %}Tomorrow{% else %}{{ u.days_left }} days{% endif %}
+        </span>
+      · <a href="{{ u.url }}" style="color:#1565c0;font-size:.82rem">View →</a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+  <div class="section-card">
+    <div class="section-header blue">🎫 Requests</div>
+    <div class="section-body">
+      <a href="/"               class="btn btn-blue">📝 Submit New Request</a>
+      <a href="/dashboard"      class="btn btn-blue">📊 Request Dashboard</a>
+      <a href="/legacy_tickets" class="btn btn-blue">📁 Legacy Tickets</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header rtm">🖥 Real Time Management</div>
+    <div class="section-body">
+      <a href="/rtm/dashboard"    class="btn btn-rtm" style="background:#0d1757;font-weight:700">📊 Combined Dashboard</a>
+      <div class="sub-label">Attendance</div>
+      <a href="/rtm/schedule"     class="btn btn-rtm">📋 Schedule & Attendance</a>
+      <a href="/rtm/absenteeism"  class="btn btn-rtm">📊 Absenteeism by LOB</a>
+      <div class="sub-label">Operations</div>
+      <a href="/rtm/pw-schedules" class="btn btn-rtm">📅 PW Schedules</a>
+      <a href="/rtm/forecast"     class="btn btn-rtm">🔮 Forecast vs OTF</a>
+      <a href="/rtm/interval"     class="btn btn-rtm">⏱ Interval Report</a>
+      <a href="/rtm/svl"          class="btn btn-rtm">📈 SVL Calculator</a>
+      <a href="/rtm/efficiency"   class="btn btn-rtm">⚡ Production Efficiency</a>
+      <a href="/rtm/cascades"     class="btn btn-rtm">🔀 Cascades</a>
+      <a href="/rtm/agent-status" class="btn btn-rtm">👤 Agent Status</a>
+      <a href="/rtm/live" class="btn btn-rtm" style="background:#1b5e20">🟢 Live Agent Status</a>
+      <a href="/rtm/knowledge"    class="btn btn-rtm">🧠 Knowledge Assessment</a>
+      <a href="/rtm/call-log"     class="btn btn-rtm">📞 Call Log</a>
+      <a href="/rtm/backup"      class="btn btn-rtm" style="background:#e65100;">⚠ Backup Upload</a>
+      <div class="sub-label">Reporting</div>
+      <a href="/eod-insights"    class="btn btn-rtm" style="background:#6a1b9a;">📊 EOD Insights Builder</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header teal">📈 Analytics</div>
+    <div class="section-body">
+      <a href="/analytics"        class="btn btn-teal">📈 Data Analysis</a>
+      <a href="/legacy_analytics" class="btn btn-teal">📉 Legacy Analytics</a>
+      <a href="/service_level"    class="btn btn-teal">📊 Ticket Service Level</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header purple">🏗 Capacity Planning</div>
+    <div class="section-body">
+      <div class="sub-label">Data Management</div>
+      <a href="/capacity"           class="btn btn-purple">🏗 Control Panel</a>
+      <div class="sub-label">Planning Views</div>
+      <a href="/capacity/plan"      class="btn btn-purple">📅 Capacity Plan</a>
+      <a href="/capacity/headcount" class="btn btn-purple">👥 Headcount by LOB</a>
+      <a href="/capacity/summary"   class="btn btn-purple">📋 Capacity Summary</a>
+      <div class="sub-label">Data Management</div>
+      <a href="/pw-interval"        class="btn btn-purple">📤 PW Interval Import</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header" style="background:#1565c0">👥 People</div>
+    <div class="section-body">
+      <a href="/people/loa"             class="btn" style="background:#1565c0;color:#fff">🏥 Leave of Absence{% if loa_count %}<span class="badge-count">{{ loa_count }}</span>{% endif %}</a>
+      <a href="/people/accommodations"  class="btn" style="background:#1565c0;color:#fff">♿ Accommodations{% if accom_count %}<span class="badge-count">{{ accom_count }}</span>{% endif %}</a>
+      <a href="/stat-day"               class="btn" style="background:#1565c0;color:#fff">🗓 Stat Day Calculator</a>
+      <a href="/wfm-checklist"          class="btn" style="background:#1565c0;color:#fff">✅ Daily Checklist</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header green">📅 Schedule Tools</div>
+    <div class="section-body">
+      <a href="/schedule-tools" class="btn btn-green">🛠 Schedule Tools Home</a>
+      <a href="/run-schedule"   class="btn btn-green">📅 Build Schedule</a>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header slate">📚 Resources</div>
+    <div class="section-body">
+      <a href="https://accesself.sharepoint.com/sites/SC_Management/SitePages/WFM.aspx"
+         target="_blank" class="btn btn-slate">📚 WFM Wiki</a>
+      <a href="https://accesself.sharepoint.com/sites/wiki/SitePages/Work-Force-Management(WFM).aspx"
+         target="_blank" class="btn btn-slate">📘 Advisor Wiki</a>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:8px;">
+    <form method="POST" action="/clear_cache" style="display:inline"
+          onsubmit="return confirm('Clear all cached data? Pages will reload fresh from Google Sheets on next visit.');">
+      <button type="submit" class="btn btn-grey" style="cursor:pointer">🧹 Clear Cache</button>
+    </form>
+    <a href="/logout" class="btn btn-grey">🚪 Logout</a>
+  </div>
+
+</div>
+
+<div id="cache-cleared-toast" style="display:none;position:fixed;top:16px;left:50%;
+     transform:translateX(-50%);background:#2e7d32;color:#fff;padding:10px 22px;
+     border-radius:8px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:10000;">
+  ✅ Cache cleared — all pages will load fresh data
+</div>
+<script>
+(function(){
+  if (new URLSearchParams(location.search).get('cache_cleared') === '1') {
+    var t = document.getElementById('cache-cleared-toast');
+    t.style.display = 'block';
+    setTimeout(function(){ t.style.display = 'none'; }, 4000);
+    history.replaceState({}, '', '/landing');
+  }
+})();
+</script>
+
+<div class="footer">WFM Portal — StorageVault Canada &nbsp;|&nbsp; {{ user_email }}</div>
+
+<script>
+// Dismiss banner for this session only
+if (sessionStorage.getItem('upcomingDismissed')) {
+  var b = document.getElementById('upcomingBanner');
+  if (b) b.style.display = 'none';
+}
+function dismissBanner() {
+  sessionStorage.setItem('upcomingDismissed', '1');
+  var b = document.getElementById('upcomingBanner');
+  if (b) b.style.display = 'none';
+}
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

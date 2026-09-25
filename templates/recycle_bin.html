@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recycle Bin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest" defer></script>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin-bottom:20px; }
+    .nav-links { margin-bottom:16px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; }
+    .nav-links a:hover { text-decoration:underline; }
+    .section { background:#fff; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.08); }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:9px 12px; text-align:left; font-size:.88rem; }
+    th { background:#f7f7f7; }
+    tbody tr:nth-child(even) { background:#fafafa; }
+    tbody tr:hover { background:#fff5f5; }
+    .restore-btn { padding:4px 10px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:.82rem; margin-right:6px; }
+    .restore-btn:hover { background:#1e7e34; }
+    .delete-btn  { padding:4px 10px; background:#dc3545; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:.82rem; }
+    .delete-btn:hover  { background:#a71d2a; }
+  </style>
+<link rel="stylesheet" href="/static/dark.css">
+<style>
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .toolbar, .filter-bar,
+  [style*="display:flex"], [style*="display: flex"] {
+    flex-wrap: wrap !important;
+  }
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+  .kpi-row, .kpi { min-width: 120px !important; }
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+  select, input[type="date"], input[type="text"] { width: 100% !important; max-width: 100% !important; }
+  .lob-card { margin-bottom: 12px; }
+  .section { padding: 10px !important; }
+  .btn, button { font-size: .82rem !important; padding: 6px 10px !important; }
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+}
+</style>
+</head>
+<body>
+
+<h1>🗑️ Recycle Bin</h1>
+
+<div class="nav-links">
+  <a href="/dashboard">← Back to Dashboard</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="section">
+  {% if not rows %}
+    <p style="color:#6c757d;font-style:italic;">The recycle bin is empty.</p>
+  {% else %}
+  <table id="binTable">
+    <thead>
+      <tr>
+        {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="bin-body">
+      {% for row in rows %}
+      <tr>
+        {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+        <td>
+          <button class="restore-btn"
+            onclick="restoreTicket('{{ ticket_ids[loop.index0] }}')">Restore</button>
+          {% if is_admin %}
+          <button class="delete-btn"
+            onclick="deleteEntry('{{ ticket_ids[loop.index0] }}')">Delete Permanently</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<script>
+const restoreUrl = "{{ restore_url }}";
+const deleteUrl  = "{{ delete_url }}";
+
+// Store all rows from the server before DataTable touches the DOM
+const allRows = [];
+document.querySelectorAll("#bin-body tr").forEach(tr => {
+  allRows.push(tr.cloneNode(true));
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  const tbody = document.getElementById("bin-body");
+  if (!tbody || allRows.length === 0) return;
+
+  new simpleDatatables.DataTable("#binTable", {
+    searchable: true,
+    perPage: 25,
+    columns: [{ select: {{ headers|length }}, sortable: false }],
+    labels: {
+      placeholder: "🔍 Search deleted tickets...",
+      perPage:     "Show {select} entries per page",
+      noRows:      "No deleted tickets found",
+      info:        "Showing {start} to {end} of {rows} deleted tickets"
+    }
+  });
+});
+
+function restoreTicket(ticketId) {
+  if (!confirm("Restore this ticket back to the main dashboard?")) return;
+  fetch(restoreUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticket_id: ticketId })
+  })
+  .then(res => {
+    if (res.status === 403) alert("Permission denied.");
+    else if (res.status === 404) alert("Ticket not found in recycle bin.");
+    else if (res.ok) { alert("Ticket restored successfully."); location.reload(); }
+    else alert("Failed to restore ticket.");
+  })
+  .catch(err => { console.error(err); alert("Error restoring ticket."); });
+}
+
+function deleteEntry(ticketId) {
+  if (!confirm("Permanently delete this ticket? This cannot be undone.")) return;
+  fetch(deleteUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticket_id: ticketId })
+  })
+  .then(res => {
+    if (res.status === 403) alert("Permission denied.");
+    else if (res.status === 404) alert("Recycle bin entry not found.");
+    else if (res.ok) { alert("Ticket permanently deleted."); location.reload(); }
+    else alert("Failed to delete ticket.");
+  })
+  .catch(err => { console.error(err); alert("Error deleting ticket."); });
+}
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

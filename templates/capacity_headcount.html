@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>Headcount by Planning Unit</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#6a1b9a,#4a148c); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:24px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .page-header p  { margin:4px 0 0; opacity:.85; font-size:.88rem; }
+    .nav-links a { margin-right:14px; color:#6a1b9a; text-decoration:none; font-weight:500; }
+    .nav-links a:hover { text-decoration:underline; }
+    .card { border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,.07); margin-bottom:20px; }
+    .hc-table th { background:#6a1b9a; color:#fff; font-size:.82rem;
+                   padding:9px 14px; white-space:nowrap; }
+    .hc-table td { padding:8px 14px; font-size:.88rem; vertical-align:middle; }
+    .hc-table tbody tr:nth-child(even) { background:#f8f9fa; }
+    .hc-table tbody tr:hover { background:#f0e6ff; }
+    .total-row { background:#e8d5ff !important; font-weight:700; }
+    .badge-active   { background:#d1e7dd; color:#0a3622; border-radius:10px;
+                      padding:2px 10px; font-size:.78rem; font-weight:600; }
+    .badge-inactive { background:#f8d7da; color:#842029; border-radius:10px;
+                      padding:2px 10px; font-size:.78rem; font-weight:600; }
+    .badge-loa      { background:#fff3cd; color:#856404; border-radius:10px;
+                      padding:2px 10px; font-size:.78rem; font-weight:600; }
+    .kpi-row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+    .kpi-card { background:#fff; border-radius:10px; padding:16px 20px; flex:1;
+                min-width:140px; box-shadow:0 3px 10px rgba(0,0,0,.07); text-align:center; }
+    .kpi-card .kpi-value { font-size:1.8rem; font-weight:700; color:#6a1b9a; }
+    .kpi-card .kpi-label { font-size:.78rem; color:#888; margin-top:4px; }
+    .search-bar { background:#fff; border-radius:10px; padding:14px 20px;
+                  margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .loa-pct { font-size:.8rem; color:#856404; font-weight:600; }
+    .loa-high { background:#f8d7da !important; color:#842029 !important; font-weight:700; border-radius:10px; padding:2px 10px; font-size:.78rem; }
+    .loa-warn { background:#fff3cd !important; color:#856404 !important; font-weight:700; border-radius:10px; padding:2px 10px; font-size:.78rem; }
+    .export-btn { background:#2e7d32; color:#fff; text-decoration:none; padding:5px 14px;
+                  border-radius:6px; font-weight:600; font-size:.83rem; margin-left:auto; }
+    .export-btn:hover { background:#1b5e20; color:#fff; }
+  </style>
+<link rel="stylesheet" href="/static/mobile.css">
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>👥 Headcount by Planning Unit</h1>
+  <p>Active employee roster from PeopleWare — grouped by Planning Unit</p>
+</div>
+
+<div class="nav-links mb-3">
+  <a href="/landing">← Home</a>
+  <a href="/capacity">🏗 Control Panel</a>
+  <a href="/capacity/plan">📅 Capacity Plan</a>
+  <a href="/capacity/summary">📋 Summary</a>
+  <a href="/logout">Logout</a>
+  <a href="/capacity/headcount/export{% if search %}?search={{ search }}{% endif %}" class="export-btn">⬇ Export Excel</a>
+</div>
+
+{% if hc_rows %}
+{% set total_active   = hc_rows | sum(attribute='active') %}
+{% set total_loa      = hc_rows | sum(attribute='on_leave') %}
+{% set total_inactive = hc_rows | sum(attribute='inactive') %}
+{% set total_all      = hc_rows | sum(attribute='total') %}
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-value">{{ total_active }}</div>
+    <div class="kpi-label">Active</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value" style="color:#856404">{{ total_loa }}</div>
+    <div class="kpi-label">On Leave (LOA)</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value" style="color:#dc3545">{{ total_inactive }}</div>
+    <div class="kpi-label">Inactive</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value">{{ total_all }}</div>
+    <div class="kpi-label">Total Employees</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value">{{ hc_rows | length }}</div>
+    <div class="kpi-label">Planning Units</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value" style="color:#856404">
+      {{ (total_loa / total_all * 100) | round(1) if total_all > 0 else 0 }}%
+    </div>
+    <div class="kpi-label">Overall LOA %</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="search-bar">
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <input type="text" class="form-control form-control-sm" name="search"
+           value="{{ search }}" placeholder="🔍 Search planning unit…"
+           style="max-width:280px">
+    <button type="submit" class="btn btn-sm text-white"
+            style="background:#6a1b9a">Search</button>
+    <a href="/capacity/headcount" class="btn btn-sm btn-outline-secondary">Reset</a>
+    {% if last_refreshed %}
+    <small class="text-muted ms-auto">Data as of: {{ last_refreshed }}</small>
+    {% endif %}
+  </form>
+</div>
+
+{% if not hc_rows %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <h5>No employee data yet</h5>
+    <p>Run the employee sync script locally, then come back here.</p>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table hc-table mb-0">
+      <thead>
+        <tr>
+          <th>Planning Unit</th>
+          <th class="text-center">Active</th>
+          <th class="text-center">On Leave (LOA)</th>
+          <th class="text-center">LOA %</th>
+          <th class="text-center">Inactive</th>
+          <th class="text-center">Total</th>
+          <th class="text-center">Active %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in hc_rows %}
+        <tr>
+          <td>{{ row.planning_unit }}</td>
+          <td class="text-center">
+            {% if row.active > 0 %}
+              <span class="badge-active">{{ row.active }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if row.on_leave > 0 %}
+              <span class="badge-loa">{{ row.on_leave }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if row.loa_pct > 20 %}
+              <span class="loa-high">{{ row.loa_pct }}%</span>
+            {% elif row.loa_pct > 10 %}
+              <span class="loa-warn">{{ row.loa_pct }}%</span>
+            {% elif row.loa_pct > 0 %}
+              <span class="loa-pct">{{ row.loa_pct }}%</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if row.inactive > 0 %}
+              <span class="badge-inactive">{{ row.inactive }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">{{ row.total }}</td>
+          <td class="text-center">
+            {% if row.total > 0 %}
+            {% set pct = (row.active / row.total * 100) | round(0) | int %}
+            <div class="d-flex align-items-center gap-2 justify-content-center">
+              <div class="progress" style="height:6px;width:60px">
+                <div class="progress-bar" style="width:{{ pct }}%;background:#6a1b9a"></div>
+              </div>
+              <small class="text-muted">{{ pct }}%</small>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% set ta = hc_rows | sum(attribute='active') %}
+        {% set tl = hc_rows | sum(attribute='on_leave') %}
+        {% set ti = hc_rows | sum(attribute='inactive') %}
+        {% set tt = hc_rows | sum(attribute='total') %}
+        <tr class="total-row">
+          <td>TOTAL</td>
+          <td class="text-center">{{ ta }}</td>
+          <td class="text-center">{{ tl }}</td>
+          <td class="text-center">
+            {{ (tl / tt * 100) | round(1) if tt > 0 else 0 }}%
+          </td>
+          <td class="text-center">{{ ti }}</td>
+          <td class="text-center">{{ tt }}</td>
+          <td class="text-center">
+            {{ (ta / tt * 100) | round(0) | int if tt > 0 else 0 }}%
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if employees %}
+<!-- ══════════════ EMPLOYEE DIRECTORY ══════════════ -->
+<div class="card mt-2">
+  <!-- Directory header with inline filters -->
+  <div style="background:#6a1b9a;border-radius:10px 10px 0 0;padding:10px 16px;
+              display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="color:#fff;font-weight:700;font-size:.88rem;white-space:nowrap">
+      👤 Employee Directory
+      <span id="dir-count" style="opacity:.75;font-weight:400;font-size:.8rem">
+        ({{ employees | length }} employees)
+      </span>
+    </span>
+
+    <!-- Search box -->
+    <input type="text" id="dirSearch" oninput="filterDir()"
+           placeholder="🔍 Search name, skill, ID…"
+           style="border:1px solid rgba(255,255,255,.35);border-radius:6px;
+                  background:rgba(255,255,255,.15);color:#fff;
+                  padding:4px 10px;font-size:.8rem;width:200px;outline:none"
+           onfocus="this.style.background='rgba(255,255,255,.25)'"
+           onblur="this.style.background='rgba(255,255,255,.15)'">
+
+    <!-- Planning Unit filter -->
+    <div style="position:relative" id="puPickerWrap">
+      <button onclick="toggleDirPicker(event,'puDrop')"
+              style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);
+                     color:#fff;border-radius:6px;padding:4px 12px;font-size:.8rem;
+                     cursor:pointer;white-space:nowrap" id="puToggle">
+        Planning Unit ▾
+      </button>
+      <div id="puDrop" class="dir-drop">
+        {% set pus = employees | map(attribute='planningUnit') | unique | sort | list %}
+        {% for pu in pus %}
+        <label class="dir-opt">
+          <input type="checkbox" class="pu-cb" value="{{ pu }}" onchange="filterDir()"> {{ pu or '(none)' }}
+        </label>
+        {% endfor %}
+        <div class="dir-drop-footer">
+          <button onclick="dirSelectAll('.pu-cb',true)">All</button>
+          <button onclick="dirSelectAll('.pu-cb',false)">None</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status filter -->
+    <div style="position:relative" id="stPickerWrap">
+      <button onclick="toggleDirPicker(event,'stDrop')"
+              style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);
+                     color:#fff;border-radius:6px;padding:4px 12px;font-size:.8rem;
+                     cursor:pointer;white-space:nowrap" id="stToggle">
+        Status ▾
+      </button>
+      <div id="stDrop" class="dir-drop">
+        {% for s in ['Active','LOA','Inactive'] %}
+        <label class="dir-opt">
+          <input type="checkbox" class="st-cb" value="{{ s }}" {% if s != 'Inactive' %}checked{% endif %} onchange="filterDir()"> {{ s }}
+        </label>
+        {% endfor %}
+        <div class="dir-drop-footer">
+          <button onclick="dirSelectAll('.st-cb',true)">All</button>
+          <button onclick="dirSelectAll('.st-cb',false)">None</button>
+        </div>
+      </div>
+    </div>
+
+    <span id="dir-showing" style="color:rgba(255,255,255,.7);font-size:.78rem;margin-left:4px"></span>
+    <button onclick="resetDirFilters()"
+            style="background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
+                   border-radius:6px;padding:3px 10px;font-size:.75rem;cursor:pointer;margin-left:auto">
+      Reset
+    </button>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table mb-0" id="dirTable" style="font-size:.82rem">
+      <thead>
+        <tr style="background:#ede7f6">
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="0" data-type="alpha" onclick="sortDir(this)">Last Name <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="1" data-type="alpha" onclick="sortDir(this)">First Name <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="2" data-type="alpha" onclick="sortDir(this)">Planning Unit <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="3" data-type="alpha" onclick="sortDir(this)">Latest Skill <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="4" data-type="alpha" onclick="sortDir(this)">Skill Start <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="5" data-type="alpha" onclick="sortDir(this)">Status <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c;cursor:pointer;user-select:none" data-col="6" data-type="alpha" onclick="sortDir(this)">Hire Date <span class="dsa">⇅</span></th>
+          <th style="padding:7px 12px;font-size:.77rem;color:#4a148c" data-col="7">Employee ID</th>
+        </tr>
+      </thead>
+      <tbody id="dirBody">
+        {% for e in employees %}
+        <tr data-pu="{{ e.planningUnit }}" data-status="{{ e.status }}"
+            data-search="{{ (e.lastName ~ ' ' ~ e.firstName ~ ' ' ~ e.planningUnit ~ ' ' ~ e.skillName ~ ' ' ~ e.employeeId ~ ' ' ~ e.allSkills) | lower }}">
+          <td style="padding:6px 12px;font-weight:500">{{ e.lastName }}</td>
+          <td style="padding:6px 12px">{{ e.firstName }}</td>
+          <td style="padding:6px 12px">{{ e.planningUnit }}</td>
+          <td style="padding:6px 12px">{{ e.skillName }}</td>
+          <td style="padding:6px 12px">{{ e.skillStart }}</td>
+          <td style="padding:6px 12px">
+            {% if e.status == 'Active' %}
+              <span style="background:#d1e7dd;color:#0a3622;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600">Active</span>
+            {% elif e.status == 'LOA' %}
+              <span style="background:#fff3cd;color:#856404;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600">LOA</span>
+            {% elif e.status == 'Inactive' or e.status == 'inactive' %}
+              <span style="background:#f8d7da;color:#842029;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600">Inactive</span>
+            {% else %}
+              <span style="background:#e9ecef;color:#495057;border-radius:6px;padding:1px 8px;font-size:.74rem">{{ e.status }}</span>
+            {% endif %}
+          </td>
+          <td style="padding:6px 12px">{{ e.empStart }}</td>
+          <td style="padding:6px 12px;color:#888;font-size:.78rem">{{ e.employeeId }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<style>
+  .dir-drop { display:none;position:absolute;top:calc(100% + 4px);left:0;
+              background:#fff;border:1px solid #dee2e6;border-radius:8px;
+              box-shadow:0 6px 20px rgba(0,0,0,.15);width:220px;z-index:1060;
+              padding:4px 0;max-height:280px;overflow-y:auto; }
+  .dir-drop.open { display:block; }
+  .dir-opt { display:flex;align-items:center;gap:8px;padding:5px 12px;
+             font-size:.81rem;color:#333;cursor:pointer; }
+  .dir-opt:hover { background:#f0e6ff; }
+  .dir-opt input { accent-color:#6a1b9a;width:13px;height:13px;flex-shrink:0; }
+  .dir-drop-footer { padding:6px 10px;border-top:1px solid #eee;display:flex;gap:6px; }
+  .dir-drop-footer button { font-size:.72rem;padding:2px 8px;border-radius:4px;cursor:pointer;border:1px solid #ced4da; }
+  #dirTable tbody tr:nth-child(even) { background:#faf5ff; }
+  #dirTable tbody tr:hover { background:#ede7f6; }
+</style>
+
+<script>
+// ── Directory filters ──
+function toggleDirPicker(e, id) {
+  e.stopPropagation();
+  document.querySelectorAll('.dir-drop').forEach(function(d){
+    if (d.id !== id) d.classList.remove('open');
+  });
+  document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', function() {
+  document.querySelectorAll('.dir-drop').forEach(function(d){ d.classList.remove('open'); });
+});
+
+function dirSelectAll(cls, val) {
+  document.querySelectorAll(cls).forEach(function(cb){ cb.checked = val; });
+  filterDir();
+}
+
+function filterDir() {
+  var q     = (document.getElementById('dirSearch').value || '').trim().toLowerCase();
+  var puSet = new Set(Array.from(document.querySelectorAll('.pu-cb:checked')).map(function(c){ return c.value; }));
+  var stSet = new Set(Array.from(document.querySelectorAll('.st-cb:checked')).map(function(c){ return c.value; }));
+  var allPU = document.querySelectorAll('.pu-cb').length;
+  var allST = document.querySelectorAll('.st-cb').length;
+  var shown = 0, total = 0;
+  document.querySelectorAll('#dirBody tr').forEach(function(tr) {
+    total++;
+    var pu     = tr.getAttribute('data-pu');
+    var st     = tr.getAttribute('data-status');
+    var search = tr.getAttribute('data-search');
+    var puOk   = puSet.size === 0 || puSet.size === allPU || puSet.has(pu);
+    var stOk   = stSet.size === 0 || stSet.size === allST || stSet.has(st);
+    var qOk    = !q || search.includes(q);
+    var show   = puOk && stOk && qOk;
+    tr.style.display = show ? '' : 'none';
+    if (show) shown++;
+  });
+  document.getElementById('dir-showing').textContent =
+    shown === total ? '' : shown + ' of ' + total + ' shown';
+}
+
+function resetDirFilters() {
+  document.getElementById('dirSearch').value = '';
+  document.querySelectorAll('.pu-cb, .st-cb').forEach(function(cb){ cb.checked = true; });
+  filterDir();
+}
+
+// ── Directory column sort ──
+var dirSortState = {};
+function sortDir(th) {
+  var col  = parseInt(th.getAttribute('data-col'));
+  var type = th.getAttribute('data-type') || 'alpha';
+  var key  = 'dir-' + col;
+  var dir  = (dirSortState[key] === 'asc') ? 'desc' : 'asc';
+  dirSortState[key] = dir;
+  var tbody = document.getElementById('dirBody');
+  var rows  = Array.from(tbody.querySelectorAll('tr'));
+  rows.sort(function(a, b) {
+    var av = (a.cells[col] ? a.cells[col].innerText : '').trim().toLowerCase();
+    var bv = (b.cells[col] ? b.cells[col].innerText : '').trim().toLowerCase();
+    return dir === 'asc' ? (av < bv ? -1 : av > bv ? 1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
+  });
+  rows.forEach(function(r){ tbody.appendChild(r); });
+  // Update arrows
+  document.querySelectorAll('#dirTable th .dsa').forEach(function(a){ a.textContent = ' ⇅'; });
+  var arrow = th.querySelector('.dsa');
+  if (arrow) arrow.textContent = dir === 'asc' ? ' ▲' : ' ▼';
+}
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

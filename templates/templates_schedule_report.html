@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Schedule Report</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#eef2f5; padding:24px; }
+    h2   { color:#0078D4; }
+    textarea {
+      font-family:'Courier New', monospace;
+      font-size:.82rem;
+      resize:vertical;
+    }
+    #reportFrame {
+      width:100%;
+      min-height:500px;
+      border:none;
+      border-radius:0 0 8px 8px;
+      display:block;
+    }
+    .filter-bar { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+    .filter-bar label { font-size:.875rem; font-weight:600; }
+    .filter-bar select,
+    .filter-bar input  { font-size:.875rem; }
+  </style>
+</head>
+<body>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">📅 Schedule Report</h2>
+  <a href="{{ url_for('schedule_tools') }}" class="btn btn-outline-secondary btn-sm">← Back to Tools</a>
+</div>
+
+<!-- ── Action buttons ── -->
+<div class="d-flex gap-2 mb-4 flex-wrap">
+  <button class="btn btn-outline-primary btn-sm"  onclick="copyText()">📋 Copy Text</button>
+  <button class="btn btn-outline-success btn-sm"  onclick="downloadText()">⬇ Download .txt</button>
+  <button class="btn btn-outline-secondary btn-sm" onclick="printReport()">🖨 Print Report</button>
+</div>
+
+<!-- ── Filters ── -->
+<div class="card mb-4">
+  <div class="card-header"><strong>🔍 Filters</strong> <small class="text-muted">(apply to the visual report below)</small></div>
+  <div class="card-body">
+    <div class="filter-bar">
+
+      <div>
+        <label>Team</label><br>
+        <select id="teamFilter" class="form-select form-select-sm" style="width:130px">
+          <option value="ALL">All Teams</option>
+          <option value="SS">SS Only</option>
+          <option value="PS">PS Only</option>
+        </select>
+      </div>
+
+      <div>
+        <label>From Date</label><br>
+        <input type="date" id="startDate" class="form-control form-control-sm">
+      </div>
+
+      <div>
+        <label>To Date</label><br>
+        <input type="date" id="endDate" class="form-control form-control-sm">
+      </div>
+
+      <div>
+        <button class="btn btn-primary btn-sm" onclick="applyFilters()">Apply</button>
+        <button class="btn btn-outline-secondary btn-sm ms-1" onclick="clearFilters()">Clear</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── Text report ── -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>📝 Text Version</strong>
+    <small class="text-muted">Copy/paste into Excel or email</small>
+  </div>
+  <div class="card-body p-2">
+    {% if text_report %}
+      <textarea id="textReport" class="form-control" rows="14">{{ text_report }}</textarea>
+    {% else %}
+      <p class="text-muted mb-0">No text report generated yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── HTML visual report in iframe ── -->
+<!-- Using srcdoc so the full HTML page from schedule_builder renders correctly     -->
+<!-- without nesting <html>/<head>/<body> tags inside this page (which breaks CSS)  -->
+<div class="card mb-4">
+  <div class="card-header"><strong>📊 Visual Report</strong></div>
+  {% if html_report %}
+    <iframe id="reportFrame"
+            srcdoc="{{ html_report | e }}"
+            onload="onFrameLoad()"></iframe>
+  {% else %}
+    <div class="card-body text-danger">
+      ⚠️ No HTML report found. Run the schedule builder first.
+    </div>
+  {% endif %}
+</div>
+
+<script>
+// ── Copy text to clipboard ──
+function copyText() {
+  const ta  = document.getElementById("textReport");
+  if (!ta) return;
+  ta.select();
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = "✅ Copied!";
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+// ── Download text as .txt file ──
+function downloadText() {
+  const ta = document.getElementById("textReport");
+  if (!ta) return;
+  const blob = new Blob([ta.value], { type: "text/plain" });
+  const a    = Object.assign(document.createElement("a"), {
+    href:     URL.createObjectURL(blob),
+    download: "schedule_report.txt"
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Print the iframe content ──
+function printReport() {
+  const frame = document.getElementById("reportFrame");
+  if (!frame) return;
+  frame.contentWindow.focus();
+  frame.contentWindow.print();
+}
+
+// ── Auto-resize iframe to its content height ──
+function onFrameLoad() {
+  const frame = document.getElementById("reportFrame");
+  if (!frame) return;
+  try {
+    const body = frame.contentDocument.body;
+    frame.style.height = (body.scrollHeight + 40) + "px";
+  } catch (e) {}
+}
+
+// ── Apply filters to the iframe content ──
+// The html_report structure from schedule_builder:
+//   <h4>📋 SS Team Leads</h4>  then TL .card elements
+//   <h4>📋 PS Team Leads</h4>  then TL .card elements
+//   Shift tables: th[0]=Day  th[1]=Date  th[2]=Start  th[3]=End  th[4]=Hours
+function applyFilters() {
+  const team  = document.getElementById("teamFilter").value;
+  const start = document.getElementById("startDate").value;
+  const end   = document.getElementById("endDate").value;
+
+  const frame = document.getElementById("reportFrame");
+  if (!frame) return;
+  let doc;
+  try { doc = frame.contentDocument; } catch(e) { return; }
+
+  // ── Team filter ──
+  // Find each h4 section and collect all .card siblings until the next h4
+  const h4s = Array.from(doc.querySelectorAll("h4"));
+  h4s.forEach(h4 => {
+    const text    = h4.textContent || "";
+    const isSSHdr = text.includes("SS");
+    const isPSHdr = text.includes("PS");
+    if (!isSSHdr && !isPSHdr) return;
+
+    const groupVisible =
+      team === "ALL" ||
+      (team === "SS" && isSSHdr) ||
+      (team === "PS" && isPSHdr);
+
+    // Toggle h4 itself
+    h4.style.display = groupVisible ? "" : "none";
+
+    // Toggle every .card that follows this h4 up to the next h4 or hr
+    let el = h4.nextElementSibling;
+    while (el && el.tagName !== "H4" && el.tagName !== "HR") {
+      el.style.display = groupVisible ? "" : "none";
+      el = el.nextElementSibling;
+    }
+  });
+
+  // ── Date filter ──
+  // Shift tables have Date in column index 1 (th: Day|Date|Start|End|Hours)
+  // Table rows with class table-secondary are week headers — skip those
+  if (start || end) {
+    const tables = Array.from(doc.querySelectorAll("table"));
+    tables.forEach(tbl => {
+      // Confirm this is a shift table by checking for a "Date" column header
+      const headers = Array.from(tbl.querySelectorAll("th")).map(th => th.textContent.trim());
+      const dateColIdx = headers.indexOf("Date");
+      if (dateColIdx < 0) return;  // not a shift table (e.g. fairness table)
+
+      const tbodyRows = Array.from(tbl.querySelectorAll("tbody tr"));
+      tbodyRows.forEach(tr => {
+        // Skip week-header rows (no date data in them)
+        if (tr.querySelector("td[colspan]")) return;
+
+        const cells   = tr.querySelectorAll("td");
+        const dateVal = cells[dateColIdx] ? cells[dateColIdx].textContent.trim() : "";
+
+        let show = true;
+        if (start && dateVal && dateVal < start) show = false;
+        if (end   && dateVal && dateVal > end)   show = false;
+        tr.style.display = show ? "" : "none";
+      });
+    });
+  }
+
+  // Resize iframe after filter changes row visibility
+  onFrameLoad();
+}
+
+// ── Clear all filters ──
+function clearFilters() {
+  document.getElementById("teamFilter").value = "ALL";
+  document.getElementById("startDate").value  = "";
+  document.getElementById("endDate").value    = "";
+
+  const frame = document.getElementById("reportFrame");
+  if (!frame) return;
+  let doc;
+  try { doc = frame.contentDocument; } catch(e) { return; }
+
+  // Restore all hidden elements
+  doc.querySelectorAll("[style*='display: none'], [style*='display:none']")
+     .forEach(el => el.style.display = "");
+
+  onFrameLoad();
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Legacy Analytics</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filter-bar { background:#fff; border-radius:10px; padding:12px 16px; margin-bottom:16px;
+                  box-shadow:0 2px 6px rgba(0,0,0,.06); display:flex; gap:12px;
+                  align-items:flex-end; flex-wrap:wrap; }
+    .filter-bar label { display:block; font-weight:600; font-size:.75rem; margin-bottom:3px; }
+    .filter-bar input, .filter-bar select { padding:5px 9px; border:1px solid #ccc;
+                  border-radius:6px; font-size:.84rem; }
+    .filter-bar button { padding:6px 16px; background:#1a237e; color:#fff; border:none;
+                  border-radius:6px; cursor:pointer; font-size:.85rem; font-weight:600; }
+    .filter-bar a.reset { padding:6px 13px; border:1px solid #ccc; border-radius:6px;
+                  color:#555; text-decoration:none; font-size:.85rem; }
+    .kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .kpi { background:#fff; border-radius:10px; padding:12px 18px; flex:1; min-width:118px;
+           box-shadow:0 2px 6px rgba(0,0,0,.06); text-align:center; }
+    .kpi .v { font-size:1.45rem; font-weight:700; color:#1a237e; }
+    .kpi .l { font-size:.72rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+    .kpi.green .v { color:#2e7d32; } .kpi.amber .v { color:#e65100; } .kpi.red .v { color:#b71c1c; }
+    .grid2 { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .card { background:#fff; border-radius:10px; padding:16px 18px;
+            box-shadow:0 2px 6px rgba(0,0,0,.06); flex:1; min-width:320px; }
+    .card h2 { margin:0 0 10px; font-size:.92rem; color:#1a237e; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:7px 10px; text-align:left; font-size:.83rem; border-bottom:1px solid #eee; }
+    th { background:#f7f7f7; font-size:.76rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.num, th.num { text-align:right; }
+    tbody tr:hover { background:#f0f4ff; }
+    canvas { max-height:280px; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>📉 Legacy Analytics</h1>
+<div class="sub">WFM request reporting from the legacy Tasks archive</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/dashboard">Ticket Dashboard</a>
+  <a href="/legacy_tickets">Legacy Tickets</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+    <div><label>From</label><input type="date" name="start" value="{{ start }}"></div>
+    <div><label>To</label><input type="date" name="end" value="{{ end }}"></div>
+    <div>
+      <label>LOB</label>
+      <select name="lob">
+        <option value="">All LOBs</option>
+        {% for l in all_lobs %}<option {% if l == lob %}selected{% endif %}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Request Type</label>
+      <select name="rtype">
+        <option value="">All Types</option>
+        {% for t in all_types %}<option {% if t == rtype %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Team Member</label>
+      <select name="person">
+        <option value="">Everyone</option>
+        {% for p in all_people %}<option {% if p == person %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <button type="submit">Apply</button>
+      <a href="/legacy_analytics" class="reset">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="v">{{ "{:,}".format(total) }}</div><div class="l">Requests</div></div>
+  <div class="kpi green"><div class="v">{{ "{:,}".format(completed_n) }}</div><div class="l">Completed</div></div>
+  <div class="kpi green"><div class="v">{{ sameday_pct }}%</div><div class="l">Same-Day Rate</div></div>
+  <div class="kpi"><div class="v">{{ avg_days }}</div><div class="l">Avg Days to Complete</div></div>
+  <div class="kpi amber"><div class="v">{{ "{:,}".format(inprog) }}</div><div class="l">In Progress</div></div>
+  <div class="kpi amber"><div class="v">{{ "{:,}".format(notstart) }}</div><div class="l">Not Started</div></div>
+  <div class="kpi red"><div class="v">{{ "{:,}".format(late_n) }}</div><div class="l">Late</div></div>
+</div>
+
+<div class="grid2">
+  <div class="card" style="flex:2">
+    <h2>📈 Request Volume by {{ volume_chart_label | capitalize }}</h2>
+    <canvas id="volChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>🥧 By LOB</h2>
+    <canvas id="lobChart"></canvas>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card" style="flex:2">
+    <h2>📊 Top Request Types</h2>
+    <canvas id="typeChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>⚑ Priority Split</h2>
+    <table>
+      <thead><tr><th>Priority</th><th class="num">Count</th></tr></thead>
+      <tbody>
+        {% for p, c in prio_counts %}
+        <tr><td>{{ p }}</td><td class="num">{{ "{:,}".format(c) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>👥 Team Performance</h2>
+    <table>
+      <thead><tr><th>Member</th><th class="num">Assigned</th><th class="num">Completed</th>
+        <th class="num">In&nbsp;Prog</th><th class="num">Not&nbsp;Started</th>
+        <th class="num">Same-Day&nbsp;%</th></tr></thead>
+      <tbody>
+        {% for t in team_rows %}
+        <tr><td>{{ t.name }}</td><td class="num">{{ "{:,}".format(t.assigned) }}</td>
+          <td class="num">{{ "{:,}".format(t.completed) }}</td>
+          <td class="num">{{ t.inprog }}</td><td class="num">{{ t.notstart }}</td>
+          <td class="num">{{ t.sameday_pct }}%</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>✅ Completion — Last 14 Days in Range</h2>
+    <table>
+      <thead><tr><th>Date</th><th class="num">Created</th><th class="num">Same-Day</th>
+        <th class="num">In&nbsp;Prog</th><th class="num">Pending</th></tr></thead>
+      <tbody>
+        {% for d, c in completion_days %}
+        <tr><td>{{ d }}</td><td class="num">{{ c.created }}</td><td class="num">{{ c.sameday }}</td>
+          <td class="num">{{ c.inprog }}</td><td class="num">{{ c.pending }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>🗂 All Request Types</h2>
+  <table>
+    <thead><tr><th>Request Type</th><th class="num">Count</th><th class="num">% of Total</th></tr></thead>
+    <tbody>
+      {% for t, c in type_counts %}
+      <tr><td>{{ t }}</td><td class="num">{{ "{:,}".format(c) }}</td>
+        <td class="num">{{ (c / total * 100) | round(1) if total else 0 }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const VOL   = {{ volume_chart | tojson }};
+const TYPES = {{ type_counts  | tojson }};
+const LOBS  = {{ lob_counts   | tojson }};
+const dark  = localStorage.getItem('wfm_dark') === '1';
+const grid  = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+const ticks = dark ? '#9ca3af' : '#666';
+const PALETTE = ['#1a237e','#2e7d32','#e65100','#6a1b9a','#b71c1c','#006064',
+                 '#f9a825','#4527a0','#00695c','#c62828','#283593','#558b2f'];
+
+try {
+new Chart(document.getElementById('volChart'), {
+  type: 'line',
+  data: { labels: VOL.map(v => v[0]),
+    datasets: [{ label:'Requests', data: VOL.map(v => v[1]),
+      borderColor:'#1a237e', backgroundColor:'rgba(26,35,126,.12)',
+      fill:true, tension:.25, pointRadius: VOL.length <= 7 ? 6 : 3,
+      pointHoverRadius: 8 }] },
+  options: { plugins:{legend:{display:false}},
+    scales:{ x:{grid:{color:grid},ticks:{color:ticks,maxTicksLimit:14}},
+             y:{grid:{color:grid},ticks:{color:ticks},beginAtZero:true} } }
+});
+} catch(e) { console.error('volChart error:', e); }
+
+const TOPT = TYPES.slice(0, 12);
+try {
+new Chart(document.getElementById('typeChart'), {
+  type: 'bar',
+  data: { labels: TOPT.map(t => t[0]),
+    datasets: [{ data: TOPT.map(t => t[1]), backgroundColor:'#1a237e' }] },
+  options: { indexAxis:'y', plugins:{legend:{display:false}},
+    scales:{ x:{grid:{color:grid},ticks:{color:ticks},beginAtZero:true},
+             y:{grid:{display:false},ticks:{color:ticks,autoSkip:false,font:{size:10}}} } }
+});
+} catch(e) { console.error('typeChart error:', e); }
+
+try {
+new Chart(document.getElementById('lobChart'), {
+  type: 'doughnut',
+  data: { labels: LOBS.map(l => l[0]),
+    datasets: [{ data: LOBS.map(l => l[1]),
+      backgroundColor: LOBS.map((_, i) => PALETTE[i % PALETTE.length]) }] },
+  options: { plugins:{legend:{position:'bottom',
+    labels:{color:ticks,font:{size:10},boxWidth:12}}} }
+});
+} catch(e) { console.error('lobChart error:', e); }
+</script>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

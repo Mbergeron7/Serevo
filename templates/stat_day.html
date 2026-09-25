@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stat Day Calculator</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .card { background:#fff; border-radius:10px; padding:16px 18px; margin-bottom:16px;
+            box-shadow:0 2px 6px rgba(0,0,0,.06); }
+    .card h2 { margin:0 0 10px; font-size:.95rem; color:#1565c0; }
+    .upload-form { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+    .upload-form label { display:block; font-weight:600; font-size:.78rem; margin-bottom:4px; }
+    .upload-form input { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:.86rem; }
+    .upload-form button { padding:8px 20px; background:#1565c0; color:#fff; border:none;
+                          border-radius:6px; cursor:pointer; font-size:.88rem; font-weight:600; }
+    .hint { font-size:.78rem; color:#6c757d; margin-top:8px; }
+    .error { background:#fdecea; border-left:4px solid #b71c1c; color:#b71c1c;
+             padding:10px 14px; border-radius:6px; margin-bottom:16px; font-size:.87rem; }
+    .kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .kpi { background:#fff; border-radius:10px; padding:12px 20px; flex:1; min-width:130px;
+           box-shadow:0 2px 6px rgba(0,0,0,.06); text-align:center; }
+    .kpi .v { font-size:1.5rem; font-weight:700; color:#1565c0; }
+    .kpi.red .v { color:#b71c1c; }
+    .kpi .l { font-size:.72rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; }
+    .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .toolbar button { padding:7px 16px; border-radius:6px; border:none; cursor:pointer;
+                      font-size:.84rem; font-weight:600; }
+    .btn-copy { background:#2e7d32; color:#fff; }
+    .btn-toggle { background:#e8eaf6; color:#1a237e; border:1px solid #c5cae9 !important; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:7px 9px; text-align:left; font-size:.81rem; border-bottom:1px solid #eee; }
+    th { background:#f7f7f7; font-size:.73rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.c, th.c { text-align:center; }
+    tbody tr:hover { background:#f0f4ff; }
+    .yes { color:#b71c1c; font-weight:700; }
+    .no  { color:#2e7d32; }
+    .off { color:#9e9e9e; }
+    .pill { display:inline-block; padding:1px 9px; border-radius:10px; font-size:.72rem;
+            font-weight:700; letter-spacing:.02em; }
+    .pill.absent  { background:#fdecea; color:#b71c1c; }
+    .pill.present { background:#e8f5e9; color:#1b5e20; }
+    .pill.off     { background:#eceff1; color:#78909c; }
+    .legdate { font-size:.78rem; color:#555; display:block; margin-bottom:2px; }
+    .notes { font-size:.76rem; color:#6c757d; max-width:260px; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>🗓 Stat Day Removal Calculator</h1>
+<div class="sub">Flags employees absent on their last shift before, the stat day itself, or their first shift after a statutory holiday</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/people/loa">Leave of Absence</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/logout">Logout</a>
+</div>
+
+{% if error %}<div class="error">⚠ {{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2>1 · Upload &amp; Calculate</h2>
+  <form method="POST" enctype="multipart/form-data" class="upload-form">
+    <div>
+      <label>Stat Day</label>
+      <input type="date" name="stat_date" value="{{ stat_date }}" required>
+    </div>
+    <div>
+      <label>DV Data Export (.csv or .xlsx)</label>
+      <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required>
+    </div>
+    <div>
+      <label>Employee Database Override <span style="font-weight:400;color:#9e9e9e">(optional — rarely needed)</span></label>
+      <input type="file" name="emp_file" accept=".csv,.xlsx,.xlsm">
+    </div>
+    <div><button type="submit">Calculate</button></div>
+  </form>
+  <div class="hint">💡 Export the raw DV daily data covering <b>at least a few days before and after</b> the stat day —
+    the same data you'd paste into the "DV Data Paste" tab. The employee name, team lead, and LOB come straight from the export.<br>
+    🚫 <b>Terminated/inactive employees are excluded automatically</b> using the portal's employee database (the roster sheet).
+    The override upload is only needed if the roster hasn't been refreshed since a recent termination.</div>
+</div>
+
+{% if results is not none %}
+<div class="kpi-row">
+  <div class="kpi"><div class="v">{{ summary.total }}</div><div class="l">Employees Analyzed</div></div>
+  <div class="kpi red"><div class="v">{{ summary.flagged }}</div><div class="l">Flagged for Removal</div></div>
+  <div class="kpi"><div class="v" style="color:#78909c">{{ summary.excluded }}</div><div class="l">Excluded (Terminated)</div></div>
+  <div class="kpi"><div class="v" style="font-size:.95rem;padding-top:8px">{{ summary.stat_pretty }}</div><div class="l">Stat Day</div></div>
+  <div class="kpi"><div class="v" style="font-size:.95rem;padding-top:8px">{{ summary.range }}</div><div class="l">Data Range in File</div></div>
+</div>
+
+{% if excluded %}
+<details class="card" style="padding:12px 18px">
+  <summary style="cursor:pointer;font-size:.88rem;font-weight:600;color:#78909c">
+    🚫 {{ excluded|length }} terminated employee{{ 's' if excluded|length != 1 }} excluded
+    {% if summary.term_source %}<span style="font-weight:400"> — cross-referenced against the {{ summary.term_source }}</span>{% endif %}
+  </summary>
+  <table style="margin-top:10px">
+    <thead><tr><th>DV ID</th><th>Team Lead</th><th>Name</th><th>Terminated</th></tr></thead>
+    <tbody>
+      {% for x in excluded %}
+      <tr><td>{{ x.dvid }}</td><td>{{ x.tl }}</td><td>{{ x.name }}</td><td>{{ x.term }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% elif summary.term_source is none %}
+<div class="hint" style="margin:-6px 0 14px">
+  ⚠ No termination data source was available — upload your employee database file to enable automatic exclusion of terminated employees.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="toolbar">
+    <h2 style="margin:0;flex:1">2 · Results</h2>
+    <button class="btn-toggle" style="background:#e8f5e9;color:#1b5e20;border-color:#c8e6c9 !important" onclick="exportExcel()">⬇ Export to Excel</button>
+    <button class="btn-copy" onclick="copyEmail()">📋 Copy for Email</button>
+  </div>
+  <div class="toolbar" style="gap:10px">
+    <input type="text" id="fSearch" placeholder="🔍 Search name or DV ID…"
+           oninput="applyFilters()" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:.83rem;min-width:190px">
+    <select id="fTL"  onchange="applyFilters()" style="padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.83rem"></select>
+    <select id="fLOB" onchange="applyFilters()" style="padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.83rem"></select>
+    <select id="fStatus" onchange="applyFilters()" style="padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.83rem">
+      <option value="remove" selected>Flagged for removal only</option>
+      <option value="all">All employees</option>
+      <option value="keep">Keep only</option>
+    </select>
+    <span id="fCount" style="font-size:.78rem;color:#6c757d"></span>
+  </div>
+  <table id="resultsTable">
+    <thead>
+      <tr>
+        <th data-col="0" class="sortable">DV ID</th>
+        <th data-col="1" class="sortable">Team Lead</th>
+        <th data-col="2" class="sortable">Name</th>
+        <th data-col="3" class="sortable">LOB</th>
+        <th data-col="4" class="sortable c">Last Shift Before Stat</th>
+        <th data-col="5" class="sortable c">Stat Day</th>
+        <th data-col="6" class="sortable c">First Shift After Stat</th>
+        <th data-col="7" class="sortable c">Remove Stat Pay</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% macro legcell(l) -%}
+        {%- if l -%}
+          <span class="legdate">{{ l.date }} ({{ l.hrs }}h)</span>
+          {%- if l.absent -%}<span class="pill absent">ABSENT</span>
+          {%- else -%}<span class="pill present">Present</span>{%- endif -%}
+        {%- else -%}<span class="pill off">Not in file</span>{%- endif -%}
+      {%- endmacro %}
+      {% macro legsort(l) -%}{%- if not l -%}3{%- elif l.absent -%}0{%- else -%}1{%- endif -%}{%- endmacro %}
+      {% for r in results %}
+      <tr data-flagged="{{ '1' if r.remove else '0' }}"
+          data-idx="{{ loop.index0 }}" data-tl="{{ r.tl }}" data-lob="{{ r.lob }}"
+          data-search="{{ (r.name ~ ' ' ~ r.dvid) | lower }}">
+        <td data-sort="{{ r.dvid }}">{{ r.dvid }}</td>
+        <td data-sort="{{ r.tl }}">{{ r.tl }}</td>
+        <td data-sort="{{ r.name }}"><b>{{ r.name }}</b></td>
+        <td data-sort="{{ r.lob }}">{{ r.lob }}</td>
+        <td class="c" data-sort="{{ legsort(r.before) }}">{{ legcell(r.before) }}</td>
+        <td class="c" data-sort="{% if r.sched_on_stat %}{{ legsort(r.stat) }}{% else %}2{% endif %}">
+          {% if r.sched_on_stat %}
+            <span class="legdate">Scheduled ({{ r.stat.hrs }}h)</span>
+            {% if r.stat.absent %}<span class="pill absent">ABSENT</span>
+            {% else %}<span class="pill present">Present</span>{% endif %}
+          {% else %}<span class="pill off">Off</span>{% endif %}
+        </td>
+        <td class="c" data-sort="{{ legsort(r.after) }}">{{ legcell(r.after) }}</td>
+        <td class="c" data-sort="{{ '0' if r.remove else '1' }}">{% if r.remove %}<span class="yes">REMOVE</span>{% else %}<span class="no">Keep</span>{% endif %}</td>
+        <td class="notes">{{ r.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+const RESULTS  = {{ results | tojson }};
+const SUMMARY  = {{ summary | tojson }};
+
+// ── Filters ─────────────────────────────────────────────────────
+function populateFilters() {
+  const tls  = [...new Set(RESULTS.map(r => r.tl).filter(Boolean))].sort();
+  const lobs = [...new Set(RESULTS.map(r => r.lob).filter(Boolean))].sort();
+  const tlSel  = document.getElementById('fTL');
+  const lobSel = document.getElementById('fLOB');
+  tlSel.innerHTML  = '<option value="">All Team Leads</option>' +
+    tls.map(t => `<option>${t}</option>`).join('');
+  lobSel.innerHTML = '<option value="">All LOBs</option>' +
+    lobs.map(l => `<option>${l}</option>`).join('');
+}
+
+function applyFilters() {
+  const q      = document.getElementById('fSearch').value.trim().toLowerCase();
+  const tl     = document.getElementById('fTL').value;
+  const lob    = document.getElementById('fLOB').value;
+  const status = document.getElementById('fStatus').value;
+  let shown = 0;
+  document.querySelectorAll('#resultsTable tbody tr').forEach(tr => {
+    let ok = true;
+    if (status === 'remove' && tr.dataset.flagged !== '1') ok = false;
+    if (status === 'keep'   && tr.dataset.flagged !== '0') ok = false;
+    if (ok && tl  && tr.dataset.tl  !== tl)  ok = false;
+    if (ok && lob && tr.dataset.lob !== lob) ok = false;
+    if (ok && q   && !tr.dataset.search.includes(q)) ok = false;
+    tr.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  document.getElementById('fCount').textContent =
+    'Showing ' + shown + ' of ' + RESULTS.length;
+}
+
+function visibleResults() {
+  const out = [];
+  document.querySelectorAll('#resultsTable tbody tr').forEach(tr => {
+    if (tr.style.display !== 'none') out.push(RESULTS[parseInt(tr.dataset.idx, 10)]);
+  });
+  return out;
+}
+
+// ── Sorting ─────────────────────────────────────────────────────
+let sortCol = null, sortAsc = true;
+function makeSortable() {
+  document.querySelectorAll('#resultsTable th.sortable').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.title = 'Click to sort';
+    th.addEventListener('click', () => {
+      const col = parseInt(th.dataset.col, 10);
+      sortAsc = (sortCol === col) ? !sortAsc : true;
+      sortCol = col;
+      const tbody = document.querySelector('#resultsTable tbody');
+      const rows  = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((a, b) => {
+        const av = a.children[col].dataset.sort ?? a.children[col].textContent.trim();
+        const bv = b.children[col].dataset.sort ?? b.children[col].textContent.trim();
+        const an = parseFloat(av), bn = parseFloat(bv);
+        let cmp;
+        if (!isNaN(an) && !isNaN(bn) && String(an) === av && String(bn) === bv) cmp = an - bn;
+        else cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' });
+        return sortAsc ? cmp : -cmp;
+      });
+      rows.forEach(r => tbody.appendChild(r));
+      document.querySelectorAll('#resultsTable th.sortable').forEach(h => {
+        h.textContent = h.textContent.replace(/ [▲▼]$/, '');
+      });
+      th.textContent += sortAsc ? ' ▲' : ' ▼';
+    });
+  });
+}
+
+populateFilters();
+applyFilters();
+makeSortable();
+
+// ── Copy for Email (respects current filters) ───────────────────
+function copyEmail() {
+  const flagged = visibleResults().filter(r => r.remove);
+  const tlPick  = document.getElementById('fTL').value;
+  const cell = 'padding:6px 10px;border:1px solid #d0d0d0;font-size:13px;font-family:Segoe UI,Arial,sans-serif;';
+  const th   = cell + 'background:#1565c0;color:#ffffff;font-weight:700;text-align:left;';
+  let html = '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#222">' +
+    '<p>Hello,</p>' +
+    '<p>Please find below the stat pay removal list for <b>' + SUMMARY.stat_pretty + '</b>' +
+    (tlPick ? ' (team: <b>' + tlPick + '</b>)' : '') + '. ' +
+    'These employees were absent on their last scheduled shift before the stat, the stat day itself, ' +
+    'or their first scheduled shift after, and are flagged for stat pay removal:</p>';
+  if (!flagged.length) {
+    html += '<p><b>No employees are flagged for stat pay removal.</b></p>';
+  } else {
+    html += '<table style="border-collapse:collapse">' +
+      '<tr>' + ['DV ID','Team Lead','Name','LOB','Shift Before','Stat Day','Shift After','Reason']
+        .map(h => '<th style="' + th + '">' + h + '</th>').join('') + '</tr>';
+    flagged.forEach(r => {
+      const leg = l => !l ? 'Not in file' :
+        (l.date ? l.date + ' (' + l.hrs + 'h) — ' : '') +
+        (l.absent ? '<b style="color:#b71c1c">ABSENT</b>' : 'Present');
+      const statLeg = r.sched_on_stat
+        ? ('Scheduled (' + r.stat.hrs + 'h) — ' +
+           (r.stat.absent ? '<b style="color:#b71c1c">ABSENT</b>' : 'Present'))
+        : 'Off';
+      html += '<tr>' + [r.dvid, r.tl, '<b>' + r.name + '</b>', r.lob,
+        leg(r.before), statLeg, leg(r.after), r.notes]
+        .map(v => '<td style="' + cell + '">' + (v || '—') + '</td>').join('') + '</tr>';
+    });
+    html += '</table>';
+  }
+  html += '<p>Please review and confirm before processing. Thank you!</p></div>';
+
+  const text = flagged.map(r =>
+    `${r.dvid}\t${r.tl}\t${r.name}\t${r.lob}\t${r.notes}`).join('\n');
+  try {
+    navigator.clipboard.write([new ClipboardItem({
+      'text/html':  new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([text || 'No employees flagged.'], { type: 'text/plain' })
+    })]).then(() => flashCopied()).catch(() => fallbackCopy(text));
+  } catch (e) { fallbackCopy(text); }
+}
+function fallbackCopy(text) {
+  navigator.clipboard.writeText(text).then(flashCopied);
+}
+function flashCopied() {
+  const b = document.querySelector('.btn-copy');
+  const orig = b.textContent;
+  b.textContent = '✅ Copied — paste into your email';
+  setTimeout(() => b.textContent = orig, 2500);
+}
+
+// ── Export (respects current filters) ───────────────────────────
+async function exportExcel() {
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Building…';
+  try {
+    const res = await fetch('/stat-day/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results: visibleResults(), stat_pretty: SUMMARY.stat_pretty })
+    });
+    if (!res.ok) throw new Error('export failed');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^";]+)"?/);
+    a.download = m ? m[1] : 'Stat_Day_Removal.xlsx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    btn.textContent = '✅ Downloaded';
+  } catch (e) {
+    console.error(e);
+    btn.textContent = '❌ Failed';
+  }
+  setTimeout(() => btn.textContent = orig, 2500);
+}
+</script>
+{% endif %}
+
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

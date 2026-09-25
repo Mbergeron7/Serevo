@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeopleWare Interval Import</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .card { background:#fff; border-radius:10px; padding:16px 18px; margin-bottom:16px;
+            box-shadow:0 2px 6px rgba(0,0,0,.06); }
+    .card h2 { margin:0 0 10px; font-size:.95rem; color:#00695c; }
+    .upload-form { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+    .upload-form label { display:block; font-weight:600; font-size:.78rem; margin-bottom:4px; }
+    .upload-form input { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:.86rem; }
+    .upload-form button { padding:8px 20px; background:#00695c; color:#fff; border:none;
+                          border-radius:6px; cursor:pointer; font-size:.88rem; font-weight:600; }
+    .hint { font-size:.78rem; color:#6c757d; margin-top:8px; }
+    .error { background:#fdecea; border-left:4px solid #b71c1c; color:#b71c1c;
+             padding:10px 14px; border-radius:6px; margin-bottom:16px; font-size:.87rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px 10px; text-align:left; font-size:.84rem; border-bottom:1px solid #eee; }
+    th { background:#f7f7f7; font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.num, th.num { text-align:right; }
+    tbody tr:hover { background:#f0f4ff; }
+    tr.skip td { opacity:.45; }
+    .qname { padding:5px 9px; border:1px solid #ccc; border-radius:6px; font-size:.83rem; width:200px; }
+    .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .btn-gen { padding:8px 20px; background:#00695c; color:#fff; border:none; border-radius:6px;
+               cursor:pointer; font-size:.88rem; font-weight:600; }
+    .date-in { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:.85rem; }
+    pre.preview { background:#f7f7f7; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px;
+                  font-size:.78rem; max-height:200px; overflow:auto; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>📤 PeopleWare Interval Import</h1>
+<div class="sub">Convert the WFM Daily Interval report email into a PeopleWare-ready CSV
+(header row: Queue Name, Date, Time, Offered, Handled, AHT — comma separated)</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/capacity">Capacity Planning</a>
+  <a href="/logout">Logout</a>
+</div>
+
+{% if error %}<div class="error">⚠ {{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2>1 · Upload the Interval Report Email</h2>
+  <form method="POST" enctype="multipart/form-data" class="upload-form">
+    <div>
+      <label>Email (.msg / .html) or raw call status export (.csv)</label>
+      <input type="file" name="file" accept=".msg,.html,.htm,.mht,.csv" required>
+    </div>
+    <div><button type="submit">Read Email</button></div>
+  </form>
+  <div class="hint">💡 Two ways to run this: drag the "WFM - Daily - Interval" email out of Outlook and upload the
+    .msg — or upload the raw call status export (track_callcenter_tasks .csv), which can span multiple days.
+    Combined LOBs are unticked by default so queues aren't double-counted. Note: the raw CSV has no talk-time
+    data, so AHT is written as 0 on that path.</div>
+</div>
+
+{% if sections %}
+<div class="card">
+  <div class="toolbar">
+    <h2 style="margin:0;flex:1">2 · Choose Queues &amp; Generate</h2>
+    <label style="font-size:.8rem;font-weight:600">Report Date
+      <input type="date" id="repDate" class="date-in" value="{{ report_date }}">
+    </label>
+    <label style="font-size:.8rem;font-weight:600">Time Style
+      <select id="timeStyle" class="date-in" onchange="try{localStorage.setItem('pw_time_style',this.value)}catch(e){}">
+        <option value="pad_sec">09:00:00</option>
+        <option value="nopad_sec">9:00:00</option>
+        <option value="pad">09:00</option>
+        <option value="nopad">9:00</option>
+      </select>
+    </label>
+    <button class="btn-gen" onclick="generateCsv()">⬇ Generate CSV for PeopleWare</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:36px"></th>
+        <th>Report Section</th>
+        <th>PeopleWare Queue Name</th>
+        <th class="num">Intervals</th>
+        <th class="num">Offered</th>
+        <th class="num">Handled</th>
+      </tr>
+    </thead>
+    <tbody id="sectionBody">
+      {% for s in sections %}
+      <tr data-i="{{ loop.index0 }}">
+        <td><input type="checkbox" class="sec-cb" data-i="{{ loop.index0 }}"
+             {% if 'combined' not in s.lob|lower and not s.lob.endswith(' EN') and not s.lob.endswith(' FR') %}checked{% endif %} onchange="rowState(this)"></td>
+        <td><b>{{ s.lob }}</b></td>
+        <td><input type="text" class="qname" data-i="{{ loop.index0 }}" value="{{ s.lob }}"></td>
+        <td class="num">{{ s.rows|length }}</td>
+        <td class="num">{{ s.offered }}</td>
+        <td class="num">{{ s.handled }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="hint">Queue names map each report section to the PeopleWare queue and are remembered
+  on this device. Tick/untick sections to include them. The CSV path adds EN/FR splits under each
+  bilingual LOB (e.g. SS Sales, SS Sales EN, SS Sales FR) — the base LOB is ticked by default and the
+  EN/FR rows are unticked, so pick the granularity PeopleWare needs without double-counting.</div>
+</div>
+
+<div class="card" id="previewCard" style="display:none">
+  <div class="toolbar" style="margin-bottom:8px">
+    <h2 style="margin:0;flex:1">3 · Full Output</h2>
+    <button class="btn-gen" style="background:#2e7d32" onclick="copyCsv()">📋 Copy All</button>
+  </div>
+  <pre class="preview" id="previewBox" style="max-height:420px"></pre>
+</div>
+
+<script>
+const SECTIONS = {{ sections | tojson }};
+const QN_KEY = 'pw_queue_names';
+
+// PW schemas differ on time formatting — selectable so imports can be
+// matched to whatever the schema's parser actually accepts
+function fmtTime(t) {              // t = "09:00:00"
+  const style = document.getElementById('timeStyle').value;
+  let out = t;
+  if (style === 'pad')        out = t.slice(0, 5);                    // 09:00
+  else if (style === 'nopad') out = t.slice(0, 5).replace(/^0/, '');  // 9:00
+  else if (style === 'nopad_sec') out = t.replace(/^0/, '');          // 9:00:00
+  return out;                                                         // 09:00:00
+}
+(function () {
+  try {
+    const s = localStorage.getItem('pw_time_style');
+    if (s) document.getElementById('timeStyle').value = s;
+  } catch (e) {}
+})();
+
+// restore saved queue-name mappings for this device
+(function () {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(QN_KEY) || '{}'); } catch (e) {}
+  document.querySelectorAll('.qname').forEach(inp => {
+    const lob = SECTIONS[parseInt(inp.dataset.i, 10)].lob;
+    if (saved[lob]) inp.value = saved[lob];
+  });
+  document.querySelectorAll('.sec-cb').forEach(rowState);
+})();
+
+function rowState(cb) {
+  cb.closest('tr').classList.toggle('skip', !cb.checked);
+}
+
+function generateCsv() {
+  const date = document.getElementById('repDate').value;
+  const rowsHaveDates = SECTIONS.some(s => s.rows.some(r => r.length > 4 && r[4]));
+  if (!date && !rowsHaveDates) { alert('Pick the report date first.'); return; }
+  const saved = {};
+  const lines = [];
+  document.querySelectorAll('.sec-cb').forEach(cb => {
+    const i = parseInt(cb.dataset.i, 10);
+    const s = SECTIONS[i];
+    const qname = document.querySelector('.qname[data-i="' + i + '"]').value.trim() || s.lob;
+    saved[s.lob] = qname;
+    if (!cb.checked) return;
+    s.rows.forEach(r => {
+      // r = [time hh:mm:ss, offered, handled, aht, (optional per-row date)]
+      const rowDate = (r.length > 4 && r[4]) ? r[4] : date;
+      lines.push([qname, rowDate, fmtTime(r[0]), r[1], r[2], r[3]].join(','));
+    });
+  });
+  try { localStorage.setItem(QN_KEY, JSON.stringify(saved)); } catch (e) {}
+  if (!lines.length) { alert('No sections selected.'); return; }
+
+  const csv = 'Queue Name,Date,Time,Offered,Handled,AHT\r\n' + lines.join('\r\n') + '\r\n';
+  _lastCsv = csv;
+  _lastRows = [];
+  document.querySelectorAll('.sec-cb').forEach(cb => {
+    if (!cb.checked) return;
+    const i = parseInt(cb.dataset.i, 10);
+    const s = SECTIONS[i];
+    const qname = document.querySelector('.qname[data-i="' + i + '"]').value.trim() || s.lob;
+    s.rows.forEach(r => {
+      const rowDate = (r.length > 4 && r[4]) ? r[4] : date;
+      _lastRows.push([qname, rowDate, fmtTime(r[0]), r[1], r[2], r[3]]);
+    });
+  });
+  _lastDate = date || (SECTIONS.some(s => s.rows.some(r => r.length > 4 && r[4])) ? 'multi_day' : '');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'PW_Interval_Import_' + (date || 'multi_day') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  document.getElementById('previewCard').style.display = '';
+  document.getElementById('previewBox').textContent =
+    'Queue Name,Date,Time,Offered,Handled,AHT\n' + lines.join('\n');
+}
+
+let _lastCsv = '';
+let _lastRows = [];
+let _lastDate = '';
+function copyCsv() {
+  if (!_lastCsv) { alert('Generate the CSV first.'); return; }
+  navigator.clipboard.writeText(_lastCsv).then(() => {
+    const b = document.querySelector('#previewCard .btn-gen');
+    const orig = b.textContent;
+    b.textContent = '✅ Copied';
+    setTimeout(() => b.textContent = orig, 2000);
+  }).catch(() => alert('Copy failed — select the text and copy manually.'));
+}
+
+async function exportExcel() { /* removed — PeopleWare needs the delimited .csv from "Generate CSV", not xlsx */ }
+</script>
+{% endif %}
+
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

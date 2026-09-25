@@ -1,0 +1,629 @@
+/* ── WFM Portal Dark Mode ─────────────────────────────────────────
+   Applied when <body> has class "dark".
+   Uses high-specificity overrides to beat inline styles where needed.
+────────────────────────────────────────────────────────────────── */
+
+body.dark {
+  background: #0f1117 !important;
+  color: #e2e8f0 !important;
+}
+
+/* ── General surfaces ── */
+body.dark .card,
+body.dark .filter-bar,
+body.dark .lob-card,
+body.dark .email-card,
+body.dark .modal-content,
+body.dark .page-section,
+body.dark .section,
+body.dark [class*="card"] {
+  background: #1e2130 !important;
+  border-color: #2d3350 !important;
+  color: #e2e8f0 !important;
+}
+
+/* ── Tables ── */
+body.dark table,
+body.dark .table {
+  color: #e2e8f0 !important;
+}
+body.dark thead th,
+body.dark .table thead th {
+  background: #1a237e !important;
+  color: #fff !important;
+  border-color: #2d3350 !important;
+}
+body.dark tbody tr:nth-child(even) {
+  background: #181c2e !important;
+}
+body.dark tbody tr:hover,
+body.dark .table tbody tr:hover {
+  background: #252a42 !important;
+}
+body.dark td, body.dark th {
+  border-color: #2d3350 !important;
+}
+
+/* ── Inputs, selects, textareas ── */
+body.dark input,
+body.dark select,
+body.dark textarea,
+body.dark .form-control,
+body.dark .form-select {
+  background: #252a42 !important;
+  color: #e2e8f0 !important;
+  border-color: #3d4466 !important;
+}
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+body.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* ── Navigation & headers ── */
+body.dark .page-header,
+body.dark .nav-links {
+  background: transparent !important;
+}
+body.dark .nav-links a,
+body.dark a {
+  color: #818cf8 !important;
+}
+body.dark a:hover {
+  color: #a5b4fc !important;
+}
+
+/* ── Badges & pills ── */
+body.dark .badge-open     { background: #1e3a5f !important; color: #93c5fd !important; }
+body.dark .badge-progress { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .badge-closed   { background: #1a3320 !important; color: #86efac !important; }
+body.dark .badge-default  { background: #252a42 !important; color: #9ca3af !important; }
+
+/* ── Buttons ── */
+body.dark .btn-primary,
+body.dark .update-button,
+body.dark .btn-blue {
+  background: #3730a3 !important;
+  border-color: #4338ca !important;
+  color: #fff !important;
+}
+body.dark .btn-outline-secondary {
+  border-color: #4b5563 !important;
+  color: #9ca3af !important;
+}
+body.dark .btn-success  { background: #14532d !important; border-color: #166534 !important; }
+body.dark .delete-button,
+body.dark .btn-danger   { background: #7f1d1d !important; border-color: #991b1b !important; }
+
+/* ── RTM specific ── */
+body.dark .rtm-card,
+body.dark .stat-box,
+body.dark .kpi-card {
+  background: #1e2130 !important;
+  border-color: #2d3350 !important;
+}
+body.dark .ooh-row td { background: #181c2e !important; color: #4b5563 !important; }
+
+/* ── Dashboard toolbar ── */
+body.dark .toolbar,
+body.dark #filterBar {
+  background: #1e2130 !important;
+  border-color: #2d3350 !important;
+}
+
+/* ── Modal ── */
+body.dark #ticketModal .modal-inner,
+body.dark .modal-inner {
+  background: #1e2130 !important;
+  color: #e2e8f0 !important;
+}
+body.dark .form-group label { color: #9ca3af !important; }
+body.dark .form-group input,
+body.dark .form-group select,
+body.dark .form-group textarea {
+  background: #252a42 !important;
+  color: #e2e8f0 !important;
+  border-color: #3d4466 !important;
+}
+
+/* ── Capacity pages ── */
+body.dark .sum-table tbody tr:nth-child(even) { background: #181c2e !important; }
+body.dark .gap-positive { background: #14532d !important; color: #86efac !important; }
+body.dark .gap-negative { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .gap-neutral  { background: #252a42 !important; color: #9ca3af !important; }
+body.dark .fte-low  { background: #14532d !important; }
+body.dark .fte-mid  { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .fte-high { background: #7f1d1d !important; color: #fca5a5 !important; }
+
+/* ── Scrollbars (webkit) ── */
+body.dark ::-webkit-scrollbar { width: 6px; height: 6px; }
+body.dark ::-webkit-scrollbar-track { background: #1e2130; }
+body.dark ::-webkit-scrollbar-thumb { background: #3d4466; border-radius: 3px; }
+
+/* ── LOB dropdown ── */
+body.dark .lob-dropdown,
+body.dark .lob-list-box,
+body.dark .lob-toggle {
+  background: #1e2130 !important;
+  border-color: #3d4466 !important;
+  color: #e2e8f0 !important;
+}
+body.dark .lob-item {
+  color: #cbd5e1 !important;
+}
+body.dark .lob-item:hover { background: #252a42 !important; color: #fff !important; }
+body.dark .lob-search-wrap,
+body.dark .lob-footer,
+body.dark .lob-list-footer {
+  background: #181c2e !important;
+  border-color: #2d3350 !important;
+}
+body.dark .lob-footer button.btn-outline-secondary {
+  color: #cbd5e1 !important;
+  border-color: #4b5563 !important;
+  background: transparent !important;
+}
+body.dark .lob-footer button.btn-outline-secondary:hover {
+  background: #252a42 !important;
+}
+
+/* ── Progress log (capacity control) ── */
+body.dark .progress-log { background: #0f1117 !important; }
+
+/* ── Alert boxes ── */
+body.dark .alert-warning { background: #3d2c00 !important; color: #fcd34d !important; border-color: #78350f !important; }
+body.dark .alert-danger  { background: #7f1d1d !important; color: #fca5a5 !important; border-color: #991b1b !important; }
+body.dark .alert-success { background: #14532d !important; color: #86efac !important; border-color: #166534 !important; }
+body.dark .alert-info    { background: #1e3a5f !important; color: #93c5fd !important; border-color: #1d4ed8 !important; }
+
+/* ── Dark mode toggle button ── */
+#dark-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #1a237e;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s, transform .15s;
+}
+#dark-toggle:hover { background: #283593; transform: scale(1.1); }
+body.dark #dark-toggle { background: #374151; }
+body.dark #dark-toggle:hover { background: #4b5563; }
+
+/* ══════════════════════════════════════════════════════════
+   RTM-SPECIFIC DARK MODE OVERRIDES
+   ══════════════════════════════════════════════════════════ */
+
+/* ── RTM Dashboard cards & sections ── */
+body.dark .sc,
+body.dark .refresh-bar,
+body.dark .snap-section-item { background: #1e2130 !important; border-color: #2d3350 !important; }
+
+/* Dim headers slightly WITHOUT css filter — filter creates a containing
+   block that breaks position:fixed dropdowns inside the header. A gradient
+   overlay achieves the same dimming with no side effects. */
+body.dark .sc-head           { background-image: linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.15)); }
+body.dark #snapshot          { background: #0f1117 !important; }
+
+/* ── Table headers (RTM uses .mt) ── */
+body.dark .mt th             { background: #1a237e !important; color: #c5cae9 !important; border-color: #2d3350 !important; }
+body.dark .mt th:hover       { background: #283593 !important; }
+body.dark .mt td             { border-color: #2d3350 !important; color: #e2e8f0 !important; }
+body.dark .mt tbody tr:hover { background: #252a42 !important; }
+body.dark .mt tfoot td       { background: #1a237e !important; color: #c5cae9 !important; border-color: #2d3350 !important; }
+
+/* ── Service level colour classes — keep traffic light colours readable in dark ── */
+body.dark .sl-green  { color: #4ade80 !important; }
+body.dark .sl-amber  { color: #fbbf24 !important; }
+body.dark .sl-red    { color: #f87171 !important; }
+body.dark .otf-high  { color: #f87171 !important; }
+body.dark .otf-ok    { color: #4ade80 !important; }
+body.dark .otf-low   { color: #fbbf24 !important; }
+body.dark .abs-high  { color: #f87171 !important; }
+body.dark .abs-mid   { color: #fbbf24 !important; }
+body.dark .abs-ok    { color: #4ade80 !important; }
+body.dark .casc-high { color: #f87171 !important; }
+body.dark .casc-mid  { color: #fbbf24 !important; }
+body.dark .casc-ok   { color: #4ade80 !important; }
+
+/* ── Cascades by-agent count colours ── */
+body.dark .count-high { color: #f87171 !important; }
+body.dark .count-mid  { color: #fbbf24 !important; }
+body.dark .count-low  { color: #4ade80 !important; }
+
+/* ── PW Schedules activity colours ── */
+body.dark .act-oncall   { color: #4ade80 !important; }
+body.dark .act-break    { color: #fbbf24 !important; }
+body.dark .act-lunch    { color: #60a5fa !important; }
+body.dark .act-meeting  { color: #c084fc !important; }
+body.dark .act-training { color: #fb923c !important; }
+body.dark .act-other    { color: #9ca3af !important; }
+
+/* ── Text-only status/metric colours across RTM pages ── */
+/* Green family (good/on-time/positive) */
+body.dark .asa-ok,
+body.dark .duration-fast,
+body.dark .ka-yes,
+body.dark .pct-green,
+body.dark .recent-ready,
+body.dark .timing-ontime,
+body.dark .val-positive {
+  color: #4ade80 !important;
+}
+/* Amber family (warning/late/mid) */
+body.dark .dur-mid,
+body.dark .duration-slow,
+body.dark .loa-pct,
+body.dark .pct-amber,
+body.dark .timing-late {
+  color: #fbbf24 !important;
+}
+/* Red family (bad/negative/absent) */
+body.dark .asa-red,
+body.dark .dur-long,
+body.dark .pct-red,
+body.dark .recent-offline,
+body.dark .timing-absent,
+body.dark .val-negative {
+  color: #f87171 !important;
+}
+/* Dark green (early leave was near-black — brighten for visibility) */
+body.dark .timing-early-s {
+  color: #86efac !important;
+}
+/* Neutral grey family */
+body.dark .ka-no,
+body.dark .recent-other,
+body.dark .timing-waiting,
+body.dark .val-neutral {
+  color: #9ca3af !important;
+}
+
+/* ── Status pill badges (LOA/Accommodation lists, misc) ── */
+body.dark .badge-active   { background: #14532d !important; color: #86efac !important; }
+body.dark .badge-inactive { background: #252a42 !important; color: #9ca3af !important; }
+body.dark .badge-ok,
+body.dark .badge-aw       { background: #14532d !important; color: #86efac !important; }
+body.dark .badge-empty,
+body.dark .badge-late,
+body.dark .badge-loa,
+body.dark .badge-rolled   { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .badge-aband,
+body.dark .badge-err,
+body.dark .badge-error    { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .badge-grey,
+body.dark .badge-none,
+body.dark .badge-ooh      { background: #252a42 !important; color: #9ca3af !important; }
+body.dark .badge-running  { background: #1e3a5f !important; color: #93c5fd !important; }
+body.dark .status-other   { background: #252a42 !important; color: #9ca3af !important; }
+
+/* ── AHOD banner ── */
+body.dark .ahod-yellow { background: #2d2400 !important; border-color: #92400e !important; }
+body.dark .ahod-red    { background: #2d1515 !important; border-color: #b91c1c !important; }
+body.dark .ahod-yellow .ahod-head { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-red    .ahod-head { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .ahod-table th { color: #9ca3af !important; border-color: rgba(255,255,255,.08) !important; }
+body.dark .ahod-table td { color: #e2e8f0 !important; border-color: rgba(255,255,255,.06) !important; }
+body.dark .ahod-status-active  { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .ahod-status-standby { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-check-meta     { color: #9ca3af !important; }
+
+/* ── Schedule & attendance badges ── */
+body.dark .badge-present  { background: #14532d !important; color: #86efac !important; }
+body.dark .badge-absent   { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .badge-waiting  { background: #252a42 !important; color: #9ca3af !important; }
+body.dark .badge-absent   { background: #7f1d1d !important; color: #fca5a5 !important; }
+
+/* ── Agent status badges ── */
+body.dark .status-ready   { background: #14532d !important; color: #86efac !important; }
+body.dark .status-oncall  { background: #164e63 !important; color: #67e8f9 !important; }
+body.dark .status-offline { background: #1f2937 !important; color: #9ca3af !important; }
+body.dark .status-unavail { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .status-break   { background: #1e3a5f !important; color: #93c5fd !important; }
+body.dark .status-training{ background: #3b0764 !important; color: #d8b4fe !important; }
+body.dark .status-cooldown{ background: #1c1917 !important; color: #d6d3d1 !important; }
+
+/* ── OOH (out of hours) rows ── */
+body.dark .ooh-row td     { background: #181c2e !important; color: #4b5563 !important; }
+body.dark .ooh-badge      { color: #4b5563 !important; }
+
+/* ── Interval report row backgrounds ── */
+body.dark tr.ooh-row      { background: #181c2e !important; }
+
+/* ── Cascade badge ── */
+body.dark .badge-cascade  { background: #3d2c00 !important; color: #fcd34d !important; }
+
+/* ── Knowledge assessment ── */
+body.dark .score-high     { color: #4ade80 !important; }
+body.dark .score-mid      { color: #fbbf24 !important; }
+body.dark .score-low      { color: #f87171 !important; }
+
+/* ── SVL calculator ── */
+body.dark .svl-met        { color: #4ade80 !important; }
+body.dark .svl-miss       { color: #f87171 !important; }
+
+/* ── Forecast vs OTF ── */
+body.dark .over-fc        { color: #f87171 !important; }
+body.dark .under-fc       { color: #4ade80 !important; }
+
+/* ── Nav links in RTM header ── */
+body.dark .nav-links a    { color: #818cf8 !important; }
+body.dark .nav-sep        { color: #374151 !important; }
+body.dark .refresh-bar    { color: #e2e8f0 !important; }
+
+/* ── RTM countdown & auto-refresh ── */
+body.dark #rtm-countdown  { color: #818cf8 !important; }
+
+/* ── Section picker dropdown ── */
+body.dark .snap-section-item:hover { background: #252a42 !important; }
+
+/* ── PW Schedules ── */
+body.dark .shift-block    { background: #252a42 !important; border-color: #3d4466 !important; color: #e2e8f0 !important; }
+
+/* ── Copy/snap buttons — keep visible ── */
+body.dark .btn-snap       { background: #1a237e !important; }
+body.dark .btn-copy       { background: #006064 !important; }
+body.dark .btn-snap.done,
+body.dark .btn-copy.done  { background: #14532d !important; }
+
+/* ── Interval Report readability upgrade ── */
+body.dark #tbl-interval tbody tr.row-critical { background:#3a1414 !important; }
+body.dark #tbl-interval tbody tr.row-warn     { background:#3a2c0a !important; }
+body.dark #tbl-interval tbody tr.row-ok       { background:#14301a !important; }
+
+/* ── Backup Upload page ── */
+body.dark .status-active   { background: #14532d !important; color: #86efac !important; }
+body.dark .status-inactive { background: #252a42 !important; color: #9ca3af !important; }
+body.dark .card-desc       { color: #9ca3af !important; }
+body.dark .format-note     { background: #181c2e !important; color: #9ca3af !important; }
+body.dark .msg-ok          { background: #14532d !important; color: #86efac !important; }
+body.dark .msg-err         { background: #7f1d1d !important; color: #fca5a5 !important; }
+body.dark .btn-clear       { background: transparent !important; color: #fca5a5 !important; border-color: #f87171 !important; }
+body.dark .btn-clear:hover { background: #7f1d1d !important; }
+body.dark .upload-row input[type=file] {
+  background: #252a42 !important; color: #e2e8f0 !important; border-color: #3d4466 !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RTM DASHBOARD DROPDOWNS — dark mode readability
+   (snapshot section picker + Status Under 5 Sec filters)
+   ══════════════════════════════════════════════════════════ */
+
+/* Containers — inline background:#fff needs !important override */
+body.dark #snapDropdown,
+body.dark #empU5Dropdown,
+body.dark #u5Dropdown {
+  background: #1e2130 !important;
+  border-color: #3d4466 !important;
+}
+
+/* Section-picker items: dark bg was set previously but text stayed #333 */
+body.dark .snap-section-item {
+  color: #e2e8f0 !important;
+}
+body.dark #snapDropdown > div:first-child {   /* "Select Sections" heading */
+  color: #9ca3af !important;
+}
+
+/* U5 dropdown labels use inline color:#333 — force readable text */
+body.dark #empU5Dropdown label,
+body.dark #u5Dropdown label {
+  color: #e2e8f0 !important;
+}
+body.dark #empU5Dropdown label:hover,
+body.dark #u5Dropdown label:hover,
+body.dark .snap-section-item:hover {
+  background: #252a42 !important;
+  color: #fff !important;
+}
+
+/* Sticky footers (inline background:#fff) + neutral buttons */
+body.dark #snapDropdown .snap-footer,
+body.dark #empU5Dropdown div[style*="sticky"],
+body.dark #u5Dropdown div[style*="sticky"] {
+  background: #181c2e !important;
+  border-top-color: #3d4466 !important;
+}
+body.dark #snapDropdown button,
+body.dark #empU5Dropdown button,
+body.dark #u5Dropdown button {
+  border-color: #3d4466 !important;
+}
+/* All/None buttons (transparent bg + dark text by default) */
+body.dark #snapDropdown button[style*="border:1px solid"],
+body.dark #empU5Dropdown button[style*="border:1px solid"],
+body.dark #u5Dropdown button[style*="border:1px solid"] {
+  background: #252a42 !important;
+  color: #e2e8f0 !important;
+}
+
+/* ── All floating dropdown panels (body-reparented via JS) ── */
+body.dark #intLobDrop,
+body.dark #actDropdown,
+body.dark #lobDropdown,
+body.dark #monthDropdown,
+body.dark #puDrop,
+body.dark #snDropdown,
+body.dark #stDrop,
+body.dark #statusDropdown {
+  background: #1e2130 !important;
+  border: 1px solid #2d3350 !important;
+  color: #e2e8f0 !important;
+}
+body.dark #intLobDrop label,
+body.dark #actDropdown label,
+body.dark #lobDropdown label,
+body.dark #monthDropdown label,
+body.dark #puDrop label,
+body.dark #snDropdown label,
+body.dark #stDrop label,
+body.dark #statusDropdown label {
+  color: #e2e8f0 !important;
+}
+body.dark #intLobDrop label:hover,
+body.dark #actDropdown label:hover,
+body.dark #lobDropdown label:hover,
+body.dark #monthDropdown label:hover,
+body.dark #puDrop label:hover,
+body.dark #snDropdown label:hover,
+body.dark #stDrop label:hover,
+body.dark #statusDropdown label:hover {
+  background: #252a42 !important;
+}
+body.dark #intLobDrop div[style*="sticky"],
+body.dark #intLobDrop div[style*="border-top"],
+body.dark #actDropdown div[style*="sticky"],
+body.dark #actDropdown div[style*="border-top"] {
+  background: #1e2130 !important;
+  border-top-color: #2d3350 !important;
+}
+body.dark #intLobDrop button[style*="border:1px solid"],
+body.dark #actDropdown button[style*="border:1px solid"],
+body.dark #lobDropdown button[style*="border:1px solid"],
+body.dark #monthDropdown button[style*="border:1px solid"],
+body.dark #puDrop button[style*="border:1px solid"],
+body.dark #snDropdown button[style*="border:1px solid"],
+body.dark #stDrop button[style*="border:1px solid"],
+body.dark #statusDropdown button[style*="border:1px solid"] {
+  background: #252a42 !important;
+  color: #e2e8f0 !important;
+  border-color: #3d4466 !important;
+}
+
+/* ── RTM table row highlight colours ── */
+body.dark .row-warn   { background: #3d2c00 !important; }
+body.dark .row-ok     { background: #0d2b0d !important; }
+body.dark .row-critical { background: #3b0a0a !important; }
+body.dark tr.row-warn td,
+body.dark tr.row-ok td,
+body.dark tr.row-critical td { color: #e2e8f0 !important; }
+
+/* ── AHOD section ── */
+body.dark .ahod-yellow { background: #2d2000 !important; border-color: #7a5b00 !important; }
+body.dark .ahod-yellow .ahod-head { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-red { background: #2b0a0a !important; border-color: #7f1d1d !important; }
+body.dark .ahod-red .ahod-head { background: #3b0a0a !important; color: #fca5a5 !important; }
+body.dark .ahod-status-standby { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-table tr.ahod-done td { color: #6b7280 !important; }
+
+/* ── Section cards (.sc) ── */
+body.dark .sc { background: #1e2130 !important; box-shadow: 0 2px 8px rgba(0,0,0,.4) !important; }
+
+/* ── Refresh bar ── */
+body.dark .refresh-bar { background: #1e2130 !important; color: #e2e8f0 !important; }
+
+/* ── LOA / Accom forms and list pages ── */
+body.dark .section-card { background: #1e2130 !important; }
+body.dark .topbar { background: #1e2130 !important; }
+body.dark .tool-body { background: #1e2130 !important; }
+body.dark details.tool { background: #1e2130 !important; }
+body.dark details.tool summary { color: #818cf8 !important; }
+
+/* ── Checklist ── */
+body.dark .section-card { background: #1e2130 !important; }
+body.dark .freq { background: #252a42 !important; color: #a5b4fc !important; }
+body.dark .freq.cont { background: #0d2b1a !important; color: #86efac !important; }
+body.dark .freq.hr { background: #3d2000 !important; color: #fb923c !important; }
+body.dark .act-type.AHOD { background: #3b0a0a !important; color: #fca5a5 !important; }
+body.dark .act-type.VTO  { background: #0d2b1a !important; color: #86efac !important; }
+body.dark .act-type.Note { background: #1e2b4a !important; color: #93c5fd !important; }
+
+/* ── Stat day page ── */
+body.dark .badge { background: #252a42 !important; color: #e2e8f0 !important; }
+
+/* ── Backup banner ── */
+body.dark div[style*="background:#fff3e0"] {
+  background: #3d2000 !important;
+  border-color: #b45309 !important;
+  color: #fcd34d !important;
+}
+
+/* ── Progress bar ── */
+body.dark .progress-bar { background: #252a42 !important; }
+
+/* ── All floating dropdown panels (body-reparented via JS) ── */
+body.dark #intLobDrop,
+body.dark #actDropdown,
+body.dark #lobDropdown,
+body.dark #monthDropdown,
+body.dark #puDrop,
+body.dark #snDropdown,
+body.dark #stDrop,
+body.dark #statusDropdown {
+  background: #1e2130 !important;
+  border: 1px solid #2d3350 !important;
+  color: #e2e8f0 !important;
+}
+body.dark #intLobDrop label,
+body.dark #actDropdown label,
+body.dark #lobDropdown label,
+body.dark #monthDropdown label,
+body.dark #puDrop label,
+body.dark #snDropdown label,
+body.dark #stDrop label,
+body.dark #statusDropdown label { color: #e2e8f0 !important; }
+body.dark #intLobDrop label:hover,
+body.dark #actDropdown label:hover,
+body.dark #lobDropdown label:hover { background: #252a42 !important; }
+body.dark #intLobDrop div[style*="border-top"],
+body.dark #actDropdown div[style*="border-top"] {
+  background: #1e2130 !important; border-top-color: #2d3350 !important;
+}
+body.dark #intLobDrop button[style*="border:1px solid"],
+body.dark #actDropdown button[style*="border:1px solid"],
+body.dark #lobDropdown button[style*="border:1px solid"],
+body.dark #monthDropdown button[style*="border:1px solid"],
+body.dark #puDrop button[style*="border:1px solid"],
+body.dark #snDropdown button[style*="border:1px solid"],
+body.dark #stDrop button[style*="border:1px solid"],
+body.dark #statusDropdown button[style*="border:1px solid"] {
+  background: #252a42 !important; color: #e2e8f0 !important; border-color: #3d4466 !important;
+}
+
+/* ── RTM row highlights ── */
+body.dark .row-warn     { background: #3d2c00 !important; }
+body.dark .row-ok       { background: #0d2b0d !important; }
+body.dark .row-critical { background: #3b0a0a !important; }
+body.dark tr.row-warn td, body.dark tr.row-ok td, body.dark tr.row-critical td { color: #e2e8f0 !important; }
+
+/* ── AHOD section ── */
+body.dark .ahod-yellow { background: #2d2000 !important; border-color: #7a5b00 !important; }
+body.dark .ahod-yellow .ahod-head { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-red    { background: #2b0a0a !important; border-color: #7f1d1d !important; }
+body.dark .ahod-red .ahod-head    { background: #3b0a0a !important; color: #fca5a5 !important; }
+body.dark .ahod-status-standby    { background: #3d2c00 !important; color: #fcd34d !important; }
+body.dark .ahod-table tr.ahod-done td { color: #6b7280 !important; }
+
+/* ── Section cards and page structure ── */
+body.dark .sc           { background: #1e2130 !important; box-shadow: 0 2px 8px rgba(0,0,0,.4) !important; }
+body.dark .refresh-bar  { background: #1e2130 !important; }
+body.dark .topbar,
+body.dark .section-card { background: #1e2130 !important; }
+body.dark details.tool  { background: #1e2130 !important; }
+body.dark details.tool summary { color: #818cf8 !important; }
+body.dark .progress-bar { background: #252a42 !important; }
+
+/* ── Checklist ── */
+body.dark .freq        { background: #252a42 !important; color: #a5b4fc !important; }
+body.dark .freq.cont   { background: #0d2b1a !important; color: #86efac !important; }
+body.dark .freq.hr     { background: #3d2000 !important; color: #fb923c !important; }
+body.dark .act-type.AHOD { background: #3b0a0a !important; color: #fca5a5 !important; }
+body.dark .act-type.VTO  { background: #0d2b1a !important; color: #86efac !important; }
+body.dark .act-type.Note { background: #1e2b4a !important; color: #93c5fd !important; }
+
+/* ── Backup warning banner ── */
+body.dark div[style*="background:#fff3e0"] {
+  background: #3d2000 !important; border-color: #b45309 !important; color: #fcd34d !important;
+}

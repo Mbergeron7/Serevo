@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WFM Daily Checklist</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .topbar { background:#fff; border-radius:10px; padding:12px 16px; margin-bottom:16px;
+              box-shadow:0 2px 6px rgba(0,0,0,.06); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+    .topbar label { font-weight:600; font-size:.8rem; }
+    .progress-wrap { flex:1; min-width:180px; }
+    .progress-bar { height:10px; background:#e8eaf6; border-radius:6px; overflow:hidden; margin-top:5px; }
+    .progress-fill { height:100%; background:#2e7d32; width:0%; transition:width .3s; }
+    .sync { font-size:.74rem; color:#9e9e9e; }
+    .sync.saving { color:#e65100; } .sync.ok { color:#2e7d32; }
+    .btn { padding:6px 14px; border:none; border-radius:6px; cursor:pointer; font-size:.83rem; font-weight:600; }
+    .btn-primary { background:#1565c0; color:#fff; }
+    .btn-reset { background:#eceff1; color:#546e7a; border:1px solid #cfd8dc !important; }
+    .section-card { background:#fff; border-radius:10px; margin-bottom:16px;
+                    box-shadow:0 2px 6px rgba(0,0,0,.06); overflow:hidden; }
+    .section-head { padding:10px 16px; font-weight:700; font-size:.95rem; color:#fff; display:flex; align-items:center; gap:10px; }
+    .section-head .count { margin-left:auto; font-size:.78rem; font-weight:500; opacity:.9; }
+    .morning { background:#f9a825; } .midday { background:#1565c0; }
+    .afternoon { background:#6a1b9a; } .eod { background:#00695c; } .activity { background:#b71c1c; }
+    table { width:100%; border-collapse:collapse; }
+    td, th { padding:9px 12px; font-size:.86rem; border-bottom:1px solid #eee; vertical-align:middle; }
+    th { background:#f7f7f7; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:left; }
+    tr.done td { color:#9e9e9e; } tr.done .task { text-decoration:line-through; }
+    .task { font-weight:500; }
+    .freq { display:inline-block; padding:1px 8px; border-radius:9px; font-size:.7rem; font-weight:700;
+            background:#e8eaf6; color:#3949ab; white-space:nowrap; }
+    .freq.cont { background:#e0f2f1; color:#00695c; } .freq.hr { background:#fff3e0; color:#e65100; }
+    .cb { width:18px; height:18px; cursor:pointer; }
+    .who { font-size:.72rem; color:#78909c; white-space:nowrap; }
+    .tool-body { padding:12px 16px; }
+    .tool-body label { display:block; font-weight:600; font-size:.76rem; margin:8px 0 3px; }
+    .tool-body input, .tool-body textarea, .tool-body select {
+        width:100%; box-sizing:border-box; padding:6px 9px; border:1px solid #ccc;
+        border-radius:6px; font-size:.85rem; font-family:inherit; }
+    .tool-row { display:flex; gap:12px; flex-wrap:wrap; }
+    .tool-row > div { flex:1; min-width:140px; }
+    details.tool { background:#fff; border-radius:10px; margin-bottom:16px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+    details.tool summary { padding:12px 16px; cursor:pointer; font-weight:700; font-size:.95rem; color:#1565c0; }
+    pre.email-out { background:#f7f7f7; border:1px solid #e0e0e0; border-radius:8px; padding:12px 14px;
+                    font-size:.82rem; white-space:pre-wrap; margin-top:10px; }
+    .act-type { display:inline-block; padding:2px 9px; border-radius:9px; font-size:.72rem; font-weight:700; }
+    .act-type.AHOD { background:#fdecea; color:#b71c1c; }
+    .act-type.VTO  { background:#e8f5e9; color:#1b5e20; }
+    .act-type.Note { background:#e3f2fd; color:#1565c0; }
+    .act-del { color:#b71c1c; cursor:pointer; font-size:.8rem; border:none; background:none; }
+    .act-fields { margin-top:10px; padding:10px 12px; background:#f7f9fc; border-radius:8px; border:1px solid #e0e7ef; }
+    .act-fields label { font-size:.74rem; font-weight:600; margin:6px 0 2px; display:block; }
+    .act-fields input, .act-fields select { width:100%; box-sizing:border-box; padding:5px 8px; border:1px solid #ccc; border-radius:5px; font-size:.83rem; }
+    .act-hint { font-size:.7rem; color:#9e9e9e; margin-top:2px; }
+    .lookup-btn { padding:4px 10px; font-size:.75rem; background:#e8eaf6; color:#3949ab; border:1px solid #c5cae9; border-radius:5px; cursor:pointer; margin-left:6px; white-space:nowrap; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>✅ WFM Daily Checklist</h1>
+<div class="sub">Shared real-time analyst checklist — everyone on shift sees the same ticks. Resets each day.</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/dashboard">Ticket Dashboard</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="topbar">
+  <div><label>Date</label> <span id="todayLabel" style="font-weight:600"></span></div>
+  <div class="progress-wrap">
+    <label>Progress: <span id="progressPct">0%</span> (<span id="progressCount">0/0</span>)</label>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+  <span class="sync" id="syncStatus">Loading…</span>
+  <button class="btn btn-reset" onclick="refreshNow()">↻ Refresh</button>
+  <div style="position:relative">
+    <button class="btn btn-primary" onclick="toggleExportDrop()" id="exportToggle">⬇ Export ▾</button>
+    <div id="exportDrop" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;
+         border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;padding:14px 16px;min-width:240px">
+      <div style="font-weight:700;font-size:.82rem;margin-bottom:10px">Export Checklist History</div>
+      <label style="font-size:.75rem;font-weight:600;display:block;margin-bottom:3px">From date</label>
+      <input type="date" id="expFrom" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:.83rem;margin-bottom:8px">
+      <label style="font-size:.75rem;font-weight:600;display:block;margin-bottom:3px">To date</label>
+      <input type="date" id="expTo" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-size:.83rem;margin-bottom:10px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn btn-reset" style="flex:1;font-size:.76rem" onclick="setExpRange(0)">Today</button>
+        <button class="btn btn-reset" style="flex:1;font-size:.76rem" onclick="setExpRange(7)">Last 7d</button>
+        <button class="btn btn-reset" style="flex:1;font-size:.76rem" onclick="setExpRange(30)">Last 30d</button>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="doExport()">⬇ Download CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- AHOD / VTO / Note activity log -->
+<div class="section-card">
+  <div class="section-head activity">🚨 AHOD / VTO / Activity Log
+    <span class="count" id="actCount"></span>
+    <button class="btn" style="background:rgba(255,255,255,.2);color:#fff;margin-left:8px"
+            onclick="clearActivityLog()">Clear Log</button></div>
+  <div class="tool-body">
+
+    <div class="tool-row">
+      <div><label>Type</label>
+        <select id="actType" onchange="onActTypeChange()">
+          <option value="AHOD">AHOD — All Hands on Deck</option>
+          <option value="VTO">VTO — Voluntary Time Off</option>
+          <option value="Note">General Note</option>
+        </select>
+      </div>
+      <div style="max-width:120px"><label>From</label><input type="time" id="actFrom"></div>
+      <div style="max-width:120px"><label>To</label><input type="time" id="actTo"></div>
+    </div>
+
+    <!-- AHOD fields (advisor pulled to assist another LOB) -->
+    <div id="ahodFields" class="act-fields">
+      <div class="tool-row">
+        <div>
+          <label>Advisor Name</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="text" id="ahodAdvisor" list="ahodEmpList" autocomplete="off"
+                   oninput="onAhodAdvisorPick(this.value)" placeholder="Start typing…">
+            <datalist id="ahodEmpList"></datalist>
+          </div>
+        </div>
+        <div><label>Team Lead</label><input type="text" id="ahodTL" placeholder="Auto-filled"></div>
+        <div><label>Current LoB</label><input type="text" id="ahodLob" placeholder="Auto-filled"></div>
+      </div>
+      <div class="tool-row" style="margin-top:8px">
+        <div>
+          <label>Assisting LOB <span style="font-weight:400;color:#888">(being pulled to help)</span></label>
+          <select id="ahodAssistLob">
+            <option value="">— select LOB —</option>
+          </select>
+        </div>
+        <div style="max-width:250px">
+          <label>Details / Actions taken</label>
+          <input type="text" id="ahodDetail" placeholder="e.g. Taking inbound calls, cancelled offline">
+        </div>
+      </div>
+    </div>
+
+    <!-- VTO fields (advisor being sent home early) -->
+    <div id="vtoFields" class="act-fields" style="display:none">
+      <div class="tool-row">
+        <div>
+          <label>Advisor Name</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="text" id="vtoAdvisor" list="vtoEmpList" autocomplete="off"
+                   oninput="onVtoAdvisorPick(this.value)" placeholder="Start typing…">
+            <datalist id="vtoEmpList"></datalist>
+            <button class="lookup-btn" onclick="lookupVtoTimes()" title="Pull last status & shift end">⟳ Lookup</button>
+          </div>
+          <div class="act-hint">Pick a name, then click ⟳ to auto-fill times from agent status & schedule.</div>
+        </div>
+        <div><label>Team Lead</label><input type="text" id="vtoTL" placeholder="Auto-filled"></div>
+        <div><label>LoB</label><input type="text" id="vtoLob" placeholder="Auto-filled"></div>
+      </div>
+      <div class="tool-row" style="margin-top:8px">
+        <div style="max-width:250px">
+          <label>Details / Notes</label>
+          <input type="text" id="vtoDetail" placeholder="e.g. VTO accepted, logging off at 14:30">
+        </div>
+      </div>
+      <div class="act-hint" id="vtoLookupStatus" style="margin-top:6px;color:#1565c0"></div>
+    </div>
+
+    <!-- Note fields (free-text) -->
+    <div id="noteFields" class="act-fields" style="display:none">
+      <div class="tool-row">
+        <div><label>Who / Team involved</label>
+          <input type="text" id="noteWho" placeholder="e.g. QA Sales, Josh S."></div>
+        <div><label>Details</label>
+          <input type="text" id="noteDetail" placeholder="What happened / what was done"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="actSubmitBtn" onclick="submitActivity()">➕ Log Activity</button>
+      <button class="btn btn-reset" id="actCancelBtn" onclick="cancelEdit()" style="display:none">✕ Cancel Edit</button>
+      <span id="actEditingLabel" style="font-size:.78rem;color:#1565c0;display:none">✏ Editing — update fields then save</span>
+    </div>
+
+    <table style="margin-top:12px">
+      <thead><tr>
+        <th style="width:80px">Type</th>
+        <th>Advisor / Who</th>
+        <th>LoB → Assisting</th>
+        <th style="width:110px">Window</th>
+        <th style="width:130px">Logged by</th>
+        <th style="width:40px"></th>
+      </tr></thead>
+      <tbody id="activityBody">
+        <tr><td colspan="6" style="color:#9e9e9e;font-style:italic">No activity logged yet today.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Attendance line builder -->
+<details class="tool">
+  <summary>📞 Attendance Line — Absent/Late Email Builder</summary>
+  <div class="tool-body">
+    <div class="sub" style="margin:4px 0 8px">From the advisor voicemail (1-833-374-1222), fill these in and copy the CP2 distro email.</div>
+    <div class="tool-row">
+      <div><label>Type</label><select id="atType"><option>Absent</option><option>Late</option><option>Early Leave</option></select></div>
+      <div><label>Advisor Name</label>
+        <input type="text" id="atName" list="empList" autocomplete="off"
+               oninput="onAdvisorPick(this.value)" placeholder="Start typing a name…">
+        <datalist id="empList"></datalist>
+      </div>
+      <div><label>Date</label><input type="date" id="atDate"></div>
+    </div>
+    <div class="tool-row">
+      <div><label>LoB</label><input type="text" id="atLob" placeholder="e.g. SS Sales"></div>
+      <div><label>Team Lead</label><input type="text" id="atTL"></div>
+      <div><label>Contact Number</label><input type="text" id="atPhone"></div>
+    </div>
+    <label>Reason</label><textarea id="atReason" rows="2"></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="buildAttnEmail()">Build Email</button>
+      <button class="btn btn-reset" onclick="copyAttnEmail()">📋 Copy</button>
+      <button class="btn btn-reset" onclick="clearAttnForm()">Clear</button>
+    </div>
+    <pre class="email-out" id="attnOut" style="display:none"></pre>
+  </div>
+</details>
+
+<div id="checklist"></div>
+
+<script>
+const CHECKLIST = [
+  { key:'morning', title:'🌅 Morning — Start of Day', cls:'morning', items:[
+    ['Review schedule changes from overnight','Daily'],
+    ['Check Service Level for first intervals','Daily'],
+    ['Review staffing vs forecast for the morning','Daily'],
+    ['Respond to overnight WFM tickets','Daily'],
+    ['Confirm routing/skills accuracy in CP','Daily'],
+    ['Review any open risks from previous day','Daily'],
+    ['Validate PeopleWare attendance','Hourly'],
+    ['Process call-ins, late arrivals','Continuous'],
+  ]},
+  { key:'midday', title:'☀️ Midday', cls:'midday', items:[
+    ['Monitor SL, AHT, ATT, ACW, Adherence','Every 30 Mins'],
+    ['Review interval performance','Every 30 Mins'],
+    ['Approve/deny day-of schedule requests','Continuous'],
+    ['Respond to TL requests','Continuous'],
+    ['Review adherence exceptions','Continuous'],
+    ['Update Attendance','Continuous'],
+    ['Adjust staffing (OT/VTO/skill changes)','As Needed'],
+    ['Communicate risks to Ops','As Needed'],
+    ['Update intraday forecast if needed','As Needed'],
+  ]},
+  { key:'afternoon', title:'🌇 Afternoon', cls:'afternoon', items:[
+    ['Re-check staffing vs forecast','Daily'],
+    ['Review drivers for missing SL','Daily'],
+    ['Prepare RTA reporting','Daily'],
+    ['Communicate end-of-day risks to Ops','Daily'],
+    ['Knowledge Assessment Email','Daily'],
+    ['Validate attendance updates','Hourly'],
+    ['Analyze AHT/Adherence trends','As Needed'],
+  ]},
+  { key:'eod', title:'🌙 Shift Handover & EOD', cls:'eod', items:[
+    ['Service Level Summary','Daily'],
+    ['Staffing Summary','Daily'],
+    ['Attendance','Daily'],
+    ['Queue / Routing Notes','Daily'],
+    ['Tickets & Requests','Daily'],
+    ['AHOD Skills Updated / Removed','Daily'],
+    ['Risks for Next Shift','Daily'],
+    ['Reporting Status','Daily'],
+    ['Additional Notes','As Needed'],
+  ]},
+];
+
+let TICKS = {};
+let ACTIVITY = [];
+let EMPLOYEES = [];
+let EMP_BY_NAME = {};
+let ALL_LOBS = [];
+
+const TASK_TEXT = {};
+CHECKLIST.forEach(sec => sec.items.forEach((it, idx) => { TASK_TEXT[sec.key+'_'+idx] = it[0]; }));
+
+function setSync(txt, cls){ const el=document.getElementById('syncStatus'); el.textContent=txt; el.className='sync '+(cls||''); }
+function freqClass(f){ if(f==='Continuous')return 'cont'; if(f==='Hourly'||f.startsWith('Every'))return 'hr'; return ''; }
+
+// ── Employee directory ──────────────────────────────────────────────
+(async function loadDirectory() {
+  try {
+    const res = await fetch('/api/employee_directory');
+    const d = await res.json();
+    EMPLOYEES = d.employees || [];
+    ALL_LOBS  = d.lobs || [];
+    EMP_BY_NAME = {};
+    EMPLOYEES.forEach(e => { EMP_BY_NAME[e.name.toLowerCase()] = e; });
+    // Populate all datalists
+    const opts = EMPLOYEES.map(e => '<option value="' + e.name.replace(/"/g,'&quot;') + '">').join('');
+    ['empList','ahodEmpList','vtoEmpList'].forEach(id => {
+      const dl = document.getElementById(id); if(dl) dl.innerHTML = opts;
+    });
+    // Populate AHOD assisting LOB dropdown
+    const sel = document.getElementById('ahodAssistLob');
+    if(sel) ALL_LOBS.forEach(l => {
+      const o = document.createElement('option'); o.value = l; o.textContent = l; sel.appendChild(o);
+    });
+  } catch(e) { console.error('directory load failed', e); }
+})();
+
+function fillAdvisorFields(name, prefixId) {
+  const e = EMP_BY_NAME[(name||'').trim().toLowerCase()];
+  if (!e) return;
+  const tl  = document.getElementById(prefixId+'TL');
+  const lob = document.getElementById(prefixId+'Lob');
+  if (tl)  tl.value  = e.phone_alt || '';
+  if (lob) lob.value = e.lob || '';
+}
+function onAhodAdvisorPick(val) { fillAdvisorFields(val, 'ahod'); }
+function onVtoAdvisorPick(val)  { fillAdvisorFields(val, 'vto'); }
+
+// ── VTO: lookup last status time + shift end ───────────────────────
+async function lookupVtoTimes() {
+  const name = document.getElementById('vtoAdvisor').value.trim();
+  if (!name) { alert('Enter an advisor name first.'); return; }
+  const status = document.getElementById('vtoLookupStatus');
+  status.textContent = 'Looking up…';
+  try {
+    const res = await fetch('/api/checklist_advisor_info?name=' + encodeURIComponent(name));
+    const d = await res.json();
+    if (d.last_status_time) {
+      document.getElementById('actFrom').value = d.last_status_time;
+      status.textContent = '✓ Last status at ' + d.last_status_time;
+    } else {
+      status.textContent = 'No status events found for today.';
+    }
+    if (d.shift_end) {
+      document.getElementById('actTo').value = d.shift_end;
+      status.textContent += (d.last_status_time ? ' · ' : '') + 'Shift ends ' + d.shift_end;
+    }
+    if (!d.last_status_time && !d.shift_end) status.textContent = 'No data found — fill in manually.';
+  } catch(e) { status.textContent = 'Lookup failed — fill in manually.'; }
+}
+
+// ── Form type switching ────────────────────────────────────────────
+function onActTypeChange() {
+  const t = document.getElementById('actType').value;
+  document.getElementById('ahodFields').style.display = t === 'AHOD' ? '' : 'none';
+  document.getElementById('vtoFields').style.display  = t === 'VTO'  ? '' : 'none';
+  document.getElementById('noteFields').style.display = t === 'Note' ? '' : 'none';
+}
+
+// ── State ──────────────────────────────────────────────────────────
+async function loadState() {
+  try {
+    const res = await fetch('/api/checklist_state');
+    const d = await res.json();
+    TICKS = d.ticks || {};
+    ACTIVITY = d.activity || [];
+    renderChecklist(); renderActivity();
+    setSync(d.sheet !== false ? 'Synced ✓' : 'Sheet unavailable', d.sheet !== false ? 'ok' : '');
+  } catch(e){ console.error(e); setSync('Sync error',''); }
+}
+function refreshNow(){ setSync('Refreshing…','saving'); loadState(); }
+
+function renderChecklist() {
+  const root = document.getElementById('checklist');
+  root.innerHTML = '';
+  let totalDone=0, total=0;
+  CHECKLIST.forEach(sec => {
+    let secDone=0;
+    const rows = sec.items.map((it, idx) => {
+      const id = sec.key+'_'+idx;
+      const st = TICKS[id] || {};
+      const done = !!st.done;
+      if(done){ secDone++; totalDone++; }
+      total++;
+      return '<tr class="'+(done?'done':'')+'">'+
+        '<td style="width:34px"><input type="checkbox" class="cb" '+(done?'checked':'')+' onchange="toggleTick(\''+id+'\',this.checked)"></td>'+
+        '<td class="task">'+it[0]+'</td>'+
+        '<td style="width:120px"><span class="freq '+freqClass(it[1])+'">'+it[1]+'</span></td>'+
+        '<td class="who">'+(done && st.who ? '✓ '+st.who.split('@')[0]+' @ '+st.time : '')+'</td></tr>';
+    }).join('');
+    root.insertAdjacentHTML('beforeend',
+      '<div class="section-card"><div class="section-head '+sec.cls+'">'+sec.title+
+      '<span class="count">'+secDone+'/'+sec.items.length+' done</span></div>'+
+      '<table><thead><tr><th></th><th>Task</th><th>Frequency</th><th>Completed by</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>');
+  });
+  const pct = total ? Math.round(totalDone/total*100) : 0;
+  document.getElementById('progressPct').textContent = pct+'%';
+  document.getElementById('progressCount').textContent = totalDone+'/'+total;
+  document.getElementById('progressFill').style.width = pct+'%';
+}
+
+async function toggleTick(id, checked) {
+  TICKS[id] = TICKS[id] || {}; TICKS[id].done = checked;
+  renderChecklist(); setSync('Saving…','saving');
+  try {
+    const res = await fetch('/api/checklist_tick', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ item_id:id, task:TASK_TEXT[id]||'', done:checked }) });
+    const d = await res.json();
+    if (d.success) { TICKS[id] = { done:checked, who:d.who, time:d.time }; renderChecklist(); setSync('Synced ✓','ok'); }
+    else setSync('Save failed','');
+  } catch(e){ console.error(e); setSync('Save failed',''); }
+}
+
+function renderActivity() {
+  const body = document.getElementById('activityBody');
+  document.getElementById('actCount').textContent = ACTIVITY.length ? ACTIVITY.length+' logged' : '';
+  if (!ACTIVITY.length) {
+    body.innerHTML='<tr><td colspan="6" style="color:#9e9e9e;font-style:italic">No activity logged yet today.</td></tr>';
+    return;
+  }
+  body.innerHTML = ACTIVITY.map(a => {
+    const win = (a.from||a.to) ? ((a.from||'?')+' – '+(a.to||'?')) : '—';
+    // Build "who" display depending on type
+    let whoCell = '', lobCell = '';
+    if (a.type === 'AHOD' || a.type === 'VTO') {
+      whoCell = (a.advisor||a.who_involved||'').replace(/</g,'&lt;');
+      if (a.tl) whoCell += ' <span style="font-size:.7rem;color:#78909c">TL: '+a.tl.replace(/</g,'&lt;')+'</span>';
+      lobCell = (a.lob||'').replace(/</g,'&lt;');
+      if (a.assisting_lob) lobCell += ' → <strong>'+a.assisting_lob.replace(/</g,'&lt;')+'</strong>';
+    } else {
+      whoCell = (a.who_involved||'').replace(/</g,'&lt;');
+      lobCell = (a.detail||'').replace(/</g,'&lt;');
+    }
+    return '<tr><td><span class="act-type '+a.type+'">'+a.type+'</span></td>'+
+      '<td>'+whoCell+'</td>'+
+      '<td>'+lobCell+'</td>'+
+      '<td>'+win+'</td>'+
+      '<td class="who">'+(a.who||'').split('@')[0]+' @ '+(a.at||'')+'</td>'+
+      '<td style="white-space:nowrap">'+
+      '<button class="act-del" onclick="editActivity(\''+a.id+'\')" title="Edit" style="color:#1565c0;margin-right:6px">✏</button>'+
+      '<button class="act-del" onclick="delActivity(\''+a.id+'\')" title="Delete">✕</button>'+
+      '</td></tr>';
+  }).join('');
+}
+
+let _editingId = null;
+
+function editActivity(id) {
+  const a = ACTIVITY.find(x => x.id === id);
+  if (!a) return;
+  _editingId = id;
+  document.getElementById('actType').value = a.type || 'Note';
+  onActTypeChange();
+  document.getElementById('actFrom').value = a.from || '';
+  document.getElementById('actTo').value   = a.to   || '';
+  if (a.type === 'AHOD') {
+    document.getElementById('ahodAdvisor').value   = a.advisor || a.who_involved || '';
+    document.getElementById('ahodTL').value        = a.tl || '';
+    document.getElementById('ahodLob').value       = a.lob || '';
+    document.getElementById('ahodAssistLob').value = a.assisting_lob || '';
+    document.getElementById('ahodDetail').value    = a.detail || '';
+  } else if (a.type === 'VTO') {
+    document.getElementById('vtoAdvisor').value = a.advisor || a.who_involved || '';
+    document.getElementById('vtoTL').value      = a.tl || '';
+    document.getElementById('vtoLob').value     = a.lob || '';
+    document.getElementById('vtoDetail').value  = a.detail || '';
+  } else {
+    document.getElementById('noteWho').value    = a.who_involved || '';
+    document.getElementById('noteDetail').value = a.detail || '';
+  }
+  document.getElementById('actSubmitBtn').textContent = '💾 Update Activity';
+  document.getElementById('actSubmitBtn').style.background = '#1b5e20';
+  document.getElementById('actCancelBtn').style.display = '';
+  document.getElementById('actEditingLabel').style.display = '';
+  document.getElementById('actSubmitBtn').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function cancelEdit() {
+  _editingId = null;
+  document.getElementById('actSubmitBtn').textContent = '➕ Log Activity';
+  document.getElementById('actSubmitBtn').style.background = '';
+  document.getElementById('actCancelBtn').style.display = 'none';
+  document.getElementById('actEditingLabel').style.display = 'none';
+  ['ahodAdvisor','ahodTL','ahodLob','ahodDetail','vtoAdvisor','vtoTL',
+   'vtoLob','vtoDetail','noteWho','noteDetail','actFrom','actTo'].forEach(x => {
+    const el = document.getElementById(x); if(el) el.value='';
+  });
+  document.getElementById('ahodAssistLob').value='';
+}
+
+async function submitActivity() {
+  if (_editingId) {
+    const type = document.getElementById('actType').value;
+    let payload = { action:'update', id:_editingId, type };
+    if (type === 'AHOD') {
+      payload.advisor       = document.getElementById('ahodAdvisor').value.trim();
+      payload.tl            = document.getElementById('ahodTL').value.trim();
+      payload.lob           = document.getElementById('ahodLob').value.trim();
+      payload.assisting_lob = document.getElementById('ahodAssistLob').value.trim();
+      payload.detail        = document.getElementById('ahodDetail').value.trim();
+      payload.who_involved  = payload.advisor;
+    } else if (type === 'VTO') {
+      payload.advisor      = document.getElementById('vtoAdvisor').value.trim();
+      payload.tl           = document.getElementById('vtoTL').value.trim();
+      payload.lob          = document.getElementById('vtoLob').value.trim();
+      payload.detail       = document.getElementById('vtoDetail').value.trim();
+      payload.who_involved = payload.advisor;
+    } else {
+      payload.who_involved = document.getElementById('noteWho').value.trim();
+      payload.detail       = document.getElementById('noteDetail').value.trim();
+    }
+    payload.from = document.getElementById('actFrom').value;
+    payload.to   = document.getElementById('actTo').value;
+    setSync('Saving…','saving');
+    try {
+      const res = await fetch('/api/checklist_activity', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const d = await res.json();
+      if (d.success) {
+        const idx = ACTIVITY.findIndex(x => x.id === _editingId);
+        if (idx >= 0) ACTIVITY[idx] = {...ACTIVITY[idx], ...payload, who:d.who, at:d.at};
+        renderActivity(); setSync('Synced ✓','ok'); cancelEdit();
+      } else setSync('Save failed','');
+    } catch(e){ console.error(e); setSync('Save failed',''); }
+  } else {
+    await addActivity();
+  }
+}
+
+async function addActivity() {
+  const type = document.getElementById('actType').value;
+  let payload = { type };
+  if (type === 'AHOD') {
+    payload.advisor       = document.getElementById('ahodAdvisor').value.trim();
+    payload.tl            = document.getElementById('ahodTL').value.trim();
+    payload.lob           = document.getElementById('ahodLob').value.trim();
+    payload.assisting_lob = document.getElementById('ahodAssistLob').value.trim();
+    payload.detail        = document.getElementById('ahodDetail').value.trim();
+    payload.who_involved  = payload.advisor;
+    if (!payload.advisor && !payload.assisting_lob) { alert('Enter the advisor name or the assisting LOB.'); return; }
+  } else if (type === 'VTO') {
+    payload.advisor      = document.getElementById('vtoAdvisor').value.trim();
+    payload.tl           = document.getElementById('vtoTL').value.trim();
+    payload.lob          = document.getElementById('vtoLob').value.trim();
+    payload.detail       = document.getElementById('vtoDetail').value.trim();
+    payload.who_involved = payload.advisor;
+    if (!payload.advisor) { alert('Enter the advisor name.'); return; }
+  } else {
+    payload.who_involved = document.getElementById('noteWho').value.trim();
+    payload.detail       = document.getElementById('noteDetail').value.trim();
+    if (!payload.who_involved && !payload.detail) { alert('Add at least a detail or who was involved.'); return; }
+  }
+  payload.from = document.getElementById('actFrom').value;
+  payload.to   = document.getElementById('actTo').value;
+
+  setSync('Saving…','saving');
+  try {
+    const res = await fetch('/api/checklist_activity', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'add', ...payload }) });
+    const d = await res.json();
+    if (d.success) {
+      ACTIVITY.push({ id:d.id, ...payload, who:d.who, at:d.at });
+      renderActivity(); setSync('Synced ✓','ok');
+      // clear form
+      ['ahodAdvisor','ahodTL','ahodLob','ahodDetail','vtoAdvisor','vtoTL','vtoLob','vtoDetail','noteWho','noteDetail','actFrom','actTo'].forEach(x => {
+        const el = document.getElementById(x); if(el) el.value='';
+      });
+      document.getElementById('ahodAssistLob').value='';
+      const ls = document.getElementById('vtoLookupStatus'); if(ls) ls.textContent='';
+    } else setSync('Save failed','');
+  } catch(e){ console.error(e); setSync('Save failed',''); }
+}
+
+async function delActivity(id) {
+  if (!confirm('Delete this activity entry?')) return;
+  setSync('Saving…','saving');
+  try {
+    const res = await fetch('/api/checklist_activity', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id }) });
+    const d = await res.json();
+    if (d.success) { ACTIVITY = ACTIVITY.filter(a => a.id !== id); renderActivity(); setSync('Synced ✓','ok'); }
+    else setSync('Delete failed','');
+  } catch(e){ console.error(e); setSync('Delete failed',''); }
+}
+
+async function clearActivityLog() {
+  if (!ACTIVITY.length) { alert('The activity log is already empty.'); return; }
+  if (!confirm('Clear all ' + ACTIVITY.length + ' activity entries for today?')) return;
+  setSync('Clearing…','saving');
+  try {
+    for (const id of ACTIVITY.map(a => a.id)) {
+      await fetch('/api/checklist_activity', { method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id }) });
+    }
+    ACTIVITY = []; renderActivity(); setSync('Synced ✓','ok');
+  } catch(e){ console.error(e); setSync('Clear failed',''); loadState(); }
+}
+
+// ── Export picker ──────────────────────────────────────────────
+function isoToday() {
+  const t = new Date();
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
+function isoOffset(days) {
+  const t = new Date(); t.setDate(t.getDate() - days);
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
+(function initExportDates() {
+  const t = isoToday();
+  document.getElementById('expFrom').value = t;
+  document.getElementById('expTo').value   = t;
+})();
+function setExpRange(days) {
+  document.getElementById('expFrom').value = days === 0 ? isoToday() : isoOffset(days);
+  document.getElementById('expTo').value   = isoToday();
+}
+function toggleExportDrop() {
+  const drop = document.getElementById('exportDrop');
+  if (drop.style.display === 'block') { drop.style.display = 'none'; return; }
+  if (drop.parentNode !== document.body) document.body.appendChild(drop);
+  const btn  = document.getElementById('exportToggle');
+  const rect = btn.getBoundingClientRect();
+  drop.style.display = 'block';   // show first so offsetWidth is real
+  const dw   = drop.offsetWidth;
+  // right-align to the button, clamped within viewport
+  let left = rect.right - dw;
+  if (left < 6) left = 6;
+  if (left + dw > window.innerWidth - 6) left = window.innerWidth - dw - 6;
+  drop.style.top  = (rect.bottom + 4) + 'px';
+  drop.style.left = left + 'px';
+}
+document.addEventListener('click', function(e) {
+  const drop = document.getElementById('exportDrop');
+  const btn  = document.getElementById('exportToggle');
+  if (drop && drop.style.display === 'block' && !drop.contains(e.target) && e.target !== btn)
+    drop.style.display = 'none';
+});
+function doExport() {
+  const from = document.getElementById('expFrom').value;
+  const to   = document.getElementById('expTo').value;
+  if (!from || !to) { alert('Please select both a from and to date.'); return; }
+  if (from > to) { alert('From date must be on or before To date.'); return; }
+  window.location.href = '/wfm-checklist/export?from=' + from + '&to=' + to;
+  document.getElementById('exportDrop').style.display = 'none';
+}
+
+function exportChecklist() {  // kept for compatibility
+  const today = document.getElementById('todayLabel').textContent;
+  const rows = [['WFM Daily Checklist — ' + today], []];
+
+  // ── Checklist ticks ──
+  rows.push(['CHECKLIST TASKS']);
+  rows.push(['Section', 'Task', 'Frequency', 'Status', 'Completed By', 'Time']);
+  CHECKLIST.forEach(sec => {
+    sec.items.forEach((it, idx) => {
+      const id  = sec.key + '_' + idx;
+      const st  = TICKS[id] || {};
+      const done = st.done ? 'Done' : 'Not Done';
+      const who  = st.who ? st.who.split('@')[0] : '';
+      rows.push([sec.title.replace(/^[^\w]+/, '').trim(), it[0], it[1], done, who, st.time || '']);
+    });
+  });
+
+  rows.push([]);
+
+  // ── Activity log ──
+  rows.push(['ACTIVITY LOG']);
+  rows.push(['Type', 'Advisor / Who', 'LoB', 'Assisting LOB', 'Detail', 'From', 'To', 'Logged By', 'At']);
+  if (ACTIVITY.length) {
+    ACTIVITY.forEach(a => {
+      rows.push([
+        a.type || '',
+        (a.advisor || a.who_involved || '').replace(/@.*/, ''),
+        a.lob || '',
+        a.assisting_lob || '',
+        a.detail || '',
+        a.from || '',
+        a.to   || '',
+        (a.who || '').split('@')[0],
+        a.at   || '',
+      ]);
+    });
+  } else {
+    rows.push(['No activity logged today.']);
+  }
+
+  // Build CSV
+  const csv = rows.map(r => r.map(v => {
+    const s = String(v == null ? '' : v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\r\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const d    = new Date();
+  const ds   = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  a.href     = url;
+  a.download = 'wfm_checklist_' + ds + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('todayLabel').textContent =
+  new Date().toLocaleDateString([], {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+loadState();
+setInterval(loadState, 30000);
+
+// ── Attendance email builder ──
+(function(){ const d=document.getElementById('atDate'); if(d){ const t=new Date();
+  d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); } })();
+
+function onAdvisorPick(val) {
+  const e = EMP_BY_NAME[(val||'').trim().toLowerCase()];
+  if (!e) return;
+  document.getElementById('atLob').value   = e.lob   || '';
+  document.getElementById('atTL').value    = e.phone_alt || '';
+  document.getElementById('atPhone').value = e.phone || '';
+}
+function buildAttnEmail() {
+  const type=document.getElementById('atType').value, name=document.getElementById('atName').value.trim(),
+    date=document.getElementById('atDate').value, lob=document.getElementById('atLob').value.trim(),
+    tl=document.getElementById('atTL').value.trim(), phone=document.getElementById('atPhone').value.trim(),
+    reason=document.getElementById('atReason').value.trim();
+  const subject='WFM - Attendance Line - '+type+' - '+(name||'Advisor Name')+' - '+date;
+  const body=subject+'\n\nAdvisor Name - '+name+'\nLoB - '+lob+'\nTeam Lead - '+tl+'\nContact number - '+phone+'\nReason - '+reason;
+  const out=document.getElementById('attnOut'); out.style.display='block'; out.textContent=body;
+}
+function copyAttnEmail() {
+  const out=document.getElementById('attnOut');
+  if(out.style.display==='none'||!out.textContent) buildAttnEmail();
+  const btn=event.target;
+  copyText(out.textContent, btn);
+}
+function clearAttnForm() {
+  ['atName','atLob','atTL','atPhone','atReason'].forEach(x => document.getElementById(x).value='');
+  const out=document.getElementById('attnOut'); out.style.display='none'; out.textContent='';
+}
+function copyText(text, btn) {
+  const flash = () => { if(btn){ const o=btn.textContent; btn.textContent='✅ Copied'; setTimeout(()=>btn.textContent=o,2000); } };
+  const legacy = () => {
+    try {
+      const ta=document.createElement('textarea'); ta.value=text;
+      ta.style.position='fixed'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok=document.execCommand('copy'); document.body.removeChild(ta);
+      if(ok) flash(); else alert('Copy failed — select the text and copy manually.');
+    } catch(e){ alert('Copy failed — select the text and copy manually.'); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(flash).catch(legacy);
+  } else { legacy(); }
+}
+</script>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update History</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest" defer></script>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin-bottom:20px; }
+    .nav-links { margin-bottom:16px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; }
+    .nav-links a:hover { text-decoration:underline; }
+    .section { background:#fff; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.08); }
+    .filter-bar { background:#fff; padding:14px 20px; border-radius:10px;
+                  box-shadow:0 4px 12px rgba(0,0,0,0.08); margin-bottom:16px;
+                  display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+    .filter-bar label { display:block; font-weight:600; font-size:.82rem; margin-bottom:4px; }
+    .filter-bar input { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:.88rem; width:220px; }
+    .filter-bar button { padding:7px 16px; background:#1a237e; color:#fff; border:none;
+                         border-radius:6px; cursor:pointer; font-size:.88rem; }
+    .filter-bar button:hover { background:#283593; }
+    .filter-bar a.reset { padding:7px 14px; border:1px solid #ccc; border-radius:6px;
+                          color:#555; text-decoration:none; font-size:.88rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:9px 12px; text-align:left; font-size:.88rem; }
+    th { background:#f7f7f7; }
+    tbody tr:nth-child(even) { background:#fafafa; }
+    tbody tr:hover { background:#f0f4ff; }
+    .badge-count { display:inline-block; background:#e8eaf6; color:#1a237e;
+                   padding:2px 10px; border-radius:12px; font-size:.8rem;
+                   font-weight:600; margin-left:8px; vertical-align:middle; }
+    .delete-btn  { padding:4px 10px; background:#dc3545; color:#fff; border:none;
+                   border-radius:5px; cursor:pointer; font-size:.82rem; }
+    .delete-btn:hover  { background:#a71d2a; }
+    .open-btn    { padding:4px 12px; background:#1a237e; color:#fff; border:none;
+                   border-radius:5px; cursor:pointer; font-size:.82rem; margin-right:4px; }
+    .open-btn:hover    { background:#283593; }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45);
+                     display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal-overlay.show { display:flex; }
+    .modal-box   { background:#fff; padding:22px; width:92%; max-width:640px;
+                   max-height:85vh; overflow-y:auto; border-radius:12px;
+                   box-shadow:0 8px 32px rgba(0,0,0,.2); }
+    .modal-head  { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .modal-head h2 { margin:0; font-size:1.05rem; }
+    .modal-close { font-size:1.5rem; cursor:pointer; color:#888; line-height:1; }
+    .modal-close:hover { color:#000; }
+    .steps-table { width:100%; border-collapse:collapse; }
+    .steps-table th { background:#f0f2f5; }
+    .steps-table td, .steps-table th { padding:8px 10px; font-size:.87rem;
+                   border-bottom:1px solid #eee; text-align:left; vertical-align:top; }
+    .steps-table td:last-child { white-space:pre-wrap; word-break:break-word; }
+  </style>
+<link rel="stylesheet" href="/static/dark.css">
+<style>
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .toolbar, .filter-bar,
+  [style*="display:flex"], [style*="display: flex"] {
+    flex-wrap: wrap !important;
+  }
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+  select, input[type="date"], input[type="text"] { width: 100% !important; max-width: 100% !important; }
+  .section { padding: 10px !important; }
+  .btn, button { font-size: .82rem !important; padding: 6px 10px !important; }
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+}
+</style>
+</head>
+<body>
+
+<h1>📜 Update History<span class="badge-count">{{ log_groups|length }} entries</span></h1>
+
+<div class="nav-links">
+  <a href="/dashboard">← Back to Dashboard</a>
+  {% if is_admin %}
+  <a href="/archive">Archive</a>
+  <a href="/recycle_bin">Recycle Bin</a>
+  {% endif %}
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+    <div>
+      <label>Ticket ID</label>
+      <input type="text" name="ticket_id" value="{{ ticket_id }}" placeholder="e.g. TXT-20260702...">
+    </div>
+    {% if is_admin %}
+    <div>
+      <label>User Email</label>
+      <input type="text" name="user_email" value="{{ filter_user }}" placeholder="Filter by user...">
+    </div>
+    {% endif %}
+    <div>
+      <button type="submit">Apply</button>
+      <a href="/history" class="reset">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="section">
+  {% if truncated %}
+  <p style="color:#6c757d;font-size:.85rem;margin-top:0;">
+    Showing the latest 500 actions. <a href="/history?all=1">Show full history</a>
+  </p>
+  {% endif %}
+  {% if not log_groups %}
+    <p style="color:#6c757d;font-style:italic;">No history entries found.</p>
+  {% else %}
+  <table id="historyTable">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Ticket ID</th>
+        <th>Action</th>
+        <th>User</th>
+        <th>Steps</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="history-body">
+      {% for g in log_groups %}
+      <tr>
+        <td>{{ g.timestamp }}</td>
+        <td>{{ g.ticket_id }}</td>
+        <td>{{ g.summary }}</td>
+        <td>{{ g.user }}</td>
+        <td style="text-align:center">{{ g.steps|length }}</td>
+        <td>
+          <button class="open-btn" onclick="openSteps({{ loop.index0 }})">Open</button>
+          {% if is_admin %}
+          <button class="delete-btn" onclick="deleteEntry({{ loop.index0 }})">Delete</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<!-- Steps modal -->
+<div id="stepsModal" class="modal-overlay" onclick="if(event.target===this)closeSteps()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="stepsTitle">Action Details</h2>
+      <span class="modal-close" onclick="closeSteps()">&times;</span>
+    </div>
+    <div id="stepsMeta" style="color:#6c757d;font-size:.85rem;margin-bottom:12px;"></div>
+    <table class="steps-table">
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody id="stepsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const LOG_GROUPS = {{ log_groups | tojson }};
+
+document.addEventListener("DOMContentLoaded", () => {
+  const tbody = document.getElementById("history-body");
+  if (!tbody || tbody.children.length === 0) return;
+  new simpleDatatables.DataTable("#historyTable", {
+    searchable: true,
+    perPage: 50,
+    columns: [{ select: 5, sortable: false }],
+    labels: {
+      placeholder: "🔍 Search history...",
+      perPage:     "Show {select} entries per page",
+      noRows:      "No history entries found",
+      info:        "Showing {start} to {end} of {rows} actions"
+    }
+  });
+});
+
+function openSteps(idx) {
+  const g = LOG_GROUPS[idx];
+  if (!g) return;
+  document.getElementById("stepsTitle").textContent = g.summary || "Action Details";
+  document.getElementById("stepsMeta").textContent =
+    `${g.timestamp}  ·  ${g.ticket_id}  ·  by ${g.user}`;
+  const body = document.getElementById("stepsBody");
+  body.innerHTML = "";
+  g.steps.forEach(s => {
+    const tr = document.createElement("tr");
+    const tdF = document.createElement("td"); tdF.textContent = s.field;
+    const tdV = document.createElement("td"); tdV.textContent = s.value;
+    tr.appendChild(tdF); tr.appendChild(tdV);
+    body.appendChild(tr);
+  });
+  document.getElementById("stepsModal").classList.add("show");
+}
+function closeSteps() { document.getElementById("stepsModal").classList.remove("show"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSteps(); });
+
+function deleteEntry(idx) {
+  const g = LOG_GROUPS[idx];
+  if (!g) return;
+  const n = g.steps.length;
+  if (!confirm(`Delete this history entry (${n} step${n > 1 ? 's' : ''})? This cannot be undone.`)) return;
+  fetch("/delete_log_entry", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entry_id: g.timestamp, ticket_id: g.ticket_id, user: g.user })
+  })
+  .then(res => {
+    if (res.status === 403) alert("Permission denied.");
+    else if (res.status === 404) alert("History entry not found.");
+    else if (res.ok) location.reload();
+    else alert("Failed to delete history entry.");
+  })
+  .catch(err => { console.error(err); alert("Error deleting history entry."); });
+}
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

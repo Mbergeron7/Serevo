@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Analysis</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filter-bar { background:#fff; border-radius:10px; padding:12px 16px; margin-bottom:16px;
+                  box-shadow:0 2px 6px rgba(0,0,0,.06); display:flex; gap:12px;
+                  align-items:flex-end; flex-wrap:wrap; }
+    .filter-bar label { display:block; font-weight:600; font-size:.75rem; margin-bottom:3px; }
+    .filter-bar input { padding:5px 9px; border:1px solid #ccc; border-radius:6px; font-size:.84rem; }
+    .filter-bar button { padding:6px 14px; background:#1a237e; color:#fff; border:none;
+                  border-radius:6px; cursor:pointer; font-size:.83rem; font-weight:600; }
+    .quick { padding:5px 11px !important; background:#e8eaf6 !important; color:#1a237e !important;
+             border:1px solid #c5cae9 !important; }
+    .quick.active { background:#1a237e !important; color:#fff !important; }
+    .kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .kpi { background:#fff; border-radius:10px; padding:12px 18px; flex:1; min-width:118px;
+           box-shadow:0 2px 6px rgba(0,0,0,.06); text-align:center; }
+    .kpi .v { font-size:1.4rem; font-weight:700; color:#1a237e; min-height:1.6rem; }
+    .kpi .l { font-size:.71rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+    .kpi.green .v { color:#2e7d32; } .kpi.amber .v { color:#e65100; } .kpi.grey .v { color:#546e7a; font-size:1.0rem; padding-top:5px; }
+    .grid2 { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .card { background:#fff; border-radius:10px; padding:16px 18px;
+            box-shadow:0 2px 6px rgba(0,0,0,.06); flex:1; min-width:320px; }
+    .card h2 { margin:0 0 10px; font-size:.92rem; color:#1a237e; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:7px 10px; text-align:left; font-size:.83rem; border-bottom:1px solid #eee; }
+    th { background:#f7f7f7; font-size:.76rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.num, th.num { text-align:right; }
+    tbody tr:hover { background:#f0f4ff; }
+    canvas { max-height:280px; }
+    .loading { color:#9e9e9e; font-style:italic; font-size:.85rem; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>📈 Data Analysis</h1>
+<div class="sub">Live ticket analytics — includes archived tickets</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/dashboard">Ticket Dashboard</a>
+  <a href="/service_level">Service Level</a>
+  <a href="/legacy_analytics">Legacy Analytics</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="filter-bar">
+  <div><label>From</label><input type="date" id="fromDate"></div>
+  <div><label>To</label><input type="date" id="toDate"></div>
+  <div><button onclick="loadAll()">Apply</button></div>
+  <div style="display:flex;gap:6px;align-items:flex-end">
+    <button class="quick" data-days="7"  onclick="quickRange(this)">7d</button>
+    <button class="quick" data-days="30" onclick="quickRange(this)">30d</button>
+    <button class="quick" data-days="90" onclick="quickRange(this)">90d</button>
+    <button class="quick active" data-days="0" onclick="quickRange(this)">All</button>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="v" id="kTotal">–</div><div class="l">Total Tickets</div></div>
+  <div class="kpi amber"><div class="v" id="kOpen">–</div><div class="l">Open</div></div>
+  <div class="kpi amber"><div class="v" id="kPending">–</div><div class="l">Pending</div></div>
+  <div class="kpi green"><div class="v" id="kClosed">–</div><div class="l">Closed</div></div>
+  <div class="kpi green"><div class="v" id="kClosure">–</div><div class="l">Closure Rate</div></div>
+  <div class="kpi"><div class="v" id="kAvgRes">–</div><div class="l">Avg Resolution (hrs)</div></div>
+  <div class="kpi grey"><div class="v" id="kBusiest">–</div><div class="l">Busiest Day</div></div>
+  <div class="kpi grey"><div class="v" id="kTopType">–</div><div class="l">Top Request Type</div></div>
+</div>
+
+<div class="grid2">
+  <div class="card" style="flex:2">
+    <h2>📈 Ticket Volume by Day <span style="font-weight:400;color:#9e9e9e">(with 7-day average)</span></h2>
+    <canvas id="volChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>🥧 Status Split</h2>
+    <canvas id="statusChart"></canvas>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card" style="flex:2">
+    <h2>📊 Request Types — Open vs Closed</h2>
+    <canvas id="typeChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>👥 Team Workload</h2>
+    <table>
+      <thead><tr><th>Member</th><th class="num">Open</th><th class="num">Pend.</th>
+        <th class="num">Closed</th><th class="num">Compl.&nbsp;%</th></tr></thead>
+      <tbody id="workloadBody"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const dark  = localStorage.getItem('wfm_dark') === '1';
+const grid  = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+const ticks = dark ? '#9ca3af' : '#666';
+let volChart, statusChart, typeChart;
+
+function dateParams() {
+  const f = document.getElementById('fromDate').value;
+  const t = document.getElementById('toDate').value;
+  const p = new URLSearchParams();
+  if (f) p.set('from', f);
+  if (t) p.set('to', t);
+  const s = p.toString();
+  return s ? '?' + s : '';
+}
+
+function quickRange(btn) {
+  document.querySelectorAll('.quick').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const days = parseInt(btn.dataset.days, 10);
+  const to = new Date();
+  if (days === 0) {
+    document.getElementById('fromDate').value = '';
+    document.getElementById('toDate').value   = '';
+  } else {
+    const from = new Date(to.getTime() - days * 86400000);
+    document.getElementById('fromDate').value = from.toISOString().slice(0, 10);
+    document.getElementById('toDate').value   = to.toISOString().slice(0, 10);
+  }
+  loadAll();
+}
+
+function movingAvg(vals, w) {
+  return vals.map((_, i) => {
+    const s = vals.slice(Math.max(0, i - w + 1), i + 1);
+    return Math.round(s.reduce((a, b) => a + b, 0) / s.length * 10) / 10;
+  });
+}
+
+async function loadAll() {
+  const q = dateParams();
+  const [vol, status, types, workload, avgres] = await Promise.all([
+    fetch('/api/ticket_volume' + q).then(r => r.json()),
+    fetch('/api/status_breakdown' + q).then(r => r.json()),
+    fetch('/api/wfm_request_breakdown' + q).then(r => r.json()),
+    fetch('/api/workload_distribution' + q).then(r => r.json()),
+    fetch('/api/avg_resolution_time' + q).then(r => r.json()),
+  ]);
+
+  // ── KPIs ──
+  const dates = Object.keys(vol).sort();
+  const counts = dates.map(d => vol[d]);
+  const total = counts.reduce((a, b) => a + b, 0);
+  document.getElementById('kTotal').textContent   = total.toLocaleString();
+  document.getElementById('kOpen').textContent    = (status.open    || 0).toLocaleString();
+  document.getElementById('kPending').textContent = (status.pending || 0).toLocaleString();
+  document.getElementById('kClosed').textContent  = (status.closed  || 0).toLocaleString();
+  const st = (status.open || 0) + (status.pending || 0) + (status.closed || 0);
+  document.getElementById('kClosure').textContent = st ? Math.round((status.closed || 0) / st * 1000) / 10 + '%' : '–';
+  document.getElementById('kAvgRes').textContent  = avgres.average_resolution_hours ?? '–';
+  let bi = counts.indexOf(Math.max(...counts, 0));
+  document.getElementById('kBusiest').textContent = dates.length ? dates[bi] + ' (' + counts[bi] + ')' : '–';
+  const typeEntries = Object.entries(types)
+    .map(([k, v]) => [k, (v.open || 0) + (v.closed || 0)])
+    .sort((a, b) => b[1] - a[1]);
+  document.getElementById('kTopType').textContent = typeEntries.length
+    ? typeEntries[0][0] : '–';
+
+  // ── Volume chart with 7-day average ──
+  if (volChart) volChart.destroy();
+  volChart = new Chart(document.getElementById('volChart'), {
+    type: 'line',
+    data: { labels: dates, datasets: [
+      { label: 'Tickets', data: counts, borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,.12)', fill: true, tension: .25, pointRadius: 2 },
+      { label: '7-day avg', data: movingAvg(counts, 7), borderColor: '#e65100',
+        borderDash: [6, 4], fill: false, tension: .3, pointRadius: 0 }
+    ]},
+    options: { plugins: { legend: { labels: { color: ticks } } },
+      scales: { x: { grid: { color: grid }, ticks: { color: ticks, maxTicksLimit: 14 } },
+                y: { grid: { color: grid }, ticks: { color: ticks }, beginAtZero: true } } }
+  });
+
+  // ── Status doughnut ──
+  if (statusChart) statusChart.destroy();
+  statusChart = new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: { labels: ['Open', 'Pending', 'Closed'],
+      datasets: [{ data: [status.open || 0, status.pending || 0, status.closed || 0],
+        backgroundColor: ['#e65100', '#f9a825', '#2e7d32'] }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { color: ticks, boxWidth: 12 } } } }
+  });
+
+  // ── Request types stacked bar ──
+  const top = typeEntries.slice(0, 12).map(([k]) => k);
+  if (typeChart) typeChart.destroy();
+  typeChart = new Chart(document.getElementById('typeChart'), {
+    type: 'bar',
+    data: { labels: top, datasets: [
+      { label: 'Closed', data: top.map(k => types[k].closed || 0), backgroundColor: '#2e7d32' },
+      { label: 'Open',   data: top.map(k => types[k].open   || 0), backgroundColor: '#e65100' }
+    ]},
+    options: { indexAxis: 'y',
+      plugins: { legend: { labels: { color: ticks } } },
+      scales: { x: { stacked: true, grid: { color: grid }, ticks: { color: ticks }, beginAtZero: true },
+                y: { stacked: true, grid: { display: false },
+                     ticks: { color: ticks, autoSkip: false, font: { size: 10 } } } } }
+  });
+
+  // ── Workload table ──
+  const wb = document.getElementById('workloadBody');
+  wb.innerHTML = '';
+  Object.entries(workload)
+    .sort((a, b) => (b[1].open + b[1].pending + b[1].closed) - (a[1].open + a[1].pending + a[1].closed))
+    .forEach(([name, v]) => {
+      const tr = document.createElement('tr');
+      [name, v.open, v.pending, v.closed, v.completion_rate + '%'].forEach((val, i) => {
+        const td = document.createElement('td');
+        if (i > 0) td.className = 'num';
+        td.textContent = val;
+        tr.appendChild(td);
+      });
+      wb.appendChild(tr);
+    });
+  if (!wb.children.length)
+    wb.innerHTML = '<tr><td colspan="5" class="loading">No data in range</td></tr>';
+}
+
+loadAll();
+</script>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket Service Level</title>
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f0f2f5; color:#333; }
+    h1 { margin:0 0 4px; font-size:1.35rem; }
+    .sub { color:#6c757d; font-size:.85rem; margin-bottom:14px; }
+    .nav-links { margin-bottom:14px; }
+    .nav-links a { margin-right:16px; text-decoration:none; font-weight:500; color:#007bff; font-size:.9rem; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filter-bar { background:#fff; border-radius:10px; padding:12px 16px; margin-bottom:16px;
+                  box-shadow:0 2px 6px rgba(0,0,0,.06); display:flex; gap:12px;
+                  align-items:flex-end; flex-wrap:wrap; }
+    .filter-bar label { display:block; font-weight:600; font-size:.75rem; margin-bottom:3px; }
+    .filter-bar input, .filter-bar select { padding:5px 9px; border:1px solid #ccc;
+                  border-radius:6px; font-size:.84rem; }
+    .filter-bar button { padding:6px 16px; background:#1a237e; color:#fff; border:none;
+                  border-radius:6px; cursor:pointer; font-size:.85rem; font-weight:600; }
+    .kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .kpi { background:#fff; border-radius:10px; padding:14px 20px; flex:1; min-width:130px;
+           box-shadow:0 2px 6px rgba(0,0,0,.06); text-align:center; }
+    .kpi .v { font-size:1.5rem; font-weight:700; color:#1a237e; min-height:1.7rem; }
+    .kpi .l { font-size:.72rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+    .kpi.big { flex:1.4; }
+    .kpi.big .v { font-size:2.3rem; }
+    .v.good { color:#2e7d32 !important; } .v.warn { color:#e65100 !important; } .v.bad { color:#b71c1c !important; }
+    .grid2 { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .card { background:#fff; border-radius:10px; padding:16px 18px;
+            box-shadow:0 2px 6px rgba(0,0,0,.06); flex:1; min-width:320px; }
+    .card h2 { margin:0 0 10px; font-size:.92rem; color:#1a237e; }
+    canvas { max-height:280px; }
+    .insight { background:#e8eaf6; border-left:4px solid #1a237e; border-radius:6px;
+               padding:9px 14px; font-size:.84rem; margin-bottom:16px; color:#333; }
+  </style>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+
+<h1>📊 Ticket Service Level</h1>
+<div class="sub">How fast WFM tickets get resolved — includes archived tickets</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/dashboard">Ticket Dashboard</a>
+  <a href="/analytics">Data Analysis</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="filter-bar">
+  <div><label>From</label><input type="date" id="fromDate"></div>
+  <div><label>To</label><input type="date" id="toDate"></div>
+  <div>
+    <label>SLA Threshold</label>
+    <select id="threshold">
+      <option value="4">4 hours</option>
+      <option value="8" selected>8 hours</option>
+      <option value="24">24 hours</option>
+      <option value="48">48 hours</option>
+      <option value="72">72 hours</option>
+    </select>
+  </div>
+  <div>
+    <label>Target</label>
+    <select id="target">
+      <option value="80" selected>80%</option>
+      <option value="85">85%</option>
+      <option value="90">90%</option>
+      <option value="95">95%</option>
+    </select>
+  </div>
+  <div><button onclick="loadAll()">Apply</button></div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi big"><div class="v" id="kSL">–</div><div class="l">Service Level</div></div>
+  <div class="kpi"><div class="v" id="kTotal">–</div><div class="l">Total Tickets</div></div>
+  <div class="kpi"><div class="v good" id="kWithin">–</div><div class="l">Within SLA</div></div>
+  <div class="kpi"><div class="v bad" id="kOutside">–</div><div class="l">Outside SLA</div></div>
+  <div class="kpi"><div class="v" id="kDaysMet">–</div><div class="l">Days Meeting Target</div></div>
+</div>
+
+<div class="insight" id="insight" style="display:none"></div>
+
+<div class="grid2">
+  <div class="card" style="flex:2">
+    <h2>📈 Daily Service Level vs Target</h2>
+    <canvas id="trendChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>📊 Within vs Outside SLA by Day</h2>
+    <canvas id="breakdownChart"></canvas>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>🔮 Ticket Volume — Actual &amp; 7-Day Forecast</h2>
+  <canvas id="forecastChart" style="max-height:240px"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const dark  = localStorage.getItem('wfm_dark') === '1';
+const grid  = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+const ticks = dark ? '#9ca3af' : '#666';
+let trendChart, breakdownChart, forecastChart;
+
+function params() {
+  const p = new URLSearchParams();
+  const f = document.getElementById('fromDate').value;
+  const t = document.getElementById('toDate').value;
+  if (f) p.set('from', f);
+  if (t) p.set('to', t);
+  p.set('threshold', document.getElementById('threshold').value);
+  return '?' + p.toString();
+}
+
+async function loadAll() {
+  const q = params();
+  const target = parseFloat(document.getElementById('target').value);
+  const [kpis, trend, breakdown, forecast] = await Promise.all([
+    fetch('/api/service_level_kpis' + q).then(r => r.json()),
+    fetch('/api/service_level_trend' + q).then(r => r.json()),
+    fetch('/api/service_level_breakdown' + q).then(r => r.json()),
+    fetch('/api/service_level_forecast' + q).then(r => r.json()),
+  ]);
+
+  // ── KPIs ──
+  const slEl = document.getElementById('kSL');
+  slEl.textContent = (kpis.service_level ?? 0) + '%';
+  slEl.className = 'v ' + (kpis.service_level >= target ? 'good'
+                    : kpis.service_level >= target - 10 ? 'warn' : 'bad');
+  document.getElementById('kTotal').textContent   = (kpis.total_tickets   || 0).toLocaleString();
+  document.getElementById('kWithin').textContent  = (kpis.answered_within || 0).toLocaleString();
+  document.getElementById('kOutside').textContent =
+    ((kpis.total_tickets || 0) - (kpis.answered_within || 0)).toLocaleString();
+
+  const days = Object.keys(trend).sort();
+  const slVals = days.map(d => trend[d]);
+  const met = slVals.filter(v => v >= target).length;
+  document.getElementById('kDaysMet').textContent =
+    days.length ? met + ' / ' + days.length : '–';
+
+  // ── Insight strip: best & worst days ──
+  const ins = document.getElementById('insight');
+  if (days.length >= 2) {
+    let hi = 0, lo = 0;
+    slVals.forEach((v, i) => { if (v > slVals[hi]) hi = i; if (v < slVals[lo]) lo = i; });
+    ins.style.display = 'block';
+    ins.innerHTML = '💡 Best day: <b>' + days[hi] + '</b> (' + slVals[hi] + '%) · ' +
+      'Toughest day: <b>' + days[lo] + '</b> (' + slVals[lo] + '%) · ' +
+      'Target met on <b>' + met + '</b> of ' + days.length + ' days';
+  } else { ins.style.display = 'none'; }
+
+  // ── Trend chart with target line ──
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: { labels: days, datasets: [
+      { label: 'SL %', data: slVals, borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,.10)', fill: true, tension: .25, pointRadius: 2 },
+      { label: 'Target ' + target + '%', data: days.map(() => target),
+        borderColor: '#b71c1c', borderDash: [6, 5], fill: false, pointRadius: 0 }
+    ]},
+    options: { plugins: { legend: { labels: { color: ticks } } },
+      scales: { x: { grid: { color: grid }, ticks: { color: ticks, maxTicksLimit: 12 } },
+                y: { grid: { color: grid }, ticks: { color: ticks }, min: 0, max: 100 } } }
+  });
+
+  // ── Breakdown stacked bar ──
+  const bDays = Object.keys(breakdown).sort();
+  if (breakdownChart) breakdownChart.destroy();
+  breakdownChart = new Chart(document.getElementById('breakdownChart'), {
+    type: 'bar',
+    data: { labels: bDays, datasets: [
+      { label: 'Within',  data: bDays.map(d => breakdown[d].within),  backgroundColor: '#2e7d32' },
+      { label: 'Outside', data: bDays.map(d => breakdown[d].outside), backgroundColor: '#b71c1c' }
+    ]},
+    options: { plugins: { legend: { labels: { color: ticks } } },
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { color: ticks, maxTicksLimit: 10 } },
+                y: { stacked: true, grid: { color: grid }, ticks: { color: ticks }, beginAtZero: true } } }
+  });
+
+  // ── Forecast chart ──
+  if (forecastChart) forecastChart.destroy();
+  forecastChart = new Chart(document.getElementById('forecastChart'), {
+    type: 'line',
+    data: { labels: forecast.labels || [], datasets: [
+      { label: 'Actual', data: forecast.actual || [], borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,.10)', fill: true, tension: .25, pointRadius: 2 },
+      { label: 'Forecast', data: forecast.forecast || [], borderColor: '#e65100',
+        borderDash: [6, 4], fill: false, tension: .25, pointRadius: 3 }
+    ]},
+    options: { plugins: { legend: { labels: { color: ticks } } },
+      scales: { x: { grid: { color: grid }, ticks: { color: ticks, maxTicksLimit: 14 } },
+                y: { grid: { color: grid }, ticks: { color: ticks }, beginAtZero: true } } }
+  });
+}
+
+loadAll();
+</script>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

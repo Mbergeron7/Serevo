@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Agent Status — WFM Portal</title>
+<link rel="stylesheet" href="/static/dark.css">
+<link rel="stylesheet" href="/static/mobile.css">
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: var(--bg, #f4f6f9); }
+  .top-bar { background: #1a237e; color: #fff; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .top-bar h1 { margin: 0; font-size: 1.1rem; }
+  .top-bar .meta { font-size: 0.78rem; opacity: 0.85; }
+  .nav-bar { background: #283593; padding: 6px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.8rem; }
+  .nav-bar a { color: #cfd8dc; text-decoration: none; }
+  .nav-bar a:hover { color: #fff; }
+  .controls { padding: 10px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--surface, #fff); border-bottom: 1px solid var(--border, #ddd); }
+  .controls .refresh-info { font-size: 0.8rem; color: var(--muted, #888); }
+  .refresh-btn { background: #1565c0; color: #fff; border: none; border-radius: 5px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; }
+  .refresh-btn:hover { background: #0d47a1; }
+  .lob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; padding: 14px; }
+  .lob-card { background: var(--surface, #fff); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+  .lob-card-header { background: #1a237e; color: #fff; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .lob-card-header .lob-name { font-size: 0.88rem; font-weight: 600; }
+  .lob-card-header .counts { font-size: 0.75rem; display: flex; gap: 8px; }
+  .lob-card-header .cnt-badge { background: rgba(255,255,255,0.2); border-radius: 10px; padding: 1px 7px; }
+  .agent-list { max-height: 340px; overflow-y: auto; }
+  .sort-header { display: flex; gap: 8px; padding: 4px 10px; background: var(--surface2, #f0f2f5); border-bottom: 1px solid var(--border, #ddd); }
+  .sort-btn { font-size: 0.7rem; font-weight: 600; cursor: pointer; color: var(--muted, #666); background: none; border: none; padding: 2px 4px; border-radius: 3px; flex: 1; text-align: left; }
+  .sort-btn:hover { background: var(--border, #ddd); }
+  .sort-btn.active { color: #1565c0; }
+  .sort-btn.dur { text-align: right; flex: 0 0 50px; }
+  .sort-btn.st  { flex: 0 0 110px; }
+  .agent-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border, #eee); }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-name { font-size: 0.84rem; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-adh  { flex: 0 0 100px; text-align: center; }
+  .status-badge { font-size: 0.68rem; font-weight: 600; border-radius: 10px; padding: 2px 7px; color: #fff; flex: 0 0 130px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+  .duration { font-size: 0.7rem; color: var(--muted, #888); min-width: 44px; text-align: right; flex-shrink: 0; }
+  .empty-card { padding: 18px; text-align: center; color: var(--muted, #aaa); font-size: 0.82rem; }
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #ccc; border-top-color: #1565c0; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .last-refresh { font-size: 0.75rem; color: var(--muted, #888); }
+  .agent-row.over-limit { background: rgba(220,53,69,0.12); }
+  .agent-row.over-limit .duration { color: #c62828; font-weight: 700; }
+  .agent-row.warn-limit  { background: rgba(255,152,0,0.10); }
+  .agent-row.warn-limit  .duration { color: #e65100; font-weight: 700; }
+  .over-icon { font-size: 0.7rem; margin-left: 2px; }
+  .agent-lob-tag { font-size: 0.65rem; color: var(--muted,#999); margin-left: 4px; }
+  /* Agent detail panel */
+  #agent-panel { position: fixed; top: 0; right: -420px; width: 400px; height: 100vh; background: var(--surface,#fff); box-shadow: -4px 0 20px rgba(0,0,0,.2); z-index: 10000; transition: right .3s ease; display: flex; flex-direction: column; }
+  #agent-panel.open { right: 0; }
+  .panel-header { background: #1a237e; color: #fff; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .panel-header h3 { margin: 0; font-size: 1rem; }
+  .panel-close { background: none; border: none; color: #fff; font-size: 1.3rem; cursor: pointer; padding: 0 4px; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  .panel-section { margin-bottom: 18px; }
+  .panel-section h4 { font-size: 0.82rem; font-weight: 700; color: var(--muted,#666); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; border-bottom: 1px solid var(--border,#eee); padding-bottom: 4px; }
+  .shift-bar { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+  .shift-time { font-weight: 600; }
+  .seg-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border,#f0f0f0); font-size: 0.82rem; }
+  .seg-activity { flex: 1; }
+  .seg-time { font-size: 0.75rem; color: var(--muted,#888); min-width: 110px; }
+  .seg-adh { font-size: 0.72rem; font-weight: 600; border-radius: 8px; padding: 1px 7px; }
+  .adh-ok2      { background: #d4edda; color: #155724; }
+  .adh-missed   { background: #f8d7da; color: #721c24; }
+  .adh-active   { background: #cce5ff; color: #004085; }
+  .adh-upcoming { background: #f0f2f5; color: #666; }
+  .tl-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.78rem; }
+  .tl-time { font-weight: 600; min-width: 45px; color: var(--muted,#888); }
+  .tl-status { }
+  .panel-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 9999; }
+  .panel-overlay.open { display: block; }
+  .agent-row.pw-absent { background: rgba(255,193,7,0.15); }
+  .pw-note-badge { font-size:0.62rem; border-radius:8px; padding:1px 6px; margin-left:4px; background:#fff3cd; color:#856404; border:1px solid #ffc107; font-weight:600; }
+  .unsched-card .lob-card-header { background:#e65100; }
+  .preshift-card .lob-card-header { background:#283593; }
+  .ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-bottom:1px solid var(--border,#eee); font-size:0.82rem; }
+  .ps-row:last-child { border-bottom:none; }
+  .ps-name { flex:1; font-weight:500; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ps-lob  { font-size:0.7rem; color:var(--muted,#888); flex:0 0 110px; }
+  .ps-time { font-size:0.7rem; color:var(--muted,#888); flex:0 0 50px; text-align:right; }
+  .badge-nys  { font-size:0.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#1565c0; color:#fff; white-space:nowrap; }
+  .badge-abs  { font-size:0.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#c62828; color:#fff; white-space:nowrap; }
+  #panel-loading { text-align: center; padding: 40px; color: var(--muted,#aaa); }
+  .offline-card .lob-card-header { background: #455a64; }
+  .filter-wrap { position: relative; display: inline-block; }
+  .filter-btn  { background: #283593; color: #fff; border: none; border-radius: 5px; padding: 5px 12px; cursor: pointer; font-size: 0.82rem; }
+  .filter-btn:hover { background: #1a237e; }
+  .filter-drop { display: none; position: absolute; top: 110%; left: 0; background: var(--surface,#fff); border: 1px solid var(--border,#ddd); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 9999; min-width: 220px; max-height: 380px; overflow-y: auto; }
+  .filter-drop.open { display: block; }
+  .filter-actions { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border,#eee); }
+  .filter-action-btn { font-size: 0.75rem; background: var(--surface2,#f0f2f5); border: 1px solid var(--border,#ddd); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+  .filter-action-btn:hover { background: var(--border,#ddd); }
+  .filter-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
+  .filter-item:hover { background: var(--surface2,#f0f2f5); }
+  .filter-item input { width: 13px; height: 13px; accent-color: #1a237e; cursor: pointer; }
+  .adh-badge { font-size: 0.62rem; border-radius: 8px; padding: 1px 5px; margin-left: 4px; font-weight: 600; vertical-align: middle; }
+  .adh-due   { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+  .adh-unsch { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  .adh-ok    { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+</style>
+<!-- Agent detail panel -->
+<div class="panel-overlay" id="panel-overlay" onclick="closeAgentPanel()"></div>
+<div id="agent-panel">
+  <div class="panel-header">
+    <div>
+      <h3 id="panel-name">Agent Schedule</h3>
+      <div id="panel-lob" style="font-size:0.78rem;opacity:0.8"></div>
+    </div>
+    <button class="panel-close" onclick="closeAgentPanel()">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body">
+    <div id="panel-loading"><span class="spinner"></span> Loading…</div>
+  </div>
+</div>
+
+<script src="/static/dark_toggle.js" defer></script>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>🟢 Live Agent Status</h1>
+  <div class="meta">
+    <span id="live-time"></span> EST &nbsp;|&nbsp;
+    <span class="last-refresh">Last refresh: <span id="last-refresh-time">—</span></span>
+  </div>
+</div>
+
+<div class="nav-bar">
+  <a href="/landing">← Home</a> |
+  <a href="/rtm/dashboard">Dashboard</a> |
+  <a href="/rtm/schedule">Schedule</a> |
+  <a href="/rtm/absenteeism">Absenteeism</a> |
+  <a href="/rtm/interval">Interval</a> |
+  <a href="/rtm/agent-status">Agent Status</a> |
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="controls">
+  <button class="refresh-btn" id="refresh-btn" onclick="liveManualRefresh()">🔄 Refresh Now</button>
+  <span style="color:#aaa">|</span>
+  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;font-size:.8rem">
+    <input type="checkbox" id="live-auto-toggle" onchange="liveToggleAuto(this.checked)"
+           style="accent-color:#1a237e;width:13px;height:13px"> Auto-refresh
+  </label>
+  <span id="live-countdown" style="color:#1a237e;font-weight:600;display:none"></span>
+  <span style="color:#aaa">|</span>
+  <div class="filter-wrap">
+    <button class="filter-btn" id="filter-toggle-btn" onclick="toggleFilterDrop()">🔽 LOBs <span id="filter-count"></span></button>
+    <div class="filter-drop" id="filter-drop">
+      <div class="filter-actions">
+        <button class="filter-action-btn" onclick="selectAllLobs()">All</button>
+        <button class="filter-action-btn" onclick="selectNoneLobs()">None</button>
+      </div>
+      <div id="filter-lob-list"></div>
+    </div>
+  </div>
+  <span style="color:#aaa">|</span>
+  <div class="filter-wrap" id="status-filter-wrap">
+    <button class="filter-btn" onclick="toggleStatusDrop()" id="status-filter-btn">🔽 Status <span id="status-filter-count"></span></button>
+    <div class="filter-drop" id="status-drop">
+      <div class="filter-actions">
+        <button class="filter-action-btn" onclick="selectAllStatuses()">All</button>
+        <button class="filter-action-btn" onclick="selectNoneStatuses()">None</button>
+      </div>
+      <div id="filter-status-list"></div>
+    </div>
+  </div>
+  <span style="color:#aaa">|</span>
+  <span id="status-summary" style="font-size:0.78rem;"></span>
+</div>
+
+<div id="lob-grid" class="lob-grid">
+  <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted,#aaa)">
+    <span class="spinner"></span> Loading agent status…
+  </div>
+</div>
+
+
+<script>
+const STATUS_COLORS = {
+  "Ready":                  "#28a745",
+  "On-call":                "#1565c0",
+  "Cool-Down":              "#f9a825",
+  "ooq Client Account Work":"#8e24aa",
+  "On Break":               "#ef6c00",
+  "Lunch":                  "#e65100",
+  "Unavailable":            "#c62828",
+  "No-Answer":              "#b71c1c",
+  "Rejected":               "#880e4f",
+  "Offline":                "#607d8b",
+  "No-Mic":                 "#546e7a",
+  "ooq Meeting":            "#00838f",
+  "ooq Training":           "#2e7d32",
+  "ooq Coaching":           "#1b5e20",
+  "ooq After Shift":        "#4e342e",
+  "ooq System Issue":       "#d84315",
+  "ooq Personal":           "#6a1b9a",
+  "Web Leads":              "#0277bd",
+  "eChat":                  "#00695c",
+  "Long Distance":          "#4527a0",
+  "Leader on Duty":         "#f57f17",
+  "Cascade":                "#bf360c",
+};
+const DEFAULT_COLOR = "#78909c";
+
+const OVER_LIMITS = {
+  "On Break":     { warn: 12, over: 15 },
+  "Lunch":        { warn: 25, over: 30 },
+  "ooq Personal": { warn: 8,  over: 10 },
+};
+const OFFLINE_STATUSES = new Set(["Offline", "No-Mic"]);
+
+function rowClass(a) {
+  const L = OVER_LIMITS[a.status];
+  if (!L) return "";
+  return a.minutes_in_status >= L.over ? "over-limit"
+       : a.minutes_in_status >= L.warn ? "warn-limit" : "";
+}
+function overIcon(a) {
+  const L = OVER_LIMITS[a.status];
+  return (L && a.minutes_in_status >= L.over) ? '<span class="over-icon">⚠️</span>' : "";
+}
+
+function shiftBadge(a) {
+  if (a.shift_done === null || a.shift_done === undefined) return "";
+  if (a.shift_done) {
+    return `<span class="adh-badge adh-ok" title="Shift end was ${a.shift_end}">✓ Done ${a.shift_end}</span>`;
+  }
+  // Calculate how early they left
+  let earlyMsg = "";
+  if (a.current_since && a.shift_end) {
+    const [lh, lm] = a.current_since.split(":").map(Number);
+    const [sh, sm] = a.shift_end.split(":").map(Number);
+    const minsEarly = (sh * 60 + sm) - (lh * 60 + lm);
+    if (minsEarly > 0) earlyMsg = ` (${minsEarly}m early)`;
+  }
+  return `<span class="adh-badge adh-unsch" title="Left at ${a.current_since}, shift ends ${a.shift_end}">🚪 Left ${a.current_since}${earlyMsg}</span>`;
+}
+
+function adherenceBadge(a) {
+  const sn      = a.sched_now;
+  const status  = a.status;
+  const onBreak = status === "On Break";
+  const onLunch = status === "Lunch";
+
+  // No schedule entry at all for today
+  if (a.not_scheduled) {
+    return '<span class="adh-badge" style="background:#607d8b;color:#fff" title="No schedule found for today">📋 Not Scheduled</span>';
+  }
+
+  // Logged in before scheduled shift start
+  if (a.pre_shift && a.shift_start) {
+    return `<span class="adh-badge adh-due" title="Shift starts at ${a.shift_start}">⏳ Pre-Shift</span>`;
+  }
+
+  // Still logged in after shift end
+  if (a.shift_done && a.shift_end) {
+    return `<span class="adh-badge adh-unsch" title="Shift ended at ${a.shift_end} — still logged in">⏰ Over Shift</span>`;
+  }
+
+  if (sn === "break") {
+    if (onBreak) return '<span class="adh-badge adh-ok" title="On scheduled break">✓ Sched</span>';
+    return '<span class="adh-badge adh-due" title="Should be on break now">📋 Break due</span>';
+  }
+  if (sn === "lunch") {
+    if (onLunch) return '<span class="adh-badge adh-ok" title="On scheduled lunch">✓ Sched</span>';
+    return '<span class="adh-badge adh-due" title="Should be on lunch now">📋 Lunch due</span>';
+  }
+  if (onBreak) return '<span class="adh-badge adh-unsch" title="Unscheduled break — Non-adherent">⚠ Non-adherent</span>';
+  if (onLunch) return '<span class="adh-badge adh-unsch" title="Unscheduled lunch — Non-adherent">⚠ Non-adherent</span>';
+  return "";
+}
+
+// LOB display order
+const LOB_ORDER = [
+  "SS Sales","PS Sales","PS Care","SS Case Management",
+  "Web Leads SS Inbound","I.T Support","MoveBuddy",
+  "Team Lead","Admin","PS Admin","PS Case Manager",
+  "Web Leads PS","Web Leads SS","EChat","ERO"
+];
+
+function fmtDuration(mins) {
+  if (mins == null || isNaN(mins)) return "";
+  const m = Math.round(mins);
+  if (m < 60) return m + "m";
+  return Math.floor(m/60) + "h" + String(m%60).padStart(2,"0") + "m";
+}
+
+// Persistent sort state — survives auto-refresh
+const sortState = {};
+
+function sortAgents(agents, col, dir) {
+  const sorted = [...agents];
+  sorted.sort((a, b) => {
+    let av, bv;
+    if (col === "name")     { av = a.name; bv = b.name; }
+    else if (col === "status") { av = a.status; bv = b.status; }
+    else                    { av = a.minutes_in_status; bv = b.minutes_in_status; }
+    if (av < bv) return dir === "asc" ? -1 : 1;
+    if (av > bv) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+  return sorted;
+}
+
+function setSort(lobKey, col) {
+  const cur = sortState[lobKey] || {col: "status", dir: "asc"};
+  const dir = cur.col === col ? (cur.dir === "asc" ? "desc" : "asc") : "asc";
+  sortState[lobKey] = {col, dir};
+  // Re-render just this card from cached data
+  if (window._lastData && window._lastData[lobKey]) {
+    const card = document.querySelector(`[data-lob="${CSS.escape(lobKey)}"]`);
+    const isOff = lobKey === '__offline__';
+    if (card) card.outerHTML = buildCard(lobKey, window._lastData[lobKey], isOff);
+  }
+}
+
+function buildPreShiftCard(agents) {
+  if (!agents || agents.length === 0) return '';
+  const absent = agents.filter(a => a.indicator === 'absent').length;
+  const nys    = agents.filter(a => a.indicator === 'not_yet_started').length;
+  let rows = '';
+  for (const a of agents) {
+    const badge = a.indicator === 'absent'
+      ? `<span class="badge-abs" title="${a.mins_late}m past start">⚠ Absent</span>`
+      : `<span class="badge-nys" title="Starts at ${a.shift_start}">⏳ Not Started</span>`;
+    const timeLabel = a.indicator === 'absent'
+      ? `${a.shift_start} +${a.mins_late}m`
+      : a.shift_start;
+    rows += `<div class="ps-row">
+      <span class="ps-name" title="${a.name}">👤 ${a.name}</span>
+      <span class="ps-lob">${a.lob}</span>
+      ${badge}
+      <span class="ps-time">${timeLabel}</span>
+    </div>`;
+  }
+  return `<div class="lob-card preshift-card" data-lob="__preshift__">
+    <div class="lob-card-header">
+      <span class="lob-name">📋 Scheduled — Not Logged In</span>
+      <span class="counts">
+        <span class="cnt-badge" title="Total">${agents.length}</span>
+        <span class="cnt-badge" style="background:rgba(198,40,40,0.5)" title="Absent">⚠${absent}</span>
+        <span class="cnt-badge" style="background:rgba(21,101,192,0.5)" title="Not Yet Started">⏳${nys}</span>
+      </span>
+    </div>
+    <div class="agent-list">${rows}</div>
+  </div>`;
+}
+
+function buildCard(lob, agents, showLobTag) {
+  const lobKey = lob;
+  const state  = sortState[lobKey] || {col: "status", dir: "asc"};
+  const sorted = sortAgents(agents, state.col, state.dir);
+
+  const isOffline     = lob === "__offline__";
+  const isUnscheduled = lob === "__unscheduled__";
+  const displayName   = isOffline ? "⚫ Offline" : isUnscheduled ? "🔶 Unscheduled" : lob;
+  const ready  = agents.filter(a => a.status === "Ready").length;
+  const oncall = agents.filter(a => a.status === "On-call").length;
+
+  function arrow(col) {
+    if (state.col !== col) return " ↕";
+    return state.dir === "asc" ? " ↑" : " ↓";
+  }
+
+  let rows = "";
+  for (const a of sorted) {
+    const color = STATUS_COLORS[a.status] || DEFAULT_COLOR;
+    const dur   = fmtDuration(a.minutes_in_status);
+    const rc      = rowClass(a);
+    const icon    = overIcon(a);
+    const adh     = (isOffline||isUnscheduled) ? shiftBadge(a) : adherenceBadge(a);
+    const lobTag  = showLobTag && a.lob ? `<span class="agent-lob-tag">${a.lob}</span>` : "";
+    const pwBadge = a.pw_note ? `<span class="pw-note-badge" title="PW: ${a.pw_note}">📋 ${a.pw_note}</span>` : "";
+    const pwCls   = a.pw_note ? " pw-absent" : "";
+    rows += `<div class="agent-row${rc ? ' '+rc : ''}${pwCls}">
+      <span class="agent-name" title="${a.name}" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted" data-uid="${a.user_id}" data-aname="${a.name}" data-alob="${showLobTag&&a.lob?a.lob:lob}" onclick="openAgentPanelFromEl(this)">&#x1F464; ${a.name}${lobTag}${pwBadge}</span>
+      <span class="agent-adh">${adh}</span>
+      <span class="status-badge" style="background:${color}" title="${a.status}">${a.status}</span>
+      <span class="duration">${dur}${icon}</span>
+    </div>`;
+  }
+
+  const lobAttr   = lob.replace(/"/g, "&quot;");
+  const cardClass = isOffline ? "lob-card offline-card" : isUnscheduled ? "lob-card unsched-card" : "lob-card";
+  return `<div class="${cardClass}" data-lob="${lobAttr}">
+    <div class="lob-card-header">
+      <span class="lob-name">${displayName}</span>
+      <span class="counts">
+        <span class="cnt-badge" title="Total">${agents.length}</span>
+        ${isOffline ? '' : '<span class="cnt-badge" style="background:rgba(40,167,69,0.5)">&#x2713;' + ready + '</span><span class="cnt-badge" style="background:rgba(21,101,192,0.5)">&#x1F4DE;' + oncall + '</span>'}
+      </span>
+    </div>
+    <div class="sort-header">
+      <button class="sort-btn${state.col==='name'?' active':''}" onclick="setSort('${lobAttr}','name')">Name${arrow('name')}</button>
+      <button class="sort-btn" style="flex:0 0 100px;text-align:center;cursor:default;font-size:0.7rem" disabled>Adherence</button>
+      <button class="sort-btn${state.col==='status'?' active':''}" style="flex:0 0 130px;text-align:center;font-size:0.7rem" onclick="setSort('${lobAttr}','status')">Status${arrow('status')}</button>
+      <button class="sort-btn dur${state.col==='duration'?' active':''}" onclick="setSort('${lobAttr}','duration')">Time${arrow('duration')}</button>
+    </div>
+    <div class="agent-list">${rows || '<div class="empty-card">No agents logged in</div>'}</div>
+  </div>`;
+}
+
+// ── LOB Filter ────────────────────────────────────────────
+const FILTER_KEY = 'live_lob_filter';
+let allKnownLobs  = [];   // all LOBs seen from API
+let selectedLobs  = null; // null = all selected
+
+function loadFilterState() {
+  try {
+    const s = localStorage.getItem(FILTER_KEY);
+    if (s) selectedLobs = new Set(JSON.parse(s));
+  } catch(e) {}
+}
+
+function saveFilterState() {
+  try {
+    if (selectedLobs === null) localStorage.removeItem(FILTER_KEY);
+    else localStorage.setItem(FILTER_KEY, JSON.stringify([...selectedLobs]));
+  } catch(e) {}
+}
+
+function isLobSelected(lob) {
+  if (selectedLobs === null) return true;
+  return selectedLobs.has(lob);
+}
+
+function toggleFilterDrop() {
+  document.getElementById('filter-drop').classList.toggle('open');
+}
+
+// Close dropdown if clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.filter-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('filter-drop').classList.remove('open');
+  }
+});
+
+const LOB_LABELS = {
+  '__offline__':    '⚫ Offline',
+  '__unscheduled__':'🔶 Unscheduled',
+  '__preshift__':   '📋 Scheduled — Not Logged In',
+};
+function rebuildFilterList() {
+  const list = document.getElementById('filter-lob-list');
+  list.innerHTML = '';
+  for (const lob of allKnownLobs) {
+    const checked = isLobSelected(lob);
+    const id = 'flob_' + lob.replace(/[^a-zA-Z0-9]/g,'_');
+    const label = LOB_LABELS[lob] || lob;
+    const div = document.createElement('div');
+    div.className = 'filter-item';
+    div.innerHTML = `<input type="checkbox" id="${id}" ${checked ? 'checked' : ''}
+      onchange="toggleLob('${lob.replace(/'/g,"\'")}', this.checked)">
+      <label for="${id}" style="cursor:pointer;flex:1">${label}</label>`;
+    list.appendChild(div);
+  }
+  updateFilterCount();
+}
+
+function updateFilterCount() {
+  const total    = allKnownLobs.length;
+  const selected = selectedLobs === null ? total : [...selectedLobs].filter(l => allKnownLobs.includes(l)).length;
+  document.getElementById('filter-count').textContent = selected === total ? '(All)' : `(${selected}/${total})`;
+}
+
+function toggleLob(lob, checked) {
+  if (selectedLobs === null) {
+    // Was "all" — now going custom, start with all selected
+    selectedLobs = new Set(allKnownLobs);
+  }
+  if (checked) selectedLobs.add(lob);
+  else          selectedLobs.delete(lob);
+  // If all selected, revert to null (all)
+  if (selectedLobs.size >= allKnownLobs.length) selectedLobs = null; // null = All
+  saveFilterState();
+  updateFilterCount();
+  applyFilter();
+}
+
+function selectAllLobs() {
+  selectedLobs = null;
+  saveFilterState();
+  rebuildFilterList();
+  applyFilter();
+}
+
+function selectNoneLobs() {
+  selectedLobs = new Set();
+  saveFilterState();
+  rebuildFilterList();
+  applyFilter();
+}
+
+function applyFilter() {
+  document.querySelectorAll('.lob-card').forEach(card => {
+    const lob = card.dataset.lob;
+    card.style.display = isLobSelected(lob) ? '' : 'none';
+  });
+}
+
+loadFilterState();
+
+// ── Status Filter ─────────────────────────────────────────
+const STATUS_FILTER_KEY = 'live_status_filter';
+let selectedStatuses = null;  // null = all
+let allKnownStatuses = [];
+
+function loadStatusFilterState() {
+  try {
+    const s = localStorage.getItem(STATUS_FILTER_KEY);
+    if (s) selectedStatuses = new Set(JSON.parse(s));
+  } catch(e) {}
+}
+function saveStatusFilterState() {
+  try {
+    if (selectedStatuses === null) localStorage.removeItem(STATUS_FILTER_KEY);
+    else localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify([...selectedStatuses]));
+  } catch(e) {}
+}
+function isStatusSelected(st) {
+  return selectedStatuses === null || selectedStatuses.has(st);
+}
+function toggleStatusDrop() {
+  document.getElementById('status-drop').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('status-filter-wrap');
+  if (wrap && !wrap.contains(e.target))
+    document.getElementById('status-drop').classList.remove('open');
+}, true);
+function rebuildStatusList() {
+  const list = document.getElementById('filter-status-list');
+  list.innerHTML = '';
+  for (const st of allKnownStatuses) {
+    const checked = isStatusSelected(st);
+    const color   = STATUS_COLORS[st] || DEFAULT_COLOR;
+    const id = 'fst_' + st.replace(/[^a-zA-Z0-9]/g,'_');
+    const div = document.createElement('div');
+    div.className = 'filter-item';
+    div.innerHTML = `<input type="checkbox" id="${id}" ${checked?'checked':''}
+      onchange="toggleStatus('${st.replace(/'/g,"\'")}', this.checked)">
+      <label for="${id}" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>${st}
+      </label>`;
+    list.appendChild(div);
+  }
+  updateStatusCount();
+}
+function updateStatusCount() {
+  const total    = allKnownStatuses.length;
+  const selected = selectedStatuses === null ? total : [...selectedStatuses].filter(s=>allKnownStatuses.includes(s)).length;
+  document.getElementById('status-filter-count').textContent = selected===total ? '(All)' : `(${selected}/${total})`;
+}
+function toggleStatus(st, checked) {
+  if (selectedStatuses === null) selectedStatuses = new Set(allKnownStatuses);
+  if (checked) selectedStatuses.add(st);
+  else          selectedStatuses.delete(st);
+  if (selectedStatuses.size >= allKnownStatuses.length) selectedStatuses = null;
+  saveStatusFilterState();
+  updateStatusCount();
+  applyStatusFilter();
+}
+function selectAllStatuses() { selectedStatuses=null; saveStatusFilterState(); rebuildStatusList(); applyStatusFilter(); }
+function selectNoneStatuses() { selectedStatuses=new Set(); saveStatusFilterState(); rebuildStatusList(); applyStatusFilter(); }
+function applyStatusFilter() {
+  document.querySelectorAll('.lob-card').forEach(card => {
+    const lob = card.dataset.lob;
+    if (lob==='__offline__'||lob==='__unscheduled__'||lob==='__preshift__') return; // always show special cards
+    card.querySelectorAll('.agent-row').forEach(row => {
+      const badge = row.querySelector('.status-badge');
+      const st = badge ? badge.textContent.trim() : '';
+      row.style.display = isStatusSelected(st) ? '' : 'none';
+    });
+    // Hide card if all rows hidden
+    const visRows = card.querySelectorAll('.agent-row:not([style*="display: none"]):not([style*="display:none"])');
+    card.style.display = (isLobSelected(lob) && visRows.length > 0) ? '' : 'none';
+  });
+}
+loadStatusFilterState();
+// ── End Status Filter ─────────────────────────────────────
+
+// ── End LOB Filter ──────────────────────────────────────── ────────────────────────────────────────
+
+async function loadAgents(showSpinner) {  // returns promise
+  if (showSpinner) {
+    document.getElementById("lob-grid").innerHTML =
+      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted,#aaa)"><span class="spinner"></span> Loading…</div>';
+  }
+  try {
+    const resp = await fetch("/api/rtm_live_agents");
+    const data = await resp.json();
+
+    window._lastData = {};
+    if (data.error) {
+      document.getElementById("lob-grid").innerHTML =
+        `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#c62828">${data.error}</div>`;
+      return;
+    }
+    try {
+
+    // Sort LOBs by LOB_ORDER, then alphabetically for any not in the list
+    const lobs = Object.keys(data.by_lob);
+    lobs.sort((a,b) => {
+      const ai = LOB_ORDER.indexOf(a), bi = LOB_ORDER.indexOf(b);
+      if (ai>=0 && bi>=0) return ai-bi;
+      if (ai>=0) return -1;
+      if (bi>=0) return 1;
+      return a.localeCompare(b);
+    });
+
+    let html = "";
+    let totalAgents = 0, totalReady = 0, totalCalling = 0;
+    const statusCount = {};
+    const offlineAgents    = [];
+    const unschedAgents    = [];
+    const preShift = data.pre_shift || [];
+
+    for (const lob of lobs) {
+      const agents = data.by_lob[lob];
+      if (!agents || agents.length === 0) continue;
+
+      const online   = agents.filter(a => !OFFLINE_STATUSES.has(a.status) && !a.not_scheduled);
+      const offline  = agents.filter(a =>  OFFLINE_STATUSES.has(a.status));
+      const unsched  = agents.filter(a =>  a.not_scheduled && !OFFLINE_STATUSES.has(a.status));
+      offline.forEach(a => offlineAgents.push({...a, lob}));
+      unsched.forEach(a => unschedAgents.push({...a, lob}));
+
+      agents.forEach(a => { statusCount[a.status] = (statusCount[a.status]||0)+1; });
+
+      if (online.length > 0) {
+        window._lastData[lob] = online;
+        html += buildCard(lob, online, false);
+        totalAgents  += online.length;
+        totalReady   += online.filter(a=>a.status==="Ready").length;
+        totalCalling += online.filter(a=>a.status==="On-call").length;
+      }
+    }
+
+    if (unschedAgents.length > 0) {
+      window._lastData["__unscheduled__"] = unschedAgents;
+      html += buildCard("__unscheduled__", unschedAgents, true);
+    }
+    if (offlineAgents.length > 0) {
+      window._lastData["__offline__"] = offlineAgents;
+      html += buildCard("__offline__", offlineAgents, true);
+    }
+    if (preShift.length > 0) {
+      html += buildPreShiftCard(preShift);
+    }
+
+    if (!html) {
+      // Empty result — could be IMPORTRANGE mid-refresh or worker restart
+      // Show message and auto-retry once after 8 seconds
+      document.getElementById("lob-grid").innerHTML =
+        '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted,#aaa)">' +
+        '<span class="spinner"></span> No data yet — retrying in 8s…</div>';
+      setTimeout(() => loadAgents(false), 8000);
+      return;
+    }
+    document.getElementById("lob-grid").innerHTML = html;
+    // Status summary bar
+    const summaryParts = Object.entries(statusCount)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([s,c]) => `<span style="color:${STATUS_COLORS[s]||DEFAULT_COLOR};font-weight:600">${s}: ${c}</span>`);
+    document.getElementById("status-summary").innerHTML = summaryParts.join(" &nbsp;·&nbsp; ");
+
+    document.getElementById("last-refresh-time").textContent =
+      new Date().toLocaleTimeString("en-US", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+
+    // Update known LOBs and apply filter
+    // Regular LOBs
+    allKnownLobs = lobs.filter(l => l !== '__offline__' && l !== '__unscheduled__' && l !== '__preshift__' && data.by_lob[l] && data.by_lob[l].length > 0);
+    // Add special cards if they have data
+    if (offlineAgents.length > 0)  allKnownLobs.push('__offline__');
+    if (unschedAgents.length > 0)  allKnownLobs.push('__unscheduled__');
+    if (preShift.length > 0)       allKnownLobs.push('__preshift__');
+    allKnownStatuses = Object.keys(statusCount).sort();
+    rebuildFilterList();
+    rebuildStatusList();
+    applyFilter();
+    applyStatusFilter();
+    } catch(renderErr) {
+      console.error('Render error:', renderErr);
+      document.getElementById("lob-grid").innerHTML =
+        `<div style="grid-column:1/-1;padding:30px;color:#c62828">Render error: ${renderErr.message}</div>`;
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// Live clock
+function updateClock() {
+  const now = new Date();
+  // Approximate EST (UTC-5) / EDT (UTC-4)
+  const est = new Date(now.toLocaleString("en-US", {timeZone:"America/New_York"}));
+  document.getElementById("live-time").textContent =
+    est.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+const LIVE_AUTO_INTERVAL = 60;
+let liveSecondsLeft = LIVE_AUTO_INTERVAL;
+let liveCountdown   = null;
+
+function liveStartCountdown() {
+  liveSecondsLeft = LIVE_AUTO_INTERVAL;
+  const el = document.getElementById('live-countdown');
+  el.style.display = 'inline';
+  liveCountdown = setInterval(function() {
+    liveSecondsLeft--;
+    el.textContent = '(next in ' + liveSecondsLeft + 's)';
+    if (liveSecondsLeft <= 0) {
+      clearInterval(liveCountdown);
+      loadAgents(false).then(() => {
+        if (document.getElementById('live-auto-toggle').checked) {
+          liveStartCountdown();
+        }
+      });
+    }
+  }, 1000);
+}
+
+function liveStopCountdown() {
+  if (liveCountdown) clearInterval(liveCountdown);
+  document.getElementById('live-countdown').style.display = 'none';
+}
+
+function liveToggleAuto(on) {
+  localStorage.setItem('live_auto_refresh', on ? '1' : '0');
+  if (on) { liveStartCountdown(); } else { liveStopCountdown(); }
+}
+
+function liveManualRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '⏳ Refreshing…';
+  btn.disabled = true;
+  liveStopCountdown();
+  loadAgents(true).then(() => {
+    btn.textContent = '🔄 Refresh Now';
+    btn.disabled = false;
+    if (document.getElementById('live-auto-toggle').checked) {
+      liveStartCountdown();
+    }
+  });
+}
+
+// ── Agent detail panel ────────────────────────────────────
+function openAgentPanelFromEl(el) {
+  openAgentPanel(el.dataset.uid, el.dataset.aname, el.dataset.alob);
+}
+
+function openAgentPanel(uid, name, lob) {
+  document.getElementById('panel-name').textContent = name;
+  document.getElementById('panel-lob').textContent  = lob;
+  document.getElementById('panel-body').innerHTML   =
+    '<div id="panel-loading"><span class="spinner"></span> Loading…</div>';
+  document.getElementById('agent-panel').classList.add('open');
+  document.getElementById('panel-overlay').classList.add('open');
+
+  fetch(`/api/rtm_agent_detail?uid=${encodeURIComponent(uid)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('panel-body').innerHTML =
+          `<div style="color:#c62828;padding:20px">${data.error}</div>`;
+        return;
+      }
+      renderAgentPanel(data);
+    })
+    .catch(e => {
+      document.getElementById('panel-body').innerHTML =
+        `<div style="color:#c62828;padding:20px">Failed to load: ${e}</div>`;
+    });
+}
+
+function closeAgentPanel() {
+  document.getElementById('agent-panel').classList.remove('open');
+  document.getElementById('panel-overlay').classList.remove('open');
+}
+
+const ADH_CLASS = {ok:'adh-ok2', missed:'adh-missed', active:'adh-active', upcoming:'adh-upcoming'};
+
+function renderAgentPanel(d) {
+  // Sort segments by start time and timeline chronologically
+  if (d.segments) d.segments.sort((a,b) => a.start.localeCompare(b.start));
+  if (d.timeline) d.timeline.sort((a,b) => a.time.localeCompare(b.time));
+
+  const statusColor = STATUS_COLORS[d.current_status] || DEFAULT_COLOR;
+  let html = '';
+
+  // Current status
+  html += `<div class="panel-section">
+    <h4>Current Status</h4>
+    <div class="shift-bar">
+      <span class="status-badge" style="background:${statusColor}">${d.current_status}</span>
+      <span style="font-size:0.82rem;color:var(--muted,#888)">since ${d.current_since}</span>
+    </div>
+  </div>`;
+
+  // Shift
+  if (d.shift_start || d.shift_end) {
+    html += `<div class="panel-section">
+      <h4>Shift</h4>
+      <div class="shift-bar">
+        <span class="shift-time">${d.shift_start || '—'}</span>
+        <span style="color:var(--muted,#aaa)">→</span>
+        <span class="shift-time">${d.shift_end || '—'}</span>
+      </div>
+    </div>`;
+  }
+
+  // Schedule segments
+  if (d.segments && d.segments.length > 0) {
+    html += `<div class="panel-section"><h4>Schedule Blocks</h4>`;
+    for (const seg of d.segments) {
+      const cls = ADH_CLASS[seg.adh_class] || 'adh-upcoming';
+      html += `<div class="seg-row">
+        <span class="seg-activity">${seg.activity}</span>
+        <span class="seg-time">${seg.start} – ${seg.end}</span>
+        <span class="seg-adh ${cls}">${seg.adherence}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<div class="panel-section"><h4>Schedule Blocks</h4>
+      <div style="color:var(--muted,#aaa);font-size:0.82rem">No blocks scheduled today</div>
+    </div>`;
+  }
+
+  // Status timeline
+  if (d.timeline && d.timeline.length > 0) {
+    html += `<div class="panel-section"><h4>Status Timeline</h4>`;
+    const shown = d.timeline.slice(-30); // last 30 events (most recent)
+    for (const t of [...shown].reverse()) {
+      const c = STATUS_COLORS[t.status] || DEFAULT_COLOR;
+      html += `<div class="tl-row">
+        <span class="tl-time">${t.time}</span>
+        <span class="status-badge" style="background:${c};font-size:0.65rem;padding:1px 6px">${t.status}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  document.getElementById('panel-body').innerHTML = html;
+}
+// ── End agent panel ───────────────────────────────────────
+
+// Initial load then restore auto-refresh preference
+loadAgents(true).then(() => {
+  if (localStorage.getItem('live_auto_refresh') === '1') {
+    document.getElementById('live-auto-toggle').checked = true;
+    liveStartCountdown();
+  }
+});
+</script>
+</body>
+</html>

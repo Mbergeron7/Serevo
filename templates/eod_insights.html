@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"/>
+<title>WFM — EOD Insights Builder</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+  .page-header { background:linear-gradient(135deg,#1a237e,#283593); color:#fff;
+                 border-radius:10px; padding:20px 28px; margin-bottom:20px; }
+  .page-header h1 { margin:0; font-size:1.4rem; }
+  .page-header p  { margin:4px 0 0; opacity:.85; font-size:.88rem; }
+  .nav-links { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+  .nav-links a { color:#1a237e; text-decoration:none; font-weight:500; font-size:.88rem; }
+  .nav-links a:hover { text-decoration:underline; }
+  .nav-sep { color:#ccc; }
+  .card { border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,.07); overflow:hidden; background:#fff; padding:20px 24px; margin-bottom:16px; }
+  .row-card { background:#f8f9fa; border:1px solid #e2e4ea; border-radius:10px; padding:14px 18px; margin-bottom:12px; }
+  .row-card input[type=text], .row-card input[type=number] {
+    border:1px solid #ccc; border-radius:6px; padding:5px 8px; font-size:.8rem;
+  }
+  .metric-row { display:grid; grid-template-columns:1.3fr repeat(6,1fr); gap:6px; margin-bottom:10px; align-items:center; }
+  .metric-row label { font-size:.68rem; color:#888; text-align:center; margin-bottom:2px; display:block; }
+  .action-chip { display:flex; align-items:center; gap:5px; font-size:.8rem; color:#555; }
+  .btn-purple { background:#1a237e; color:#fff; border:none; }
+  .btn-purple:hover { background:#283593; color:#fff; }
+  .remove-btn { background:#dc3545; color:#fff; border:none; border-radius:6px; width:32px; height:32px; }
+  .preview-box { background:#fff; border:1px solid #ddd; border-radius:10px; padding:18px; }
+  .preview-box table { border-collapse:collapse; width:100%; font-family:Calibri,Arial,sans-serif; font-size:13px; }
+  .preview-box th, .preview-box td { border:1px solid #999; padding:10px; }
+  .preview-box th { background:#f0f0f0; color:#222; }
+</style>
+<style>
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .toolbar, .filter-bar { flex-wrap: wrap !important; }
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+  select, input[type="date"], input[type="text"] { width: 100% !important; max-width: 100% !important; }
+  .metric-row { grid-template-columns: repeat(2, 1fr) !important; }
+  .btn, button { font-size: .82rem !important; padding: 6px 10px !important; }
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+}
+</style>
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+<div class="page-header">
+  <h1>📊 EOD Insights Builder</h1>
+  <p>Build the daily missed-SVL report and copy it straight into an email</p>
+</div>
+<div class="nav-links">
+  <a href="/landing">← Home</a><span class="nav-sep">|</span>
+  <strong style="color:#1a237e">RTM</strong><span class="nav-sep">|</span>
+  <a href="/rtm/dashboard">📊 Dashboard</a>
+  <a href="/rtm/svl">📈 SVL</a>
+  <a href="/rtm/absenteeism">📊 Absenteeism</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <label style="font-size:.85rem;font-weight:600;color:#444">Report date</label>
+    <input type="date" id="report-date" style="width:170px">
+    <button class="btn btn-purple" onclick="autoFill()" id="autofill-btn">⚡ Auto-fill missed SVL</button>
+    <button class="btn btn-purple" style="margin-left:auto" onclick="addRow()">+ Add LOB</button>
+  </div>
+  <div id="autofill-msg" style="font-size:.78rem;color:#888;margin-bottom:8px"></div>
+  <div id="rows-container"></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+    <span style="font-weight:600;color:#444">Preview</span>
+    <button class="btn btn-purple" style="margin-left:auto" onclick="copyReport()" id="copy-btn">📋 Copy for email</button>
+  </div>
+  <div id="preview-wrapper" class="preview-box"></div>
+</div>
+
+<script>
+let rows = [];
+let rowId = 0;
+const commonLobs = ['SS Sales','PS Sales','I.T Support','SS Case Management','PS Care','SS CCA','Web Leads SS Inbound'];
+const actionOptions = ['AHOD Activated','Flagged over break/lunch','Flagged over break/lunch/OOQ Status','Overtime approved','Added additional hours','Team Meetings cancelled','Training Cancelled','Offline Cancelled','Requested Afternoon OT, None Received'];
+
+function esc(s){ if(s===undefined||s===null) s=''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function addRow(prefill){
+  const id = rowId++;
+  rows.push(Object.assign({id, lob:'', svl:'', otf:'', cascades:'', absences:'', abandoned:'', vto:'', actions:[], other:''}, prefill||{}));
+  renderRows();
+  renderPreview();
+}
+async function autoFill(){
+  const btn = document.getElementById('autofill-btn');
+  const msg = document.getElementById('autofill-msg');
+  btn.disabled = true;
+  btn.textContent = '⏳ Pulling today\'s data...';
+  msg.textContent = '';
+  try{
+    const res = await fetch('/api/eod-insights/prefill?threshold=80');
+    if(!res.ok) throw new Error('Request failed: '+res.status);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    if(!data.missed || data.missed.length===0){
+      msg.textContent = 'No LOBs currently below 80% service level — nothing to auto-fill.';
+    } else {
+      if(rows.length>0 && !confirm('This will replace the current rows with today\'s missed-SVL LOBs. Continue?')) {
+        btn.disabled = false; btn.textContent = '⚡ Auto-fill missed SVL';
+        return;
+      }
+      rows = [];
+      const rnd = v => (v === '' || v === null || v === undefined) ? '' : Math.round(v);
+      data.missed.forEach(m=>addRow({
+        lob: m.lob, svl: rnd(m.svl), otf: rnd(m.otf), cascades: rnd(m.cascades),
+        abandoned: rnd(m.abandoned), absences: rnd(m.absences),
+        vto: (m.vto && m.vto > 0) ? m.vto : ''
+      }));
+      msg.textContent = 'Pulled '+data.missed.length+' LOB(s) below 80% SVL. Check the boxes for actions taken on each.';
+    }
+  }catch(e){
+    msg.textContent = 'Could not auto-fill: '+e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '⚡ Auto-fill missed SVL';
+}
+function removeRow(id){
+  rows = rows.filter(r=>r.id!==id);
+  renderRows();
+  renderPreview();
+}
+function updateField(id, field, value){
+  const r = rows.find(r=>r.id===id);
+  if(!r) return;
+  r[field] = value;
+  renderPreview();
+}
+function toggleAction(id, action, checked){
+  const r = rows.find(r=>r.id===id);
+  if(!r) return;
+  if(checked){ if(!r.actions.includes(action)) r.actions.push(action); }
+  else { r.actions = r.actions.filter(a=>a!==action); }
+  renderPreview();
+}
+function renderRows(){
+  const c = document.getElementById('rows-container');
+  c.innerHTML = '';
+  if(rows.length===0){
+    c.innerHTML = '<p style="color:#999;font-size:.85rem;margin:0">No LOBs added yet — click "+ Add LOB" to start.</p>';
+    return;
+  }
+  rows.forEach(r=>{
+    const card = document.createElement('div');
+    card.className = 'row-card';
+    card.innerHTML =
+      '<div class="metric-row">'+
+      '<div><label>LOB</label><input list="lob-list" type="text" placeholder="LOB name" value="'+esc(r.lob)+'" oninput="updateField('+r.id+',\'lob\',this.value)"></div>'+
+      '<div><label>SVL %</label><input type="number" value="'+esc(r.svl)+'" oninput="updateField('+r.id+',\'svl\',this.value)"></div>'+
+      '<div><label>OTF %</label><input type="number" value="'+esc(r.otf)+'" oninput="updateField('+r.id+',\'otf\',this.value)"></div>'+
+      '<div><label>Cascades %</label><input type="number" value="'+esc(r.cascades)+'" oninput="updateField('+r.id+',\'cascades\',this.value)"></div>'+
+      '<div><label>Absences %</label><input type="number" value="'+esc(r.absences)+'" oninput="updateField('+r.id+',\'absences\',this.value)"></div>'+
+      '<div><label>Abandoned %</label><input type="number" value="'+esc(r.abandoned)+'" oninput="updateField('+r.id+',\'abandoned\',this.value)"></div>'+
+      '<div><label>VTO</label><input type="number" value="'+esc(r.vto)+'" oninput="updateField('+r.id+',\'vto\',this.value)"></div>'+
+      '</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px;align-items:center">'+
+      actionOptions.map(a=>'<label class="action-chip"><input type="checkbox" '+(r.actions.includes(a)?'checked':'')+' onchange="toggleAction('+r.id+',\''+a.replace(/'/g,"\\'")+'\',this.checked)">'+a+'</label>').join('')+
+      '<button class="remove-btn" style="margin-left:auto;width:28px;height:28px;font-size:.75rem" onclick="removeRow('+r.id+')" title="Remove">✕</button>'+
+      '</div>'+
+      '<input type="text" placeholder="Other action taken (optional)" value="'+esc(r.other)+'" style="width:100%" oninput="updateField('+r.id+',\'other\',this.value)">';
+    c.appendChild(card);
+  });
+}
+function svlColor(v){
+  const n = parseFloat(v);
+  if(isNaN(n)) return '#222222';
+  if(n<50) return '#C00000';
+  if(n<70) return '#C55A11';
+  return '#222222';
+}
+function buildActionsText(r){
+  const parts = [...r.actions];
+  if(r.other && r.other.trim()) parts.push(esc(r.other.trim()));
+  return parts.join(' / ') || '—';
+}
+function buildDriversHtml(r){
+  const items = [];
+  if(r.otf!=='') items.push('OTF &ndash; '+esc(r.otf)+'%');
+  if(r.cascades!=='') items.push('Cascades &ndash; '+esc(r.cascades)+'%');
+  if(r.absences!=='') items.push('Absences &ndash; '+esc(r.absences)+'%');
+  if(r.abandoned!=='') items.push('Abandoned &ndash; '+esc(r.abandoned)+'%');
+  if(r.vto!=='') items.push('VTO &ndash; '+esc(r.vto));
+  return items.join('<br>') || '—';
+}
+function renderPreview(){
+  const wrap = document.getElementById('preview-wrapper');
+  if(rows.length===0){
+    wrap.innerHTML = '<p style="font-size:.85rem;color:#999;margin:0">Add a LOB above to build the report.</p>';
+    return;
+  }
+  const dateEl = document.getElementById('report-date');
+  const dateVal = dateEl ? dateEl.value : '';
+  const dateLabel = dateVal ? new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
+  let bodyRows = '';
+  rows.forEach((r,i)=>{
+    bodyRows += '<tr>'+
+      (i===0 ? '<td rowspan="'+rows.length+'" style="border:1px solid #999999;padding:10px;font-weight:bold;text-align:center;vertical-align:middle;background:#f5f5f5;color:#222222">Missed SVL</td>' : '')+
+      '<td style="border:1px solid #999999;padding:10px;font-weight:bold;text-align:center;color:#222222">'+(esc(r.lob)||'—')+'</td>'+
+      '<td style="border:1px solid #999999;padding:10px;text-align:center;font-weight:bold;color:'+svlColor(r.svl)+'">'+(r.svl!==''?esc(r.svl)+'%':'—')+'</td>'+
+      '<td style="border:1px solid #999999;padding:10px;text-align:center;color:#222222">'+buildActionsText(r)+'</td>'+
+      '<td style="border:1px solid #999999;padding:10px;text-align:center;color:#222222">'+buildDriversHtml(r)+'</td>'+
+      '</tr>';
+  });
+  const titleHtml = dateLabel ? '<p style="font-size:14px;font-weight:bold;margin:0 0 10px;color:#222;font-family:Calibri,Arial,sans-serif">WFM &ndash; EOD Insights &ndash; '+dateLabel+'</p>' : '';
+  wrap.innerHTML = '<div id="preview-copy-target" style="background:#ffffff">'+titleHtml+
+    '<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:13px">'+
+    '<thead><tr>'+
+    '<th style="border:1px solid #999999;padding:10px;background:#f0f0f0;color:#222222"></th>'+
+    '<th style="border:1px solid #999999;padding:10px;background:#f0f0f0;color:#222222">LoB</th>'+
+    '<th style="border:1px solid #999999;padding:10px;background:#f0f0f0;color:#222222">SVL</th>'+
+    '<th style="border:1px solid #999999;padding:10px;background:#f0f0f0;color:#222222">Actions taken</th>'+
+    '<th style="border:1px solid #999999;padding:10px;background:#f0f0f0;color:#222222">Drivers</th>'+
+    '</tr></thead>'+
+    '<tbody>'+bodyRows+'</tbody></table></div>';
+}
+async function copyReport(){
+  const target = document.getElementById('preview-copy-target');
+  if(!target){ return; }
+  const html = target.outerHTML;
+  const text = target.innerText;
+  const btn = document.getElementById('copy-btn');
+  const restore = '📋 Copy for email';
+  if(navigator.clipboard && window.ClipboardItem){
+    try{
+      const item = new ClipboardItem({
+        'text/html': new Blob([html],{type:'text/html'}),
+        'text/plain': new Blob([text],{type:'text/plain'})
+      });
+      await navigator.clipboard.write([item]);
+      btn.textContent = '✅ Copied — paste into Outlook';
+      setTimeout(()=>{btn.textContent = restore;},2200);
+      return;
+    }catch(e){
+      console.warn('Clipboard API failed, falling back to selection copy:', e);
+    }
+  }
+  const range = document.createRange();
+  range.selectNode(target);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+  try{
+    const ok = document.execCommand('copy');
+    btn.textContent = ok ? '✅ Copied — paste into Outlook' : '⚠ Copy failed — select manually';
+    setTimeout(()=>{btn.textContent = restore;},2200);
+  }catch(e2){
+    btn.textContent = '⚠ Copy failed — select manually';
+    setTimeout(()=>{btn.textContent = restore;},2200);
+  }
+  window.getSelection().removeAllRanges();
+}
+function todayLocalISO(){
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - offset*60000);
+  return local.toISOString().slice(0,10);
+}
+document.getElementById('report-date').addEventListener('input', renderPreview);
+document.getElementById('report-date').value = todayLocalISO();
+addRow();
+</script>
+
+<datalist id="lob-list">
+{% for l in ['SS Sales','PS Sales','I.T Support','SS Case Management','PS Care','SS CCA','Web Leads SS Inbound'] %}
+<option value="{{ l }}"></option>
+{% endfor %}
+</datalist>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

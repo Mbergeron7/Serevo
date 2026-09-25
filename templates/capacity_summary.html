@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta charset="UTF-8"/>
+  <title>Capacity Summary</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#6a1b9a,#4a148c); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:24px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .page-header p  { margin:4px 0 0; opacity:.85; font-size:.88rem; }
+    .nav-links { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:20px; }
+    .nav-links a { margin-right:8px; color:#6a1b9a; text-decoration:none; font-weight:500; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filter-bar { background:#fff; border-radius:10px; padding:14px 20px;
+                  margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .card { border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,.07); margin-bottom:20px; }
+    .sum-table th { background:#6a1b9a; color:#fff; font-size:.82rem;
+                    padding:9px 14px; white-space:nowrap; }
+    .sum-table td { padding:8px 14px; font-size:.88rem; vertical-align:middle; }
+    .sum-table tbody tr:nth-child(even) { background:#f8f9fa; }
+    .sum-table tbody tr:hover { background:#f0e6ff; }
+    .badge-purple { background:#6a1b9a; color:#fff; border-radius:10px;
+                    padding:2px 10px; font-size:.78rem; font-weight:600; }
+    .badge-grey   { background:#e9ecef; color:#555; border-radius:10px;
+                    padding:2px 10px; font-size:.78rem; font-weight:600; }
+    .gap-positive { background:#d1e7dd; color:#0a3622; font-weight:700;
+                    border-radius:6px; padding:2px 8px; font-size:.85rem; }
+    .gap-negative { background:#f8d7da; color:#842029; font-weight:700;
+                    border-radius:6px; padding:2px 8px; font-size:.85rem; }
+    .gap-neutral  { background:#e9ecef; color:#555;
+                    border-radius:6px; padding:2px 8px; font-size:.85rem; }
+    .fte-low  { background:#c6efce; border-radius:6px; padding:2px 8px; }
+    .fte-mid  { background:#ffeb84; border-radius:6px; padding:2px 8px; }
+    .fte-high { background:#f8696b; color:#fff; font-weight:700;
+                border-radius:6px; padding:2px 8px; }
+    .export-btn { background:#2e7d32; color:#fff !important; text-decoration:none !important;
+                  padding:5px 14px; border-radius:6px; font-weight:600;
+                  font-size:.83rem; margin-left:auto; }
+    .export-btn:hover { background:#1b5e20; }
+    .kpi-row  { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+    .kpi-card { background:#fff; border-radius:10px; padding:16px 20px; flex:1;
+                min-width:130px; box-shadow:0 3px 10px rgba(0,0,0,.07); text-align:center; }
+    .kpi-card .kpi-value { font-size:1.6rem; font-weight:700; color:#6a1b9a; }
+    .kpi-card .kpi-label { font-size:.78rem; color:#888; margin-top:4px; }
+
+    /* ── LOB grouped picker ── */
+    .lob-picker { position:relative; }
+    .lob-toggle { display:flex; align-items:center; justify-content:space-between;
+                  border:1px solid #ced4da; border-radius:6px; padding:6px 12px;
+                  cursor:pointer; background:#fff; min-width:220px; font-size:.85rem;
+                  user-select:none; }
+    .lob-toggle:hover { border-color:#6a1b9a; }
+    .lob-dropdown { position:absolute; top:calc(100% + 4px); left:0; z-index:1050;
+                    background:#fff; border:1px solid #dee2e6; border-radius:8px;
+                    box-shadow:0 6px 20px rgba(0,0,0,.13); width:300px;
+                    display:none; flex-direction:column; max-height:480px; }
+    .lob-dropdown.open { display:flex; }
+    .lob-search-wrap { padding:10px 12px; border-bottom:1px solid #eee; flex-shrink:0; }
+    .lob-search-wrap input { width:100%; border:1px solid #ced4da; border-radius:5px;
+                              padding:5px 9px; font-size:.83rem; outline:none; }
+    .lob-search-wrap input:focus { border-color:#6a1b9a; }
+    .lob-list { overflow-y:auto; flex:1; padding:4px 0; }
+    .lob-group-header { display:flex; align-items:center; gap:8px;
+                        padding:7px 12px 5px; cursor:pointer;
+                        background:#f5eeff; border-top:1px solid #e8d5f5;
+                        font-size:.78rem; font-weight:700; color:#6a1b9a;
+                        user-select:none; }
+    .lob-group-header:first-child { border-top:none; }
+    .lob-group-header input[type=checkbox] { accent-color:#6a1b9a;
+                                             width:14px; height:14px; flex-shrink:0; }
+    .lob-group-toggle { margin-left:auto; font-size:.7rem; opacity:.6; transition:transform .2s; }
+    .lob-group-toggle.collapsed { transform:rotate(-90deg); }
+    .lob-item { display:flex; align-items:center; gap:8px;
+                padding:5px 12px 5px 28px; cursor:pointer;
+                font-size:.83rem; color:#333; }
+    .lob-item:hover { background:#f0e6ff; }
+    .lob-item input[type=checkbox] { accent-color:#6a1b9a;
+                                     width:14px; height:14px; flex-shrink:0; }
+    .lob-item.hidden { display:none; }
+    .lob-group-items.collapsed { display:none; }
+    .lob-footer { padding:8px 12px; border-top:1px solid #eee; flex-shrink:0;
+                  display:flex; gap:8px; align-items:center; }
+    .lob-footer button { font-size:.78rem; padding:3px 10px; border-radius:5px; cursor:pointer; }
+    .lob-count { font-size:.75rem; color:#888; margin-left:auto; }
+    .selected-tags { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; max-width:600px; }
+    .tag { background:#ede0f5; color:#6a1b9a; padding:3px 10px; border-radius:12px;
+           font-size:.78rem; display:flex; align-items:center; gap:5px; }
+    .tag-x { cursor:pointer; font-weight:700; opacity:.6; line-height:1; }
+    .tag-x:hover { opacity:1; }
+  </style>
+<link rel="stylesheet" href="/static/mobile.css">
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>📋 Capacity Summary</h1>
+  <p>FTE required vs headcount overview across all LOBs</p>
+</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/capacity">🏗 Control Panel</a>
+  <a href="/capacity/plan">📅 Capacity Plan</a>
+  <a href="/capacity/headcount">👥 Headcount</a>
+  <a href="/logout">Logout</a>
+  <a href="#" onclick="exportWithFilters(); return false;" class="export-btn">⬇ Export Excel</a>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" id="filterForm">
+    <div class="d-flex gap-4 align-items-start flex-wrap">
+
+      <!-- Month multi-select picker -->
+      <div>
+        <label class="form-label fw-semibold mb-1 d-block" style="font-size:.83rem">Filter Month(s)</label>
+        <div class="lob-picker" id="monthPicker" style="min-width:180px">
+          <div class="lob-toggle" id="monthToggle" onclick="toggleMonthDropdown(event)">
+            <span id="monthToggleLabel">All months</span>
+            <span style="font-size:.7rem;opacity:.5">▾</span>
+          </div>
+          <div class="lob-dropdown" id="monthDropdown">
+            <div class="lob-list" id="monthList" style="max-height:220px;overflow-y:auto">
+              {% for m in available_months %}
+              <label class="lob-item">
+                <input type="checkbox" name="months" value="{{ m }}"
+                       {% if m in filter_months %}checked{% endif %}>
+                {{ m | month_label }}
+              </label>
+              {% endfor %}
+            </div>
+            <div class="lob-footer">
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      onclick="selectAllMonths()">All</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      onclick="clearMonths()">None</button>
+              <button type="submit" class="btn btn-sm text-white ms-2"
+                      style="background:#6a1b9a">Apply</button>
+              <span class="lob-count" id="monthCount"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grouped LOB picker -->
+      <div>
+        <label class="form-label fw-semibold mb-1 d-block" style="font-size:.83rem">
+          Filter LOBs
+        </label>
+        <div class="lob-picker" id="lobPicker">
+          <div class="lob-toggle" id="lobToggle" onclick="toggleLobDropdown(event)">
+            <span id="lobToggleLabel">All LOBs</span>
+            <span style="font-size:.7rem;opacity:.5">▾</span>
+          </div>
+          <div class="lob-dropdown" id="lobDropdown">
+            <div class="lob-search-wrap">
+              <input type="text" id="lobSearch" placeholder="Search LOBs…"
+                     oninput="filterLobs(this.value)" autocomplete="off">
+            </div>
+            <div class="lob-list" id="lobList"></div>
+            <div class="lob-footer">
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      onclick="selectAllLobs()">All</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      onclick="clearAllLobs()">None</button>
+              <button type="submit" class="btn btn-sm text-white ms-2"
+                      style="background:#6a1b9a">Apply</button>
+              <span class="lob-count" id="lobCount"></span>
+            </div>
+          </div>
+        </div>
+        <div class="selected-tags" id="selectedTags"></div>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% if summary_rows %}
+{% set total_lobs    = summary_rows | length %}
+{% set total_hc      = summary_rows | sum(attribute='active_hc') %}
+{% set total_fte     = summary_rows | sum(attribute='fte_required') %}
+{% set total_gap     = summary_rows | sum(attribute='gap') %}
+{% set deficit_lobs  = summary_rows | selectattr('gap','lt',0) | list | length %}
+
+{% if all_months and plan %}
+<div class="card mb-4">
+  <div class="card-header fw-bold d-flex align-items-center" style="background:#4a148c;color:#fff;font-size:.9rem">
+    📈 Month-over-Month FTE Trend
+    <span style="font-size:.76rem;font-weight:400;opacity:.8;margin-left:10px">FTE Required vs Actual HC — gap bars show surplus (green) or deficit (red)</span>
+  </div>
+  <div class="card-body">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px">
+      <div style="background:#f8f9fa;border-radius:8px;padding:12px 20px;text-align:center;min-width:120px">
+        <div style="font-size:1.35rem;font-weight:700;color:#6a1b9a" id="trend-avg-gap">—</div>
+        <div style="font-size:.72rem;color:#888;margin-top:3px">Avg Monthly Gap</div>
+      </div>
+      <div style="background:#f8f9fa;border-radius:8px;padding:12px 20px;text-align:center;min-width:120px">
+        <div style="font-size:1.35rem;font-weight:700;color:#2e7d32" id="trend-best">—</div>
+        <div style="font-size:.72rem;color:#888;margin-top:3px">Best Month</div>
+      </div>
+      <div style="background:#f8f9fa;border-radius:8px;padding:12px 20px;text-align:center;min-width:120px">
+        <div style="font-size:1.35rem;font-weight:700;color:#c62828" id="trend-worst">—</div>
+        <div style="font-size:.72rem;color:#888;margin-top:3px">Worst Month</div>
+      </div>
+      <div style="background:#f8f9fa;border-radius:8px;padding:12px 20px;text-align:center;min-width:140px">
+        <div style="font-size:1.35rem;font-weight:700" id="trend-direction">—</div>
+        <div style="font-size:.72rem;color:#888;margin-top:3px">Trend Direction</div>
+      </div>
+    </div>
+    <canvas id="trendChart" style="max-height:300px"></canvas>
+  </div>
+</div>
+{% endif %}
+
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-value">{{ total_lobs }}</div>
+    <div class="kpi-label">LOBs</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value">{{ total_hc }}</div>
+    <div class="kpi-label">Total HC</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value">{{ total_fte | round(1) }}</div>
+    <div class="kpi-label">Total FTE Required</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value" style="color:{% if total_gap >= 0 %}#198754{% else %}#dc3545{% endif %}">
+      {{ "%+.1f" | format(total_gap | float) }}
+    </div>
+    <div class="kpi-label">Total Gap</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value" style="color:#dc3545">{{ deficit_lobs }}</div>
+    <div class="kpi-label">LOBs in Deficit</div>
+  </div>
+</div>
+{% endif %}
+
+{% if not summary_rows %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <h5>No summary data</h5>
+    <p>Go to <a href="/capacity">Control Panel</a> → <strong>Build Capacity Plan</strong>.</p>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table sum-table mb-0">
+      <thead>
+        <tr>
+          <th>LOB</th>
+          <th class="text-center">Month</th>
+          <th class="text-center">Total Calls</th>
+          <th class="text-center" title="Actual headcount. LOBs with English and French sides show Combined / EN / FR.">Actual HC</th>
+          <th class="text-center">FTE Required</th>
+          <th class="text-center">Gap (HC − FTE)</th>
+          <th class="text-center">AHT (s)</th>
+          <th class="text-center">Peak Agents</th>
+          <th class="text-center">Avg Agents</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set fte_vals = summary_rows | map(attribute='fte_required') | list %}
+        {% set fte_min  = fte_vals | min %}
+        {% set fte_max  = fte_vals | max %}
+        {% set fte_range = (fte_max - fte_min) if fte_max != fte_min else 1 %}
+
+        {% for row in summary_rows %}
+        {% set fte_pct = ((row.fte_required - fte_min) / fte_range) if fte_range else 0 %}
+        <tr>
+          <td><strong>{{ row.lob }}</strong></td>
+          <td class="text-center" style="font-size:.82rem;color:#6a1b9a;font-weight:600">{{ row.date_range }}</td>
+          <td class="text-center">{{ row.total_calls | int | format_number }}</td>
+          <td class="text-center">
+            <strong>{{ row.active_hc }}</strong>
+            {% if row.hc_has_lang %}
+              <div style="font-size:.7rem;color:#6a1b9a;margin-top:2px;white-space:nowrap">
+                Comb {{ row.hc_combined }} · EN {{ row.hc_en }} · FR {{ row.hc_fr }}
+              </div>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if fte_pct < 0.33 %}
+              <span class="fte-low">{{ row.fte_required }}</span>
+            {% elif fte_pct < 0.66 %}
+              <span class="fte-mid">{{ row.fte_required }}</span>
+            {% else %}
+              <span class="fte-high">{{ row.fte_required }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% set g = row.gap | float %}
+            {% if g > 0 %}
+              <span class="gap-positive">+{{ "%.1f" | format(g) }}</span>
+            {% elif g < 0 %}
+              <span class="gap-negative">{{ "%.1f" | format(g) }}</span>
+            {% else %}
+              <span class="gap-neutral">0.0</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if row.aht and row.aht != 470 %}
+              <span class="badge-purple">{{ row.aht }}s</span>
+            {% else %}
+              <span class="badge-grey">{{ row.aht }}s</span>
+            {% endif %}
+          </td>
+          <td class="text-center">{{ row.peak_agents }}</td>
+          <td class="text-center">{{ "%.2f" | format(row.avg_agents | float) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const ALL_LOBS = {{ all_lobs_available | tojson }};
+const SELECTED_LOBS = new Set({{ selected_lobs | tojson }});
+
+const GROUP_RULES = [
+  { prefix: "ss sales",             group: "SS Sales"            },
+  { prefix: "ss case",              group: "SS Case Management"  },
+  { prefix: "ss cca",               group: "SS Case Management"  },
+  { prefix: "ss cm",                group: "SS Case Management"  },
+  { prefix: "ps sales",             group: "PS Sales"            },
+  { prefix: "ps care",              group: "PS Care"             },
+  { prefix: "ps case manager",      group: "PS Care"             },
+  { prefix: "ps combined",          group: "PS Sales"            },
+  { prefix: "web leads ss inbound", group: "Web Leads SS Inbound"},
+  { prefix: "web leads ss",         group: "Web Leads SS"        },
+  { prefix: "web leads ps & ss",    group: "Web Leads Combined"  },
+  { prefix: "web leads ps",         group: "Web Leads PS"        },
+  { prefix: "web leads combined",   group: "Web Leads Combined"  },
+  { prefix: "movebuddy",            group: "Other"               },
+  { prefix: "i.t",                  group: "Other"               },
+];
+
+function detectGroup(lob) {
+  const lower = lob.toLowerCase();
+  for (const rule of GROUP_RULES) {
+    if (lower.startsWith(rule.prefix)) return rule.group;
+  }
+  return "Other";
+}
+
+const groups = {}, groupOrder = [];
+for (const lob of ALL_LOBS) {
+  const g = detectGroup(lob);
+  if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+  groups[g].push(lob);
+}
+
+function buildPicker() {
+  const list = document.getElementById('lobList');
+  list.innerHTML = '';
+  for (const grpName of groupOrder) {
+    const lobs = groups[grpName];
+    const hdr = document.createElement('div');
+    hdr.className = 'lob-group-header';
+    hdr.dataset.group = grpName;
+    hdr.innerHTML = `
+      <input type="checkbox" class="group-cb" data-group="${grpName}"
+             onchange="toggleGroup('${grpName}', this.checked)" onclick="event.stopPropagation()">
+      <span>${grpName}</span>
+      <span class="lob-group-toggle" id="arrow_${grpName.replace(/\s/g,'_')}">▾</span>`;
+    hdr.addEventListener('click', (e) => { if (e.target.tagName === 'INPUT') return; collapseGroup(grpName); });
+    list.appendChild(hdr);
+
+    const items = document.createElement('div');
+    items.className = 'lob-group-items';
+    items.id = `grp_${grpName.replace(/\s/g,'_')}`;
+    for (const lob of lobs) {
+      const label = document.createElement('label');
+      label.className = 'lob-item';
+      label.dataset.lob = lob.toLowerCase();
+      label.innerHTML = `
+        <input type="checkbox" name="lobs" value="${lob}"
+               ${SELECTED_LOBS.has(lob) ? 'checked' : ''}
+               onchange="onLobChange()">
+        ${lob}`;
+      items.appendChild(label);
+    }
+    list.appendChild(items);
+  }
+  syncGroupCheckboxes();
+  updateCount();
+  renderTags();
+}
+
+function collapseGroup(grpName) {
+  const key = grpName.replace(/\s/g,'_');
+  document.getElementById(`grp_${key}`).classList.toggle('collapsed');
+  document.getElementById(`arrow_${key}`).classList.toggle('collapsed');
+}
+
+function toggleGroup(grpName, checked) {
+  const key = grpName.replace(/\s/g,'_');
+  document.querySelectorAll(`#grp_${key} input[type=checkbox]`).forEach(cb => cb.checked = checked);
+  updateCount(); renderTags();
+}
+
+function syncGroupCheckboxes() {
+  document.querySelectorAll('.group-cb').forEach(gcb => {
+    const key = gcb.dataset.group.replace(/\s/g,'_');
+    const cbs = [...document.querySelectorAll(`#grp_${key} input[type=checkbox]`)];
+    const n = cbs.filter(c => c.checked).length;
+    gcb.checked = n === cbs.length && cbs.length > 0;
+    gcb.indeterminate = n > 0 && n < cbs.length;
+  });
+}
+
+function onLobChange() { syncGroupCheckboxes(); updateCount(); renderTags(); }
+
+function filterLobs(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.lob-item').forEach(el => {
+    el.classList.toggle('hidden', q && !el.dataset.lob.includes(q));
+  });
+  for (const grpName of groupOrder) {
+    const key = grpName.replace(/\s/g,'_');
+    const hdr = document.querySelector(`.lob-group-header[data-group="${grpName}"]`);
+    const items = document.getElementById(`grp_${key}`);
+    const hasVisible = [...items.querySelectorAll('.lob-item')].some(el => !el.classList.contains('hidden'));
+    hdr.style.display = hasVisible ? '' : 'none';
+    items.style.display = hasVisible ? '' : 'none';
+    if (q) {
+      items.classList.remove('collapsed');
+      document.getElementById(`arrow_${key}`).classList.remove('collapsed');
+    }
+  }
+}
+
+function selectAllLobs() {
+  document.querySelectorAll('#lobList input[name=lobs]').forEach(cb => cb.checked = true);
+  document.querySelectorAll('.group-cb').forEach(cb => { cb.checked = true; cb.indeterminate = false; });
+  updateCount(); renderTags();
+}
+function clearAllLobs() {
+  document.querySelectorAll('#lobList input[name=lobs]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('.group-cb').forEach(cb => { cb.checked = false; cb.indeterminate = false; });
+  updateCount(); renderTags();
+}
+
+function updateCount() {
+  const total   = document.querySelectorAll('#lobList input[name=lobs]').length;
+  const checked = document.querySelectorAll('#lobList input[name=lobs]:checked').length;
+  document.getElementById('lobCount').textContent =
+    checked === 0 || checked === total ? 'All shown' : `${checked} / ${total} selected`;
+  document.getElementById('lobToggleLabel').textContent =
+    checked === 0 || checked === total ? 'All LOBs' : `${checked} LOB${checked > 1 ? 's' : ''} selected`;
+}
+
+function renderTags() {
+  const checked = [...document.querySelectorAll('#lobList input[name=lobs]:checked')];
+  const total   = document.querySelectorAll('#lobList input[name=lobs]').length;
+  const tags    = document.getElementById('selectedTags');
+  tags.innerHTML = '';
+  if (checked.length === 0 || checked.length === total) return;
+  checked.forEach(cb => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `${cb.value} <span class="tag-x" onclick="removeTag('${cb.value}')">×</span>`;
+    tags.appendChild(tag);
+  });
+}
+
+function removeTag(lob) {
+  const cb = document.querySelector(`#lobList input[value="${lob}"]`);
+  if (cb) { cb.checked = false; onLobChange(); }
+}
+
+function toggleLobDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('lobDropdown').classList.toggle('open');
+}
+function exportWithFilters() {
+  var params = new URLSearchParams();
+  // Months
+  document.querySelectorAll('#monthList input[type=checkbox]:checked').forEach(function(cb) {
+    params.append('months', cb.value);
+  });
+  // LOBs
+  document.querySelectorAll('#lobList input[type=checkbox]:checked').forEach(function(cb) {
+    params.append('lobs', cb.value);
+  });
+  // Search
+  var search = document.getElementById('searchInput');
+  if (search && search.value.trim()) params.set('search', search.value.trim());
+  window.location.href = '/capacity/summary/export?' + params.toString();
+}
+
+function toggleMonthDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('monthDropdown').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('lobPicker').contains(e.target))
+    document.getElementById('lobDropdown').classList.remove('open');
+  if (!document.getElementById('monthPicker').contains(e.target))
+    document.getElementById('monthDropdown').classList.remove('open');
+});
+
+function selectAllMonths() {
+  document.querySelectorAll('#monthList input[name=months]').forEach(cb => cb.checked = true);
+  updateMonthCount();
+}
+function clearMonths() {
+  document.querySelectorAll('#monthList input[name=months]').forEach(cb => cb.checked = false);
+  updateMonthCount();
+}
+function updateMonthCount() {
+  const total   = document.querySelectorAll('#monthList input[name=months]').length;
+  const checked = document.querySelectorAll('#monthList input[name=months]:checked').length;
+  const label   = checked === 0 || checked === total ? 'All months' : `${checked} month${checked>1?'s':''} selected`;
+  document.getElementById('monthToggleLabel').textContent = label;
+  document.getElementById('monthCount').textContent = checked > 0 && checked < total ? `${checked}/${total}` : '';
+}
+document.querySelectorAll('#monthList input[name=months]').forEach(cb => cb.addEventListener('change', updateMonthCount));
+updateMonthCount();
+
+buildPicker();
+</script>
+
+{% if all_months and plan %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const planData  = {{ plan | tojson }};
+const allMonths = {{ all_months | tojson }};
+const selLobs   = {{ selected_lobs | tojson }};
+const activeLobs = selLobs.length > 0
+  ? Object.keys(planData).filter(l => selLobs.includes(l))
+  : Object.keys(planData);
+
+// Deduplicate LOBs that share a planning unit — prefer "Combined" over EN/FR splits.
+// This prevents SS Sales Combined + SS Sales EN + SS Sales FR from triple-counting.
+function deduplicateLobs(lobs) {
+  // Strip " EN", " FR", " Combined" suffixes to get base name
+  function baseName(lob) {
+    return lob.replace(/\s+(combined|en|fr|inbound)$/i, '').trim().toLowerCase();
+  }
+  const byBase = {};
+  lobs.forEach(lob => {
+    const base = baseName(lob);
+    if (!byBase[base]) byBase[base] = [];
+    byBase[base].push(lob);
+  });
+  // For each group, prefer the one with "combined" in its name, else use first
+  return Object.values(byBase).map(group => {
+    const combined = group.find(l => /combined/i.test(l));
+    return combined || group[0];
+  });
+}
+
+const dedupedLobs = deduplicateLobs(activeLobs);
+
+const monthLabels = allMonths.map(m => {
+  const [y, mo] = m.split('-');
+  return new Date(y, mo-1).toLocaleString('en-CA', {month:'short', year:'numeric'});
+});
+const fteRequired = allMonths.map(month => {
+  let t = 0;
+  dedupedLobs.forEach(lob => { const d = planData[lob]?.[month]; if (d) t += parseFloat(d.fte_required||0); });
+  return Math.round(t*10)/10;
+});
+const actualHC = allMonths.map(month => {
+  let t = 0;
+  dedupedLobs.forEach(lob => { const d = planData[lob]?.[month]; if (d) t += parseFloat(d.actual_hc||0); });
+  return Math.round(t*10)/10;
+});
+const gap = allMonths.map((_,i) => Math.round((actualHC[i]-fteRequired[i])*10)/10);
+
+// KPI cards
+const validGaps = gap.filter((_,i) => fteRequired[i] > 0);
+if (validGaps.length > 0) {
+  const avg   = Math.round(validGaps.reduce((a,b)=>a+b,0)/validGaps.length*10)/10;
+  const best  = Math.max(...validGaps);
+  const worst = Math.min(...validGaps);
+  document.getElementById('trend-avg-gap').textContent = (avg>=0?'+':'')+avg+' FTE';
+  document.getElementById('trend-best').textContent    = (best>=0?'+':'')+best+' FTE';
+  document.getElementById('trend-worst').textContent   = worst+' FTE';
+  const mid=Math.floor(validGaps.length/2);
+  const a1=validGaps.slice(0,mid).reduce((a,b)=>a+b,0)/(mid||1);
+  const a2=validGaps.slice(mid).reduce((a,b)=>a+b,0)/((validGaps.length-mid)||1);
+  const el=document.getElementById('trend-direction');
+  if(Math.abs(a2-a1)<0.5){el.textContent='→ Stable';el.style.color='#555';}
+  else if(a2>a1){el.textContent='↑ Improving';el.style.color='#2e7d32';}
+  else{el.textContent='↓ Worsening';el.style.color='#c62828';}
+}
+
+new Chart(document.getElementById('trendChart'),{
+  data:{
+    labels:monthLabels,
+    datasets:[
+      {type:'line',label:'FTE Required',data:fteRequired,borderColor:'#6a1b9a',backgroundColor:'rgba(106,27,154,.1)',borderWidth:2,tension:.3,pointRadius:4,fill:false,yAxisID:'y'},
+      {type:'line',label:'Actual HC',data:actualHC,borderColor:'#2e7d32',backgroundColor:'rgba(46,125,50,.1)',borderWidth:2,tension:.3,pointRadius:4,fill:false,yAxisID:'y'},
+      {type:'bar',label:'Gap (HC−FTE)',data:gap,backgroundColor:gap.map(g=>g>=0?'rgba(46,125,50,.6)':'rgba(198,40,40,.6)'),borderWidth:1,yAxisID:'y2'}
+    ]
+  },
+  options:{
+    responsive:true,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y>=0?'+':''}${c.parsed.y} FTE`}}},
+    scales:{
+      y:{position:'left',title:{display:true,text:'FTE'},grid:{color:'#f0f0f0'}},
+      y2:{position:'right',title:{display:true,text:'Gap'},grid:{drawOnChartArea:false}}
+    }
+  }
+});
+</script>
+{% endif %}
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+<script src="/static/picker_fit.js"></script>
+</body>
+</html>

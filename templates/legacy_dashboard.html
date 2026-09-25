@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Legacy Tickets</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #eef2f5;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #0078D4;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .muted {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .button {
+      display: inline-block;
+      margin: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .primary { background-color: #0078D4; color: white; }
+    .primary:hover { background-color: #005fa3; }
+    .secondary { background-color: #ccc; color: #333; }
+    .secondary:hover { background-color: #999; }
+
+    form {
+      margin: 20px auto;
+      text-align: center;
+    }
+
+    label {
+      margin-right: 8px;
+      font-weight: bold;
+    }
+
+    input[type="date"], select {
+      padding: 6px;
+      margin-right: 12px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #fff;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 8px;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      cursor: pointer;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9fbfc;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Legacy Tickets</h1>
+  <p class="muted">Historical requests mirrored from Microsoft Forms/Planner.</p>
+
+  <div style="text-align:center;">
+    <a href="/landing" class="button secondary">⬅️ Back to Landing Page</a>
+    <button onclick="exportTableToCSV('legacy_tickets.csv')" class="button primary">📤 Export to CSV</button>
+  </div>
+
+  <!-- Filter Form -->
+  <form method="get" action="/legacy_tickets">
+    <label for="start">Start Date:</label>
+    <input type="date" name="start" id="start" value="{{ request.args.get('start', '') }}">
+
+    <label for="end">End Date:</label>
+    <input type="date" name="end" id="end" value="{{ request.args.get('end', '') }}">
+
+    <label for="assigned">Assigned To:</label>
+    <select name="assigned" id="assigned">
+      <option value="">All</option>
+      {% for r in rows %}
+        {% if r[headers.index('Assigned To')] %}
+          <option value="{{ r[headers.index('Assigned To')] }}"
+            {% if request.args.get('assigned') == r[headers.index('Assigned To')] %}selected{% endif %}>
+            {{ r[headers.index('Assigned To')] }}
+          </option>
+        {% endif %}
+      {% endfor %}
+    </select>
+
+    <label for="priority">Priority:</label>
+    <select name="priority" id="priority">
+      <option value="">All</option>
+      <option value="High" {% if request.args.get('priority') == 'High' %}selected{% endif %}>High</option>
+      <option value="Medium" {% if request.args.get('priority') == 'Medium' %}selected{% endif %}>Medium</option>
+      <option value="Low" {% if request.args.get('priority') == 'Low' %}selected{% endif %}>Low</option>
+    </select>
+
+    <label for="progress">Progress:</label>
+    <select name="progress" id="progress">
+      <option value="">All</option>
+      <option value="Not started" {% if request.args.get('progress') == 'Not started' %}selected{% endif %}>Not started</option>
+      <option value="In progress" {% if request.args.get('progress') == 'In progress' %}selected{% endif %}>In progress</option>
+      <option value="Completed" {% if request.args.get('progress') == 'Completed' %}selected{% endif %}>Completed</option>
+    </select>
+
+    <button type="submit" class="button primary">🔍 Apply Filters</button>
+  </form>
+
+  {% if headers %}
+    <table id="ticketsTable">
+      <thead>
+        <tr>
+          {% for h in headers %}
+            <th onclick="sortTable({{ loop.index0 }})">{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% if rows %}
+          {% for r in rows %}
+            <tr>
+              {% for cell in r %}
+                <td>{{ cell }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="{{ headers|length }}" class="muted">No legacy ticket rows found.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No legacy data available yet.</p>
+  {% endif %}
+
+  <!-- JS for sorting and CSV export -->
+  <script>
+    function sortTable(n) {
+      var table = document.getElementById("ticketsTable");
+      var rows = table.rows;
+      var switching = true;
+      var dir = "asc";
+      var switchcount = 0;
+
+      while (switching) {
+        switching = false;
+        var shouldSwitch;
+        for (var i = 1; i < (rows.length - 1); i++) {
+          shouldSwitch = false;
+          var x = rows[i].getElementsByTagName("TD")[n];
+          var y = rows[i + 1].getElementsByTagName("TD")[n];
+          if (dir == "asc" && x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+            shouldSwitch = true;
+            break;
+          } else if (dir == "desc" && x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+            shouldSwitch = true;
+            break;
+          }
+        }
+        if (shouldSwitch) {
+          rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+          switching = true;
+          switchcount++;
+        } else {
+          if (switchcount == 0 && dir == "asc") {
+            dir = "desc";
+            switching = true;
+          }
+        }
+      }
+    }
+
+    function exportTableToCSV(filename) {
+      var csv = [];
+      var rows = document.querySelectorAll("table tr");
+      for (var i = 0; i < rows.length; i++) {
+        var row = [], cols = rows[i].querySelectorAll("td, th");
+        for (var j = 0; j < cols.length; j++) {
+          row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+        }
+        csv.push(row.join(","));
+      }
+      var csvFile = new Blob([csv.join("\n")], { type: "text/csv" });
+      var downloadLink = document.createElement("a");
+      downloadLink.download = filename;
+      downloadLink.href = window.URL.createObjectURL(csvFile);
+      downloadLink.style.display = "none";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+    }
+  </script>
+
+</body>
+</html>

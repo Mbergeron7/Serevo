@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WFM Portal — Login</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #0d1757 0%, #1a237e 60%, #283593 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo h1 { font-size: 1.5rem; font-weight: 700; color: #0d1757; margin-bottom: 4px; }
+    .logo p  { font-size: .83rem; color: #6b7280; }
+    .field   { margin-bottom: 16px; }
+    label    { display: block; font-size: .85rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    input[type=email], input[type=password] {
+      width: 100%; padding: 11px 14px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: .95rem; outline: none; transition: border-color .2s;
+    }
+    input:focus { border-color: #0d1757; box-shadow: 0 0 0 3px rgba(13,23,87,.1); }
+    .btn {
+      width: 100%; padding: 12px;
+      background: #0d1757; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 700;
+      cursor: pointer; margin-top: 8px; transition: background .2s;
+    }
+    .btn:hover { background: #1a237e; }
+    .alert-error {
+      padding: 10px 14px; border-radius: 8px; font-size: .85rem;
+      margin-bottom: 16px;
+      background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>📋 WFM Portal</h1>
+    <p>StorageVault Canada — Workforce Management</p>
+  </div>
+
+  {% if error %}
+    <div class="alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST">
+    <div class="field">
+      <label for="email">Work Email</label>
+      <input type="email" id="email" name="email"
+             placeholder="you@storagevaultcanada.com"
+             autocomplete="email" autofocus required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password"
+             placeholder="••••••••" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit">Sign In</button>
+  </form>
+</div>
+<link rel="stylesheet" href="/static/dark.css">
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

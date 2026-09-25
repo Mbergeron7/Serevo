@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WFM — Backup Upload</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+  .page-header { background:linear-gradient(135deg,#e65100,#f57c00); color:#fff;
+                 border-radius:10px; padding:20px 28px; margin-bottom:20px; }
+  .page-header h1 { margin:0; font-size:1.4rem; }
+  .page-header p  { margin:4px 0 0; opacity:.9; font-size:.88rem; }
+  .nav-links { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+  .nav-links a { color:#1a237e; text-decoration:none; font-weight:500; font-size:.88rem; }
+  .nav-links a:hover { text-decoration:underline; }
+  .nav-sep { color:#ccc; }
+  .card { border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,.07); overflow:hidden;
+          background:#fff; margin-bottom:18px; }
+  .card-head { padding:12px 20px; font-weight:700; font-size:.92rem; color:#fff; }
+  .card-body { padding:18px 20px; }
+  .card-desc { font-size:.82rem; color:#666; margin-bottom:14px; }
+  .status-pill { display:inline-flex; align-items:center; gap:6px; border-radius:20px;
+                 padding:4px 12px; font-size:.78rem; font-weight:600; margin-bottom:14px; }
+  .status-active   { background:#e8f5e9; color:#1b5e20; }
+  .status-inactive  { background:#f1f1f1; color:#777; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .dot-active   { background:#1b5e20; }
+  .dot-inactive { background:#aaa; }
+  .upload-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .upload-row input[type=file] { flex:1; min-width:220px; border:1px solid #ced4da;
+                                  border-radius:6px; padding:6px 10px; font-size:.85rem; background:#fff; }
+  .btn-upload { background:#1a237e; color:#fff; border:none; border-radius:6px;
+                padding:7px 18px; font-size:.85rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .btn-upload:hover { background:#283593; }
+  .btn-upload:disabled { background:#aaa; cursor:not-allowed; }
+  .btn-clear { background:#fff; color:#dc3545; border:1px solid #dc3545; border-radius:6px;
+               padding:6px 14px; font-size:.8rem; font-weight:600; cursor:pointer; margin-top:10px; }
+  .btn-clear:hover { background:#fdecea; }
+  .msg { font-size:.82rem; margin-top:10px; padding:8px 12px; border-radius:6px; display:none; }
+  .msg-ok  { background:#e8f5e9; color:#1b5e20; }
+  .msg-err { background:#fdecea; color:#b71c1c; }
+  .format-note { font-size:.74rem; color:#888; margin-top:10px; background:#f8f9fa;
+                 border-radius:6px; padding:8px 12px; font-family:monospace; }
+</style>
+<style>
+/* ── Mobile responsiveness ─────────────────────── */
+@media (max-width: 768px) {
+  body { padding: 8px !important; font-size: 14px; }
+  .toolbar, .filter-bar { flex-wrap: wrap !important; }
+  .nav-links { flex-wrap: wrap; gap: 6px; }
+  .page-header h1, h1 { font-size: 1.1rem !important; }
+  .upload-row { flex-direction: column; align-items: stretch !important; }
+  .upload-row input[type=file] { width: 100%; }
+  .btn-upload { width: 100%; }
+  #dark-toggle { bottom: 10px !important; right: 10px !important; }
+}
+</style>
+<link rel="stylesheet" href="/static/dark.css">
+</head>
+<body>
+
+<div class="page-header">
+  <h1>⚠ Backup Upload</h1>
+  <p>Manually-pulled data used when the live Call Potential / Google Sheets feed is unavailable</p>
+</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a><span class="nav-sep">|</span>
+  <strong style="color:#1a237e">RTM</strong><span class="nav-sep">|</span>
+  <a href="/rtm/dashboard">📊 Dashboard</a>
+  <a href="/rtm/schedule">📋 Schedule</a>
+  <a href="/rtm/absenteeism">📊 Absenteeism</a>
+  <a href="/rtm/cascades">⚡ Cascades</a>
+  <a href="/rtm/agent-status">👤 Agent Status</a>
+  <a href="/logout">Logout</a>
+</div>
+
+<!-- ── Call Volume ── -->
+<div class="card">
+  <div class="card-head" style="background:#1a237e">📞 Call Volume</div>
+  <div class="card-body">
+    <div class="card-desc">Manually-pulled Call Potential call volume export. Powers the Interval Report, SVL, and Forecast vs OTF pages.</div>
+    <div id="callStatusPill" class="status-pill {{ 'status-active' if call_date else 'status-inactive' }}">
+      <span class="dot {{ 'dot-active' if call_date else 'dot-inactive' }}"></span>
+      {% if call_date %}Active — {{ call_date }} ({{ call_rows }} rows){% else %}Not active — using live feed{% endif %}
+    </div>
+    <form id="callForm" class="upload-row" onsubmit="return uploadFile(event,'callForm','/rtm/backup/upload-calls','callMsg','callStatusPill','Call Volume')">
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit" class="btn-upload">⬆ Upload</button>
+    </form>
+    <div id="callMsg" class="msg"></div>
+    {% if call_date %}
+    <button class="btn-clear" onclick="clearBackup('calls','callStatusPill','Call Volume')">✕ Clear Call Volume Backup</button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Agent Status — Summary ── -->
+<div class="card">
+  <div class="card-head" style="background:#00695c">👤 Agent Status — Summary</div>
+  <div class="card-body">
+    <div class="card-desc">Basic attendance CSV (Agent Name, First Login, Log Off). Powers Schedule & Attendance timing only — not cascades or Status Under 5 Sec.</div>
+    <div id="agentStatusPill" class="status-pill {{ 'status-active' if agent_date else 'status-inactive' }}">
+      <span class="dot {{ 'dot-active' if agent_date else 'dot-inactive' }}"></span>
+      {% if agent_date %}Active — {{ agent_date }} ({{ agent_rows }} rows){% else %}Not active — using live feed{% endif %}
+    </div>
+    <form id="agentForm" class="upload-row" onsubmit="return uploadFile(event,'agentForm','/rtm/backup/upload-agents','agentMsg','agentStatusPill','Agent Status Summary')">
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit" class="btn-upload">⬆ Upload</button>
+    </form>
+    <div id="agentMsg" class="msg"></div>
+    {% if agent_date %}
+    <button class="btn-clear" onclick="clearBackup('agents','agentStatusPill','Agent Status Summary')">✕ Clear Summary Backup</button>
+    {% endif %}
+    <div class="format-note">Expected columns: Agent Name, First Login, Log Off</div>
+  </div>
+</div>
+
+<!-- ── Worker Status Logs (NEW) ── -->
+<div class="card">
+  <div class="card-head" style="background:#c62828">⚡ Worker Status Logs</div>
+  <div class="card-body">
+    <div class="card-desc">
+      Raw Call Potential export — every status change event, same data the live sheet uses.
+      Takes ~30 min to pull manually, but powers <strong>everything</strong>: attendance, Cascades,
+      and Status Under 5 Sec. Use this instead of the summary above when you need the full picture.
+    </div>
+    <div id="agentEventsStatusPill" class="status-pill {{ 'status-active' if agent_events_date else 'status-inactive' }}">
+      <span class="dot {{ 'dot-active' if agent_events_date else 'dot-inactive' }}"></span>
+      {% if agent_events_date %}Active — {{ agent_events_date }} ({{ agent_events_rows }} rows){% else %}Not active — using live feed{% endif %}
+    </div>
+    <form id="agentEventsForm" class="upload-row" onsubmit="return uploadFile(event,'agentEventsForm','/rtm/backup/upload-agent-events','agentEventsMsg','agentEventsStatusPill','Worker Status Logs')">
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit" class="btn-upload">⬆ Upload</button>
+    </form>
+    <div id="agentEventsMsg" class="msg"></div>
+    {% if agent_events_date %}
+    <button class="btn-clear" onclick="clearBackup('agent-events','agentEventsStatusPill','Worker Status Logs')">✕ Clear Worker Status Logs Backup</button>
+    {% endif %}
+    <div class="format-note">Expected columns: id, user_id, start_time, activity_sid</div>
+  </div>
+</div>
+
+<script>
+async function uploadFile(e, formId, url, msgId, pillId, label) {
+  e.preventDefault();
+  const form  = document.getElementById(formId);
+  const msg   = document.getElementById(msgId);
+  const btn   = form.querySelector('button[type=submit]');
+  const input = form.querySelector('input[type=file]');
+  if (!input.files.length) return false;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Uploading...';
+  msg.style.display = 'none';
+
+  try {
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const res = await fetch(url, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.ok) {
+      var dateInfo = data.date_summary || (data.rows + ' rows for ' + data.date);
+      msg.className = 'msg msg-ok';
+      msg.textContent = '✅ ' + label + ' uploaded — ' + dateInfo + '. Reload the page to see it reflected.';
+      if (data.warning) {
+        msg.className = 'msg msg-err';
+        msg.textContent = '⚠ ' + label + ' uploaded (' + dateInfo + '), but: ' + data.warning;
+      }
+      msg.style.display = 'block';
+      setTimeout(() => location.reload(), data.warning ? 4000 : 1800);
+    } else {
+      msg.className = 'msg msg-err';
+      msg.textContent = '❌ ' + (data.error || 'Upload failed');
+      msg.style.display = 'block';
+    }
+  } catch (err) {
+    msg.className = 'msg msg-err';
+    msg.textContent = '❌ Upload failed: ' + err.message;
+    msg.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = '⬆ Upload';
+  return false;
+}
+
+async function clearBackup(which, pillId, label) {
+  if (!confirm(`Clear the ${label} backup and go back to using the live feed?`)) return;
+  try {
+    const res = await fetch('/rtm/backup/clear', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({which: which})
+    });
+    const data = await res.json();
+    if (data.ok) location.reload();
+  } catch (err) {
+    alert('Failed to clear backup: ' + err.message);
+  }
+}
+</script>
+
+<button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"
+  style="position:fixed;bottom:20px;right:20px;width:42px;height:42px;border-radius:50%;
+         border:none;background:#1a237e;color:#fff;font-size:1.2rem;cursor:pointer;
+         z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.3)">&#127769;</button>
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

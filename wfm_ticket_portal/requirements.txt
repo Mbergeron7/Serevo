@@ -1,0 +1,10 @@
+Flask
+gunicorn
+gspread
+oauth2client
+pandas
+sendgrid==6.10.0
+openpyxl>=3.1.2
+sendgrid
+openpyxl>=3.1.0
+extract-msg

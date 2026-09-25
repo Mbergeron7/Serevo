@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% if edit_mode %}Edit Ticket {{ ticket_id }}{% else %}WFM Request Form{% endif %}</title>
+  <style>
+    :root{
+      --bg:#f9f9f9; --card:#ffffff; --muted:#6b7280; --accent:#0078D4; --accent-strong:#005fa3; --radius:8px;
+    }
+    html,body{height:100%;margin:0}
+    body{
+      font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:var(--bg); color:#111; padding:28px; -webkit-font-smoothing:antialiased;
+    }
+    .wrap{max-width:920px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{font-size:20px;margin:0;color:#0f172a}
+    .buttons a{display:inline-block;margin-left:8px;padding:7px 12px;background:#eee;border-radius:6px;color:#111;text-decoration:none}
+
+    form{background:var(--card);border-radius:var(--radius);padding:20px;margin-top:18px;box-shadow:0 6px 18px rgba(10,10,10,0.05)}
+    fieldset{border:0;margin:0;padding:0}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .full{grid-column:1/-1}
+    label{display:block;font-weight:600;font-size:13px;color:#111;margin-bottom:6px}
+    input[type=text], input[type=date], input[type=number], input[type=time], select, textarea{
+      width:100%;padding:10px;border:1px solid #e6e7eb;border-radius:6px;font-size:14px;box-sizing:border-box
+    }
+    input[type=file]{font-size:13px}
+    textarea{min-height:100px;resize:vertical}
+    .muted{color:var(--muted);font-size:13px}
+
+    .section{background:#fbfbfd;border:1px solid #eef0f6;padding:12px;border-radius:8px;margin-top:14px}
+    .actions{text-align:right;margin-top:18px}
+    button[type=submit]{background:var(--accent);color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer}
+    button[type=submit]:hover{background:var(--accent-strong)}
+
+    /* Hidden sections (controlled via JS) */
+    .hidden{display:none !important}
+
+    /* responsive */
+    @media (max-width:720px){.row{grid-template-columns:1fr}.buttons a{margin-left:6px;margin-top:8px;display:inline-block}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>{% if edit_mode %}✏️ Edit Ticket <span style="color:#0078D4;font-size:16px">{{ ticket_id }}</span>{% else %}Submit WFM Request{% endif %}</h1>
+      <div class="buttons">
+        <a href="/landing">⬅ Back to Landing</a>
+        <a href="/logout">Logout</a>
+      </div>
+    </header>
+
+    <!-- show user if available (Jinja) -->
+    {% if session.user_email %}
+      <p class="muted">Logged in as <strong>{{ session.user_email }}</strong></p>
+    {% endif %}
+
+    <form id="wfmForm" method="POST" action="{% if edit_mode %}/edit_ticket/{{ ticket_id }}{% else %}/{% endif %}" enctype="multipart/form-data" novalidate>
+
+      <fieldset>
+        <div class="row">
+          <div>
+            <label for="advisor_name">Advisor Name</label>
+            <input id="advisor_name" name="advisor_name" type="text" required>
+          </div>
+
+          <div>
+            <label for="request_date">Date of Request</label>
+            <input id="request_date" name="request_date" type="date" required>
+          </div>
+
+          <div>
+            <label for="lob">Line of Business (LoB)</label>
+            <select id="lob" name="lob" required>
+              <option value="" disabled selected>Select LoB</option>
+              <option>ERO</option>
+              <option>IT</option>
+              <option>MoveBuddy</option>
+              <option>PS Admin</option>
+              <option>PS BO</option>
+              <option>PS Case Mgr</option>
+              <option>PS CC</option>
+              <option>PS Onboarding</option>
+              <option>PS Sales</option>
+              <option>QA</option>
+              <option>SS Case Management</option>
+              <option>SS Onboarding</option>
+              <option>SS Sales</option>
+              <option>TL/LoD</option>
+              <option>Training</option>
+              <option>WL PS</option>
+              <option>WL SS</option>
+              <option>Workforce Management</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="team_lead">Team Lead</label>
+            <select id="team_lead" name="team_lead" required>
+              <option value="" disabled selected>Select Team Lead</option>
+              <option>Adeyinka</option>
+              <option>Alana</option>
+              <option>Alexandra</option>
+              <option>Aman</option>
+              <option>Bryan</option>
+              <option>Cushana</option>
+              <option>David</option>
+              <option>Dee</option>
+              <option>Jodi</option>
+              <option>Julianne</option>
+              <option>Kristin</option>
+              <option>Lucas</option>
+              <option>Maggie</option>
+              <option>Mike</option>
+              <option>Odette</option>
+              <option>Pat</option>
+              <option>Salomon</option>
+              <option>Sean</option>
+              <option>Shavindri</option>
+              <option>Teresa</option>
+            </select>
+          </div>
+
+          <div class="full">
+            <label for="wfm_request">WFM Request Type</label>
+            <select id="wfm_request" name="wfm_request" required>
+              <option value="" disabled selected>Select Request Type</option>
+              <option>Accommodation request/update</option>
+              <option>Add additional hours</option>
+              <option>Add/remove/change team meeting</option>
+              <option>Add/remove/move training</option>
+              <option>Add offline segment</option>
+              <option>Advisor arrived late, remove absence</option>
+              <option>CP skill update</option>
+              <option>Employee status update (not for schedule changes)</option>
+              <option>Is OT available?</option>
+              <option>Move break/lunch because of meeting</option>
+              <option>Schedule Update - CP3 use</option>
+              <option>Schedule Error Adjustment</option>
+              <option>Shift swap/offer</option>
+              <option>Suggestions/Feedback</option>
+              <option>Unpaid time off/vacation</option>
+              <option>WFM Department Work</option>
+              <option>Testing</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- dynamic sections: each has data-type attribute matching option text -->
+
+      <!-- Accommodation -->
+      <section class="section hidden" data-type="Accommodation request/update" id="AccommodationrequestupdateFields">
+        <div class="row">
+          <div>
+            <label>Accommodation Action</label>
+            <select name="accommodation_action">
+              <option value="Add">Add</option>
+              <option value="Update">Update</option>
+              <option value="Remove">Remove</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Accommodation Type</label>
+            <select name="accommodation_type">
+              <option value="">Select type</option>
+              <option>School</option>
+              <option>Personal</option>
+              <option>Medical</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Final Date of Accommodation</label>
+            <input type="date" name="final_date">
+          </div>
+
+          <div>
+            <label>Return to Work Date</label>
+            <input type="date" name="return_to_work_date">
+          </div>
+
+          <div class="full">
+            <label>CP3 Approval</label>
+            <div style="display:flex;gap:12px;align-items:center">
+              <label><input type="radio" name="cp3_approval_status" value="Yes"> Yes</label>
+              <label><input type="radio" name="cp3_approval_status" value="No" checked> No</label>
+              <div id="cp3Upload" class="hidden full">
+                <label>Upload CP3 Approval Screenshot</label>
+                <input type="file" name="cp3_approval" accept=".pdf,.doc,.docx,.jpg,.png">
+              </div>
+            </div>
+          </div>
+
+          <div class="full">
+            <label>Upload School Schedule (optional)</label>
+            <input type="file" name="school_schedule" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
+          </div>
+
+          <div class="full">
+            <label>Weekly Schedule (optional) — free text</label>
+            <input type="text" name="monday_schedule" placeholder="Monday start/end (HH:MM AM/PM)">
+            <input type="text" name="tuesday_schedule" placeholder="Tuesday start/end (HH:MM AM/PM)">
+            <input type="text" name="wednesday_schedule" placeholder="Wednesday start/end (HH:MM AM/PM)">
+            <input type="text" name="thursday_schedule" placeholder="Thursday start/end (HH:MM AM/PM)">
+            <input type="text" name="friday_schedule" placeholder="Friday start/end (HH:MM AM/PM)">
+            <input type="text" name="saturday_schedule" placeholder="Saturday start/end (HH:MM AM/PM)">
+            <input type="text" name="sunday_schedule" placeholder="Sunday start/end (HH:MM AM/PM)">
+          </div>
+
+          <div>
+            <label>Weekly Hours</label>
+            <input type="number" name="weekly_hours" min="0" placeholder="Enter number of hours">
+          </div>
+
+          <div class="full">
+            <label>Notes or Reason</label>
+            <textarea name="accommodation_notes" placeholder="Explain reason for this request."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add Additional Hours -->
+      <section class="section hidden" data-type="Add additional hours" id="AddadditionalhoursFields">
+        <div class="row">
+          <div class="full">
+            <label>How many days are we adding hours to?</label>
+            <select name="additional_days_mode" id="additional_days_mode">
+              <option value="single">1 Day</option>
+              <option value="multi">Multiple Days</option>
+            </select>
+          </div>
+
+          <div id="singleDayFields" class="full">
+            <label>Requested Date</label>
+            <input type="date" name="additional_hours_date">
+            <label>Start Time</label>
+            <input type="time" name="additional_start_time">
+            <label>End Time</label>
+            <input type="time" name="additional_end_time">
+          </div>
+
+          <div id="multiDayFields" class="full hidden">
+            <label>Weekly Schedule (enter new start/end for days you want to change)</label>
+            <input type="text" name="mon_start" placeholder="Monday start">
+            <input type="text" name="mon_end" placeholder="Monday end">
+            <input type="text" name="tue_start" placeholder="Tuesday start">
+            <input type="text" name="tue_end" placeholder="Tuesday end">
+            <input type="text" name="wed_start" placeholder="Wednesday start">
+            <input type="text" name="wed_end" placeholder="Wednesday end">
+            <input type="text" name="thu_start" placeholder="Thursday start">
+            <input type="text" name="thu_end" placeholder="Thursday end">
+            <input type="text" name="fri_start" placeholder="Friday start">
+            <input type="text" name="fri_end" placeholder="Friday end">
+            <input type="text" name="sat_start" placeholder="Saturday start">
+            <input type="text" name="sat_end" placeholder="Saturday end">
+            <input type="text" name="sun_start" placeholder="Sunday start">
+            <input type="text" name="sun_end" placeholder="Sunday end">
+          </div>
+
+          <div>
+            <label>Weekly Hours</label>
+            <input type="number" name="additional_weekly_hours" min="0">
+          </div>
+
+          <div class="full">
+            <label>Notes or Reason</label>
+            <textarea name="additional_hours_notes"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add/Remove/Change Team Meeting -->
+      <section class="section hidden" data-type="Add/remove/change team meeting" id="AddremovechangeteammeetingFields">
+        <div class="row">
+          <div>
+            <label>Meeting Action</label>
+            <select name="team_meeting_action">
+              <option>Add</option>
+              <option>Remove</option>
+              <option>Change</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Meeting Date</label>
+            <input type="date" name="team_meeting_date">
+          </div>
+
+          <div>
+            <label>Start Time</label>
+            <input type="time" name="team_meeting_start">
+          </div>
+
+          <div>
+            <label>End Time</label>
+            <input type="time" name="team_meeting_end">
+          </div>
+
+          <div class="full">
+            <label>Notes or Reason</label>
+            <textarea name="team_meeting_notes"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add/remove/move training -->
+      <section class="section hidden" data-type="Add/remove/move training" id="AddremovemovetrainingFields">
+        <div class="row">
+          <div>
+            <label>Training Action</label>
+            <select name="training_action"><option>Add</option><option>Remove</option><option>Move</option></select>
+          </div>
+          <div>
+            <label>Training Date</label>
+            <input type="date" name="training_date">
+          </div>
+          <div>
+            <label>Start Time</label>
+            <input type="time" name="training_start">
+          </div>
+          <div>
+            <label>End Time</label>
+            <input type="time" name="training_end">
+          </div>
+          <div class="full"><label>Notes or Reason</label><textarea name="training_notes"></textarea></div>
+        </div>
+      </section>
+
+      <!-- Add offline segment -->
+      <section class="section hidden" data-type="Add offline segment" id="AddofflinesegmentFields">
+        <div class="row">
+          <div>
+            <label>Offline Segment Date</label>
+            <input type="date" name="offline_segment_date">
+          </div>
+          <div>
+            <label>Start Time</label>
+            <input type="time" name="offline_segment_start">
+          </div>
+          <div>
+            <label>End Time</label>
+            <input type="time" name="offline_segment_end">
+          </div>
+          <div class="full">
+            <label>Which segment is being updated?</label>
+            <select name="offline_segment_type">
+              <option>After Shift</option>
+              <option>Client Account Work</option>
+              <option>Coaching</option>
+              <option>Code of Conduct</option>
+              <option>Knowledge Assessment</option>
+              <option>Meeting</option>
+              <option>Personal</option>
+              <option>Store Visit</option>
+              <option>System Issue</option>
+              <option>System Outage</option>
+              <option>Training</option>
+            </select>
+          </div>
+          <div class="full"><label>Notes or Reason</label><textarea name="offline_segment_notes"></textarea></div>
+        </div>
+      </section>
+
+      <!-- Advisor arrived late -->
+      <section class="section hidden" data-type="Advisor arrived late, remove absence" id="AdvisorarrivedlateremoveabsenceFields">
+        <div class="row">
+          <div>
+            <label>Actual Start Time</label>
+            <input type="time" name="actual_start_time">
+          </div>
+          <div>
+            <label>Actual Arrival Time</label>
+            <input type="time" name="actual_arrival_time">
+          </div>
+          <div class="full"><label>Notes or Reason</label><textarea name="late_arrival_notes"></textarea></div>
+        </div>
+      </section>
+
+<!-- CP skill update -->
+<section class="section hidden" data-type="CP skill update" id="CPskillupdateFields">
+  <div class="row">
+
+    <div>
+      <label>Action</label>
+      <select id="cp_action" name="cp_action">
+        <option value="">Select</option>
+        <option value="Add">Add</option>
+        <option value="Remove">Remove</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Language</label>
+      <select id="cp_language" name="cp_language">
+        <option value="">Select</option>
+        <option value="English">English</option>
+        <option value="French">French</option>
+        <option value="Bilingual">Bilingual</option>
+      </select>
+    </div>
+
+    <div id="cp_skill_blocks" class="full">
+
+      <!-- ADD ENGLISH -->
+      <div id="orig_add_en" class="hidden">
+        <label>Skill(s) to Add – English</label>
+        <select name="skill_add_en">
+          <option value="">-- Select English Skill to Add --</option>
+          <option>MoveBuddy</option>
+          <option>PS CC EN</option>
+          <option>PS Sales EN</option>
+          <option>PS WL EN</option>
+          <option>SS CM EN</option>
+          <option>SS Sales EN</option>
+          <option>SS WL EN</option>
+          <option>PS Test</option>
+          <option>SS Test</option>
+        </select>
+      </div>
+
+      <!-- REMOVE ENGLISH -->
+      <div id="orig_remove_en" class="hidden">
+        <label>Skill(s) to Remove – English</label>
+        <select name="skill_remove_en">
+          <option value="">-- Select English Skill to Remove --</option>
+          <option>MoveBuddy</option>
+          <option>PS CC EN</option>
+          <option>PS Sales EN</option>
+          <option>PS WL EN</option>
+          <option>SS CM EN</option>
+          <option>SS Sales EN</option>
+          <option>SS WL EN</option>
+          <option>PS Test</option>
+          <option>SS Test</option>
+        </select>
+      </div>
+
+      <!-- ADD FRENCH -->
+      <div id="orig_add_fr" class="hidden">
+        <label>Skill(s) to Add – French</label>
+        <select name="skill_add_fr">
+          <option value="">-- Select French Skill to Add --</option>
+          <option>PS CC FR</option>
+          <option>PS Sales FR</option>
+          <option>PS WL FR</option>
+          <option>SS CM FR</option>
+          <option>SS Sales FR</option>
+          <option>SS WL FR</option>
+        </select>
+      </div>
+
+      <!-- REMOVE FRENCH -->
+      <div id="orig_remove_fr" class="hidden">
+        <label>Skill(s) to Remove – French</label>
+        <select name="skill_remove_fr">
+          <option value="">-- Select French Skill to Remove --</option>
+          <option>PS CC FR</option>
+          <option>PS Sales FR</option>
+          <option>PS WL FR</option>
+          <option>SS CM FR</option>
+          <option>SS Sales FR</option>
+          <option>SS WL FR</option>
+        </select>
+      </div>
+
+      <!-- ADD BILINGUAL -->
+      <div id="orig_add_bi" class="hidden">
+        <label>Skill(s) to Add – Bilingual</label>
+        <select name="skill_add_bi">
+          <option value="">-- Select Bilingual Skill to Add --</option>
+          <option>MoveBuddy Bilingual</option>
+          <option>PS CC Bilingual</option>
+          <option>PS Sales Bilingual</option>
+          <option>PS Test Bilingual</option>
+          <option>SS CM Bilingual</option>
+          <option>SS Sales Bilingual</option>
+          <option>SS Test Bilingual</option>
+          <option>SS WL Bilingual</option>
+          <option>PS WL Bilingual</option>
+        </select>
+      </div>
+
+      <!-- REMOVE BILINGUAL -->
+      <div id="orig_remove_bi" class="hidden">
+        <label>Skill(s) to Remove – Bilingual</label>
+        <select name="skill_remove_bi">
+          <option value="">-- Select Bilingual Skill to Remove --</option>
+          <option>MoveBuddy Bilingual</option>
+          <option>PS CC Bilingual</option>
+          <option>PS Sales Bilingual</option>
+          <option>PS Test Bilingual</option>
+          <option>SS CM Bilingual</option>
+          <option>SS Sales Bilingual</option>
+          <option>SS Test Bilingual</option>
+          <option>SS WL Bilingual</option>
+          <option>PS WL Bilingual</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="full">
+      <label>Notes or Reason</label>
+      <textarea name="cp_skill_notes"></textarea>
+    </div>
+
+  </div>
+</section>
+
+      <!-- Employee status update -->
+      <section class="section hidden" data-type="Employee status update (not for schedule changes)" id="EmployeestatusupdatenotforschedulechangesFields">
+        <div class="row">
+          <div class="full"><label>Employee Name or ID</label><input type="text" name="status_update_employee"></div>
+          <div>
+            <label>Status Change</label>
+            <select name="status_update_type" id="status_update_type">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Update">Update</option>
+            </select>
+          </div>
+          <div>
+            <label>Effective Date</label>
+            <input type="date" name="status_update_effective_date">
+          </div>
+          <div id="returnToWorkContainer" class="hidden"><label>Return to Work Date</label><input type="date" name="status_update_return_date"></div>
+          <div class="full"><label>Notes or Reason</label><textarea name="status_update_notes"></textarea></div>
+        </div>
+      </section>
+
+      <!-- Is OT available -->
+      <section class="section hidden" data-type="Is OT available?" id="IsOTavailableFields">
+        <div class="row">
+          <div><label>OT Date</label><input type="date" name="ot_date"></div>
+          <div class="full"><label>Notes</label><textarea name="ot_notes"></textarea></div>
+
+          <div class="full">
+            <h4 class="muted">OT Availability (optional)</h4>
+            <label>Monday</label><input type="text" name="ot_monday" placeholder="Start/End">
+            <label>Tuesday</label><input type="text" name="ot_tuesday" placeholder="Start/End">
+            <label>Wednesday</label><input type="text" name="ot_wednesday" placeholder="Start/End">
+            <label>Thursday</label><input type="text" name="ot_thursday" placeholder="Start/End">
+            <label>Friday</label><input type="text" name="ot_friday" placeholder="Start/End">
+            <label>Saturday</label><input type="text" name="ot_saturday" placeholder="Start/End">
+            <label>Sunday</label><input type="text" name="ot_sunday" placeholder="Start/End">
+            <label>Total Weekly OT Hours</label><input type="number" name="ot_weekly_hours" min="0">
+          </div>
+        </div>
+      </section>
+
+      <!-- Move break/lunch -->
+      <section class="section hidden" data-type="Move break/lunch because of meeting" id="MovebreaklunchbecauseofmeetingFields">
+        <div class="row">
+          <div><label>Original Break/Lunch Time</label><input type="time" name="original_break_time"></div>
+          <div><label>New Break/Lunch Time</label><input type="time" name="new_break_time"></div>
+          <div class="full"><label>Notes</label><textarea name="break_notes"></textarea></div>
+        </div>
+      </section>
+
+      <!-- Schedule Update - CP3 use -->
+      <section class="section hidden" data-type="Schedule Update - CP3 use" id="ScheduleUpdateCP3useFields">
+        <div class="row">
+          <div class="full">
+            <label>Choose single day or week</label>
+            <select id="cp3_type" name="cp3_type"><option value="single">Single Day</option><option value="multi">Multiple Days (Week Of)</option></select>
+          </div>
+
+          <div id="cp3_single_day" class="full">
+            <label>Date</label><input type="date" name="cp3_date">
+            <label>Old Start Time</label><input type="time" name="cp3_old_start">
+            <label>Old End Time</label><input type="time" name="cp3_old_end">
+            <label>New Start Time</label><input type="time" name="cp3_new_start">
+            <label>New End Time</label><input type="time" name="cp3_new_end">
+          </div>
+
+          <div id="cp3_multi_day" class="full hidden">
+            <label>Week Of</label><input type="date" name="cp3_week_of">
+            <p class="muted">Select days to update and provide new hours</p>
+            <label><input type="checkbox" data-day="cp3_monday"> Monday</label><input id="cp3_monday" name="cp3_monday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_tuesday"> Tuesday</label><input id="cp3_tuesday" name="cp3_tuesday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_wednesday"> Wednesday</label><input id="cp3_wednesday" name="cp3_wednesday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_thursday"> Thursday</label><input id="cp3_thursday" name="cp3_thursday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_friday"> Friday</label><input id="cp3_friday" name="cp3_friday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_saturday"> Saturday</label><input id="cp3_saturday" name="cp3_saturday" type="text" disabled>
+            <label><input type="checkbox" data-day="cp3_sunday"> Sunday</label><input id="cp3_sunday" name="cp3_sunday" type="text" disabled>
+
+            <label>CP3 Approval Upload</label><input type="file" name="cp3_approval_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+            <label>Notes</label><textarea name="cp3_notes"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Schedule Error Adjustment -->
+      <section class="section hidden" data-type="Schedule Error Adjustment" id="ScheduleErrorAdjustmentFields">
+        <div class="row">
+          <div class="full">
+            <label>Adjustment Type</label>
+            <select id="error_adjustment_type" name="error_adjustment_type"><option value="single">Single Day</option><option value="multi">Multiple Days</option></select>
+          </div>
+
+          <div id="error_adjustment_single_day" class="full">
+            <label>Date</label><input type="date" name="error_adjustment_date">
+            <label>Old Start</label><input type="time" name="error_adjustment_old_start">
+            <label>Old End</label><input type="time" name="error_adjustment_old_end">
+            <label>New Start</label><input type="time" name="error_adjustment_new_start">
+            <label>New End</label><input type="time" name="error_adjustment_new_end">
+          </div>
+
+          <div id="error_adjustment_multi_day" class="full hidden">
+            <label>Week Of</label><input type="date" name="error_adjustment_week_of">
+            <p class="muted">Select which days to adjust and enter corrected hours</p>
+            <label><input type="checkbox" data-day="error_adjustment_monday"> Monday</label><input id="error_adjustment_monday" name="error_adjustment_monday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_tuesday"> Tuesday</label><input id="error_adjustment_tuesday" name="error_adjustment_tuesday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_wednesday"> Wednesday</label><input id="error_adjustment_wednesday" name="error_adjustment_wednesday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_thursday"> Thursday</label><input id="error_adjustment_thursday" name="error_adjustment_thursday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_friday"> Friday</label><input id="error_adjustment_friday" name="error_adjustment_friday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_saturday"> Saturday</label><input id="error_adjustment_saturday" name="error_adjustment_saturday" type="text" disabled>
+            <label><input type="checkbox" data-day="error_adjustment_sunday"> Sunday</label><input id="error_adjustment_sunday" name="error_adjustment_sunday" type="text" disabled>
+            <label>Upload Screenshot (optional)</label><input type="file" name="error_adjustment_file" accept=".png,.jpg,.jpeg,.pdf">
+            <label>Notes</label><textarea name="error_adjustment_notes"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Shift Swap / Offer -->
+      <section class="section hidden" data-type="Shift swap/offer" id="ShiftswapofferFields">
+        <div class="row">
+          <div class="full">
+            <label>Type</label>
+            <select id="shift_type" name="shift_type"><option value="offer">Shift Offer</option><option value="swap">Shift Swap</option></select>
+          </div>
+
+          <div id="shift_offer_section" class="full hidden">
+            <label>Date of Shift</label><input type="date" name="shift_offer_date">
+            <label>Start Time</label><input type="time" name="shift_offer_start">
+            <label>End Time</label><input type="time" name="shift_offer_end">
+            <label>Person Offering/Receiving</label><input type="text" name="shift_offer_person">
+          </div>
+
+          <div id="shift_swap_section" class="full hidden">
+            <h4>Employee 1 (Your Shift)</h4>
+            <label>Date</label><input type="date" name="shift_swap_emp1_date">
+            <label>Start</label><input type="time" name="shift_swap_emp1_start">
+            <label>End</label><input type="time" name="shift_swap_emp1_end">
+            <label>Name</label><input type="text" name="shift_swap_emp1_name">
+            <hr>
+            <h4>Employee 2</h4>
+            <label>Date</label><input type="date" name="shift_swap_emp2_date">
+            <label>Start</label><input type="time" name="shift_swap_emp2_start">
+            <label>End</label><input type="time" name="shift_swap_emp2_end">
+            <label>Name</label><input type="text" name="shift_swap_emp2_name">
+            <label>PeopleWare submitted?</label>
+            <select name="shift_peopleware_submitted"><option value="">--</option><option value="yes">Yes</option><option value="no">No</option></select>
+            <label>Upload screenshot (optional)</label><input type="file" name="shift_swap_file" accept=".png,.jpg,.jpeg,.pdf">
+            <label>Notes</label><textarea name="shift_swap_notes"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Suggestions / Feedback -->
+      <section class="section hidden" data-type="Suggestions/Feedback" id="SuggestionsFeedbackFields"><div class="full"><label>Suggestions/Feedback</label><textarea name="suggestions_feedback_text"></textarea></div></section>
+
+      <!-- Unpaid time off / vacation -->
+      <section class="section hidden" data-type="Unpaid time off/vacation" id="UnpaidtimeoffvacationFields">
+        <div class="row">
+          <div>
+            <label>Request Type</label>
+            <select id="timeoff_type" name="timeoff_type"><option value="">--</option><option value="unpaid_time_off">Unpaid Time Off</option><option value="paid_vacation">Paid Vacation</option><option value="appointment">Appointment</option></select>
+          </div>
+          <div>
+            <label>Date From</label>
+            <input id="timeoff_date_from" type="date" name="timeoff_date_from">
+          </div>
+          <div>
+            <label>Date To</label>
+            <input id="timeoff_date_to" type="date" name="timeoff_date_to">
+          </div>
+          <div class="full"><p id="timeoff_date_error" class="muted hidden">"Date To" cannot be earlier than "Date From."</p></div>
+          <div class="full"><label>Reason / Notes</label><textarea name="timeoff_reason"></textarea></div>
+          <div id="cp3_upload_container" class="full hidden"><label>Optional: Upload CP3 Approval</label><input type="file" name="timeoff_cp3_file" accept=".png,.jpg,.jpeg,.pdf"></div>
+        </div>
+      </section>
+
+      <!-- Testing -->
+      <!-- WFM Department Work (internal projects & requests) -->
+      <section class="section hidden" data-type="WFM Department Work" id="WFMDepartmentWorkFields">
+        <div class="row">
+          <div>
+            <label>Work Category</label>
+            <select name="wfm_work_category">
+              <option value="" disabled selected>Select Category</option>
+              <option>Project</option>
+              <option>Ad-hoc Request</option>
+              <option>Report Build / Update</option>
+              <option>Data Analysis</option>
+              <option>Forecast Update</option>
+              <option>Schedule Build / Change</option>
+              <option>Capacity Planning</option>
+              <option>Portal Development</option>
+              <option>Audit / QA Review</option>
+              <option>Process Documentation</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Requested By (Department)</label>
+            <select name="wfm_work_source">
+              <option value="" disabled selected>Select Source</option>
+              <option>Leadership</option>
+              <option>Operations</option>
+              <option>Team Leads</option>
+              <option>HR</option>
+              <option>Finance</option>
+              <option>IT</option>
+              <option>Client / External</option>
+              <option>Internal WFM</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Requester Name</label>
+            <input type="text" name="wfm_work_requester" placeholder="Who asked for this?">
+          </div>
+
+          <div>
+            <label>LOB(s) Affected</label>
+            <select name="wfm_work_lob">
+              <option value="" disabled selected>Select LOB(s)</option>
+              <option>All LOBs</option>
+              <option>Multiple</option>
+              <option>SS Sales</option>
+              <option>PS Sales</option>
+              <option>PS Care</option>
+              <option>SS Case Management</option>
+              <option>I.T. Support</option>
+              <option>N/A</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Priority</label>
+            <select name="wfm_work_priority">
+              <option value="" disabled selected>Select Priority</option>
+              <option>Low</option>
+              <option>Medium</option>
+              <option>High</option>
+              <option>Urgent</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Target Due Date</label>
+            <input type="date" name="wfm_work_due_date">
+          </div>
+
+          <div>
+            <label>Estimated Effort (hours)</label>
+            <input type="number" name="wfm_work_est_hours" min="0" step="0.5" placeholder="e.g. 4">
+          </div>
+
+          <div>
+            <label>Recurrence</label>
+            <select name="wfm_work_recurring">
+              <option selected>One-time</option>
+              <option>Daily</option>
+              <option>Weekly</option>
+              <option>Bi-weekly</option>
+              <option>Monthly</option>
+              <option>Quarterly</option>
+            </select>
+          </div>
+
+          <div class="full">
+            <label>Deliverable / Expected Outcome</label>
+            <input type="text" name="wfm_work_deliverable"
+                   placeholder="e.g. Updated absenteeism report, new RTM page, revised Q3 forecast">
+          </div>
+
+          <div class="full">
+            <label>Description / Notes</label>
+            <textarea name="wfm_work_notes"
+                      placeholder="Details, context, links to files or sheets…"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section class="section hidden" data-type="Testing" id="TestingFields"><div class="full"><label>Testing Notes</label><textarea name="testing_notes"></textarea></div></section>
+
+      <div class="actions">
+        <button type="submit">{% if edit_mode %}💾 Save Changes{% else %}Submit{% endif %}</button>
+        {% if edit_mode %}<a href="/dashboard" style="margin-left:10px;padding:10px 16px;background:#eee;border-radius:8px;text-decoration:none;color:#111">Cancel</a>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  <script>
+  // Single, consolidated JS block — no duplicate functions. Runs after DOM loaded.
+  (function(){
+    'use strict';
+    function q(sel, root=document){return root.querySelector(sel)}
+    function qa(sel, root=document){return Array.from(root.querySelectorAll(sel))}
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const form = q('#wfmForm');
+      const wfmSelect = q('#wfm_request');
+      const sections = qa('section[data-type]');
+
+      // map option text -> section element
+      const sectionMap = new Map();
+      sections.forEach(s=>{ sectionMap.set(s.dataset.type, s); s.classList.add('hidden'); });
+
+      // Helper to show only selected section
+      function showSectionFor(type){
+        sections.forEach(s=>s.classList.add('hidden'));
+        const target = sectionMap.get(type);
+        if(target) target.classList.remove('hidden');
+      }
+
+      // initialize current selection (handle autofill)
+      if(wfmSelect){
+        showSectionFor(wfmSelect.value);
+        wfmSelect.addEventListener('change', e=> showSectionFor(e.target.value));
+      }
+
+      // ── WFM Department Work niceties ───────────────────────────────
+      // Internal dept work has no "advisor", so relabel the field and
+      // default the LoB to Workforce Management when this type is picked.
+      const advisorLabel = q('label[for="advisor_name"]');
+      const lobSelect    = q('#lob');
+      function applyWfmWorkMode(type){
+        const isDeptWork = (type === 'WFM Department Work');
+        if(advisorLabel){
+          advisorLabel.textContent = isDeptWork
+            ? 'Project / Task Name' : 'Advisor Name';
+        }
+        if(isDeptWork && lobSelect && !lobSelect.value){
+          Array.from(lobSelect.options).forEach(o=>{
+            if(o.text === 'Workforce Management') o.selected = true;
+          });
+        }
+      }
+      if(wfmSelect){
+        applyWfmWorkMode(wfmSelect.value);
+        wfmSelect.addEventListener('change', e=> applyWfmWorkMode(e.target.value));
+      }
+
+      // CP3 approval toggle inside Accommodation
+      const cp3Radios = qa('input[name="cp3_approval_status"]');
+      const cp3Upload = q('#cp3Upload');
+      cp3Radios.forEach(r=>r.addEventListener('change', ()=>{
+        if(cp3Upload){ cp3Upload.classList.toggle('hidden', r.value !== 'Yes'); }
+      }));
+
+      // Additional hours mode toggle
+      const addMode = q('#additional_days_mode');
+      const singleDay = q('#singleDayFields');
+      const multiDay = q('#multiDayFields');
+      if(addMode){
+        addMode.addEventListener('change', ()=>{
+          const v = addMode.value; singleDay.classList.toggle('hidden', v==='multi'); multiDay.classList.toggle('hidden', v!=='multi');
+        });
+      }
+
+      // CP skill language/action toggles
+      const cpAction = q('#cp_action');
+      const cpLang = q('#cp_language');
+      function refreshCPBlocks(){
+        const action = cpAction?.value || '';
+        const lang = cpLang?.value || '';
+        // hide all blocks first
+        qa('#cp_skill_blocks > div').forEach(el=>el.classList.add('hidden'));
+        if(!action || !lang) return;
+        const id = (action==='Add' ? 'orig_add_' : 'orig_remove_') + (lang==='English'?'en':(lang==='French'?'fr':'bi'));
+        const el = q('#'+id);
+        if(el) el.classList.remove('hidden');
+      }
+      [cpAction, cpLang].forEach(el=>el && el.addEventListener('change', refreshCPBlocks));
+
+      // Return to work toggle
+      const statusType = q('#status_update_type');
+      const returnContainer = q('#returnToWorkContainer');
+      if(statusType){
+        statusType.addEventListener('change', ()=>{
+          returnContainer.classList.toggle('hidden', statusType.value !== 'Inactive');
+        });
+      }
+
+      // CP3 single/multi toggles and day inputs
+      const cp3Type = q('#cp3_type');
+      if(cp3Type){
+        cp3Type.addEventListener('change', ()=>{
+          q('#cp3_single_day').classList.toggle('hidden', cp3Type.value !== 'single');
+          q('#cp3_multi_day').classList.toggle('hidden', cp3Type.value !== 'multi');
+        });
+      }
+      // day checkboxes for cp3 and error adjustments
+      function wireDayCheckboxes(containerSelector){
+        qa(containerSelector + ' input[type=checkbox]').forEach(cb=>{
+          cb.addEventListener('change', (e)=>{
+            const id = e.target.dataset.day; if(!id) return; const input = q('#'+id); if(!input) return; input.disabled = !e.target.checked; if(!e.target.checked) input.value='';
+          });
+        });
+      }
+      wireDayCheckboxes('#cp3_multi_day');
+      wireDayCheckboxes('#error_adjustment_multi_day');
+
+      // Error adjustment type toggle
+      const errType = q('#error_adjustment_type');
+      if(errType){ errType.addEventListener('change', ()=>{
+        q('#error_adjustment_single_day').classList.toggle('hidden', errType.value !== 'single');
+        q('#error_adjustment_multi_day').classList.toggle('hidden', errType.value !== 'multi');
+      }); }
+
+      // Shift offer/swap toggle
+      const shiftType = q('#shift_type');
+      if(shiftType){ shiftType.addEventListener('change', ()=>{
+        q('#shift_offer_section').classList.toggle('hidden', shiftType.value !== 'offer');
+        q('#shift_swap_section').classList.toggle('hidden', shiftType.value !== 'swap');
+      }); }
+
+      // Timeoff cp3 upload toggle and date validation
+      const timeoffType = q('#timeoff_type');
+      const cp3Container = q('#cp3_upload_container');
+      if(timeoffType){ timeoffType.addEventListener('change', ()=>{ cp3Container.classList.toggle('hidden', !(timeoffType.value==='unpaid_time_off' || timeoffType.value==='appointment')); }); }
+      const timeFrom = q('#timeoff_date_from'); const timeTo = q('#timeoff_date_to'); const timeErr = q('#timeoff_date_error');
+      function validateTimeOffDates(){ if(timeFrom && timeTo){ if(timeFrom.value && timeTo.value && timeTo.value < timeFrom.value){ timeErr.classList.remove('hidden'); return false;} timeErr.classList.add('hidden'); return true; } return true; }
+      [timeFrom, timeTo].forEach(el=>el && el.addEventListener('input', validateTimeOffDates));
+
+      // Shift swap initial wiring
+      if(shiftType) shiftType.dispatchEvent(new Event('change'));
+      if(cp3Type) cp3Type.dispatchEvent(new Event('change'));
+
+      // When form submits, run validation for selected section types. Returns true to allow submit.
+      form.addEventListener('submit', (ev)=>{
+        // basic HTML5 validity
+        if(!form.reportValidity()) { ev.preventDefault(); return; }
+
+        // check timeoff dates
+        if(!validateTimeOffDates()){ ev.preventDefault(); alert('Please fix Time Off dates.'); return; }
+
+        // section-specific validation
+        const selectedType = wfmSelect?.value || '';
+        if(selectedType === 'Add/remove/change team meeting'){
+          const d = q('input[name="team_meeting_date"]'); if(!d || !d.value){ ev.preventDefault(); alert('Enter meeting date.'); return; }
+        }
+        if(selectedType === 'CP skill update'){
+          const action = cpAction?.value; const lang = cpLang?.value; if(!action || !lang){ ev.preventDefault(); alert('Select CP skill action and language.'); return; }
+          const skillFieldName = (action==='Add'? 'skill_add_':'skill_remove_') + (lang==='English'?'en':(lang==='French'?'fr':'bi'));
+          const fld = q('[name="'+skillFieldName+'"]'); if(!fld || !fld.value){ ev.preventDefault(); alert('Select a skill to '+action.toLowerCase()+'.'); return; }
+        }
+
+        // pass-through; server will also validate
+      });
+
+
+      // ── Prefill from server data (edit mode) ──────────────────────────
+      {% if prefill %}
+      const _prefill = {{ prefill | tojson }};
+
+      // Normalize a name for matching: trim, lowercase, spaces → underscores.
+      // Sheet headers are typed by hand ("WFM Work Category", "wfm_work_category ",
+      // etc.) so exact-match against form field names silently fails; this
+      // makes prefill tolerant of capitalization/spacing differences.
+      const _norm = s => (s || "").toString().trim().toLowerCase().replace(/\s+/g, "_");
+
+      // Index every named form element by its normalized name
+      const _fieldIndex = new Map();
+      document.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
+        const key = _norm(el.name);
+        if (!_fieldIndex.has(key)) _fieldIndex.set(key, []);
+        _fieldIndex.get(key).push(el);
+      });
+
+      Object.entries(_prefill).forEach(([name, val]) => {
+        if (!val) return;
+        val = val.toString();
+        const els = _fieldIndex.get(_norm(name)) || [];
+        els.forEach(el => {
+          if (el.type === 'radio' || el.type === 'checkbox') {
+            el.checked = (el.value.trim() === val.trim());
+          } else if (el.tagName === 'SELECT') {
+            // try to find matching option (exact, then trimmed)
+            let matched = false;
+            Array.from(el.options).forEach(opt => {
+              if (opt.value === val || opt.text === val) { opt.selected = true; matched = true; }
+            });
+            if (!matched) {
+              Array.from(el.options).forEach(opt => {
+                if (opt.value.trim() === val.trim() || opt.text.trim() === val.trim()) {
+                  opt.selected = true;
+                }
+              });
+            }
+          } else {
+            el.value = val;
+          }
+        });
+      });
+      // trigger change events so dependent sections/toggles update
+      ['wfm_request','cp_action','cp_language','additional_days_mode',
+       'cp3_type','error_adjustment_type','shift_type','timeoff_type',
+       'status_update_type'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.dispatchEvent(new Event('change'));
+      });
+
+      // ── Back-fill Notes into the active section's textarea ────────────
+      // The sheet stores one "Notes" column, but the form uses per-type
+      // textareas (accommodation_notes, training_notes, timeoff_reason…).
+      // The generic prefill above can't match "Notes" to any element, so
+      // after the correct section is visible, drop the saved notes into
+      // that section's notes/reason textarea if it's still empty.
+      const _savedNotes = (_prefill["Notes"] || "").trim();
+      if (_savedNotes) {
+        // small delay so section visibility toggles have applied
+        setTimeout(() => {
+          const candidates = Array.from(document.querySelectorAll(
+            'textarea[name$="_notes"], textarea[name$="_reason"]'
+          )).filter(t => t.offsetParent !== null && !t.value.trim());
+          if (candidates.length) {
+            candidates[0].value = _savedNotes;
+          } else {
+            // fallback: no visible empty notes textarea — use any empty one
+            const anyEmpty = Array.from(document.querySelectorAll(
+              'textarea[name$="_notes"], textarea[name$="_reason"]'
+            )).find(t => !t.value.trim());
+            if (anyEmpty) anyEmpty.value = _savedNotes;
+          }
+        }, 50);
+      }
+      {% endif %}
+
+      // expose small debug helper on window (optional)
+      window._wfm_helpers = { showSectionFor, sectionMap };
+
+      // initialize UI based on any pre-filled values
+      if(wfmSelect) wfmSelect.dispatchEvent(new Event('change'));
+      if(cpAction) cpAction.dispatchEvent(new Event('change'));
+      if(cpLang) cpLang.dispatchEvent(new Event('change'));
+      validateTimeOffDates();
+    });
+  })();
+  </script>
+<link rel="stylesheet" href="/static/dark.css">
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>
+

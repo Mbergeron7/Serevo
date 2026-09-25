@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ brand_name }}{% endblock %}</title>
+  <style>
+    :root {
+      --brand-accent: {{ brand_accent }};
+      --brand-accent-light: color-mix(in srgb, {{ brand_accent }} 15%, white);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --brand-accent-light: color-mix(in srgb, {{ brand_accent }} 25%, black);
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav>
+    <a href="/" class="brand">{{ brand_name }}</a>
+    {% if is_demo %}<span class="demo-badge">Demo</span>{% endif %}
+    {% block nav %}{% endblock %}
+  </nav>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <p>&copy; {{ brand_name }} &middot; {{ brand_tagline }}</p>
+    {% if brand_email %}<p><a href="mailto:{{ brand_email }}">{{ brand_email }}</a></p>{% endif %}
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

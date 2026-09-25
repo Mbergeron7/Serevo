@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Build Schedule</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    h2   { color:#0078D4; }
+    .card { margin-bottom:1.5rem; }
+    .card-header { background:#0078D4; color:#fff; font-weight:600; }
+    .section-note { font-size:.82rem; color:#6c757d; margin-bottom:.75rem; }
+    .tl-row { background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px 16px; margin-bottom:10px; }
+    .tl-name { font-weight:600; color:#0078D4; margin-bottom:8px; font-size:.95rem; }
+    .week-label { font-size:.78rem; font-weight:600; color:#495057; margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+    .day-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px; }
+    .day-block label { font-size:.72rem; color:#555; display:block; text-align:center; margin-bottom:2px; }
+    .day-block select { font-size:.76rem; padding:2px 2px; width:100%; }
+    .hours-row { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:4px; }
+    .hours-cell { display:flex; flex-direction:column; gap:2px; }
+    .hours-cell input { font-size:.72rem; padding:2px 3px; width:100%; border:1px solid #ced4da; border-radius:4px; }
+    .hours-cell label { font-size:.68rem; color:#888; text-align:center; }
+    .week2-section { display:none; border-top:1px dashed #dee2e6; margin-top:10px; padding-top:10px; }
+    .week2-section.show { display:block; }
+    .pto-row { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+    .pto-row input, .pto-row select { flex:1; min-width:80px; }
+    .hol-row { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+    .hol-row input { flex:1; min-width:100px; }
+    .remove-btn { color:#dc3545; background:none; border:none; font-size:1.1rem; cursor:pointer; padding:0 4px; }
+    .badge-ss { background:#0078D4; }
+    .badge-ps { background:#198754; }
+    .rotation-input { font-size:.85rem; }
+    .multiweek-toggle { font-size:.82rem; }
+    #saveIndicator { font-size:.78rem; color:#198754; opacity:0; transition:opacity .3s ease; margin-left:12px; }
+    #saveIndicator.show { opacity:1; }
+    .draft-banner { background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:10px 16px; margin-bottom:16px; font-size:.875rem; display:none; }
+    .draft-banner.show { display:flex; align-items:center; gap:12px; }
+  </style>
+</head>
+<body>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex align-items-center">
+    <h2 class="mb-0">📅 Build Schedule</h2>
+    <span id="saveIndicator">✓ Draft saved</span>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearDraft()">🗑 Clear Draft</button>
+    <a href="{{ url_for('schedule_tools') }}" class="btn btn-outline-secondary btn-sm">← Back to Tools</a>
+  </div>
+</div>
+
+<div class="draft-banner" id="draftBanner">
+  📋 <strong>Draft restored</strong> — your previously saved schedule inputs have been loaded.
+  <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearDraft()">Start fresh</button>
+</div>
+
+<form method="POST" action="{{ url_for('run_schedule') }}" id="scheduleForm">
+
+  <!-- Section 1: Date Range -->
+  <div class="card">
+    <div class="card-header">1 — Schedule Range</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Start Date <span class="text-muted">(first Monday)</span></label>
+          <input type="date" class="form-control" name="schedule_start" id="scheduleStart" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">End Date <span class="text-muted">(last Monday)</span></label>
+          <input type="date" class="form-control" name="schedule_end" id="scheduleEnd" required>
+        </div>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">SS — Skip start index</label>
+          <p class="section-note">Which TL sits out the first week? (0 = first in SS closing rotation)</p>
+          <input type="number" class="form-control" name="ss_skip_start" value="0" min="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">PS Friday start index</label>
+          <p class="section-note">Which TL closes the first Friday? (0 = first in PS Friday rotation)</p>
+          <input type="number" class="form-control" name="ps_fri_start" value="0" min="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">SS Sunday start index</label>
+          <p class="section-note">Which TL does the first Sunday? (0 = first in SS Sunday rotation)</p>
+          <input type="number" class="form-control" name="ss_sun_start" value="0" min="0">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Roster -->
+  <div class="card">
+    <div class="card-header">2 — Team Roster</div>
+    <div class="card-body">
+      <p class="section-note">One name per line for each group.</p>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold"><span class="badge badge-ss me-1">SS</span> Team Leads</label>
+          <textarea class="form-control rotation-input" name="ss_team_leads" rows="8"
+            placeholder="Alana&#10;Kristin&#10;Shavindri&#10;Odette&#10;Salomon&#10;Cushana&#10;Lucas&#10;Adeyinka"></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold"><span class="badge badge-ps me-1">PS</span> Team Leads</label>
+          <textarea class="form-control rotation-input" name="ps_team_leads" rows="8"
+            placeholder="Jodi&#10;David&#10;Edena&#10;Bryan&#10;Julianne&#10;Aman"></textarea>
+        </div>
+      </div>
+      <hr class="my-3">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">SS Closing Rotation <span class="text-muted">(ordered, one per line)</span></label>
+          <textarea class="form-control rotation-input" name="ss_closing_rotation" rows="6"
+            placeholder="Odette&#10;Salomon&#10;Shavindri&#10;Cushana&#10;Lucas&#10;Adeyinka"></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">SS Sunday Rotation <span class="text-muted">(ordered, one per line)</span></label>
+          <textarea class="form-control rotation-input" name="ss_sunday_rotation" rows="5"
+            placeholder="Cushana&#10;Lucas&#10;Adeyinka&#10;Odette&#10;Salomon"></textarea>
+          <label class="form-label fw-semibold mt-2">PS Friday Rotation <span class="text-muted">(ordered, one per line)</span></label>
+          <textarea class="form-control rotation-input" name="ps_friday_rotation" rows="3"
+            placeholder="Bryan&#10;Julianne&#10;Edena"></textarea>
+        </div>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">PS Weekend TL <span class="text-muted">(Sat + Sun every week)</span></label>
+          <input type="text" class="form-control" name="ps_weekend_tl" placeholder="Aman">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">PS Mon–Thu Closer <span class="text-muted">(static every week)</span></label>
+          <input type="text" class="form-control" name="ps_monday_thursday_tl" placeholder="David">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">SS Saturday Primary TL</label>
+          <input type="text" class="form-control" name="ss_saturday_primary_tl" placeholder="Shavindri">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Accommodations -->
+  <div class="card">
+    <div class="card-header">3 — Accommodations</div>
+    <div class="card-body">
+      <p class="section-note">
+        Set each TL's availability and optionally their exact shift hours per day.
+        <strong>close</strong> = closing shift &nbsp;|&nbsp;
+        <strong>open</strong> = opening only &nbsp;|&nbsp;
+        <strong>fill</strong> = flexible &nbsp;|&nbsp;
+        <strong>off</strong> = not available.<br>
+        Leave hours blank to use the default shift times. Enable <strong>2-week rotation</strong> for TLs whose schedule alternates week-over-week.
+      </p>
+      <p class="section-note text-primary">Paste your roster above first, then click <strong>Load TL Rows</strong>.</p>
+      <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="buildAccomRows()">⟳ Load TL Rows</button>
+      <div id="accomContainer"></div>
+    </div>
+  </div>
+
+  <!-- Section 4: PTO -->
+  <div class="card">
+    <div class="card-header">4 — PTO / Time Off</div>
+    <div class="card-body">
+      <p class="section-note">
+        Add one row per block of time off. For partial days (e.g. morning appointment),
+        select <strong>Partial (AM off)</strong> — the TL will still be available for closing shifts that day.
+      </p>
+      <div id="ptoContainer"></div>
+      <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addPtoRow()">+ Add Row</button>
+    </div>
+  </div>
+
+  <!-- Section 5: Stat Holidays -->
+  <div class="card">
+    <div class="card-header">5 — Stat Holidays</div>
+    <div class="card-body">
+      <p class="section-note">Rule: PS TL always <strong>opens</strong> on stat days. SS TL always <strong>closes</strong>.</p>
+      <div id="holContainer"></div>
+      <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addHolRow()">+ Add Holiday</button>
+    </div>
+  </div>
+
+  <!-- Section 6: Shift Times -->
+  <div class="card">
+    <div class="card-header">6 — Default Shift Times</div>
+    <div class="card-body">
+      <p class="section-note">These are the fallback times used when no custom hours are set in Accommodations above.</p>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">SS Weekday Close</label>
+          <input type="text" class="form-control" name="shift_ss_weekday_close" value="13:30–22:00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">SS Weekday Open</label>
+          <input type="text" class="form-control" name="shift_ss_weekday_open" value="08:00–16:30">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">PS Weekday Close</label>
+          <input type="text" class="form-control" name="shift_ps_weekday_close" value="11:30–20:00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">PS Weekday Open</label>
+          <input type="text" class="form-control" name="shift_ps_weekday_open" value="08:00–16:30">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">SS Saturday Open</label>
+          <input type="text" class="form-control" name="shift_ss_saturday_open" value="09:00–17:30">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">SS Saturday Close</label>
+          <input type="text" class="form-control" name="shift_ss_saturday_close" value="10:30–19:00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">SS Sunday Close</label>
+          <input type="text" class="form-control" name="shift_ss_sunday_close" value="09:30–18:00">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary px-4">▶ Generate Schedule</button>
+    <button type="submit" name="output_format" value="xlsx"
+      formaction="{{ url_for('run_schedule') }}" class="btn btn-success px-4">⬇ Generate &amp; Download Excel</button>
+    <a href="{{ url_for('schedule_tools') }}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+
+</form>
+
+<script>
+const DAYS    = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const AVAIL   = ["close","open","fill","off"];
+const DRAFT_KEY = "wfm_schedule_draft_v3";
+
+let saveTimer = null;
+
+// ── Collect accommodation values ──────────────────────
+function collectAccomData() {
+  const data = [];
+  document.querySelectorAll('#accomContainer .tl-row').forEach(row => {
+    const safe  = row.id.replace('tlrow_', '');
+    const mwCb  = document.getElementById('mw_' + safe);
+    const entry = { safe, multiweek: mwCb ? mwCb.checked : false, week1: {}, week2: {}, notes: '' };
+    const notesEl = row.querySelector(`[name="accom_notes_${safe}"]`);
+    if (notesEl) entry.notes = notesEl.value;
+    ['week1','week2'].forEach(week => {
+      DAYS.forEach(day => {
+        const sel   = row.querySelector(`[name="accom_${safe}_${week}_${day}"]`);
+        const start = row.querySelector(`[name="accom_${safe}_${week}_${day}_start"]`);
+        const end   = row.querySelector(`[name="accom_${safe}_${week}_${day}_end"]`);
+        entry[week][day] = {
+          avail: sel   ? sel.value   : 'fill',
+          start: start ? start.value : '',
+          end:   end   ? end.value   : '',
+        };
+      });
+    });
+    data.push(entry);
+  });
+  return data;
+}
+
+// ── Restore accommodation values ──────────────────────
+function restoreAccomData(data) {
+  data.forEach(entry => {
+    const { safe, multiweek, notes, week1, week2 } = entry;
+    const row = document.getElementById('tlrow_' + safe);
+    if (!row) return;
+    const mwCb = document.getElementById('mw_' + safe);
+    if (mwCb) {
+      mwCb.checked = multiweek;
+      const sec = document.getElementById('week2_' + safe);
+      if (sec) sec.classList.toggle('show', multiweek);
+    }
+    const notesEl = row.querySelector(`[name="accom_notes_${safe}"]`);
+    if (notesEl) notesEl.value = notes || '';
+    ['week1','week2'].forEach(week => {
+      const weekData = entry[week] || {};
+      DAYS.forEach(day => {
+        const dayData = weekData[day] || {};
+        const sel     = row.querySelector(`[name="accom_${safe}_${week}_${day}"]`);
+        const start   = row.querySelector(`[name="accom_${safe}_${week}_${day}_start"]`);
+        const end     = row.querySelector(`[name="accom_${safe}_${week}_${day}_end"]`);
+        if (sel   && dayData.avail !== undefined) sel.value   = dayData.avail;
+        if (start && dayData.start !== undefined) start.value = dayData.start;
+        if (end   && dayData.end   !== undefined) end.value   = dayData.end;
+      });
+    });
+  });
+}
+
+// ── Save draft ────────────────────────────────────────
+function saveDraft() {
+  try {
+    const draft = {};
+    document.querySelectorAll(
+      '#scheduleForm input[name]:not([type="submit"]), #scheduleForm textarea[name], #scheduleForm select[name]'
+    ).forEach(el => {
+      if (['pto_name[]','pto_start[]','pto_end[]','pto_type[]','pto_note[]',
+           'holiday_date[]','holiday_name[]'].includes(el.name)) return;
+      if (el.name.startsWith('accom_')) return;
+      draft[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+
+    // PTO rows
+    draft._pto = [];
+    document.querySelectorAll('#ptoContainer .pto-row').forEach(row => {
+      draft._pto.push({
+        name:  row.querySelector('[name="pto_name[]"]')?.value  || '',
+        start: row.querySelector('[name="pto_start[]"]')?.value || '',
+        end:   row.querySelector('[name="pto_end[]"]')?.value   || '',
+        type:  row.querySelector('[name="pto_type[]"]')?.value  || 'full',
+        note:  row.querySelector('[name="pto_note[]"]')?.value  || '',
+      });
+    });
+
+    // Holiday rows
+    draft._hol = [];
+    document.querySelectorAll('#holContainer .hol-row').forEach(row => {
+      draft._hol.push({
+        date: row.querySelector('[name="holiday_date[]"]')?.value || '',
+        name: row.querySelector('[name="holiday_name[]"]')?.value || '',
+      });
+    });
+
+    // Accommodation data as structured values
+    draft._accom = collectAccomData();
+    draft._ssTLs = (document.querySelector('[name="ss_team_leads"]')?.value || '')
+      .split('\n').map(s=>s.trim()).filter(Boolean);
+    draft._psTLs = (document.querySelector('[name="ps_team_leads"]')?.value || '')
+      .split('\n').map(s=>s.trim()).filter(Boolean);
+
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+
+    const ind = document.getElementById('saveIndicator');
+    ind.classList.add('show');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => ind.classList.remove('show'), 2000);
+  } catch(e) {
+    console.warn('Could not save draft:', e);
+  }
+}
+
+// ── Load draft ────────────────────────────────────────
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return false;
+    const draft = JSON.parse(raw);
+
+    Object.entries(draft).forEach(([name, value]) => {
+      if (name.startsWith('_')) return;
+      const els = document.querySelectorAll(`[name="${name}"]`);
+      els.forEach(el => {
+        if (el.type === 'checkbox') el.checked = value;
+        else el.value = value;
+      });
+    });
+
+    if (draft._pto?.length) {
+      document.getElementById('ptoContainer').innerHTML = '';
+      draft._pto.forEach(r => addPtoRow(r.name, r.start, r.end, r.type||'full', r.note||''));
+    }
+
+    if (draft._hol?.length) {
+      document.getElementById('holContainer').innerHTML = '';
+      draft._hol.forEach(r => addHolRow(r.date, r.name));
+    }
+
+    if (draft._accom?.length && (draft._ssTLs?.length || draft._psTLs?.length)) {
+      const container = document.getElementById('accomContainer');
+      container.innerHTML = '';
+      (draft._ssTLs || []).forEach(name => container.insertAdjacentHTML('beforeend', buildTLRow(name, 'SS')));
+      (draft._psTLs || []).forEach(name => container.insertAdjacentHTML('beforeend', buildTLRow(name, 'PS')));
+      restoreAccomData(draft._accom);
+    }
+
+    return true;
+  } catch(e) {
+    console.warn('Could not load draft:', e);
+    return false;
+  }
+}
+
+function clearDraft() {
+  if (!confirm('Clear the saved draft and reset to defaults?')) return;
+  localStorage.removeItem(DRAFT_KEY);
+  location.reload();
+}
+
+document.getElementById('scheduleForm').addEventListener('input',  saveDraft);
+document.getElementById('scheduleForm').addEventListener('change', saveDraft);
+document.getElementById('scheduleForm').addEventListener('submit', () => {
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+// ── Accommodation rows ────────────────────────────────
+function buildAccomRows() {
+  const ss = (document.querySelector('[name="ss_team_leads"]').value || '')
+    .split('\n').map(s=>s.trim()).filter(Boolean);
+  const ps = (document.querySelector('[name="ps_team_leads"]').value || '')
+    .split('\n').map(s=>s.trim()).filter(Boolean);
+  const container = document.getElementById('accomContainer');
+  container.innerHTML = '';
+  [...ss.map(n=>({name:n,group:'SS'})), ...ps.map(n=>({name:n,group:'PS'}))]
+    .forEach(({name,group}) => container.insertAdjacentHTML('beforeend', buildTLRow(name, group)));
+  saveDraft();
+}
+
+function buildWeekGrid(safe, week) {
+  const daySelects = DAYS.map(day => `
+    <div class="day-block">
+      <label>${day}</label>
+      <select class="form-select form-select-sm" name="accom_${safe}_${week}_${day}">
+        ${AVAIL.map(o=>`<option value="${o}">${o}</option>`).join('')}
+      </select>
+    </div>`).join('');
+  const hourInputs = DAYS.map(day => `
+    <div class="hours-cell">
+      <label>Start</label>
+      <input type="time" name="accom_${safe}_${week}_${day}_start">
+      <label>End</label>
+      <input type="time" name="accom_${safe}_${week}_${day}_end">
+    </div>`).join('');
+  return `<div class="day-grid">${daySelects}</div>
+          <div class="hours-row">${hourInputs}</div>`;
+}
+
+function buildTLRow(name, group) {
+  const safe  = name.replace(/\s+/g,'_');
+  const badge = group === 'SS'
+    ? '<span class="badge badge-ss me-1">SS</span>'
+    : '<span class="badge badge-ps me-1">PS</span>';
+  return `
+  <div class="tl-row" id="tlrow_${safe}">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="tl-name">${badge}${name}</div>
+      <div class="form-check form-switch multiweek-toggle mb-0">
+        <input class="form-check-input" type="checkbox" id="mw_${safe}" name="accom_${safe}_multiweek"
+               value="1" onchange="toggleWeek2('${safe}')">
+        <label class="form-check-label" for="mw_${safe}">2-week rotation</label>
+      </div>
+    </div>
+    <div class="week-label">Week 1</div>
+    ${buildWeekGrid(safe, 'week1')}
+    <div class="week2-section" id="week2_${safe}">
+      <div class="week-label mt-2">Week 2 <span class="text-muted fw-normal">(alternates with Week 1)</span></div>
+      ${buildWeekGrid(safe, 'week2')}
+    </div>
+    <div class="mt-2">
+      <label class="form-label mb-0" style="font-size:.78rem">Notes</label>
+      <input type="text" class="form-control form-control-sm" name="accom_notes_${safe}" placeholder="Optional notes…">
+    </div>
+  </div>`;
+}
+
+function toggleWeek2(safe) {
+  const cb  = document.getElementById('mw_' + safe);
+  const sec = document.getElementById('week2_' + safe);
+  if (sec) sec.classList.toggle('show', cb.checked);
+  saveDraft();
+}
+
+// ── PTO rows ──────────────────────────────────────────
+function addPtoRow(name='', start='', end='', type='full', note='') {
+  const c   = document.getElementById('ptoContainer');
+  const row = document.createElement('div');
+  row.className = 'pto-row';
+  row.innerHTML = `
+    <input type="text" class="form-control form-control-sm" name="pto_name[]"
+           placeholder="TL Name" value="${name}" style="max-width:130px">
+    <input type="date" class="form-control form-control-sm" name="pto_start[]" value="${start}">
+    <span class="text-muted">→</span>
+    <input type="date" class="form-control form-control-sm" name="pto_end[]" value="${end}">
+    <select class="form-select form-select-sm" name="pto_type[]" style="max-width:170px">
+      <option value="full"    ${type==='full'    ?'selected':''}>Full Day(s) Off</option>
+      <option value="partial" ${type==='partial' ?'selected':''}>Partial (AM off only)</option>
+    </select>
+    <input type="text" class="form-control form-control-sm" name="pto_note[]"
+           placeholder="Note (optional)" value="${note}" style="max-width:150px">
+    <button type="button" class="remove-btn" onclick="this.parentElement.remove();saveDraft()">✕</button>`;
+  c.appendChild(row);
+}
+
+// ── Holiday rows ──────────────────────────────────────
+function addHolRow(date='', name='') {
+  const c   = document.getElementById('holContainer');
+  const row = document.createElement('div');
+  row.className = 'hol-row';
+  row.innerHTML = `
+    <input type="date" class="form-control form-control-sm" name="holiday_date[]"
+           value="${date}" style="max-width:160px">
+    <input type="text" class="form-control form-control-sm" name="holiday_name[]"
+           placeholder="Holiday name" value="${name}">
+    <button type="button" class="remove-btn" onclick="this.parentElement.remove();saveDraft()">✕</button>`;
+  c.appendChild(row);
+}
+
+// ── Boot ──────────────────────────────────────────────
+(function init() {
+  const restored = loadDraft();
+  if (restored) {
+    document.getElementById('draftBanner').classList.add('show');
+  } else {
+    const defaults = [
+      ["2026-07-01","Canada Day"],["2026-08-03","Civic Holiday"],
+      ["2026-09-07","Labour Day"],["2026-10-12","Thanksgiving"],
+      ["2026-11-11","Remembrance Day"],["2026-12-25","Christmas Day"],
+      ["2026-12-26","Boxing Day"],
+    ];
+    defaults.forEach(([d,n]) => addHolRow(d,n));
+    document.getElementById('scheduleStart').value = '2026-06-29';
+    document.getElementById('scheduleEnd').value   = '2026-12-28';
+  }
+})();
+</script>
+
+</body>
+</html>

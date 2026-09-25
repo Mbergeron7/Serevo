@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Request Submitted</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      text-align: center;
+      padding: 60px;
+    }
+
+    h1 {
+      color: #0078D4;
+    }
+
+    .button {
+      display: inline-block;
+      margin: 20px;
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .new-request {
+      background-color: #0078D4;
+      color: white;
+    }
+
+    .new-request:hover {
+      background-color: #005fa3;
+    }
+
+    .close-tab {
+      background-color: #ccc;
+      color: #333;
+    }
+
+    .close-tab:hover {
+      background-color: #999;
+    }
+  </style>
+</head>
+<body>
+  <h1>✅ Request Submitted</h1>
+  <p>Your WFM request has been logged successfully.</p>
+
+  <a href="/" class="button new-request">Submit Another Request</a>
+  <button class="button close-tab" onclick="closeTab()">Close This Tab</button>
+
+  <script>
+    function closeTab() {
+      window.open('', '_self'); // Required for some browsers
+      window.close();
+
+      // Fallback if tab doesn't close
+      setTimeout(() => {
+        alert("This tab can't be closed automatically. Please close it manually.");
+      }, 500);
+    }
+  </script>
+</body>
+</html>
+

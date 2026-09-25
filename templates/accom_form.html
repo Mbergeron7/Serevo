@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>{{ 'Edit' if mode == 'edit' else 'New' }} Accommodation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#2e7d32,#1b5e20); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:20px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .form-card { background:#fff; border-radius:10px; padding:28px; box-shadow:0 3px 10px rgba(0,0,0,.07); }
+    .btn-save { background:#2e7d32; color:#fff; border:none; border-radius:8px; padding:8px 24px; font-weight:600; }
+    .btn-save:hover { background:#1b5e20; }
+    .section-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+                     color:#2e7d32; border-bottom:2px solid #e8f5e9; padding-bottom:6px; margin:20px 0 14px; }
+    .day-label { font-size:.8rem; font-weight:600; color:#555; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>{{ '✏️ Edit Accommodation' if mode == 'edit' else '➕ New Accommodation' }}</h1>
+  <p>{{ record.name if record else 'Enter employee details below' }}</p>
+</div>
+
+<div class="mb-3">
+  <a href="/people/accommodations" style="color:#2e7d32;text-decoration:none;font-weight:500">← Back to Accommodations</a>
+</div>
+
+<div class="form-card">
+  <form method="POST">
+
+    <div class="section-title">Employee Info</div>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control" required
+               value="{{ record.name if record else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Line of Business <span class="text-danger">*</span></label>
+        <select name="lob" class="form-select" required>
+          <option value="">Select LOB…</option>
+          {% for l in lobs %}
+          <option value="{{ l }}" {% if record and record.lob == l %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Accommodation Type</label>
+        <select name="accommodation_type" class="form-select">
+          <option value="">Select…</option>
+          {% for t in accom_types %}
+          <option value="{{ t }}" {% if record and record.accommodation_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title">Schedule</div>
+    <div class="row g-2">
+      {% for day in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] %}
+      <div class="col">
+        <label class="form-label day-label mb-1 d-block">{{ day.capitalize() }}</label>
+        <input type="text" name="{{ day }}" class="form-control form-control-sm"
+               placeholder="e.g. 9:00-17:30 or Off"
+               value="{{ record[day] if record else '' }}">
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section-title">Contract & Dates</div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Injixo Contract</label>
+        <select name="injixo_contract" class="form-select">
+          <option value="">Select…</option>
+          {% for c in contracts %}
+          <option value="{{ c }}" {% if record and record.injixo_contract == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+          <option value="{{ record.injixo_contract if record and record.injixo_contract not in contracts else '' }}"
+                  {% if record and record.injixo_contract and record.injixo_contract not in contracts %}selected{% endif %}>
+            {{ record.injixo_contract if record and record.injixo_contract not in contracts else 'Other…' }}</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Request Date</label>
+        <input type="date" name="request_date" class="form-control"
+               value="{{ record.request_date if record else '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Start Date</label>
+        <input type="date" name="start_date" class="form-control"
+               value="{{ record.start_date if record else '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">End Date</label>
+        <input type="date" name="end_date" class="form-control"
+               value="{{ record.end_date if record else '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Status</label>
+        <select name="status" class="form-select">
+          <option value="Active"   {% if not record or record.status == 'Active'   %}selected{% endif %}>Active</option>
+          <option value="Inactive" {% if record and record.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title">Comments</div>
+    <div class="row g-3">
+      <div class="col-12">
+        <textarea name="comments" class="form-control" rows="3"
+                  placeholder="Any notes or special instructions…">{{ record.comments if record else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" class="btn-save btn">💾 Save</button>
+      <a href="/people/accommodations" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+
+  </form>
+</div>
+<link rel="stylesheet" href="/static/dark.css">
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>

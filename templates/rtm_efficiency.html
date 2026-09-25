@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Production Efficiency</title>
+  <link rel="stylesheet" href="/static/dark.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:16px; background:var(--bg,#f0f2f5); color:var(--text,#333); }
+    h1 { margin:0 0 4px; font-size:1.25rem; }
+    .sub { color:var(--muted,#6c757d); font-size:.82rem; margin-bottom:12px; }
+    .nav-links { margin-bottom:12px; }
+    .nav-links a { margin-right:14px; text-decoration:none; font-weight:500; color:#007bff; font-size:.88rem; }
+
+    /* Controls */
+    .controls { background:var(--surface,#fff); border-radius:10px; padding:10px 16px;
+                margin-bottom:14px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+                display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .controls label { font-size:.8rem; font-weight:600; }
+    .controls input[type=date] { padding:5px 8px; border:1px solid var(--border,#ccc);
+                                  border-radius:6px; font-size:.82rem; background:var(--surface,#fff); color:var(--text,#333); }
+    .btn { padding:6px 14px; border:none; border-radius:6px; cursor:pointer; font-size:.82rem; font-weight:600; }
+    .btn-primary { background:#1565c0; color:#fff; }
+    .btn-reset   { background:var(--surface2,#eceff1); color:var(--text,#546e7a); border:1px solid var(--border,#cfd8dc); }
+    .target-wrap { display:flex; align-items:center; gap:6px; font-size:.8rem; }
+    .target-wrap input[type=number] { width:56px; padding:4px 6px; border:1px solid var(--border,#ccc);
+                                       border-radius:5px; font-size:.82rem; background:var(--surface,#fff); color:var(--text,#333); }
+    .live-badge { background:#2e7d32; color:#fff; border-radius:8px; padding:2px 9px; font-size:.72rem; font-weight:700; }
+    .last-refresh { font-size:.74rem; color:var(--muted,#888); }
+
+    /* KPI row */
+    .kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .kpi-card { background:var(--surface,#fff); border-radius:10px; padding:12px 18px;
+                box-shadow:0 2px 6px rgba(0,0,0,.06); flex:1; min-width:140px; }
+    .kpi-val  { font-size:1.6rem; font-weight:700; color:#1565c0; }
+    .kpi-lbl  { font-size:.76rem; color:var(--muted,#888); margin-top:2px; }
+
+    /* LOB summary */
+    .section-card { background:var(--surface,#fff); border-radius:10px; margin-bottom:14px;
+                    box-shadow:0 2px 6px rgba(0,0,0,.06); overflow:hidden; }
+    .section-head { padding:10px 16px; font-weight:700; font-size:.92rem; color:#fff;
+                    background:#1a237e; display:flex; align-items:center; gap:8px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px 12px; font-size:.83rem; border-bottom:1px solid var(--border,#eee);
+             text-align:left; vertical-align:middle; }
+    th { background:var(--surface2,#f7f7f7); font-size:.72rem; text-transform:uppercase;
+         letter-spacing:.03em; font-weight:600; color:var(--muted,#666); }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:var(--surface2,#f7f9fc); }
+
+    /* Efficiency bar */
+    .eff-wrap { display:flex; align-items:center; gap:8px; min-width:160px; }
+    .eff-bar  { flex:1; height:10px; background:var(--border,#e0e0e0); border-radius:5px; overflow:hidden; position:relative; }
+    .eff-fill { height:100%; border-radius:5px; transition:width .4s; }
+    .eff-target-line { position:absolute; top:0; height:100%; width:2px; background:#e65100; }
+    .eff-pct  { font-weight:700; font-size:.82rem; min-width:40px; text-align:right; }
+    .eff-good { color:#2e7d32; }
+    .eff-warn { color:#e65100; }
+    .eff-bad  { color:#c62828; }
+
+    /* LOB filter */
+    .lob-filter { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; padding:0 16px; }
+    .lob-btn { padding:3px 10px; border-radius:12px; border:1px solid var(--border,#ddd);
+               font-size:.74rem; cursor:pointer; background:var(--surface,#fff); color:var(--text,#555); }
+    .lob-btn.active { background:#1565c0; color:#fff; border-color:#1565c0; }
+
+    .sort-arrow { font-size:.65rem; color:var(--muted,#999); }
+    .sort-arrow.active { color:#1565c0; }
+    th.sortable { cursor:pointer; user-select:none; }
+    th.sortable:hover { background:var(--border,#eee); }
+  </style>
+</head>
+<body>
+<h1>⚡ Production Efficiency</h1>
+<div class="sub">Productive CP time (Ready + On-call + Cool-Down) vs PW scheduled hours</div>
+
+<div class="nav-links">
+  <a href="/landing">← Home</a>
+  <a href="/rtm/dashboard">Dashboard</a>
+  <a href="/rtm/schedule">Schedule</a>
+  <a href="/rtm/live">Live Agents</a>
+</div>
+
+<div class="controls">
+  <div>
+    <label>Date</label><br>
+    <input type="date" id="datePicker" value="{{ target_date }}">
+  </div>
+  <button class="btn btn-primary" onclick="loadData()">Load</button>
+  {% if is_today %}<span class="live-badge">● LIVE</span>{% endif %}
+  <div class="target-wrap">
+    <label>Target %</label>
+    <input type="number" id="targetPct" value="85" min="1" max="100" onchange="renderAll()">
+    <span style="font-size:.78rem;color:var(--muted,#888)">%</span>
+  </div>
+  <span style="color:var(--border,#aaa)">|</span>
+  {% if is_today %}
+  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;font-size:.8rem">
+    <input type="checkbox" id="auto-toggle" onchange="toggleAuto(this.checked)"
+           style="accent-color:#1a237e;width:13px;height:13px"> Auto-refresh
+  </label>
+  <span id="countdown" style="color:#1a237e;font-weight:600;display:none"></span>
+  {% endif %}
+  <span class="last-refresh">Last refresh: <span id="lastRefresh">—</span></span>
+  <span style="color:var(--border,#aaa)">|</span>
+  <button class="btn btn-reset" onclick="exportCSV()">⬇ Export CSV</button>
+</div>
+
+<!-- KPI cards -->
+<div class="kpi-row" id="kpiRow">
+  <div class="kpi-card"><div class="kpi-val" id="kpiEff">—</div><div class="kpi-lbl">Overall Efficiency</div></div>
+  <div class="kpi-card"><div class="kpi-val" id="kpiSchedH">—</div><div class="kpi-lbl">Paid Hours</div></div>
+  <div class="kpi-card"><div class="kpi-val" id="kpiProdH">—</div><div class="kpi-lbl">Productive Hours</div></div>
+  <div class="kpi-card"><div class="kpi-val" id="kpiAgents">—</div><div class="kpi-lbl">Agents with Data</div></div>
+  <div class="kpi-card"><div class="kpi-val" id="kpiAtTarget">—</div><div class="kpi-lbl">At or Above Target</div></div>
+</div>
+
+<!-- LOB Summary -->
+<div class="section-card">
+  <div class="section-head">📊 Efficiency by LOB</div>
+  <table id="lobTable">
+    <thead><tr>
+      <th>LOB</th><th>Agents</th><th>Sched Hours</th><th>Prod Hours</th><th title="OOQ Client Account Work (afterwork) — hours and % of logged-in time">OOQ CAW</th><th>Efficiency</th>
+    </tr></thead>
+    <tbody id="lobBody"><tr><td colspan="6" style="text-align:center;color:var(--muted,#aaa);padding:24px">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- Agent Detail -->
+<div class="section-card">
+  <div class="section-head">👤 Agent Detail
+    <span style="font-size:.8rem;font-weight:400;margin-left:8px" id="agentCount"></span>
+  </div>
+  <div class="lob-filter" id="lobFilter"></div>
+  <table>
+    <thead><tr>
+      <th class="sortable" onclick="sortAgents('name')">Name <span class="sort-arrow" id="sort-name">↕</span></th>
+      <th class="sortable" onclick="sortAgents('lob')">LOB <span class="sort-arrow" id="sort-lob">↕</span></th>
+      <th class="sortable" onclick="sortAgents('sched_min')">Sched <span class="sort-arrow" id="sort-sched_min">↕</span></th>
+      <th class="sortable" onclick="sortAgents('paid_min')">Paid Hours <span class="sort-arrow" id="sort-paid_min">↕</span></th>
+      <th class="sortable" onclick="sortAgents('logged_min')">Logged In <span class="sort-arrow" id="sort-logged_min">↕</span></th>
+      <th class="sortable" onclick="sortAgents('caw_min')" title="OOQ Client Account Work (afterwork) — hours and % of logged-in time">OOQ CAW <span class="sort-arrow" id="sort-caw_min">↕</span></th>
+      <th class="sortable" onclick="sortAgents('prod_min')">Prod Hours <span class="sort-arrow" id="sort-prod_min">↕</span></th>
+      <th class="sortable" onclick="sortAgents('eff_pct')">Efficiency <span class="sort-arrow" id="sort-eff_pct">↕</span></th>
+    </tr></thead>
+    <tbody id="agentBody"><tr><td colspan="8" style="text-align:center;color:var(--muted,#aaa);padding:24px">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+let _allRows = [];
+let _sortCol = 'eff_pct';
+let _sortDir = -1;  // -1 = desc
+let _lobFilter = null;  // null = all
+let _autoTimer = null;
+let _countdown = 0;
+const AUTO_INTERVAL = 120;  // 2 min for efficiency (heavier calc)
+
+function fmtH(min) {
+  if (min == null) return '—';
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function effClass(pct, target) {
+  if (pct == null) return '';
+  if (pct >= target) return 'eff-good';
+  if (pct >= target * 0.9) return 'eff-warn';
+  return 'eff-bad';
+}
+
+function effColor(pct, target) {
+  if (pct == null) return '#9e9e9e';
+  if (pct >= target) return '#2e7d32';
+  if (pct >= target * 0.9) return '#e65100';
+  return '#c62828';
+}
+
+function renderAll() {
+  const target = parseInt(document.getElementById('targetPct').value) || 85;
+  renderKPIs(target);
+  renderLOB(target);
+  renderAgents(target);
+}
+
+function renderKPIs(target) {
+  const visible = _lobFilter ? _allRows.filter(r => r.lob === _lobFilter) : _allRows;
+  const totalSched = visible.reduce((s,r) => s + (r.sched_min||0), 0);
+  const totalPaid  = visible.reduce((s,r) => s + (r.paid_min||r.sched_min||0), 0);
+  const totalProd  = visible.reduce((s,r) => s + (r.prod_min||0), 0);
+  const eff = totalPaid > 0 ? (totalProd / totalPaid * 100).toFixed(1) : null;
+  const atTarget = visible.filter(r => r.eff_pct != null && r.eff_pct >= target).length;
+
+  document.getElementById('kpiEff').textContent     = eff ? eff + '%' : '—';
+  document.getElementById('kpiEff').className       = 'kpi-val ' + effClass(parseFloat(eff), target);
+  document.getElementById('kpiSchedH').textContent  = fmtH(totalPaid);
+  document.getElementById('kpiProdH').textContent   = fmtH(totalProd);
+  document.getElementById('kpiAgents').textContent  = visible.length;
+  document.getElementById('kpiAtTarget').textContent = atTarget + ' / ' + visible.length;
+}
+
+function renderLOB(target) {
+  const lobMap = {};
+  _allRows.forEach(r => {
+    if (!lobMap[r.lob]) lobMap[r.lob] = {sched:0, paid:0, prod:0, caw:0, logged:0, count:0};
+    lobMap[r.lob].sched += r.sched_min || 0;
+    lobMap[r.lob].paid  += r.paid_min  || r.sched_min || 0;
+    lobMap[r.lob].prod  += r.prod_min  || 0;
+    lobMap[r.lob].caw   += r.caw_min   || 0;
+    lobMap[r.lob].logged += r.logged_min || 0;
+    lobMap[r.lob].count++;
+  });
+  const tbody = document.getElementById('lobBody');
+  const rows  = Object.keys(lobMap).sort();
+  tbody.innerHTML = rows.map(lob => {
+    const d   = lobMap[lob];
+    const eff = d.paid > 0 ? (d.prod / d.paid * 100) : null;
+    const pct = eff != null ? eff.toFixed(1) : null;
+    const barW = eff != null ? Math.min(100, eff).toFixed(1) : 0;
+    const targetPx = Math.min(100, target);
+    const col  = effColor(eff, target);
+    const cls  = effClass(eff, target);
+    const cawPct = d.logged > 0 ? (d.caw / d.logged * 100).toFixed(1) : null;
+    return `<tr>
+      <td><strong>${lob}</strong></td>
+      <td>${d.count}</td>
+      <td>${fmtH(d.sched)}</td>
+      <td>${fmtH(d.prod)}</td>
+      <td>${fmtH(d.caw)}${cawPct != null ? ` <span style="color:var(--muted,#888);font-size:.8rem">(${cawPct}%)</span>` : ''}</td>
+      <td><div class="eff-wrap">
+        <div class="eff-bar">
+          <div class="eff-fill" style="width:${barW}%;background:${col}"></div>
+          <div class="eff-target-line" style="left:${targetPx}%"></div>
+        </div>
+        <span class="eff-pct ${cls}">${pct != null ? pct+'%' : '—'}</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function sortAgents(col) {
+  if (_sortCol === col) { _sortDir *= -1; }
+  else { _sortCol = col; _sortDir = col === 'name' || col === 'lob' ? 1 : -1; }
+  document.querySelectorAll('.sort-arrow').forEach(el => { el.textContent = '↕'; el.classList.remove('active'); });
+  const el = document.getElementById('sort-' + col);
+  if (el) { el.textContent = _sortDir === 1 ? '↑' : '↓'; el.classList.add('active'); }
+  renderAgents(parseInt(document.getElementById('targetPct').value) || 85);
+}
+
+function renderAgents(target) {
+  let rows = _lobFilter ? _allRows.filter(r => r.lob === _lobFilter) : [..._allRows];
+  rows.sort((a, b) => {
+    let av = a[_sortCol], bv = b[_sortCol];
+    if (av == null) av = _sortDir === 1 ? '\uFFFF' : -Infinity;
+    if (bv == null) bv = _sortDir === 1 ? '\uFFFF' : -Infinity;
+    if (av < bv) return -_sortDir;
+    if (av > bv) return  _sortDir;
+    return 0;
+  });
+  document.getElementById('agentCount').textContent = `(${rows.length} agents)`;
+  const tbody = document.getElementById('agentBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted,#aaa);padding:24px">No data</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const eff    = r.eff_pct;
+    const barW   = eff != null ? Math.min(100, eff).toFixed(1) : 0;
+    const col    = effColor(eff, target);
+    const cls    = effClass(eff, target);
+    const targetPx = Math.min(100, target);
+    const cawPct = r.caw_pct;
+    return `<tr>
+      <td>${r.name}</td>
+      <td><span style="font-size:.72rem;background:var(--surface2,#eef);padding:1px 7px;border-radius:8px">${r.lob}</span></td>
+      <td>${fmtH(r.sched_min)}</td>
+      <td>${fmtH(r.paid_min)}</td>
+      <td>${fmtH(r.logged_min)}</td>
+      <td>${fmtH(r.caw_min)}${cawPct != null ? ` <span style="color:var(--muted,#888);font-size:.8rem">(${cawPct}%)</span>` : ''}</td>
+      <td>${fmtH(r.prod_min)}</td>
+      <td><div class="eff-wrap">
+        <div class="eff-bar">
+          <div class="eff-fill" style="width:${barW}%;background:${col}"></div>
+          <div class="eff-target-line" style="left:${targetPx}%"></div>
+        </div>
+        <span class="eff-pct ${cls}">${eff != null ? eff.toFixed(1)+'%' : '—'}</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function buildLobFilter() {
+  const lobs = [...new Set(_allRows.map(r => r.lob))].sort();
+  const wrap  = document.getElementById('lobFilter');
+  wrap.innerHTML = `<button class="lob-btn active" onclick="setLobFilter(null, this)">All</button>` +
+    lobs.map(l => `<button class="lob-btn" onclick="setLobFilter('${l.replace(/'/g,"\\'")}', this)">${l}</button>`).join('');
+}
+
+function setLobFilter(lob, btn) {
+  _lobFilter = lob;
+  document.querySelectorAll('.lob-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAll();
+}
+
+async function loadData(silent) {
+  const date = document.getElementById('datePicker').value;
+  if (!silent) {
+    document.getElementById('agentBody').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:24px"><span style="color:var(--muted,#aaa)">Loading…</span></td></tr>';
+  }
+  try {
+    const resp = await fetch('/api/efficiency_data?date=' + (date || ''));
+    const data = await resp.json();
+    _allRows = data.rows || [];
+    buildLobFilter();
+    renderAll();
+    document.getElementById('lastRefresh').textContent =
+      new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch(e) {
+    console.error('Efficiency load error:', e);
+  }
+}
+
+// Auto-refresh
+function toggleAuto(on) {
+  localStorage.setItem('eff_auto', on ? '1' : '0');
+  if (on) startCountdown(); else stopCountdown();
+}
+function startCountdown() {
+  _countdown = AUTO_INTERVAL;
+  const el = document.getElementById('countdown');
+  el.style.display = 'inline';
+  _autoTimer = setInterval(() => {
+    _countdown--;
+    el.textContent = '(next in ' + _countdown + 's)';
+    if (_countdown <= 0) {
+      stopCountdown();
+      loadData(true).then(() => {
+        if (document.getElementById('auto-toggle')?.checked) startCountdown();
+      });
+    }
+  }, 1000);
+}
+function stopCountdown() {
+  if (_autoTimer) clearInterval(_autoTimer);
+  const el = document.getElementById('countdown');
+  if (el) el.style.display = 'none';
+}
+
+function exportCSV() {
+  const date   = document.getElementById('datePicker').value || 'today';
+  const target = document.getElementById('targetPct').value || '85';
+  const rows   = _lobFilter ? _allRows.filter(r => r.lob === _lobFilter) : [..._allRows];
+
+  const headers = ['Name','LOB','Scheduled Hours','Scheduled Min',
+                   'Logged In Hours','Logged In Min',
+                   'OOQ CAW Hours','OOQ CAW Min','OOQ CAW % of Logged In',
+                   'Productive Hours','Productive Min','Efficiency %','At Target'];
+  const lines = [headers.join(',')];
+  rows.forEach(r => {
+    const eff = r.eff_pct != null ? r.eff_pct.toFixed(1) : '';
+    const atT = r.eff_pct != null ? (r.eff_pct >= parseFloat(target) ? 'Yes' : 'No') : '';
+    const schedH = r.sched_min ? (r.sched_min / 60).toFixed(2) : '0';
+    const prodH  = r.prod_min  ? (r.prod_min  / 60).toFixed(2) : '0';
+    const logH = r.logged_min ? (r.logged_min / 60).toFixed(2) : '0';
+    const cawH = r.caw_min ? (r.caw_min / 60).toFixed(2) : '0';
+    const cawP = r.caw_pct != null ? r.caw_pct.toFixed(1) : '';
+  lines.push([
+      `"${r.name}"`, `"${r.lob}"`,
+      schedH, r.sched_min  || 0,
+      logH,   r.logged_min || 0,
+      cawH,   r.caw_min    || 0, cawP,
+      prodH,  r.prod_min   || 0,
+      eff, atT
+    ].join(','));
+  });
+
+  // LOB summary section
+  lines.push('');
+  lines.push(['LOB Summary'].join(','));
+  lines.push(['LOB','Agents','Sched Hours','Prod Hours','OOQ CAW Hours','OOQ CAW % of Logged In','Efficiency %'].join(','));
+  const lobMap = {};
+  _allRows.forEach(r => {
+    if (!lobMap[r.lob]) lobMap[r.lob] = {sched:0,prod:0,caw:0,logged:0,count:0};
+    lobMap[r.lob].sched += r.sched_min || 0;
+    lobMap[r.lob].prod  += r.prod_min  || 0;
+    lobMap[r.lob].caw   += r.caw_min   || 0;
+    lobMap[r.lob].logged += r.logged_min || 0;
+    lobMap[r.lob].count++;
+  });
+  Object.keys(lobMap).sort().forEach(lob => {
+    const d   = lobMap[lob];
+    const eff = d.sched > 0 ? (d.prod / d.sched * 100).toFixed(1) : '';
+    const cawP = d.logged > 0 ? (d.caw / d.logged * 100).toFixed(1) : '';
+    lines.push([`"${lob}"`, d.count,
+                (d.sched/60).toFixed(2), (d.prod/60).toFixed(2),
+                (d.caw/60).toFixed(2), cawP, eff].join(','));
+  });
+
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `efficiency_${date}_target${target}pct.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Initial load
+loadData();
+if (localStorage.getItem('eff_auto') === '1') {
+  const tog = document.getElementById('auto-toggle');
+  if (tog) { tog.checked = true; startCountdown(); }
+}
+</script>
+<script src="/static/dark_toggle.js" defer></script>
+</body>
+</html>

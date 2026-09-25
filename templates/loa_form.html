@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>{{ 'Edit' if mode == 'edit' else 'New' }} LOA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; padding:24px; }
+    .page-header { background:linear-gradient(135deg,#1565c0,#0d47a1); color:#fff;
+                   border-radius:10px; padding:20px 28px; margin-bottom:20px; }
+    .page-header h1 { margin:0; font-size:1.4rem; }
+    .form-card { background:#fff; border-radius:10px; padding:28px; box-shadow:0 3px 10px rgba(0,0,0,.07); }
+    .btn-save { background:#1565c0; color:#fff; border:none; border-radius:8px; padding:8px 24px; font-weight:600; }
+    .btn-save:hover { background:#0d47a1; }
+    .section-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+                     color:#1565c0; border-bottom:2px solid #e3f2fd; padding-bottom:6px; margin:20px 0 14px; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>{{ '✏️ Edit LOA Record' if mode == 'edit' else '➕ New LOA Record' }}</h1>
+  <p>{{ record.name if record else 'Enter employee details below' }}</p>
+</div>
+
+<div class="mb-3">
+  <a href="/people/loa" style="color:#1565c0;text-decoration:none;font-weight:500">← Back to LOA List</a>
+</div>
+
+<div class="form-card">
+  <form method="POST">
+
+    <div class="section-title">Employee Info</div>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control" required
+               value="{{ record.name if record else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Line of Business <span class="text-danger">*</span></label>
+        <select name="lob" class="form-select" required>
+          <option value="">Select LOB…</option>
+          {% for l in lobs %}
+          <option value="{{ l }}" {% if record and record.lob == l %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Team Lead</label>
+        <input type="text" name="team_lead" class="form-control"
+               value="{{ record.team_lead if record else '' }}">
+      </div>
+    </div>
+
+    <div class="section-title">LOA Details</div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">LOA Reason</label>
+        <select name="loa_reason" class="form-select">
+          <option value="">Select…</option>
+          {% for r in loa_reasons %}
+          <option value="{{ r }}" {% if record and record.loa_reason == r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Start Date</label>
+        <input type="date" name="start_date" class="form-control"
+               value="{{ record.start_date if record else '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Return Date</label>
+        <input type="date" name="return_date" class="form-control"
+               value="{{ record.return_date if record else '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">EMS Status</label>
+        <select name="ems_status" class="form-select">
+          <option value="Active"   {% if not record or record.ems_status == 'Active'   %}selected{% endif %}>Active</option>
+          <option value="Inactive" {% if record and record.ems_status == 'Inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Returned</label>
+        <select name="returned" class="form-select">
+          <option value="No"  {% if not record or record.returned == 'No'  %}selected{% endif %}>No</option>
+          <option value="Yes" {% if record and record.returned == 'Yes' %}selected{% endif %}>Yes</option>
+          <option value="LOA" {% if record and record.returned == 'LOA' %}selected{% endif %}>LOA</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title">Record Status</div>
+    <div class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">Status</label>
+        <select name="status" class="form-select">
+          <option value="Active"   {% if not record or record.status == 'Active'   %}selected{% endif %}>Active</option>
+          <option value="Inactive" {% if record and record.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label fw-semibold">Notes</label>
+        <textarea name="notes" class="form-control" rows="2">{{ record.notes if record else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" class="btn-save btn">💾 Save</button>
+      <a href="/people/loa" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+
+  </form>
+</div>
+<link rel="stylesheet" href="/static/dark.css">
+<script src="/static/dark_toggle.js"></script>
+</body>
+</html>
