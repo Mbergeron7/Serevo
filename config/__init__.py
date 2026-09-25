@@ -43,9 +43,12 @@ class _Config:
         "DATABASE_URL",
         os.environ.get("DATABASE_URI", "sqlite:///serevo_dev.db"),
     )
-    # Render sets DATABASE_URL with postgres:// but SQLAlchemy needs postgresql://
+    # Render sets DATABASE_URL with postgres:// but SQLAlchemy 2.x needs postgresql://
+    # Pin psycopg2 driver explicitly so SQLAlchemy doesn't try to import psycopg (v3)
     if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
     SQLALCHEMY_DATABASE_URI  = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
