@@ -1,0 +1,9 @@
+# Serevo — Local Development
+DATA_SOURCE=generic
+WFM_SECRET_KEY=serevo-local-dev-key-2026
+PORT=5000
+DEMO_MODE=true
+BRAND_NAME=Serevo
+BRAND_TAGLINE=Workforce Management Platform
+BRAND_SUPPORT_EMAIL=support@bergeronwfm.com
+BRAND_ACCENT_COLOR=#0f766e

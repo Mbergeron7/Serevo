@@ -55,11 +55,13 @@ def panel():
     try:
         api_status = cp.test_connection()
     except Exception:
-        api_status = {
-            "ok": False,
-            "legacy": {"ok": False, "status": 0},
-            "new_api": {"ok": False, "status": 0},
-        }
+        api_status = {}
+
+    # Ensure expected keys exist for the template
+    if "legacy" not in api_status:
+        api_status["legacy"] = {"ok": False, "status": 0}
+    if "new_api" not in api_status:
+        api_status["new_api"] = {"ok": False, "status": 0}
 
     # Sheet data status
     status = {
