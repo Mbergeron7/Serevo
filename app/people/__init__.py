@@ -1,0 +1,1 @@
+# Serevo — People module

@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block title %}Time Off — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/" class="nav-link">Dashboard</a>
+  <a href="/people" class="nav-link">People</a>
+  <a href="/people/accommodations" class="nav-link">Accommodations</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  .pto-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .pto-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    background: var(--brand-accent); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .pto-card-header button {
+    background: rgba(255,255,255,.2); color: #fff; border: none;
+    padding: 5px 14px; border-radius: 6px; font-size: .8rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .pto-card-header button:hover { background: rgba(255,255,255,.35); }
+
+  .pto-table-wrap { overflow-x: auto; }
+  .pto-table {
+    width: 100%; font-size: .82rem; border-collapse: collapse;
+  }
+  .pto-table th {
+    background: var(--bg); font-size: .72rem; text-align: left;
+    padding: 8px 12px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; white-space: nowrap;
+  }
+  .pto-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .pto-table tr:hover td { background: var(--brand-accent-light); }
+
+  .badge-type {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: .72rem; font-weight: 600;
+  }
+  .badge-full {
+    background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed;
+  }
+  .badge-partial {
+    background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706;
+  }
+
+  .btn-del {
+    border: none; padding: 4px 10px; border-radius: 5px;
+    font-size: .75rem; font-weight: 600; cursor: pointer;
+    background: color-mix(in srgb, #dc2626 12%, transparent); color: #dc2626;
+  }
+
+  .filter-bar {
+    display: flex; gap: 10px; align-items: center; margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-bar input, .filter-bar select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .filter-bar input { min-width: 220px; }
+
+  /* ── Modal ─────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 900;
+    justify-content: center; align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    width: 480px; max-width: 95vw; max-height: 90vh;
+    overflow-y: auto; padding: 24px;
+  }
+  .modal h2 { font-size: 1.1rem; margin-bottom: 16px; }
+
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .form-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+  .form-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .btn-primary {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 20px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer;
+  }
+  .btn-secondary {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 20px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer;
+  }
+
+  .no-data {
+    text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
+  }
+
+  @media (max-width: 600px) {
+    .filter-bar { flex-direction: column; }
+    .filter-bar input { min-width: unset; width: 100%; }
+    .modal { padding: 16px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Time Off</h1>
+  <p class="subtitle">Track PTO, vacation &amp; scheduled absences</p>
+</div>
+
+{% if error %}
+<div class="no-data">
+  Could not load PTO data: {{ error }}<br>
+  Use the <a href="/capacity">Capacity Panel</a> to pull employee data from PeopleWare first.
+</div>
+{% else %}
+
+<div class="filter-bar">
+  <input type="text" id="filterName" placeholder="Search by name…" oninput="filterPTO()">
+</div>
+
+<div class="pto-card">
+  <div class="pto-card-header">
+    <span>PTO Entries ({{ pto_list|length }})</span>
+    <button onclick="openModal()">+ Add Time Off</button>
+  </div>
+  {% if pto_list %}
+  <div class="pto-table-wrap">
+    <table class="pto-table" id="ptoTable">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Group / LOB</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Type</th>
+          <th>Note</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pto_list %}
+        <tr data-name="{{ p.Employee|default('')|lower }}">
+          <td style="font-weight:600">{{ p.Employee }}</td>
+          <td>{{ p.Group }}{% if p.LOB %} / {{ p.LOB }}{% endif %}</td>
+          <td>{{ p['Start Date']|default('—') }}</td>
+          <td>{{ p['End Date']|default('—') }}</td>
+          <td>
+            {% set ptype = p.Type|default('full')|lower %}
+            {% if ptype == 'full' %}
+              <span class="badge-type badge-full">Full Day</span>
+            {% else %}
+              <span class="badge-type badge-partial">Partial</span>
+            {% endif %}
+          </td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">{{ p.Note|default('') }}</td>
+          <td style="color:var(--text-muted);font-size:.78rem">{{ p.Updated|default('') }}</td>
+          <td>
+            <button class="btn-del" onclick="deletePTO({{ loop.index + 1 }}, '{{ p.Employee }}')">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="no-data">No time-off entries yet. Click <strong>+ Add Time Off</strong> to create one.</div>
+  {% endif %}
+</div>
+
+{% endif %}
+
+<!-- ── Modal ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>Add Time Off</h2>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Employee</label>
+        <select id="fEmployee">
+          <option value="">Select employee…</option>
+          {% for name in employee_names %}
+            <option value="{{ name }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Group</label>
+        <input type="text" id="fGroup" placeholder="e.g. Team A">
+      </div>
+      <div class="form-group">
+        <label>LOB</label>
+        <input type="text" id="fLOB" placeholder="e.g. Sales Support">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="fStart">
+      </div>
+      <div class="form-group">
+        <label>End Date</label>
+        <input type="date" id="fEnd">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="fType">
+          <option value="full">Full Day</option>
+          <option value="partial">Partial Day</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" style="min-width:100%">
+        <label>Note</label>
+        <textarea id="fNote" placeholder="Optional details…"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="savePTO()">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const overlay = document.getElementById('modalOverlay');
+
+function openModal() {
+  document.getElementById('fEmployee').value = '';
+  document.getElementById('fGroup').value = '';
+  document.getElementById('fLOB').value = '';
+  document.getElementById('fStart').value = '';
+  document.getElementById('fEnd').value = '';
+  document.getElementById('fType').value = 'full';
+  document.getElementById('fNote').value = '';
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+function savePTO() {
+  const emp = document.getElementById('fEmployee').value;
+  if (!emp) { alert('Please select an employee.'); return; }
+  const start = document.getElementById('fStart').value;
+  const end = document.getElementById('fEnd').value;
+  if (!start || !end) { alert('Please set start and end dates.'); return; }
+  const body = {
+    Employee: emp,
+    Group: document.getElementById('fGroup').value,
+    LOB: document.getElementById('fLOB').value,
+    'Start Date': start,
+    'End Date': end,
+    Type: document.getElementById('fType').value,
+    Note: document.getElementById('fNote').value,
+  };
+  fetch('/people/pto/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else alert('Error: ' + (d.error || 'Unknown'));
+  })
+  .catch(e => alert('Save failed: ' + e));
+}
+
+function deletePTO(rowIdx, name) {
+  if (!confirm('Delete PTO entry for ' + name + '?')) return;
+  fetch('/people/pto/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({row_index: rowIdx}),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else alert('Error: ' + (d.error || 'Unknown'));
+  })
+  .catch(e => alert('Delete failed: ' + e));
+}
+
+function filterPTO() {
+  const q = document.getElementById('filterName').value.toLowerCase();
+  document.querySelectorAll('#ptoTable tbody tr').forEach(row => {
+    row.style.display = (!q || (row.dataset.name || '').includes(q)) ? '' : 'none';
+  });
+}
+
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+</script>
+{% endblock %}
