@@ -27,6 +27,10 @@ def create_app():
     from flask_migrate import Migrate
     Migrate(app, db)
 
+    # Ensure all tables exist (fallback if migrations haven't run)
+    with app.app_context():
+        db.create_all()
+
     # ---- inject brand variables into every template ----
     @app.context_processor
     def inject_brand():
