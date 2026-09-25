@@ -50,6 +50,11 @@ PROVIDERS = {
         "auth_types": ["bearer", "oauth2"],
         "fields": ["base_url", "client_id", "client_secret"],
     },
+    "injixo": {
+        "label": "PeopleWare / Injixo",
+        "auth_types": ["bearer", "api_key"],
+        "fields": ["base_url", "api_key"],
+    },
 }
 
 
