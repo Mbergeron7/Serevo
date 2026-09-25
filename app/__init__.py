@@ -35,12 +35,14 @@ def create_app():
     from app.routes.capacity import capacity_bp
     from app.routes.people import people_bp
     from app.routes.scheduling import scheduling_bp
+    from app.routes.forecasting import forecasting_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(capacity_bp)
     app.register_blueprint(people_bp)
     app.register_blueprint(scheduling_bp)
+    app.register_blueprint(forecasting_bp)
 
     # ---- health check ----
     @app.route("/health")

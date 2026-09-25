@@ -1,0 +1,993 @@
+{% extends "base.html" %}
+{% block title %}Forecasting — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/" class="nav-link">Dashboard</a>
+  <a href="/capacity" class="nav-link">Capacity</a>
+  <a href="/scheduling" class="nav-link">Scheduling</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  /* ── Config panel ──────────────────────────────── */
+  .config-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 24px;
+  }
+  .config-row {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .config-group { display: flex; flex-direction: column; }
+  .config-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .config-group select, .config-group input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .btn-action {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 24px; border-radius: 6px; font-weight: 700;
+    font-size: .85rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 18px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer; white-space: nowrap;
+  }
+
+  /* ── View tabs ─────────────────────────────────── */
+  .view-tabs {
+    display: flex; gap: 2px; margin-bottom: 20px;
+    background: var(--bg); border-radius: 8px; padding: 3px;
+    width: fit-content;
+  }
+  .view-tab {
+    padding: 7px 18px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text-muted);
+    font-size: .82rem; font-weight: 600; cursor: pointer;
+    transition: all .15s;
+  }
+  .view-tab.active {
+    background: var(--brand-accent); color: #fff;
+  }
+
+  /* ── Stats row ─────────────────────────────────── */
+  .stats-row {
+    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px;
+    flex: 1; min-width: 130px;
+  }
+  .stat-label {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .stat-value { font-size: 1.35rem; font-weight: 800; }
+
+  /* ── Charts ────────────────────────────────────── */
+  .chart-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .chart-title {
+    font-size: .85rem; font-weight: 700; margin-bottom: 14px;
+  }
+  .chart-canvas {
+    width: 100%; height: 260px; position: relative;
+  }
+  svg.chart { width: 100%; height: 100%; }
+  .chart-legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px;
+    font-size: .75rem; color: var(--text-muted);
+  }
+  .legend-dot {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%; margin-right: 4px; vertical-align: middle;
+  }
+
+  /* ── Data table ────────────────────────────────── */
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: .82rem;
+  }
+  .data-table th {
+    text-align: left; padding: 8px 10px; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); border-bottom: 2px solid var(--border);
+    font-weight: 700;
+  }
+  .data-table td {
+    padding: 7px 10px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .data-table tr:hover td { background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
+  .positive { color: #16a34a; }
+  .negative { color: #dc2626; }
+
+  /* ── What-if panel ─────────────────────────────── */
+  .whatif-panel {
+    background: color-mix(in srgb, var(--brand-accent) 5%, var(--surface));
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 20px;
+  }
+  .whatif-title {
+    font-size: .85rem; font-weight: 700; margin-bottom: 12px;
+  }
+  .slider-group {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .slider-group label {
+    font-size: .78rem; font-weight: 600; min-width: 100px;
+  }
+  .slider-group input[type="range"] { flex: 1; max-width: 300px; }
+  .slider-val {
+    font-size: .82rem; font-weight: 700; min-width: 50px;
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Erlang calculator ─────────────────────────── */
+  .erlang-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 20px;
+  }
+  .erlang-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .erlang-field label {
+    display: block; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); margin-bottom: 3px;
+  }
+  .erlang-field input {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .85rem; background: var(--bg); color: var(--text);
+    box-sizing: border-box;
+  }
+  .erlang-results {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px; margin-top: 14px;
+  }
+  .erlang-result-card {
+    background: var(--bg); border-radius: 6px; padding: 10px;
+    text-align: center;
+  }
+  .erlang-result-card .val { font-size: 1.25rem; font-weight: 800; }
+  .erlang-result-card .lbl {
+    font-size: .68rem; text-transform: uppercase; color: var(--text-muted);
+    letter-spacing: .04em; margin-top: 2px;
+  }
+
+  /* ── Accuracy ──────────────────────────────────── */
+  .accuracy-bar {
+    height: 8px; border-radius: 4px; background: var(--border);
+    overflow: hidden; margin-top: 4px;
+  }
+  .accuracy-fill {
+    height: 100%; border-radius: 4px; transition: width .3s;
+  }
+
+  /* ── Loading ───────────────────────────────────── */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.3); z-index: 999;
+    justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: var(--surface); padding: 30px 40px;
+    border-radius: 12px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--brand-accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Sections ──────────────────────────────────── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-muted);
+  }
+  .empty-state h3 { margin-bottom: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Forecasting</h1>
+  <p class="subtitle">Volume forecasting, Erlang C calculations, what-if scenarios & accuracy tracking.</p>
+</div>
+
+<!-- ── Config ───────────────────────────────────── -->
+<div class="config-card">
+  <div class="config-row">
+    <div class="config-group">
+      <label>Line of Business</label>
+      <select id="selLob">
+        <option value="">— Select LOB —</option>
+        {% for lob in lobs %}
+        <option value="{{ lob }}">{{ lob }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="config-group">
+      <label>Start Date</label>
+      <input type="date" id="inpStart">
+    </div>
+    <div class="config-group">
+      <label>End Date</label>
+      <input type="date" id="inpEnd">
+    </div>
+    <div class="config-group">
+      <label>SL Target %</label>
+      <input type="number" id="inpSL" value="80" min="1" max="100" style="width:70px;">
+    </div>
+    <div class="config-group">
+      <label>ASA (sec)</label>
+      <input type="number" id="inpASA" value="30" min="1" style="width:70px;">
+    </div>
+    <div class="config-group">
+      <label>Shrinkage %</label>
+      <input type="number" id="inpShrink" value="30" min="0" max="80" style="width:70px;">
+    </div>
+    <button class="btn-action" id="btnLoad" onclick="loadData()">Load Data</button>
+  </div>
+</div>
+
+<!-- ── View tabs ────────────────────────────────── -->
+<div class="view-tabs">
+  <button class="view-tab active" onclick="switchTab('view')">View Data</button>
+  <button class="view-tab" onclick="switchTab('generate')">Generate Forecast</button>
+  <button class="view-tab" onclick="switchTab('whatif')">What-If</button>
+  <button class="view-tab" onclick="switchTab('erlang')">Erlang C</button>
+  <button class="view-tab" onclick="switchTab('accuracy')">Accuracy</button>
+</div>
+
+<!-- ═══════════ VIEW DATA SECTION ═══════════ -->
+<div class="section active" id="sec-view">
+  <div id="viewEmpty" class="empty-state">
+    <h3>Select a LOB and date range</h3>
+    <p>Choose a line of business and dates above, then click <strong>Load Data</strong>.</p>
+  </div>
+  <div id="viewContent" style="display:none;">
+    <div class="stats-row" id="viewStats"></div>
+    <div class="chart-container">
+      <div class="chart-title">Offered Volume by Interval</div>
+      <div class="chart-canvas" id="chartVolume"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Offered</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Average Handle Time (seconds)</div>
+      <div class="chart-canvas" id="chartAHT"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#f59e0b;"></span> AHT</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Agents Required (Erlang C)</div>
+      <div class="chart-canvas" id="chartAgents"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#10b981;"></span> Raw Agents</span>
+        <span><span class="legend-dot" style="background:#ef4444;"></span> With Shrinkage</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Daily Summary</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblDaily">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Total Offered</th>
+              <th>Avg AHT</th>
+              <th>Peak Offered</th>
+              <th>Peak Agents</th>
+              <th>Peak w/ Shrinkage</th>
+              <th>Intervals</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ GENERATE FORECAST SECTION ═══════════ -->
+<div class="section" id="sec-generate">
+  <div class="config-card">
+    <div class="config-row">
+      <div class="config-group">
+        <label>Method</label>
+        <select id="selMethod">
+          <option value="moving_average">Moving Average</option>
+          <option value="weighted_trend">Weighted Trend</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>History (days)</label>
+        <input type="number" id="inpHistDays" value="30" min="7" max="365" style="width:80px;">
+      </div>
+      <div class="config-group">
+        <label>Forecast (days)</label>
+        <input type="number" id="inpFcDays" value="7" min="1" max="90" style="width:80px;">
+      </div>
+      <div class="config-group" id="grpWindow">
+        <label>Window (days)</label>
+        <input type="number" id="inpWindow" value="7" min="3" max="30" style="width:70px;">
+      </div>
+      <button class="btn-action" onclick="generateForecast()">Generate</button>
+    </div>
+  </div>
+
+  <div id="genEmpty" class="empty-state">
+    <h3>Generate a Forecast</h3>
+    <p>Select a LOB above, configure the method, and click <strong>Generate</strong>.</p>
+  </div>
+  <div id="genContent" style="display:none;">
+    <div class="stats-row" id="genStats"></div>
+    <div class="chart-container">
+      <div class="chart-title">Forecasted Volume</div>
+      <div class="chart-canvas" id="chartGenVolume"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Forecast Offered</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Forecasted AHT</div>
+      <div class="chart-canvas" id="chartGenAHT"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#f59e0b;"></span> Forecast AHT</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Forecasted Agents Required</div>
+      <div class="chart-canvas" id="chartGenAgents"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#10b981;"></span> Raw</span>
+        <span><span class="legend-dot" style="background:#ef4444;"></span> w/ Shrinkage</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Daily Forecast Summary</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblGenDaily">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Total Offered</th>
+              <th>Avg AHT</th>
+              <th>Peak Offered</th>
+              <th>Peak Agents</th>
+              <th>Peak w/ Shrinkage</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ WHAT-IF SECTION ═══════════ -->
+<div class="section" id="sec-whatif">
+  <div class="whatif-panel">
+    <div class="whatif-title">Scenario Adjustments</div>
+    <div class="slider-group">
+      <label>Volume Change</label>
+      <input type="range" id="sliderVol" min="-50" max="50" value="0" oninput="updateSliderLabel('vol')">
+      <span class="slider-val" id="lblVol">0%</span>
+    </div>
+    <div class="slider-group">
+      <label>AHT Change</label>
+      <input type="range" id="sliderAHT" min="-50" max="50" value="0" oninput="updateSliderLabel('aht')">
+      <span class="slider-val" id="lblAHT">0%</span>
+    </div>
+    <div style="margin-top: 12px;">
+      <button class="btn-action" onclick="runWhatIf()">Run Scenario</button>
+      <button class="btn-secondary" onclick="resetWhatIf()" style="margin-left:8px;">Reset</button>
+    </div>
+  </div>
+  <div id="whatifEmpty" class="empty-state">
+    <h3>What-If Scenario Analysis</h3>
+    <p>Load data first, then adjust the sliders to model different scenarios.</p>
+  </div>
+  <div id="whatifContent" style="display:none;">
+    <div class="stats-row" id="whatifStats"></div>
+    <div class="chart-container">
+      <div class="chart-title">Scenario: Agents Required</div>
+      <div class="chart-canvas" id="chartWhatifAgents"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#10b981;"></span> Raw Agents</span>
+        <span><span class="legend-dot" style="background:#ef4444;"></span> With Shrinkage</span>
+        <span><span class="legend-dot" style="background:#6366f1; opacity:.3;"></span> Baseline</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Scenario Daily Summary</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblWhatif">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Adj. Offered</th>
+              <th>Adj. AHT</th>
+              <th>Peak Agents</th>
+              <th>Peak w/ Shrinkage</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ERLANG C CALCULATOR ═══════════ -->
+<div class="section" id="sec-erlang">
+  <div class="erlang-card">
+    <div class="chart-title">Erlang C Staffing Calculator</div>
+    <div class="erlang-grid">
+      <div class="erlang-field">
+        <label>Offered Contacts</label>
+        <input type="number" id="ecOffered" value="100" min="0">
+      </div>
+      <div class="erlang-field">
+        <label>AHT (seconds)</label>
+        <input type="number" id="ecAHT" value="300" min="1">
+      </div>
+      <div class="erlang-field">
+        <label>Interval (seconds)</label>
+        <input type="number" id="ecInterval" value="1800" min="60">
+      </div>
+      <div class="erlang-field">
+        <label>SL Target (%)</label>
+        <input type="number" id="ecSL" value="80" min="1" max="100">
+      </div>
+      <div class="erlang-field">
+        <label>Target ASA (sec)</label>
+        <input type="number" id="ecASA" value="30" min="1">
+      </div>
+      <div class="erlang-field">
+        <label>Shrinkage (%)</label>
+        <input type="number" id="ecShrink" value="30" min="0" max="80">
+      </div>
+    </div>
+    <div style="margin-top: 14px;">
+      <button class="btn-action" onclick="calcErlang()">Calculate</button>
+    </div>
+    <div class="erlang-results" id="erlangResults" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- ═══════════ ACCURACY SECTION ═══════════ -->
+<div class="section" id="sec-accuracy">
+  <div id="accEmpty" class="empty-state">
+    <h3>Forecast Accuracy</h3>
+    <p>Select a LOB and date range, then click <strong>Load Data</strong> to compare forecast vs. actuals.</p>
+  </div>
+  <div id="accContent" style="display:none;">
+    <div class="stats-row" id="accStats"></div>
+    <div class="chart-container">
+      <div class="chart-title">Forecast vs. Actuals (Daily)</div>
+      <div class="chart-canvas" id="chartAccuracy"></div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background:#6366f1;"></span> Forecast</span>
+        <span><span class="legend-dot" style="background:#10b981;"></span> Actual</span>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Variance by Interval</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tblAccuracy">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Forecast Offered</th>
+              <th>Forecast AHT</th>
+              <th>Actual Agents</th>
+              <th>Variance %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Loading overlay ──────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div id="loadingMsg">Loading forecast data…</div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════ */
+let STATE = {
+  forecast: [], requirements: [], erlang: [], dailySummary: [],
+  baselineErlang: [],  // for what-if comparison
+};
+
+/* ── Helpers ────────────────────────────────────── */
+function $(id) { return document.getElementById(id); }
+function showLoading(msg) { $('loadingMsg').textContent = msg || 'Loading…'; $('loadingOverlay').classList.add('show'); }
+function hideLoading() { $('loadingOverlay').classList.remove('show'); }
+
+function getParams() {
+  return {
+    lob: $('selLob').value,
+    start_date: $('inpStart').value,
+    end_date: $('inpEnd').value,
+    service_level: parseFloat($('inpSL').value) / 100,
+    target_asa: parseFloat($('inpASA').value),
+    shrinkage: parseFloat($('inpShrink').value) / 100,
+  };
+}
+
+async function api(url, body) {
+  const r = await fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+/* ── Tab switching ──────────────────────────────── */
+function switchTab(name) {
+  document.querySelectorAll('.view-tab').forEach((t, i) => {
+    const tabs = ['view','generate','whatif','erlang','accuracy'];
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  $('sec-' + name).classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════
+   SVG CHART RENDERER
+   ══════════════════════════════════════════════════ */
+function drawLineChart(containerId, datasets, labels, opts = {}) {
+  const el = $(containerId);
+  if (!el) return;
+  const W = el.clientWidth || 700, H = opts.height || 240;
+  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  // Find data range
+  let allVals = [];
+  datasets.forEach(ds => ds.data.forEach(v => allVals.push(v)));
+  let minV = Math.min(...allVals, 0);
+  let maxV = Math.max(...allVals, 1);
+  if (maxV === minV) maxV = minV + 1;
+  const range = maxV - minV;
+  minV -= range * 0.05;
+  maxV += range * 0.05;
+
+  function x(i) { return pad.left + (i / Math.max(labels.length - 1, 1)) * pw; }
+  function y(v) { return pad.top + (1 - (v - minV) / (maxV - minV)) * ph; }
+
+  // Y axis ticks
+  const yTicks = 5;
+  let ticksHtml = '';
+  for (let i = 0; i <= yTicks; i++) {
+    const val = minV + (i / yTicks) * (maxV - minV);
+    const yp = y(val);
+    ticksHtml += `<line x1="${pad.left}" x2="${W - pad.right}" y1="${yp}" y2="${yp}" stroke="var(--border)" stroke-width="0.5"/>`;
+    ticksHtml += `<text x="${pad.left - 8}" y="${yp + 4}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(val)}</text>`;
+  }
+
+  // X axis labels (show ~10 max)
+  const step = Math.max(1, Math.floor(labels.length / 10));
+  let xlabels = '';
+  for (let i = 0; i < labels.length; i += step) {
+    xlabels += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
+  }
+
+  // Lines
+  let lines = '';
+  datasets.forEach(ds => {
+    const pts = ds.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const opacity = ds.opacity || 1;
+    lines += `<polyline points="${pts}" fill="none" stroke="${ds.color}" stroke-width="${ds.width || 2}" stroke-opacity="${opacity}"/>`;
+  });
+
+  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${ticksHtml}${xlabels}${lines}</svg>`;
+}
+
+function drawBarChart(containerId, data, labels, color, opts = {}) {
+  const el = $(containerId);
+  if (!el) return;
+  const W = el.clientWidth || 700, H = opts.height || 240;
+  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  let maxV = Math.max(...data, 1);
+  const barW = Math.max(2, (pw / data.length) * 0.7);
+  const gap = (pw / data.length) * 0.3;
+
+  function y(v) { return pad.top + (1 - v / maxV) * ph; }
+
+  let bars = '';
+  data.forEach((v, i) => {
+    const bx = pad.left + i * (barW + gap);
+    const by = y(v);
+    const bh = pad.top + ph - by;
+    bars += `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${color}" rx="2"/>`;
+  });
+
+  // X labels
+  const step = Math.max(1, Math.floor(labels.length / 10));
+  let xlabels = '';
+  for (let i = 0; i < labels.length; i += step) {
+    const bx = pad.left + i * (barW + gap) + barW / 2;
+    xlabels += `<text x="${bx}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
+  }
+
+  // Y ticks
+  let yticks = '';
+  for (let i = 0; i <= 4; i++) {
+    const val = (i / 4) * maxV;
+    const yp = y(val);
+    yticks += `<line x1="${pad.left}" x2="${W - pad.right}" y1="${yp}" y2="${yp}" stroke="var(--border)" stroke-width="0.5"/>`;
+    yticks += `<text x="${pad.left - 8}" y="${yp + 4}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(val)}</text>`;
+  }
+
+  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${yticks}${xlabels}${bars}</svg>`;
+}
+
+/* ══════════════════════════════════════════════════
+   LOAD DATA (View tab)
+   ══════════════════════════════════════════════════ */
+async function loadData() {
+  const p = getParams();
+  if (!p.lob || !p.start_date || !p.end_date) {
+    alert('Please select a LOB and date range.'); return;
+  }
+  showLoading('Loading forecast data…');
+  try {
+    const data = await api('/forecasting/data', p);
+    hideLoading();
+    if (!data.success) { alert(data.error || 'Error loading data'); return; }
+
+    STATE.forecast = data.forecast || [];
+    STATE.requirements = data.requirements || [];
+    STATE.erlang = data.erlang || [];
+    STATE.dailySummary = data.daily_summary || [];
+    STATE.baselineErlang = data.erlang || [];
+
+    if (!STATE.forecast.length) {
+      $('viewEmpty').style.display = '';
+      $('viewContent').style.display = 'none';
+      $('viewEmpty').innerHTML = '<h3>No Data Found</h3><p>No forecast data exists for this LOB and date range.</p>';
+      return;
+    }
+
+    $('viewEmpty').style.display = 'none';
+    $('viewContent').style.display = '';
+    renderViewData();
+    // Also enable accuracy
+    loadAccuracy();
+  } catch (e) {
+    hideLoading();
+    alert('Error: ' + e.message);
+  }
+}
+
+function renderViewData() {
+  const fc = STATE.forecast;
+  const ec = STATE.erlang;
+  const ds = STATE.dailySummary;
+
+  // Stats
+  const totalOffered = fc.reduce((s, r) => s + r.offered, 0);
+  const avgAHT = fc.length ? fc.reduce((s, r) => s + r.aht, 0) / fc.length : 0;
+  const peakAgents = ec.length ? Math.max(...ec.map(r => r.agents_required || 0)) : 0;
+  const peakShrink = ec.length ? Math.max(...ec.map(r => r.agents_with_shrinkage || 0)) : 0;
+
+  $('viewStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Offered</div><div class="stat-value">${Math.round(totalOffered).toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Avg AHT</div><div class="stat-value">${Math.round(avgAHT)}s</div></div>
+    <div class="stat-card"><div class="stat-label">Peak Agents</div><div class="stat-value">${peakAgents}</div></div>
+    <div class="stat-card"><div class="stat-label">Peak w/ Shrinkage</div><div class="stat-value">${peakShrink}</div></div>
+    <div class="stat-card"><div class="stat-label">Days</div><div class="stat-value">${ds.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Intervals</div><div class="stat-value">${fc.length}</div></div>
+  `;
+
+  // Charts — use daily aggregates for cleaner display
+  const dLabels = ds.map(d => d.date.slice(5));  // MM-DD
+  drawBarChart('chartVolume', ds.map(d => d.total_offered), dLabels, '#6366f1');
+  drawLineChart('chartAHT', [{ data: ds.map(d => d.avg_aht), color: '#f59e0b' }], dLabels);
+  drawLineChart('chartAgents', [
+    { data: ds.map(d => d.peak_agents_required), color: '#10b981' },
+    { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444' },
+  ], dLabels);
+
+  // Daily table
+  const tbody = $('tblDaily').querySelector('tbody');
+  tbody.innerHTML = ds.map(d => `
+    <tr>
+      <td>${d.date}</td>
+      <td>${Math.round(d.total_offered).toLocaleString()}</td>
+      <td>${Math.round(d.avg_aht)}s</td>
+      <td>${Math.round(d.peak_offered)}</td>
+      <td>${d.peak_agents_required}</td>
+      <td>${d.peak_agents_with_shrinkage}</td>
+      <td>${d.intervals}</td>
+    </tr>
+  `).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   GENERATE FORECAST
+   ══════════════════════════════════════════════════ */
+async function generateForecast() {
+  const p = getParams();
+  if (!p.lob) { alert('Please select a LOB.'); return; }
+
+  showLoading('Generating forecast…');
+  try {
+    const body = {
+      ...p,
+      method: $('selMethod').value,
+      historical_days: parseInt($('inpHistDays').value),
+      forecast_days: parseInt($('inpFcDays').value),
+      window: parseInt($('inpWindow').value),
+    };
+    const data = await api('/forecasting/generate', body);
+    hideLoading();
+    if (!data.success) { alert(data.error || 'Error'); return; }
+
+    $('genEmpty').style.display = 'none';
+    $('genContent').style.display = '';
+
+    const ec = data.erlang_forecast || [];
+    const ds = data.daily_summary || [];
+
+    // Stats
+    const totalOff = ec.reduce((s, r) => s + r.offered, 0);
+    const avgAht = ec.length ? ec.reduce((s, r) => s + r.aht, 0) / ec.length : 0;
+    const peak = ec.length ? Math.max(...ec.map(r => r.agents_with_shrinkage || 0)) : 0;
+
+    $('genStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Method</div><div class="stat-value" style="font-size:1rem;">${data.method === 'weighted_trend' ? 'Weighted Trend' : 'Moving Avg'}</div></div>
+      <div class="stat-card"><div class="stat-label">History Used</div><div class="stat-value">${data.historical_days_used || 0}d</div></div>
+      <div class="stat-card"><div class="stat-label">Forecast Days</div><div class="stat-value">${ds.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Offered</div><div class="stat-value">${Math.round(totalOff).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="stat-label">Peak Agents</div><div class="stat-value">${peak}</div></div>
+    `;
+
+    const dLabels = ds.map(d => d.date.slice(5));
+    drawBarChart('chartGenVolume', ds.map(d => d.total_offered), dLabels, '#6366f1');
+    drawLineChart('chartGenAHT', [{ data: ds.map(d => d.avg_aht), color: '#f59e0b' }], dLabels);
+    drawLineChart('chartGenAgents', [
+      { data: ds.map(d => d.peak_agents_required), color: '#10b981' },
+      { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444' },
+    ], dLabels);
+
+    // Table
+    const tbody = $('tblGenDaily').querySelector('tbody');
+    tbody.innerHTML = ds.map(d => `
+      <tr>
+        <td>${d.date}</td>
+        <td>${Math.round(d.total_offered).toLocaleString()}</td>
+        <td>${Math.round(d.avg_aht)}s</td>
+        <td>${Math.round(d.peak_offered)}</td>
+        <td>${d.peak_agents_required}</td>
+        <td>${d.peak_agents_with_shrinkage}</td>
+      </tr>
+    `).join('');
+
+  } catch (e) {
+    hideLoading();
+    alert('Error: ' + e.message);
+  }
+}
+
+// Show/hide window field
+$('selMethod').addEventListener('change', function() {
+  $('grpWindow').style.display = this.value === 'moving_average' ? '' : 'none';
+});
+
+/* ══════════════════════════════════════════════════
+   WHAT-IF
+   ══════════════════════════════════════════════════ */
+function updateSliderLabel(which) {
+  if (which === 'vol') {
+    const v = $('sliderVol').value;
+    $('lblVol').textContent = (v >= 0 ? '+' : '') + v + '%';
+  } else {
+    const v = $('sliderAHT').value;
+    $('lblAHT').textContent = (v >= 0 ? '+' : '') + v + '%';
+  }
+}
+
+function resetWhatIf() {
+  $('sliderVol').value = 0; $('sliderAHT').value = 0;
+  updateSliderLabel('vol'); updateSliderLabel('aht');
+  $('whatifContent').style.display = 'none';
+  $('whatifEmpty').style.display = '';
+}
+
+async function runWhatIf() {
+  const p = getParams();
+  if (!p.lob || !p.start_date || !p.end_date) { alert('Load data first.'); return; }
+
+  showLoading('Running scenario…');
+  try {
+    const body = {
+      ...p,
+      volume_pct: parseFloat($('sliderVol').value),
+      aht_pct: parseFloat($('sliderAHT').value),
+    };
+    const data = await api('/forecasting/what-if', body);
+    hideLoading();
+    if (!data.success) { alert(data.error || 'Error'); return; }
+
+    $('whatifEmpty').style.display = 'none';
+    $('whatifContent').style.display = '';
+
+    const results = data.results || [];
+    const ds = data.daily_summary || [];
+    const baseline = STATE.dailySummary;
+
+    // Stats: compare with baseline
+    const peakNow = ds.length ? Math.max(...ds.map(d => d.peak_agents_with_shrinkage)) : 0;
+    const peakBase = baseline.length ? Math.max(...baseline.map(d => d.peak_agents_with_shrinkage)) : 0;
+    const diff = peakNow - peakBase;
+    const diffCls = diff > 0 ? 'negative' : diff < 0 ? 'positive' : '';
+
+    $('whatifStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Volume Adj</div><div class="stat-value">${data.scenario.volume_pct >= 0 ? '+' : ''}${data.scenario.volume_pct}%</div></div>
+      <div class="stat-card"><div class="stat-label">AHT Adj</div><div class="stat-value">${data.scenario.aht_pct >= 0 ? '+' : ''}${data.scenario.aht_pct}%</div></div>
+      <div class="stat-card"><div class="stat-label">Peak Agents (Scenario)</div><div class="stat-value">${peakNow}</div></div>
+      <div class="stat-card"><div class="stat-label">Δ vs Baseline</div><div class="stat-value ${diffCls}">${diff >= 0 ? '+' : ''}${diff}</div></div>
+    `;
+
+    // Chart: scenario vs baseline
+    const dLabels = ds.map(d => d.date.slice(5));
+    const baseData = baseline.map(d => d.peak_agents_required);
+    drawLineChart('chartWhatifAgents', [
+      { data: ds.map(d => d.peak_agents_required), color: '#10b981', width: 2.5 },
+      { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444', width: 2 },
+      { data: baseData.slice(0, dLabels.length), color: '#6366f1', width: 1.5, opacity: 0.3 },
+    ], dLabels);
+
+    // Table
+    const tbody = $('tblWhatif').querySelector('tbody');
+    tbody.innerHTML = ds.map(d => `
+      <tr>
+        <td>${d.date}</td>
+        <td>${Math.round(d.total_offered).toLocaleString()}</td>
+        <td>${Math.round(d.avg_aht)}s</td>
+        <td>${d.peak_agents_required}</td>
+        <td>${d.peak_agents_with_shrinkage}</td>
+      </tr>
+    `).join('');
+
+  } catch (e) {
+    hideLoading();
+    alert('Error: ' + e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   ERLANG C CALCULATOR
+   ══════════════════════════════════════════════════ */
+async function calcErlang() {
+  try {
+    const data = await api('/forecasting/erlang', {
+      offered: parseFloat($('ecOffered').value),
+      aht: parseFloat($('ecAHT').value),
+      interval_seconds: parseFloat($('ecInterval').value),
+      service_level: parseFloat($('ecSL').value) / 100,
+      target_asa: parseFloat($('ecASA').value),
+      shrinkage: parseFloat($('ecShrink').value) / 100,
+    });
+    if (!data.success) { alert(data.error || 'Error'); return; }
+
+    $('erlangResults').style.display = '';
+    $('erlangResults').innerHTML = `
+      <div class="erlang-result-card"><div class="val">${data.agents_raw}</div><div class="lbl">Raw Agents</div></div>
+      <div class="erlang-result-card"><div class="val">${data.agents_with_shrinkage}</div><div class="lbl">w/ Shrinkage</div></div>
+      <div class="erlang-result-card"><div class="val">${(data.service_level * 100).toFixed(1)}%</div><div class="lbl">Service Level</div></div>
+      <div class="erlang-result-card"><div class="val">${(data.erlang_c_prob * 100).toFixed(1)}%</div><div class="lbl">P(Wait)</div></div>
+      <div class="erlang-result-card"><div class="val">${data.traffic_intensity}</div><div class="lbl">Erlangs</div></div>
+      <div class="erlang-result-card"><div class="val">${(data.occupancy * 100).toFixed(1)}%</div><div class="lbl">Occupancy</div></div>
+    `;
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   ACCURACY
+   ══════════════════════════════════════════════════ */
+async function loadAccuracy() {
+  const p = getParams();
+  if (!p.lob || !p.start_date || !p.end_date) return;
+
+  try {
+    const data = await api('/forecasting/accuracy', p);
+    if (!data.success || !data.intervals || !data.intervals.length) {
+      $('accEmpty').style.display = '';
+      $('accContent').style.display = 'none';
+      return;
+    }
+
+    $('accEmpty').style.display = 'none';
+    $('accContent').style.display = '';
+
+    const s = data.summary;
+    $('accStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">MAPE</div><div class="stat-value">${s.mape}%</div></div>
+      <div class="stat-card"><div class="stat-label">WMAPE</div><div class="stat-value">${s.wmape}%</div></div>
+      <div class="stat-card"><div class="stat-label">Bias</div><div class="stat-value">${s.bias >= 0 ? '+' : ''}${s.bias}</div></div>
+      <div class="stat-card"><div class="stat-label">Matched Intervals</div><div class="stat-value">${s.matched_intervals}</div></div>
+    `;
+
+    // Aggregate daily for chart
+    const byDate = {};
+    data.intervals.forEach(r => {
+      if (!byDate[r.date]) byDate[r.date] = { fc: 0, act: 0 };
+      byDate[r.date].fc += r.forecast_offered;
+      byDate[r.date].act += r.actual_agents;
+    });
+    const dates = Object.keys(byDate).sort();
+    const dLabels = dates.map(d => d.slice(5));
+    drawLineChart('chartAccuracy', [
+      { data: dates.map(d => byDate[d].fc), color: '#6366f1' },
+      { data: dates.map(d => byDate[d].act), color: '#10b981' },
+    ], dLabels);
+
+    // Table (show first 200)
+    const tbody = $('tblAccuracy').querySelector('tbody');
+    const rows = data.intervals.slice(0, 200);
+    tbody.innerHTML = rows.map(r => {
+      const cls = r.variance_pct > 0 ? 'negative' : r.variance_pct < 0 ? 'positive' : '';
+      return `<tr>
+        <td>${r.date}</td><td>${r.time}</td>
+        <td>${r.forecast_offered}</td><td>${r.forecast_aht}s</td>
+        <td>${r.actual_agents}</td>
+        <td class="${cls}">${r.variance_pct >= 0 ? '+' : ''}${r.variance_pct}%</td>
+      </tr>`;
+    }).join('');
+
+  } catch (e) { /* silently skip */ }
+}
+
+/* ── Init ────────────────────────────────────────── */
+(function init() {
+  const today = new Date();
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+  $('inpStart').value = weekAgo.toISOString().slice(0, 10);
+  $('inpEnd').value = today.toISOString().slice(0, 10);
+})();
+</script>
+{% endblock %}
