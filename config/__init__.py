@@ -38,6 +38,18 @@ class _Config:
     # ---- demo mode ----
     DEMO_MODE = os.environ.get("DEMO_MODE", "false").strip().lower() == "true"
 
+    # ---- database ----
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        os.environ.get("DATABASE_URI", "sqlite:///serevo_dev.db"),
+    )
+    # Render sets DATABASE_URL with postgres:// but SQLAlchemy needs postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+    SQLALCHEMY_DATABASE_URI  = DATABASE_URL
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
     # ---- app ----
     SECRET_KEY = os.environ.get("WFM_SECRET_KEY", "change-me")
     PORT       = int(os.environ.get("PORT", 5000))

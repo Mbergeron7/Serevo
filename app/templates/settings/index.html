@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+<a href="/dashboard">Dashboard</a>
+<a href="/people/">People</a>
+<a href="/data/">Data Import</a>
+<a href="/settings/" class="active">Settings</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; max-width:900px;">
+  <a href="/settings/api-connections" class="card card-link">
+    <h3>API Connections</h3>
+    <p>Manage external API credentials for pulling workforce data from platforms like NICE, Genesys, Five9, and others.</p>
+  </a>
+  <a href="/data/" class="card card-link">
+    <h3>Data Import</h3>
+    <p>Upload CSV or Excel files for bulk data import — employees, forecast, requirements, accommodations, and PTO.</p>
+  </a>
+</div>
+{% endblock %}

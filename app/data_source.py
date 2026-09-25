@@ -38,6 +38,7 @@ change the constants in one place (COLS_*).
 
 import os
 import datetime
+from sqlalchemy import func as sa_func
 
 # ---- tab names (match the app's existing capacity-sheet tabs) ----
 TAB_EMPLOYEES     = "EMPLOYEES"
@@ -190,6 +191,59 @@ class SheetSource:
 
 
 # =====================================================================
+# PostgreSQL — reads from the local database via SQLAlchemy
+# =====================================================================
+class PostgresSource:
+    """Reads data from the PostgreSQL database."""
+
+    def get_employees(self):
+        try:
+            from app.models import Employee
+            emps = Employee.query.all()
+            return [e.to_legacy_dict() for e in emps], None
+        except Exception as e:
+            return [], str(e)
+
+    def get_planning_units(self):
+        try:
+            from app.models import PlanningUnit
+            units = PlanningUnit.query.filter_by(is_active=True).all()
+            return [{"id": u.name, "name": u.name} for u in units], None
+        except Exception as e:
+            return [], str(e)
+
+    def get_requirements(self, unit_id, day):
+        try:
+            from app.models import RequirementInterval, PlanningUnit
+            unit = PlanningUnit.query.filter_by(name=str(unit_id).strip()).first()
+            if not unit:
+                return [], None
+            target = _date_str(day)
+            rows = RequirementInterval.query.filter(
+                RequirementInterval.planning_unit_id == unit.id,
+                sa_func.date(RequirementInterval.timestamp) == target,
+            ).order_by(RequirementInterval.timestamp).all()
+            return [r.to_legacy_dict() for r in rows], None
+        except Exception as e:
+            return [], str(e)
+
+    def get_forecast(self, workload_id, day):
+        try:
+            from app.models import ForecastInterval, PlanningUnit
+            unit = PlanningUnit.query.filter_by(name=str(workload_id).strip()).first()
+            if not unit:
+                return [], None
+            target = _date_str(day)
+            rows = ForecastInterval.query.filter(
+                ForecastInterval.planning_unit_id == unit.id,
+                sa_func.date(ForecastInterval.timestamp) == target,
+            ).order_by(ForecastInterval.timestamp).all()
+            return [r.to_legacy_dict() for r in rows], None
+        except Exception as e:
+            return [], str(e)
+
+
+# =====================================================================
 # Demo — returns realistic fake data when no sheet is connected
 # =====================================================================
 class DemoSource:
@@ -224,6 +278,8 @@ def get_source():
         mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
         if mode == "peopleware":
             _INSTANCE = PeopleWareSource()
+        elif mode == "postgres":
+            _INSTANCE = PostgresSource()
         else:
             # Try SheetSource; fall back to DemoSource if no sheet key
             sheet_key = os.environ.get("CAPACITY_SHEET_KEY", "").strip()

@@ -224,9 +224,161 @@ footer {
   color: var(--brand-accent);
 }
 
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+.btn-primary {
+  background: var(--brand-accent);
+  color: #fff;
+  border-color: var(--brand-accent);
+}
+.btn-primary:hover { opacity: .9; }
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-outline:hover { border-color: var(--brand-accent); color: var(--brand-accent); }
+.btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+.btn-danger:hover { opacity: .9; }
+.btn-sm { padding: 4px 12px; font-size: .8rem; }
+
+/* ---------- forms ---------- */
+.form-group { margin-bottom: 1rem; }
+.form-group label {
+  display: block;
+  font-size: .85rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .9rem;
+}
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 2px var(--brand-accent-light);
+}
+
+/* ---------- modals ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: 100%;
+  box-shadow: 0 8px 30px rgba(0,0,0,.15);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal h2 { font-size: 1.2rem; margin-bottom: 1rem; }
+
+/* ---------- status badges ---------- */
+.status-badge {
+  display: inline-block;
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+.status-ok, .status-complete { background: #d1fae5; color: #065f46; }
+.status-error { background: #fee2e2; color: #991b1b; }
+.status-untested, .status-pending { background: #fef3c7; color: #92400e; }
+.status-processing { background: #dbeafe; color: #1e40af; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    .status-ok, .status-complete { background: #064e3b; color: #6ee7b7; }
+    .status-error { background: #7f1d1d; color: #fca5a5; }
+    .status-untested, .status-pending { background: #78350f; color: #fde68a; }
+    .status-processing { background: #1e3a5f; color: #93c5fd; }
+  }
+}
+
+/* ---------- data tables ---------- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .875rem;
+}
+.data-table th,
+.data-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.data-table th {
+  font-weight: 600;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-muted);
+}
+
+/* ---------- page headers ---------- */
+.page-header { margin-bottom: 1.5rem; }
+.page-header h1 { font-size: 1.5rem; margin-bottom: 4px; }
+.page-header .subtitle { color: var(--text-muted); font-size: .95rem; }
+
+/* ---------- card links ---------- */
+.card-link { text-decoration: none; color: inherit; transition: border-color .15s; }
+.card-link:hover { border-color: var(--brand-accent); }
+
+/* ---------- connections grid ---------- */
+.connections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1rem;
+}
+
+/* ---------- column hints ---------- */
+.column-hints {
+  background: var(--brand-accent-light);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 1rem;
+  font-size: .85rem;
+}
+.column-hints p { color: var(--text); margin-bottom: 4px; }
+
+/* ---------- text helpers ---------- */
+.text-muted { color: var(--text-muted); }
+
 /* ---------- responsive ---------- */
 @media (max-width: 600px) {
   nav { padding: 12px 16px; }
   main { padding: 24px 16px; }
   .login-card { margin-top: 40px; padding: 28px 20px; }
+  .connections-grid { grid-template-columns: 1fr; }
 }

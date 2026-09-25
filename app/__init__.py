@@ -17,6 +17,16 @@ def create_app():
     )
     app.secret_key = cfg.SECRET_KEY
 
+    # ---- database ----
+    app.config["SQLALCHEMY_DATABASE_URI"] = cfg.SQLALCHEMY_DATABASE_URI
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = cfg.SQLALCHEMY_TRACK_MODIFICATIONS
+
+    from app.models import db
+    db.init_app(app)
+
+    from flask_migrate import Migrate
+    Migrate(app, db)
+
     # ---- inject brand variables into every template ----
     @app.context_processor
     def inject_brand():
@@ -37,6 +47,8 @@ def create_app():
     from app.routes.scheduling import scheduling_bp
     from app.routes.forecasting import forecasting_bp
     from app.routes.realtime import realtime_bp
+    from app.routes.data_import import data_import_bp
+    from app.routes.settings import settings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -45,6 +57,8 @@ def create_app():
     app.register_blueprint(scheduling_bp)
     app.register_blueprint(forecasting_bp)
     app.register_blueprint(realtime_bp)
+    app.register_blueprint(data_import_bp)
+    app.register_blueprint(settings_bp)
 
     # ---- health check ----
     @app.route("/health")

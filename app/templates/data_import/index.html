@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Data Import — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+<a href="/dashboard">Dashboard</a>
+<a href="/people/">People</a>
+<a href="/data/" class="active">Data Import</a>
+<a href="/settings/">Settings</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Data Import</h1>
+  <p class="subtitle">Upload CSV or Excel files to populate your database</p>
+</div>
+
+<!-- Upload Form -->
+<div class="card" style="max-width: 640px;">
+  <h2>Upload File</h2>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="upload_type">Data Type</label>
+      <select id="upload_type" name="upload_type" required>
+        {% for key, info in upload_types.items() %}
+        <option value="{{ key }}">{{ info.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="file">File (.csv or .xlsx)</label>
+      <input type="file" id="file" name="file" accept=".csv,.xlsx,.xls" required>
+    </div>
+
+    <!-- Column hints -->
+    <div id="columnHints" class="column-hints">
+      <p><strong>Required columns:</strong> <span id="reqCols"></span></p>
+      <p><strong>Optional columns:</strong> <span id="optCols"></span></p>
+    </div>
+
+    <button type="submit" class="btn btn-primary" id="uploadBtn">
+      Upload &amp; Import
+    </button>
+  </form>
+</div>
+
+<!-- Upload Result -->
+<div id="uploadResult" class="card" style="display:none; max-width:640px; margin-top:1rem;">
+  <h3 id="resultTitle"></h3>
+  <div id="resultBody"></div>
+</div>
+
+<!-- Recent Uploads -->
+{% if recent_uploads %}
+<div class="card" style="margin-top:2rem;">
+  <h2>Recent Uploads</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Type</th>
+        <th>File</th>
+        <th>Rows</th>
+        <th>Imported</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in recent_uploads %}
+      <tr>
+        <td>{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ u.upload_type }}</td>
+        <td>{{ u.filename }}</td>
+        <td>{{ u.rows_total }}</td>
+        <td>{{ u.rows_imported }}</td>
+        <td>
+          <span class="status-badge status-{{ u.status }}">{{ u.status }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Download Templates -->
+<div class="card" style="margin-top:2rem; max-width:640px;">
+  <h2>Download Templates</h2>
+  <p>Use these CSV templates as a starting point for your data files.</p>
+  <div style="display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.75rem;">
+    {% for key, info in upload_types.items() %}
+    <button class="btn btn-outline" onclick="downloadTemplate('{{ key }}')">
+      {{ info.label }} Template
+    </button>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TYPES = {{ upload_types | tojson }};
+
+const typeSelect = document.getElementById('upload_type');
+const reqCols = document.getElementById('reqCols');
+const optCols = document.getElementById('optCols');
+
+function updateHints() {
+  const t = TYPES[typeSelect.value];
+  reqCols.textContent = t.required.join(', ');
+  optCols.textContent = t.optional.length ? t.optional.join(', ') : '(none)';
+}
+typeSelect.addEventListener('change', updateHints);
+updateHints();
+
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+
+  const fd = new FormData(this);
+  try {
+    const resp = await fetch('/data/upload', {method: 'POST', body: fd});
+    const data = await resp.json();
+    const resultDiv = document.getElementById('uploadResult');
+    const title = document.getElementById('resultTitle');
+    const body = document.getElementById('resultBody');
+    resultDiv.style.display = '';
+
+    if (data.success) {
+      title.textContent = 'Import Complete';
+      title.style.color = 'var(--brand-accent)';
+      let html = `<p><strong>${data.imported}</strong> rows imported`;
+      if (data.skipped) html += `, <strong>${data.skipped}</strong> skipped`;
+      html += ` out of <strong>${data.total}</strong> total.</p>`;
+      if (data.errors && data.errors.length) {
+        html += '<details><summary>Warnings</summary><ul>';
+        data.errors.forEach(e => html += `<li>${e}</li>`);
+        html += '</ul></details>';
+      }
+      body.innerHTML = html;
+    } else {
+      title.textContent = 'Import Failed';
+      title.style.color = '#dc2626';
+      body.innerHTML = `<p>${data.error}</p>`;
+    }
+  } catch (err) {
+    alert('Upload error: ' + err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Upload & Import';
+});
+
+function downloadTemplate(type) {
+  const t = TYPES[type];
+  const cols = [...t.required, ...t.optional];
+  const csv = cols.join(',') + '\n';
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `serevo_${type}_template.csv`;
+  a.click();
+}
+</script>
+{% endblock %}
