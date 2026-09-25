@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Google Sheets — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+<a href="/">Dashboard</a>
+<a href="/people/">People</a>
+<a href="/data/">Data Import</a>
+<a href="/settings/" class="active">Settings</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .status-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+  }
+  .status-dot.connected { background: #22c55e; }
+  .status-dot.configured { background: #f59e0b; }
+  .status-dot.error { background: #ef4444; }
+  .status-dot.not-configured { background: #9ca3af; }
+  .result-msg {
+    margin-top: 1rem; padding: 12px 16px; border-radius: 8px; font-size: .9rem;
+  }
+  .result-msg.success { background: #d1fae5; color: #065f46; }
+  .result-msg.error { background: #fee2e2; color: #991b1b; }
+  .tab-list { margin-top: .5rem; font-size: .85rem; color: var(--text-muted); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .result-msg.success { background: #064e3b; color: #6ee7b7; }
+    :root:not([data-theme="light"]) .result-msg.error { background: #7f1d1d; color: #fca5a5; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Google Sheets Connection</h1>
+  <p class="subtitle">Connect a Google Sheet as a data source for employees, forecast, and requirements</p>
+</div>
+
+<div style="margin-bottom:1.5rem;">
+  <a href="/settings/" class="btn btn-outline">&larr; Back to Settings</a>
+</div>
+
+<!-- Status -->
+<div class="card" style="max-width:640px; margin-bottom:1rem;">
+  <h3>Connection Status</h3>
+  <p>
+    <span class="status-dot {{ sheets_status.replace(' ', '-') }}"></span>
+    <strong>{{ sheets_status | capitalize }}</strong>
+  </p>
+  {% if sheets_key %}
+  <p style="font-size:.85rem; color:var(--text-muted);">Sheet Key: {{ sheets_key[:8] }}…{{ sheets_key[-4:] if sheets_key|length > 12 else sheets_key }}</p>
+  {% endif %}
+</div>
+
+<!-- Configuration -->
+<div class="card" style="max-width:640px;">
+  <h3>Configure Connection</h3>
+  <p style="font-size:.85rem; color:var(--text-muted); margin-bottom:1rem;">
+    You need a Google Sheet key and a service account JSON file. The service account
+    must have read access to the sheet. Share the sheet with the service account email
+    (the <code>client_email</code> in the JSON).
+  </p>
+
+  <div class="form-group">
+    <label for="sheet_key">Google Sheet Key *</label>
+    <input type="text" id="sheet_key" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" value="{{ sheets_key }}" required>
+    <small style="color:var(--text-muted);">The long ID from the sheet URL: docs.google.com/spreadsheets/d/<strong>[this part]</strong>/edit</small>
+  </div>
+
+  <div class="form-group">
+    <label for="sa_json">Service Account JSON {{ "✓ Saved" if has_creds else "" }}</label>
+    <textarea id="sa_json" rows="6" placeholder='Paste the full contents of your service_account.json file here…' style="font-family:monospace; font-size:.8rem;"></textarea>
+    {% if has_creds %}
+    <small style="color:var(--text-muted);">Credentials are already saved. Leave blank to keep existing, or paste new JSON to replace.</small>
+    {% endif %}
+  </div>
+
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+    <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+    <button class="btn btn-outline" onclick="testConnection()">Test Connection</button>
+    {% if sheets_key %}
+    <button class="btn btn-outline" style="color:#ef4444; border-color:#ef4444;" onclick="disconnect()">Disconnect</button>
+    {% endif %}
+  </div>
+  <div id="result"></div>
+</div>
+
+<!-- How-to -->
+<div class="card" style="max-width:640px; margin-top:1rem;">
+  <h3>Setup Guide</h3>
+  <div style="font-size:.9rem; line-height:1.6;">
+    <p><strong>1. Create a Service Account</strong><br>
+    Go to the <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank">Google Cloud Console</a>,
+    create a service account, and download the JSON key file.</p>
+
+    <p><strong>2. Enable the Sheets API</strong><br>
+    In the same project, enable the Google Sheets API and the Google Drive API.</p>
+
+    <p><strong>3. Share Your Sheet</strong><br>
+    Open your Google Sheet, click Share, and add the service account email
+    (found as <code>client_email</code> in the JSON) with Viewer access.</p>
+
+    <p><strong>4. Required Tabs</strong><br>
+    Your sheet should have these tabs: <strong>EMPLOYEES</strong>,
+    <strong>FORECAST RAW</strong>, <strong>REQUIREMENTS RAW</strong>,
+    and optionally <strong>PlanningUnits</strong>.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showResult(type, msg) {
+  document.getElementById('result').innerHTML =
+    `<div class="result-msg ${type}">${msg}</div>`;
+}
+
+async function saveConfig() {
+  const key = document.getElementById('sheet_key').value.trim();
+  const json = document.getElementById('sa_json').value.trim();
+  if (!key) return showResult('error', 'Sheet key is required.');
+
+  try {
+    const resp = await fetch('/settings/google-sheets/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ sheet_key: key, service_account_json: json }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showResult('success', 'Configuration saved. Click "Test Connection" to verify.');
+    } else {
+      showResult('error', data.error);
+    }
+  } catch(e) {
+    showResult('error', 'Network error: ' + e.message);
+  }
+}
+
+async function testConnection() {
+  showResult('success', 'Testing connection…');
+  try {
+    const resp = await fetch('/settings/google-sheets/test', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: '{}',
+    });
+    const data = await resp.json();
+    if (data.success) {
+      let msg = `Connected to sheet: <strong>${data.title}</strong>`;
+      if (data.tabs && data.tabs.length) {
+        msg += `<div class="tab-list">Tabs found: ${data.tabs.join(', ')}</div>`;
+      }
+      showResult('success', msg);
+    } else {
+      showResult('error', data.error);
+    }
+  } catch(e) {
+    showResult('error', 'Network error: ' + e.message);
+  }
+}
+
+async function disconnect() {
+  if (!confirm('Disconnect Google Sheets? The platform will fall back to the database.')) return;
+  try {
+    const resp = await fetch('/settings/google-sheets/disconnect', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: '{}',
+    });
+    const data = await resp.json();
+    if (data.success) {
+      location.reload();
+    }
+  } catch(e) {
+    showResult('error', 'Network error: ' + e.message);
+  }
+}
+</script>
+{% endblock %}

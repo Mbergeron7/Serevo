@@ -54,6 +54,26 @@ COL_OFFERED   = "offered"
 COL_AHT       = "aht"
 
 
+def _get_sheets_config():
+    """Get Google Sheets config from env vars, falling back to DB settings."""
+    sheet_key = os.environ.get("CAPACITY_SHEET_KEY", "").strip()
+    sa_file = os.environ.get("SERVICE_ACCOUNT_FILE", "").strip()
+    sa_json = ""
+
+    # Fall back to database settings if env vars aren't set
+    if not sheet_key or not sa_file:
+        try:
+            from app.models import AppSetting
+            if not sheet_key:
+                sheet_key = AppSetting.get("google_sheet_key", "")
+            if not sa_file:
+                sa_json = AppSetting.get("google_service_account_json", "")
+        except Exception:
+            pass  # DB not available yet
+
+    return sheet_key, sa_file, sa_json
+
+
 def _open_capacity_sheet():
     """Open the capacity Google Sheet via the service account. Returns (sheet, err)."""
     try:
@@ -61,13 +81,24 @@ def _open_capacity_sheet():
         from oauth2client.service_account import ServiceAccountCredentials
         scope = ["https://spreadsheets.google.com/feeds",
                  "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(
-            os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json"), scope)
+
+        sheet_key, sa_file, sa_json = _get_sheets_config()
+
+        if not sheet_key:
+            return None, "No Google Sheet key configured"
+
+        if sa_json:
+            # Use JSON credentials stored in the database
+            import json
+            creds_dict = json.loads(sa_json)
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        elif sa_file:
+            creds = ServiceAccountCredentials.from_json_keyfile_name(sa_file, scope)
+        else:
+            return None, "No service account credentials configured"
+
         client = gspread.authorize(creds)
-        key = os.environ.get("CAPACITY_SHEET_KEY", "")
-        if not key:
-            return None, "CAPACITY_SHEET_KEY not set"
-        return client.open_by_key(key), None
+        return client.open_by_key(sheet_key), None
     except Exception as e:
         return None, f"could not open capacity sheet: {e}"
 
@@ -282,12 +313,21 @@ def get_source():
             _INSTANCE = PostgresSource()
         else:
             # Try SheetSource; fall back to DemoSource if no sheet key
-            sheet_key = os.environ.get("CAPACITY_SHEET_KEY", "").strip()
+            sheet_key, sa_file, sa_json = _get_sheets_config()
             demo = os.environ.get("DEMO_MODE", "false").strip().lower() == "true"
             if demo and not sheet_key:
                 _INSTANCE = DemoSource()
-            else:
+            elif sheet_key and (sa_file or sa_json):
                 _INSTANCE = SheetSource()
+            else:
+                # No sheets config — use Postgres if DATABASE_URL is set, else Demo
+                db_url = os.environ.get("DATABASE_URL", "").strip()
+                if db_url:
+                    _INSTANCE = PostgresSource()
+                elif demo:
+                    _INSTANCE = DemoSource()
+                else:
+                    _INSTANCE = SheetSource()  # will error but keeps old behavior
     return _INSTANCE
 
 

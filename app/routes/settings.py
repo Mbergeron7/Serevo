@@ -61,9 +61,103 @@ PROVIDERS = {
 @settings_bp.route("/")
 @login_required
 def index():
+    from app.models import AppSetting
+    sheets_key = AppSetting.get("google_sheet_key", "")
+    sheets_status = AppSetting.get("google_sheets_status", "not configured")
     return render_template("settings/index.html",
         user=get_current_user(),
+        sheets_key=sheets_key,
+        sheets_status=sheets_status,
     )
+
+
+@settings_bp.route("/google-sheets")
+@login_required
+def google_sheets():
+    from app.models import AppSetting
+    sheets_key = AppSetting.get("google_sheet_key", "")
+    has_creds = bool(AppSetting.get("google_service_account_json", ""))
+    sheets_status = AppSetting.get("google_sheets_status", "not configured")
+    return render_template("settings/google_sheets.html",
+        user=get_current_user(),
+        sheets_key=sheets_key,
+        has_creds=has_creds,
+        sheets_status=sheets_status,
+    )
+
+
+@settings_bp.route("/google-sheets/save", methods=["POST"])
+@login_required
+def save_google_sheets():
+    from app.models import db, AppSetting
+    data = request.get_json(silent=True) or {}
+    sheet_key = data.get("sheet_key", "").strip()
+    sa_json = data.get("service_account_json", "").strip()
+
+    if not sheet_key:
+        return jsonify({"success": False, "error": "Sheet key is required"})
+
+    # Validate the JSON if provided
+    if sa_json:
+        try:
+            import json as json_mod
+            parsed = json_mod.loads(sa_json)
+            if "client_email" not in parsed:
+                return jsonify({"success": False, "error": "Invalid service account JSON — missing client_email"})
+        except (json.JSONDecodeError, ValueError):
+            return jsonify({"success": False, "error": "Invalid JSON format"})
+
+    AppSetting.set("google_sheet_key", sheet_key)
+    if sa_json:
+        AppSetting.set("google_service_account_json", sa_json)
+    AppSetting.set("google_sheets_status", "configured")
+    db.session.commit()
+
+    # Reset the cached data source so it picks up new config
+    import app.data_source as ds
+    ds._INSTANCE = None
+
+    return jsonify({"success": True})
+
+
+@settings_bp.route("/google-sheets/test", methods=["POST"])
+@login_required
+def test_google_sheets():
+    from app.models import db, AppSetting
+    from app.data_source import _open_capacity_sheet
+
+    sheet, err = _open_capacity_sheet()
+    if err:
+        AppSetting.set("google_sheets_status", "error")
+        db.session.commit()
+        return jsonify({"success": False, "error": err})
+
+    # Try reading the sheet title as a basic test
+    try:
+        title = sheet.title
+        tabs = [ws.title for ws in sheet.worksheets()]
+        AppSetting.set("google_sheets_status", "connected")
+        db.session.commit()
+        return jsonify({"success": True, "title": title, "tabs": tabs})
+    except Exception as e:
+        AppSetting.set("google_sheets_status", "error")
+        db.session.commit()
+        return jsonify({"success": False, "error": str(e)})
+
+
+@settings_bp.route("/google-sheets/disconnect", methods=["POST"])
+@login_required
+def disconnect_google_sheets():
+    from app.models import db, AppSetting
+    AppSetting.set("google_sheet_key", "")
+    AppSetting.set("google_service_account_json", "")
+    AppSetting.set("google_sheets_status", "not configured")
+    db.session.commit()
+
+    import app.data_source as ds
+    ds._INSTANCE = None
+
+    return jsonify({"success": True})
 
 
 @settings_bp.route("/api-connections")

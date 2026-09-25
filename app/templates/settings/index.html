@@ -14,6 +14,11 @@
 </div>
 
 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; max-width:900px;">
+  <a href="/settings/google-sheets" class="card card-link">
+    <h3>Google Sheets</h3>
+    <p>Connect a Google Sheet as a data source for employees, forecast, and requirements data.</p>
+    <span class="status-badge status-{{ sheets_status.replace(' ', '-') }}">{{ sheets_status }}</span>
+  </a>
   <a href="/settings/api-connections" class="card card-link">
     <h3>API Connections</h3>
     <p>Manage external API credentials for pulling workforce data from platforms like NICE, Genesys, Five9, and others.</p>

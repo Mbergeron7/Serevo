@@ -279,3 +279,34 @@ class DataUpload(db.Model):
 
     def __repr__(self):
         return f"<DataUpload {self.filename} ({self.upload_type})>"
+
+
+# ═══════════════════════════════════════════════════════════════
+# APP SETTINGS (key-value store for runtime configuration)
+# ═══════════════════════════════════════════════════════════════
+
+class AppSetting(db.Model):
+    __tablename__ = "app_settings"
+
+    key   = db.Column(db.String(120), primary_key=True)
+    value = db.Column(db.Text, default="")
+
+    @staticmethod
+    def get(key, default=""):
+        """Get a setting value by key."""
+        row = AppSetting.query.get(key)
+        return row.value if row else default
+
+    @staticmethod
+    def set(key, value):
+        """Set a setting value (upsert)."""
+        row = AppSetting.query.get(key)
+        if row:
+            row.value = value
+        else:
+            row = AppSetting(key=key, value=value)
+            db.session.add(row)
+        db.session.flush()
+
+    def __repr__(self):
+        return f"<AppSetting {self.key}>"
