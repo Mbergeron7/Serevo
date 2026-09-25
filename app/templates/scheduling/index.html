@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+{% block title %}Scheduling — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/" class="nav-link">Dashboard</a>
+  <a href="/people" class="nav-link">People</a>
+  <a href="/people/accommodations" class="nav-link">Accommodations</a>
+  <a href="/people/pto" class="nav-link">Time Off</a>
+  <span class="user-name">{{ user.name }}</span>
+  <a href="/logout" class="nav-link">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  /* ── Config panel ──────────────────────────────── */
+  .config-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 24px;
+  }
+  .config-row {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .config-group { display: flex; flex-direction: column; }
+  .config-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .config-group select, .config-group input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .btn-generate {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 24px; border-radius: 6px; font-weight: 700;
+    font-size: .85rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── View tabs ─────────────────────────────────── */
+  .view-tabs {
+    display: flex; gap: 2px; margin-bottom: 20px;
+    background: var(--bg); border-radius: 8px; padding: 3px;
+    width: fit-content;
+  }
+  .view-tab {
+    padding: 6px 16px; border-radius: 6px; border: none;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    background: transparent; color: var(--text-muted);
+  }
+  .view-tab.active {
+    background: var(--brand-accent); color: #fff;
+  }
+
+  /* ── Stats row ─────────────────────────────────── */
+  .stat-row {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 20px; min-width: 140px; flex: 1;
+  }
+  .stat-card .stat-num {
+    font-size: 1.6rem; font-weight: 800; color: var(--brand-accent);
+  }
+  .stat-card .stat-label {
+    font-size: .78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-top: 2px;
+  }
+  .stat-num.warn { color: #d97706; }
+  .stat-num.danger { color: #dc2626; }
+  .stat-num.good { color: #059669; }
+
+  /* ── Schedule card ─────────────────────────────── */
+  .sched-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .sched-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    background: var(--brand-accent); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .sched-table-wrap { overflow-x: auto; }
+  .sched-table {
+    width: 100%; font-size: .82rem; border-collapse: collapse;
+  }
+  .sched-table th {
+    background: var(--bg); font-size: .72rem; text-align: left;
+    padding: 8px 12px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; white-space: nowrap;
+  }
+  .sched-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .sched-table tr:hover td { background: var(--brand-accent-light); }
+
+  .badge-full {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: .72rem; font-weight: 600;
+    background: color-mix(in srgb, #059669 15%, transparent); color: #059669;
+  }
+  .badge-half {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: .72rem; font-weight: 600;
+    background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706;
+  }
+  .badge-off {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: .72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-muted);
+  }
+
+  /* ── Coverage heatmap ──────────────────────────── */
+  .coverage-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .coverage-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .coverage-grid {
+    display: grid; gap: 2px; padding: 16px;
+  }
+  .cov-cell {
+    padding: 4px 6px; border-radius: 4px; text-align: center;
+    font-size: .72rem; font-weight: 600; min-width: 48px;
+  }
+  .cov-header {
+    font-size: .68rem; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; padding: 4px 6px; text-align: center;
+  }
+  .cov-over  { background: color-mix(in srgb, #059669 20%, transparent); color: #059669; }
+  .cov-met   { background: color-mix(in srgb, #059669 12%, transparent); color: #059669; }
+  .cov-under { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+  .cov-crit  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
+  .cov-zero  { background: var(--bg); color: var(--text-muted); }
+
+  .day-header-row {
+    background: var(--bg); padding: 10px 20px; font-weight: 700;
+    font-size: .85rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+  }
+  .day-header-row:hover { background: var(--brand-accent-light); }
+  .day-content { display: none; }
+  .day-content.open { display: block; }
+
+  .warning-list {
+    padding: 8px 20px; font-size: .82rem; color: #d97706;
+  }
+
+  .no-data {
+    text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
+  }
+
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3);
+    z-index: 900; justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: var(--surface); padding: 30px 40px; border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: center;
+    font-weight: 600; font-size: .95rem;
+  }
+
+  /* ── Month/Year summary table ──────────────────── */
+  .summary-table {
+    width: 100%; font-size: .82rem; border-collapse: collapse;
+  }
+  .summary-table th {
+    background: var(--bg); font-size: .72rem; text-align: left;
+    padding: 8px 12px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .summary-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+  }
+
+  @media (max-width: 600px) {
+    .config-row { flex-direction: column; }
+    .stat-row { flex-direction: column; }
+    .view-tabs { width: 100%; }
+    .view-tab { flex: 1; text-align: center; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Scheduling</h1>
+  <p class="subtitle">Generate shift assignments &amp; analyze coverage gaps</p>
+</div>
+
+<!-- ── Config ──────────────────────────────────────────────── -->
+<div class="config-card">
+  <div class="config-row">
+    <div class="config-group">
+      <label>LOB / Skill</label>
+      <select id="cfgLOB">
+        <option value="">Select LOB…</option>
+        {% for lob in lobs %}
+          <option value="{{ lob }}">{{ lob }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="config-group">
+      <label>Start Date</label>
+      <input type="date" id="cfgStart">
+    </div>
+    <div class="config-group">
+      <label>End Date</label>
+      <input type="date" id="cfgEnd">
+    </div>
+    <div class="config-group">
+      <label>Shift Length (hrs)</label>
+      <input type="number" id="cfgShiftHrs" value="8" min="2" max="12" step="0.5" style="width:80px">
+    </div>
+    <button class="btn-generate" id="btnGenerate" onclick="generateSchedule()">
+      Generate Schedule
+    </button>
+  </div>
+</div>
+
+<!-- ── View tabs ───────────────────────────────────────────── -->
+<div class="view-tabs" id="viewTabs" style="display:none">
+  <button class="view-tab active" data-view="day" onclick="switchView('day')">Day</button>
+  <button class="view-tab" data-view="week" onclick="switchView('week')">Week</button>
+  <button class="view-tab" data-view="month" onclick="switchView('month')">Month</button>
+  <button class="view-tab" data-view="year" onclick="switchView('year')">Year</button>
+</div>
+
+<!-- ── Stats ───────────────────────────────────────────────── -->
+<div class="stat-row" id="statsRow" style="display:none">
+  <div class="stat-card">
+    <div class="stat-num" id="statShifts">0</div>
+    <div class="stat-label">Total Shifts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statHours">0</div>
+    <div class="stat-label">Total Hours</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statCoverage">0%</div>
+    <div class="stat-label">Avg Coverage</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statDays">0</div>
+    <div class="stat-label">Days</div>
+  </div>
+</div>
+
+<!-- ── Results container ──────────────────────────────────── -->
+<div id="resultsContainer"></div>
+
+<!-- ── Loading overlay ────────────────────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">Generating schedule…</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let scheduleData = null;
+let currentView = 'day';
+
+// Default dates: today → 7 days out
+const today = new Date();
+document.getElementById('cfgStart').value = fmt(today);
+const nextWeek = new Date(today);
+nextWeek.setDate(nextWeek.getDate() + 6);
+document.getElementById('cfgEnd').value = fmt(nextWeek);
+
+function fmt(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+function generateSchedule() {
+  const lob = document.getElementById('cfgLOB').value;
+  const start = document.getElementById('cfgStart').value;
+  const end = document.getElementById('cfgEnd').value;
+  const shiftHrs = parseFloat(document.getElementById('cfgShiftHrs').value) || 8;
+
+  if (!lob) { alert('Please select a LOB.'); return; }
+  if (!start || !end) { alert('Please set start and end dates.'); return; }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  document.getElementById('loadingOverlay').classList.add('show');
+
+  fetch('/scheduling/generate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob, start_date: start, end_date: end, shift_length_hrs: shiftHrs}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    document.getElementById('loadingOverlay').classList.remove('show');
+    if (!data.success) {
+      alert('Error: ' + (data.error || 'Unknown'));
+      return;
+    }
+    scheduleData = data;
+    updateStats();
+    document.getElementById('viewTabs').style.display = 'flex';
+    document.getElementById('statsRow').style.display = 'flex';
+    switchView(currentView);
+  })
+  .catch(e => {
+    btn.disabled = false;
+    document.getElementById('loadingOverlay').classList.remove('show');
+    alert('Generation failed: ' + e);
+  });
+}
+
+function updateStats() {
+  if (!scheduleData) return;
+  const t = scheduleData.totals;
+  document.getElementById('statShifts').textContent = t.total_shifts;
+  document.getElementById('statHours').textContent = t.total_hours;
+  document.getElementById('statDays').textContent = t.total_days;
+
+  const covEl = document.getElementById('statCoverage');
+  covEl.textContent = t.avg_coverage_pct + '%';
+  covEl.className = 'stat-num ' + (t.avg_coverage_pct >= 95 ? 'good' :
+                                     t.avg_coverage_pct >= 80 ? 'warn' : 'danger');
+}
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  if (!scheduleData) return;
+  const container = document.getElementById('resultsContainer');
+  switch(view) {
+    case 'day':   renderDayView(container); break;
+    case 'week':  renderWeekView(container); break;
+    case 'month': renderMonthView(container); break;
+    case 'year':  renderYearView(container); break;
+  }
+}
+
+// ── Day View ─────────────────────────────────────────
+function renderDayView(container) {
+  if (!scheduleData.days.length) {
+    container.innerHTML = '<div class="no-data">No schedule data generated.</div>';
+    return;
+  }
+  let html = '';
+  scheduleData.days.forEach((day, idx) => {
+    html += `<div class="sched-card">
+      <div class="day-header-row" onclick="toggleDay(${idx})">
+        <span>${day.date_label} — ${day.shifts.length} shifts</span>
+        <span style="font-size:.78rem;color:rgba(255,255,255,.7)">${covBadge(day.summary)}</span>
+      </div>
+      <div class="day-content${idx === 0 ? ' open' : ''}" id="dayContent${idx}">`;
+
+    if (day.warnings.length) {
+      html += '<div class="warning-list">' + day.warnings.map(w => '⚠ ' + w).join('<br>') + '</div>';
+    }
+
+    // Shifts table
+    if (day.shifts.length) {
+      html += `<div class="sched-table-wrap"><table class="sched-table">
+        <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th></tr></thead>
+        <tbody>`;
+      day.shifts.forEach(s => {
+        const badge = s.type === 'half' ? '<span class="badge-half">Half</span>' :
+                      '<span class="badge-full">Full</span>';
+        html += `<tr>
+          <td style="font-weight:600">${s.employee}</td>
+          <td>${s.start}</td><td>${s.end}</td>
+          <td>${s.hours}</td><td>${badge}</td></tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+
+    // Unassigned
+    if (day.unassigned.length) {
+      html += `<div style="padding:8px 20px;font-size:.82rem;color:var(--text-muted)">
+        <strong>Off/PTO:</strong> ${day.unassigned.join(', ')}</div>`;
+    }
+
+    // Coverage heatmap
+    if (day.coverage.length) {
+      html += renderCoverageStrip(day.coverage);
+    }
+
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+function toggleDay(idx) {
+  const el = document.getElementById('dayContent' + idx);
+  el.classList.toggle('open');
+}
+
+function covBadge(summary) {
+  if (!summary || summary.total_intervals === 0) return '';
+  const pct = summary.avg_coverage_pct;
+  const cls = pct >= 95 ? 'good' : pct >= 80 ? 'warn' : 'danger';
+  return `<span class="stat-num ${cls}" style="font-size:.85rem">${pct}%</span> coverage`;
+}
+
+function renderCoverageStrip(coverage) {
+  const cols = coverage.length;
+  let html = `<div class="coverage-card" style="margin:12px 16px 16px">
+    <div class="coverage-card-header"><span>Coverage by Interval</span></div>
+    <div class="coverage-grid" style="grid-template-columns: repeat(${Math.min(cols, 16)}, 1fr)">`;
+
+  coverage.forEach(c => {
+    let cls = 'cov-zero';
+    if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
+    else if (c.coverage_pct >= 100) cls = 'cov-over';
+    else if (c.coverage_pct >= 90) cls = 'cov-met';
+    else if (c.coverage_pct >= 70) cls = 'cov-under';
+    else cls = 'cov-crit';
+
+    html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
+      <div style="font-size:.65rem">${c.time}</div>
+      <div>${c.scheduled}/${c.required}</div>
+    </div>`;
+  });
+
+  html += '</div></div>';
+  return html;
+}
+
+// ── Week View ────────────────────────────────────────
+function renderWeekView(container) {
+  // Group days into weeks (Mon-Sun)
+  const weeks = groupByWeek(scheduleData.days);
+  let html = '';
+  weeks.forEach((week, wi) => {
+    const totalShifts = week.reduce((s, d) => s + d.shifts.length, 0);
+    const totalHours = week.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
+    const avgCov = avgCoverage(week);
+
+    html += `<div class="sched-card">
+      <div class="sched-card-header">
+        <span>Week of ${week[0].date_label} — ${totalShifts} shifts, ${totalHours.toFixed(1)} hrs</span>
+        <span style="font-size:.8rem">${avgCov}% avg coverage</span>
+      </div>
+      <div class="sched-table-wrap"><table class="summary-table">
+        <thead><tr><th>Day</th><th>Shifts</th><th>Hours</th><th>Peak Req</th><th>Coverage</th><th>Gaps</th></tr></thead>
+        <tbody>`;
+    week.forEach(d => {
+      const sm = d.summary;
+      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
+      html += `<tr>
+        <td style="font-weight:600">${d.date_label}</td>
+        <td>${d.shifts.length}</td>
+        <td>${d.shifts.reduce((h, s) => h + s.hours, 0).toFixed(1)}</td>
+        <td>${sm.peak_required}</td>
+        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
+        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+
+    // Week coverage heatmap: one row per day
+    html += '<div style="padding:12px 16px">';
+    week.forEach(d => {
+      if (d.coverage.length) {
+        html += `<div style="margin-bottom:4px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:.72rem;font-weight:700;width:70px;color:var(--text-muted)">${d.day_of_week}</span>
+          <div style="display:flex;gap:2px;flex:1">`;
+        d.coverage.forEach(c => {
+          let cls = 'cov-zero';
+          if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
+          else if (c.coverage_pct >= 100) cls = 'cov-over';
+          else if (c.coverage_pct >= 90) cls = 'cov-met';
+          else if (c.coverage_pct >= 70) cls = 'cov-under';
+          else cls = 'cov-crit';
+          html += `<div class="cov-cell ${cls}" style="flex:1;min-width:0;padding:3px 0"
+            title="${c.time}: ${c.scheduled}/${c.required}">${c.scheduled}</div>`;
+        });
+        html += '</div></div>';
+      }
+    });
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// ── Month View ───────────────────────────────────────
+function renderMonthView(container) {
+  const months = groupByMonth(scheduleData.days);
+  let html = '';
+  Object.keys(months).sort().forEach(key => {
+    const days = months[key];
+    const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
+    const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
+    const avgCov = avgCoverage(days);
+    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+
+    html += `<div class="sched-card">
+      <div class="sched-card-header">
+        <span>${label}</span>
+        <span style="font-size:.8rem">${totalShifts} shifts · ${totalHours.toFixed(0)} hrs · ${avgCov}% coverage</span>
+      </div>
+      <div class="sched-table-wrap"><table class="summary-table">
+        <thead><tr><th>Date</th><th>Day</th><th>Shifts</th><th>Hours</th><th>Coverage</th><th>Gap Intervals</th></tr></thead>
+        <tbody>`;
+    days.forEach(d => {
+      const sm = d.summary;
+      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
+      html += `<tr>
+        <td style="font-weight:600">${d.date}</td>
+        <td>${d.day_of_week}</td>
+        <td>${d.shifts.length}</td>
+        <td>${d.shifts.reduce((h, s) => h + s.hours, 0).toFixed(1)}</td>
+        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
+        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// ── Year View ────────────────────────────────────────
+function renderYearView(container) {
+  const months = groupByMonth(scheduleData.days);
+  const keys = Object.keys(months).sort();
+  if (!keys.length) {
+    container.innerHTML = '<div class="no-data">No data to display.</div>';
+    return;
+  }
+
+  let html = `<div class="sched-card">
+    <div class="sched-card-header">
+      <span>Annual Overview — ${scheduleData.lob}</span>
+    </div>
+    <div class="sched-table-wrap"><table class="summary-table">
+      <thead><tr><th>Month</th><th>Days</th><th>Total Shifts</th><th>Total Hours</th><th>Avg Coverage</th><th>Understaffed Days</th></tr></thead>
+      <tbody>`;
+
+  keys.forEach(key => {
+    const days = months[key];
+    const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
+    const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
+    const avgCov = avgCoverage(days);
+    const understaffedDays = days.filter(d => d.summary.avg_coverage_pct < 90).length;
+    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'short', year: 'numeric'});
+    const covCls = avgCov >= 95 ? 'good' : avgCov >= 80 ? 'warn' : 'danger';
+
+    html += `<tr>
+      <td style="font-weight:600">${label}</td>
+      <td>${days.length}</td>
+      <td>${totalShifts}</td>
+      <td>${totalHours.toFixed(0)}</td>
+      <td><span class="stat-num ${covCls}" style="font-size:.82rem">${avgCov}%</span></td>
+      <td>${understaffedDays > 0 ? '<span style="color:#dc2626;font-weight:600">' + understaffedDays + '</span>' : '0'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div></div>';
+  container.innerHTML = html;
+}
+
+// ── Helpers ──────────────────────────────────────────
+function groupByWeek(days) {
+  const weeks = [];
+  let current = [];
+  days.forEach(d => {
+    current.push(d);
+    if (d.day_of_week === 'Sun' || d === days[days.length - 1]) {
+      if (current.length) weeks.push([...current]);
+      current = [];
+    }
+  });
+  if (current.length) weeks.push(current);
+  return weeks;
+}
+
+function groupByMonth(days) {
+  const months = {};
+  days.forEach(d => {
+    const key = d.date.slice(0, 7); // YYYY-MM
+    if (!months[key]) months[key] = [];
+    months[key].push(d);
+  });
+  return months;
+}
+
+function avgCoverage(days) {
+  const withCov = days.filter(d => d.summary.total_intervals > 0);
+  if (!withCov.length) return 0;
+  const sum = withCov.reduce((s, d) => s + d.summary.avg_coverage_pct, 0);
+  return Math.round(sum / withCov.length * 10) / 10;
+}
+</script>
+{% endblock %}
