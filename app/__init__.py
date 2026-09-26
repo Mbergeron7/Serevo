@@ -42,6 +42,10 @@ def create_app():
     with app.app_context():
         db.create_all()
 
+    # Seed the demo user if it doesn't exist
+    from app.demo_data import seed_demo_user
+    seed_demo_user(app)
+
     # ---- inject brand variables into every template ----
     @app.context_processor
     def inject_brand():
@@ -52,7 +56,9 @@ def create_app():
     def inject_user():
         from app.auth import get_current_user
         user = get_current_user()
-        return {"current_user": user}
+        # Override is_demo if the logged-in user is a demo account
+        is_user_demo = bool(user and user.get("is_demo"))
+        return {"current_user": user, "is_demo": is_user_demo or cfg.is_demo}
 
     # ---- register blueprints ----
     from app.routes.auth import auth_bp

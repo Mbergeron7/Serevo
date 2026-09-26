@@ -52,10 +52,14 @@ def _time_diff_hours(start, end):
 @login_required
 def index():
     user = get_current_user()
-    from app.scheduling.engine import get_available_lobs
 
-    sheet = _get_sheet()
-    lobs = get_available_lobs(sheet)
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_LOBS
+        lobs = list(DEMO_LOBS)
+    else:
+        from app.scheduling.engine import get_available_lobs
+        sheet = _get_sheet()
+        lobs = get_available_lobs(sheet)
 
     return render_template("scheduling/index.html",
         user=user,

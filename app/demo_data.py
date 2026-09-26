@@ -169,3 +169,109 @@ def get_demo_accommodations():
 def get_demo_pto():
     """Return (pto_list, None)."""
     return _demo_pto(), None
+
+
+# ── Schedules ────────────────────────────────────────────────
+
+_SHIFT_PATTERNS = [
+    ("08:00", "16:30", 8.0),
+    ("09:00", "17:30", 8.0),
+    ("10:00", "18:30", 8.0),
+    ("07:00", "15:30", 8.0),
+    ("11:00", "19:30", 8.0),
+    ("12:00", "20:30", 8.0),
+]
+
+
+def get_demo_schedules(schedule_date=None):
+    """Return a list of schedule dicts for the given date."""
+    if schedule_date is None:
+        schedule_date = datetime.date.today()
+    if isinstance(schedule_date, str):
+        schedule_date = datetime.datetime.strptime(schedule_date[:10], "%Y-%m-%d").date()
+
+    weekday = schedule_date.weekday()
+    rng = random.Random(schedule_date.toordinal())
+
+    schedules = []
+    for i, emp in enumerate(DEMO_EMPLOYEES):
+        name = f"{emp['First Name']} {emp['Last Name']}"
+        shift = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
+        start_str, end_str, hours = shift
+
+        # Weekend: only ~20% of staff works
+        if weekday >= 5 and rng.random() > 0.2:
+            schedules.append({
+                "id": 8000 + i,
+                "employee": name,
+                "employee_id": emp["Employee ID"],
+                "date": schedule_date.isoformat(),
+                "start": "", "end": "",
+                "type": "full", "hours": 0,
+                "status": "off", "segments": [],
+            })
+            continue
+
+        # Build segments
+        sh, sm = int(start_str[:2]), int(start_str[3:])
+        segments = [
+            {"id": 0, "type": "on-call",  "start": start_str, "end": f"{sh+2:02d}:{sm:02d}", "duration_mins": 120, "sort_order": 0, "notes": ""},
+            {"id": 1, "type": "break",    "start": f"{sh+2:02d}:{sm:02d}", "end": f"{sh+2:02d}:15", "duration_mins": 15, "sort_order": 1, "notes": ""},
+            {"id": 2, "type": "on-call",  "start": f"{sh+2:02d}:15", "end": f"{sh+4:02d}:{sm:02d}", "duration_mins": 105, "sort_order": 2, "notes": ""},
+            {"id": 3, "type": "lunch",    "start": f"{sh+4:02d}:{sm:02d}", "end": f"{sh+4:02d}:30", "duration_mins": 30, "sort_order": 3, "notes": ""},
+            {"id": 4, "type": "on-call",  "start": f"{sh+4:02d}:30", "end": end_str, "duration_mins": int((hours - 4.75) * 60), "sort_order": 4, "notes": ""},
+        ]
+
+        schedules.append({
+            "id": 8000 + i,
+            "employee": name,
+            "employee_id": emp["Employee ID"],
+            "date": schedule_date.isoformat(),
+            "start": start_str, "end": end_str,
+            "type": "full", "hours": hours,
+            "status": "scheduled", "segments": segments,
+        })
+    return schedules
+
+
+# ── Dashboard summary ────────────────────────────────────────
+
+def get_demo_dashboard_stats():
+    """Summary numbers for the dashboard."""
+    today = datetime.date.today()
+    schedules = get_demo_schedules(today)
+    on_today = sum(1 for s in schedules if s["status"] == "scheduled")
+    off_today = sum(1 for s in schedules if s["status"] == "off")
+    pto_entries = _demo_pto()
+    pto_today = sum(1 for p in pto_entries
+                    if p["Start Date"] <= today.isoformat() <= p["End Date"])
+    return {
+        "total_employees": len(DEMO_EMPLOYEES),
+        "on_today": on_today,
+        "off_today": off_today,
+        "pto_today": pto_today,
+        "planning_units": len(DEMO_LOBS),
+        "lobs": list(DEMO_LOBS),
+    }
+
+
+# ── Seed the demo user ──────────────────────────────────────
+
+def seed_demo_user(app):
+    """Create the demo@serevo.app user if it doesn't exist."""
+    with app.app_context():
+        from app.models import db, User
+        from flask_bcrypt import generate_password_hash
+
+        demo = User.query.filter_by(email="demo@serevo.app").first()
+        if not demo:
+            demo = User(
+                email="demo@serevo.app",
+                password_hash=generate_password_hash("demo1234").decode("utf-8"),
+                display_name="Demo User",
+                role="admin",
+                is_demo=True,
+                is_active=True,
+            )
+            db.session.add(demo)
+            db.session.commit()

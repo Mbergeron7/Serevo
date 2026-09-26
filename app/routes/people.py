@@ -38,12 +38,19 @@ def _get_sheet():
 @login_required
 def roster():
     user = get_current_user()
-    from app.people.manager import get_employees, get_accommodations, get_pto
 
-    sheet = _get_sheet()
-    employees, emp_err = get_employees(sheet)
-    accoms, _ = get_accommodations(sheet)
-    pto_list, _ = get_pto(sheet)
+    # Demo mode: serve fake data, no API/sheet calls
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_employees, get_demo_accommodations, get_demo_pto
+        employees, emp_err = get_demo_employees()
+        accoms, _ = get_demo_accommodations()
+        pto_list, _ = get_demo_pto()
+    else:
+        from app.people.manager import get_employees, get_accommodations, get_pto
+        sheet = _get_sheet()
+        employees, emp_err = get_employees(sheet)
+        accoms, _ = get_accommodations(sheet)
+        pto_list, _ = get_pto(sheet)
 
     # Build lookup maps for the template
     accom_map = {}
@@ -86,11 +93,17 @@ def roster():
 @login_required
 def accommodations():
     user = get_current_user()
-    from app.people.manager import get_accommodations, get_employee_names
 
-    sheet = _get_sheet()
-    accoms, err = get_accommodations(sheet)
-    emp_names, _ = get_employee_names(sheet)
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_accommodations, get_demo_employees
+        accoms, err = get_demo_accommodations()
+        emps, _ = get_demo_employees()
+        emp_names = [f"{e['First Name']} {e['Last Name']}" for e in emps]
+    else:
+        from app.people.manager import get_accommodations, get_employee_names
+        sheet = _get_sheet()
+        accoms, err = get_accommodations(sheet)
+        emp_names, _ = get_employee_names(sheet)
 
     return render_template("people/accommodations.html",
         user=user,
@@ -134,11 +147,17 @@ def delete_accommodation():
 @login_required
 def pto():
     user = get_current_user()
-    from app.people.manager import get_pto, get_employee_names
 
-    sheet = _get_sheet()
-    pto_list, err = get_pto(sheet)
-    emp_names, _ = get_employee_names(sheet)
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_pto, get_demo_employees
+        pto_list, err = get_demo_pto()
+        emps, _ = get_demo_employees()
+        emp_names = [f"{e['First Name']} {e['Last Name']}" for e in emps]
+    else:
+        from app.people.manager import get_pto, get_employee_names
+        sheet = _get_sheet()
+        pto_list, err = get_pto(sheet)
+        emp_names, _ = get_employee_names(sheet)
 
     return render_template("people/pto.html",
         user=user,

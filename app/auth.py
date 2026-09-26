@@ -27,6 +27,7 @@ def get_current_user():
             "name": u.display_name or u.email.split("@")[0].title(),
             "is_admin": u.role == "admin",
             "role": u.role,
+            "is_demo": bool(u.is_demo),
         }
     except Exception:
         return None

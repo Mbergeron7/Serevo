@@ -52,6 +52,30 @@ def _get_worksheet(sheet, tab_name):
 @login_required
 def panel():
     user = get_current_user()
+
+    # Demo mode: show realistic fake status
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_LOBS, DEMO_EMPLOYEES
+        api_status = {
+            "legacy": {"ok": True, "status": 200},
+            "new_api": {"ok": True, "status": 200},
+        }
+        status = {
+            "forecast_rows": 2016,
+            "req_rows": 2016,
+            "emp_count": len(DEMO_EMPLOYEES),
+            "forecast_updated": "2026-09-25 08:00",
+            "req_updated": "2026-09-25 08:00",
+            "emp_updated": "on file",
+        }
+        return render_template("capacity/panel.html",
+            user=user,
+            api_status=api_status,
+            status=status,
+            workloads=sorted(DEMO_LOBS),
+            current_year=datetime.now(ZoneInfo(TIMEZONE)).year,
+        )
+
     try:
         api_status = cp.test_connection()
     except Exception:
