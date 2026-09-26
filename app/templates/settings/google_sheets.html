@@ -79,8 +79,8 @@
   <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
     <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
     <button class="btn btn-outline" onclick="testConnection()">Test Connection</button>
-    {% if sheets_key %}
-    <button class="btn btn-outline" style="color:#ef4444; border-color:#ef4444;" onclick="disconnect()">Disconnect</button>
+    {% if sheets_key or sheets_status != 'not configured' %}
+    <button class="btn btn-outline" style="color:#ef4444; border-color:#ef4444;" onclick="disconnect()">Disconnect &amp; Clear</button>
     {% endif %}
   </div>
   <div id="result"></div>

@@ -52,7 +52,7 @@
 
     <div style="display:flex; gap:.5rem; margin-top:.75rem; flex-wrap:wrap;">
       <button class="btn btn-sm btn-outline" onclick="testConn({{ conn.id }})">Test</button>
-      <button class="btn btn-sm btn-outline" onclick="editConn({{ conn.id }}, {{ conn | tojson }})">Edit</button>
+      <button class="btn btn-sm btn-outline" onclick="editConn({{ conn.id }}, {id:{{ conn.id }}, name:'{{ conn.name }}', provider:'{{ conn.provider }}', base_url:'{{ conn.base_url or '' }}', auth_type:'{{ conn.auth_type }}'})">Edit</button>
       <button class="btn btn-sm btn-outline" onclick="toggleConn({{ conn.id }})">
         {{ 'Disable' if conn.is_active else 'Enable' }}
       </button>
