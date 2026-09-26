@@ -21,6 +21,19 @@ DEFAULT_SHIFT_LENGTH_HRS = 8.0
 DEFAULT_INTERVAL_MINS = 30
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+# ── Segment / activity defaults ────────────────────────────────
+# Break/lunch placement rules (offset from shift start in minutes)
+SEGMENT_RULES_FULL = [
+    {"type": "break",  "offset_mins": 120, "duration_mins": 15},
+    {"type": "lunch",  "offset_mins": 240, "duration_mins": 30},
+    {"type": "break",  "offset_mins": 360, "duration_mins": 15},
+]
+SEGMENT_RULES_HALF = [
+    {"type": "break",  "offset_mins": 120, "duration_mins": 15},
+]
+
+ACTIVITY_TYPES = ["on-call", "break", "lunch", "meeting", "training", "other"]
+
 
 # ═════════════════════════════════════════════════════════════
 # DATA LOADING
@@ -155,6 +168,65 @@ def _minutes_to_time(mins):
     return f"{h:02d}:{m:02d}"
 
 
+def _generate_segments(start_time, end_time, shift_type):
+    """
+    Build the segments list for a shift, inserting break and lunch
+    windows into on-call blocks.
+
+    Returns list of:
+      {type: "on-call"|"break"|"lunch", start: "HH:MM", end: "HH:MM",
+       duration_mins: int}
+    """
+    s_min = _time_to_minutes(start_time)
+    e_min = _time_to_minutes(end_time)
+    shift_len = e_min - s_min
+
+    rules = SEGMENT_RULES_FULL if shift_type == "full" else SEGMENT_RULES_HALF
+
+    # Collect break/lunch windows that fit within the shift
+    pauses = []
+    for rule in rules:
+        p_start = s_min + rule["offset_mins"]
+        p_end = p_start + rule["duration_mins"]
+        if p_end <= e_min:
+            pauses.append({
+                "type": rule["type"],
+                "start_min": p_start,
+                "end_min": p_end,
+                "duration_mins": rule["duration_mins"],
+            })
+
+    # Build segments: fill gaps between pauses with on-call
+    segments = []
+    cursor = s_min
+    for p in sorted(pauses, key=lambda x: x["start_min"]):
+        if cursor < p["start_min"]:
+            segments.append({
+                "type": "on-call",
+                "start": _minutes_to_time(cursor),
+                "end": _minutes_to_time(p["start_min"]),
+                "duration_mins": p["start_min"] - cursor,
+            })
+        segments.append({
+            "type": p["type"],
+            "start": _minutes_to_time(p["start_min"]),
+            "end": _minutes_to_time(p["end_min"]),
+            "duration_mins": p["duration_mins"],
+        })
+        cursor = p["end_min"]
+
+    # Trailing on-call block
+    if cursor < e_min:
+        segments.append({
+            "type": "on-call",
+            "start": _minutes_to_time(cursor),
+            "end": _minutes_to_time(e_min),
+            "duration_mins": e_min - cursor,
+        })
+
+    return segments
+
+
 def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
     """
     Generate shift assignments for a LOB on a given date.
@@ -220,6 +292,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
                 "end": end,
                 "hours": hours,
                 "type": stype,
+                "segments": _generate_segments(start, end, stype),
             })
         return shifts, unassigned, warnings
 
@@ -316,13 +389,17 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
         for m in range(start_min, end_min, DEFAULT_INTERVAL_MINS):
             scheduled_per_interval[m] += 1
 
+        stype = "half" if avail["day_type"] == "half" else "full"
+        s_time = _minutes_to_time(start_min)
+        e_time = _minutes_to_time(end_min)
         shifts.append({
             "employee": emp["name"],
             "employee_id": emp["employee_id"],
-            "start": _minutes_to_time(start_min),
-            "end": _minutes_to_time(end_min),
+            "start": s_time,
+            "end": e_time,
             "hours": round(length / 60, 1),
-            "type": "half" if avail["day_type"] == "half" else "full",
+            "type": stype,
+            "segments": _generate_segments(s_time, e_time, stype),
         })
 
     # Sort shifts by start time, then employee name

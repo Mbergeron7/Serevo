@@ -120,6 +120,41 @@
     background: var(--bg); color: var(--text-muted);
   }
 
+  /* ── Activity segment badges ──────────────────── */
+  .act-oncall  { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
+  .act-break   { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+  .act-lunch   { background: color-mix(in srgb, #2563eb 15%, transparent); color: #2563eb; }
+  .act-meeting { background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed; }
+  .act-training{ background: color-mix(in srgb, #ea580c 15%, transparent); color: #ea580c; }
+  .act-other   { background: color-mix(in srgb, #6b7280 15%, transparent); color: #6b7280; }
+
+  .seg-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 999px;
+    font-size: .68rem; font-weight: 600; margin: 1px 2px;
+  }
+
+  /* ── Shift timeline bar ──────────────────────── */
+  .shift-timeline {
+    display: flex; height: 18px; border-radius: 4px; overflow: hidden;
+    margin-top: 4px; min-width: 200px;
+  }
+  .seg-bar { height: 100%; position: relative; }
+  .seg-bar-oncall   { background: #059669; }
+  .seg-bar-break    { background: #d97706; }
+  .seg-bar-lunch    { background: #2563eb; }
+  .seg-bar-meeting  { background: #7c3aed; }
+  .seg-bar-training { background: #ea580c; }
+  .seg-bar-other    { background: #6b7280; }
+
+  .timeline-legend {
+    display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 20px 12px;
+    font-size: .7rem; color: var(--text-muted);
+  }
+  .legend-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+    margin-right: 3px; vertical-align: middle;
+  }
+
   /* ── Coverage heatmap ──────────────────────────── */
   .coverage-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -379,17 +414,26 @@ function renderDayView(container) {
     // Shifts table
     if (day.shifts.length) {
       html += `<div class="sched-table-wrap"><table class="sched-table">
-        <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th></tr></thead>
+        <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Segments</th></tr></thead>
         <tbody>`;
       day.shifts.forEach(s => {
         const badge = s.type === 'half' ? '<span class="badge-half">Half</span>' :
                       '<span class="badge-full">Full</span>';
+        const timeline = renderShiftTimeline(s);
         html += `<tr>
           <td style="font-weight:600">${s.employee}</td>
           <td>${s.start}</td><td>${s.end}</td>
-          <td>${s.hours}</td><td>${badge}</td></tr>`;
+          <td>${s.hours}</td><td>${badge}</td>
+          <td>${timeline}</td></tr>`;
       });
       html += '</tbody></table></div>';
+      html += `<div class="timeline-legend">
+        <span><span class="legend-dot" style="background:#059669"></span>On-Call</span>
+        <span><span class="legend-dot" style="background:#d97706"></span>Break</span>
+        <span><span class="legend-dot" style="background:#2563eb"></span>Lunch</span>
+        <span><span class="legend-dot" style="background:#7c3aed"></span>Meeting</span>
+        <span><span class="legend-dot" style="background:#ea580c"></span>Training</span>
+      </div>`;
     }
 
     // Unassigned
@@ -575,6 +619,31 @@ function renderYearView(container) {
 
   html += '</tbody></table></div></div>';
   container.innerHTML = html;
+}
+
+// ── Shift timeline renderer ─────────────────────────
+function renderShiftTimeline(shift) {
+  if (!shift.segments || !shift.segments.length) {
+    return '<span class="seg-badge act-oncall">On-Call</span>';
+  }
+  const totalMins = shift.segments.reduce((s, seg) => s + seg.duration_mins, 0);
+  if (totalMins === 0) return '';
+  const barColors = {
+    'on-call': 'seg-bar-oncall', 'break': 'seg-bar-break',
+    'lunch': 'seg-bar-lunch', 'meeting': 'seg-bar-meeting',
+    'training': 'seg-bar-training', 'other': 'seg-bar-other',
+  };
+  let bars = '';
+  shift.segments.forEach(seg => {
+    const pct = (seg.duration_mins / totalMins * 100).toFixed(1);
+    const cls = barColors[seg.type] || 'seg-bar-other';
+    const label = seg.type === 'on-call' ? '' : seg.type.charAt(0).toUpperCase() + seg.type.slice(1);
+    bars += `<div class="seg-bar ${cls}" style="width:${pct}%"
+      title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)">
+      ${seg.duration_mins >= 20 ? `<span style="font-size:.6rem;color:#fff;padding:0 3px;line-height:18px">${label}</span>` : ''}
+    </div>`;
+  });
+  return `<div class="shift-timeline">${bars}</div>`;
 }
 
 // ── Helpers ──────────────────────────────────────────

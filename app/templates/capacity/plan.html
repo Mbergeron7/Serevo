@@ -13,36 +13,82 @@
   .plan-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
   .plan-header .subtitle { color: var(--text-muted); font-size: .9rem; }
 
-  .year-selector {
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 24px;
+  /* ── Controls bar ──────────────────────────────── */
+  .controls-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 20px; margin-bottom: 24px;
   }
-  .year-selector label { font-size: .8rem; font-weight: 600; text-transform: uppercase;
-                         letter-spacing: .04em; color: var(--text-muted); }
-  .year-selector select {
+  .controls-row {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .ctrl-group { display: flex; flex-direction: column; }
+  .ctrl-group label {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .ctrl-group select, .ctrl-group input {
     padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: .875rem; background: var(--bg); color: var(--text);
+    font-size: .85rem; background: var(--bg); color: var(--text);
   }
+  .ctrl-group input[type="number"] { width: 80px; }
 
+  /* LOB multi-select dropdown */
+  .lob-picker { position: relative; }
+  .lob-picker-btn {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+    cursor: pointer; min-width: 200px; text-align: left;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .lob-picker-btn::after { content: "▾"; margin-left: 8px; font-size: .7rem; }
+  .lob-dropdown {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 100;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    max-height: 280px; overflow-y: auto; min-width: 240px; padding: 6px;
+  }
+  .lob-dropdown.open { display: block; }
+  .lob-dropdown .lob-search {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: .82rem; margin-bottom: 4px;
+    background: var(--bg); color: var(--text);
+  }
+  .lob-dropdown label {
+    display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+    font-size: .82rem; cursor: pointer; border-radius: 4px;
+  }
+  .lob-dropdown label:hover { background: var(--brand-accent-light); }
+  .lob-actions { display: flex; gap: 8px; padding: 4px 6px; font-size: .75rem; }
+  .lob-actions a { cursor: pointer; color: var(--brand-accent); text-decoration: none; }
+
+  .btn-export {
+    padding: 7px 16px; border: none; border-radius: 6px;
+    font-size: .82rem; font-weight: 600; cursor: pointer;
+    background: #059669; color: #fff; white-space: nowrap;
+  }
+  .btn-export:hover { opacity: .88; }
+  .btn-apply {
+    padding: 7px 16px; border: none; border-radius: 6px;
+    font-size: .82rem; font-weight: 600; cursor: pointer;
+    background: var(--brand-accent); color: #fff; white-space: nowrap;
+  }
+  .btn-apply:hover { opacity: .88; }
+
+  /* ── LOB card & table ──────────────────────────── */
   .lob-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    margin-bottom: 20px;
-    overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    margin-bottom: 20px; overflow: hidden;
   }
   .lob-header {
-    background: var(--brand-accent);
-    color: #fff;
-    padding: 10px 18px;
-    font-weight: 700;
-    font-size: .95rem;
+    background: var(--brand-accent); color: #fff;
+    padding: 10px 18px; font-weight: 700; font-size: .95rem;
   }
-
   .plan-table-wrap { overflow-x: auto; }
   .plan-table {
     width: 100%; font-size: .78rem; border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
   }
   .plan-table th {
     background: var(--bg); font-size: .72rem; text-align: center;
@@ -57,22 +103,49 @@
   .metric-label {
     text-align: left !important; font-weight: 600; color: var(--text-muted);
     background: var(--bg) !important; padding-left: 12px !important;
-    min-width: 200px; border-right: 2px solid var(--border);
+    min-width: 220px; border-right: 2px solid var(--border);
   }
+
+  /* Conditional formatting */
   .val-positive { color: #059669; font-weight: 700; }
   .val-negative { color: #dc2626; font-weight: 700; }
   .val-neutral  { color: var(--text-muted); }
   .highlight-row td { background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface)) !important; }
   .divider-row td { padding: 2px !important; background: var(--border) !important; }
 
+  /* FTE heat map */
+  .cf-fte-low  { background: #c6efce; color: #1a6b2a; }
+  .cf-fte-mid  { background: #ffeb84; color: #7a6c00; }
+  .cf-fte-high { background: #f8696b; color: #7c1a1b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cf-fte-low  { background: #14532d; color: #86efac; }
+    :root:not([data-theme="light"]) .cf-fte-mid  { background: #713f12; color: #fde68a; }
+    :root:not([data-theme="light"]) .cf-fte-high { background: #7f1d1d; color: #fca5a5; }
+  }
+  :root[data-theme="dark"] .cf-fte-low  { background: #14532d; color: #86efac; }
+  :root[data-theme="dark"] .cf-fte-mid  { background: #713f12; color: #fde68a; }
+  :root[data-theme="dark"] .cf-fte-high { background: #7f1d1d; color: #fca5a5; }
+
+  /* Gap conditional bg */
+  .cf-positive { background: #dcfce7; }
+  .cf-negative { background: #fee2e2; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cf-positive { background: #14532d; }
+    :root:not([data-theme="light"]) .cf-negative { background: #7f1d1d; }
+  }
+  :root[data-theme="dark"] .cf-positive { background: #14532d; }
+  :root[data-theme="dark"] .cf-negative { background: #7f1d1d; }
+
   .no-data {
-    text-align: center; padding: 60px; color: var(--text-muted);
-    font-size: .95rem;
+    text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
+  }
+  .plan-timestamp {
+    text-align: right; font-size: .78rem; color: var(--text-muted); margin-top: 16px;
   }
 
-  .plan-timestamp {
-    text-align: right; font-size: .78rem; color: var(--text-muted);
-    margin-top: 16px;
+  @media (max-width: 600px) {
+    .controls-row { flex-direction: column; }
+    .ctrl-group input[type="number"] { width: 100%; }
   }
 </style>
 {% endblock %}
@@ -83,18 +156,64 @@
   <p class="subtitle">FTE required vs actual headcount by LOB</p>
 </div>
 
-<div class="year-selector">
-  <label>Year</label>
-  <select onchange="location.href='/capacity/plan?year='+this.value">
-    {% for y in years %}
-      <option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>
-    {% endfor %}
-  </select>
+<!-- ── Controls ──────────────────────────────────────── -->
+<div class="controls-card">
+  <div class="controls-row">
+    <div class="ctrl-group">
+      <label>Year</label>
+      <select id="ctrlYear" onchange="location.href='/capacity/plan?year='+this.value">
+        {% for y in years %}
+          <option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="ctrl-group">
+      <label>LOB Filter</label>
+      <div class="lob-picker">
+        <div class="lob-picker-btn" onclick="toggleLobPicker()">
+          <span id="lobPickerLabel">All LOBs</span>
+        </div>
+        <div class="lob-dropdown" id="lobDropdown">
+          <input class="lob-search" placeholder="Search LOBs…" oninput="filterLobs(this.value)">
+          <div class="lob-actions">
+            <a onclick="selectAllLobs(true)">Select All</a>
+            <a onclick="selectAllLobs(false)">Clear All</a>
+          </div>
+          <div id="lobCheckboxes">
+            {% if plan %}
+              {% for lob in plan %}
+                <label><input type="checkbox" value="{{ lob.lob }}" checked onchange="applyLobFilter()"> {{ lob.lob }}</label>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctrl-group">
+      <label>Shrinkage %</label>
+      <input type="number" id="ctrlShrinkage" value="30" min="0" max="80" step="1">
+    </div>
+    <div class="ctrl-group">
+      <label>Occupancy %</label>
+      <input type="number" id="ctrlOccupancy" value="85" min="10" max="100" step="1">
+    </div>
+    <div class="ctrl-group">
+      <label>Answer Rate %</label>
+      <input type="number" id="ctrlAnswerRate" value="92" min="10" max="100" step="1">
+    </div>
+
+    <button class="btn-apply" onclick="recalcPlan()">Apply</button>
+    <button class="btn-export" onclick="exportExcel()">⬇ Export Excel</button>
+  </div>
 </div>
 
+<!-- ── Plan tables ───────────────────────────────────── -->
+<div id="planContainer">
 {% if plan %}
   {% for lob in plan %}
-  <div class="lob-card">
+  <div class="lob-card" data-lob="{{ lob.lob }}">
     <div class="lob-header">{{ lob.lob }}</div>
     <div class="plan-table-wrap">
       <table class="plan-table">
@@ -108,15 +227,27 @@
         </thead>
         <tbody>
           <tr>
-            <td class="metric-label">Forecasted Calls</td>
+            <td class="metric-label">Forecasted Calls Offered</td>
             {% for m in lob.months %}
               <td>{{ "{:,}".format(m.fc_offered) }}</td>
             {% endfor %}
           </tr>
           <tr>
-            <td class="metric-label">Forecast Answered</td>
+            <td class="metric-label">Forecast Calls Answered</td>
             {% for m in lob.months %}
               <td>{{ "{:,}".format(m.fc_answered) }}</td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">AHT (seconds)</td>
+            {% for m in lob.months %}
+              <td>{{ m.aht|default("—") }}</td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">Occupancy %</td>
+            {% for m in lob.months %}
+              <td>{{ (m.occupancy * 100)|round(0)|int }}%</td>
             {% endfor %}
           </tr>
           <tr class="divider-row"><td colspan="{{ lob.months|length + 1 }}"></td></tr>
@@ -132,11 +263,17 @@
               <td>{{ m.psih_shr }}</td>
             {% endfor %}
           </tr>
+          <tr>
+            <td class="metric-label">Shrinkage %</td>
+            {% for m in lob.months %}
+              <td>{{ (m.shrinkage * 100)|round(0)|int }}%</td>
+            {% endfor %}
+          </tr>
           <tr class="divider-row"><td colspan="{{ lob.months|length + 1 }}"></td></tr>
-          <tr class="highlight-row">
+          <tr class="highlight-row fte-row" data-lob="{{ lob.lob }}">
             <td class="metric-label">FTE Required</td>
             {% for m in lob.months %}
-              <td><strong>{{ m.fte_req }}</strong></td>
+              <td class="fte-cell"><strong>{{ m.fte_req }}</strong></td>
             {% endfor %}
           </tr>
           <tr>
@@ -145,12 +282,26 @@
               <td>{{ m.actual_hc }}</td>
             {% endfor %}
           </tr>
-          <tr class="highlight-row">
-            <td class="metric-label">Gap (HC − FTE Req)</td>
+          <tr class="highlight-row gap-row" data-lob="{{ lob.lob }}">
+            <td class="metric-label">Required vs Actual</td>
             {% for m in lob.months %}
-              <td class="{{ 'val-positive' if m.gap > 0 else ('val-negative' if m.gap < 0 else 'val-neutral') }}">
-                {{ m.gap }}
+              {% set cls = 'cf-positive val-positive' if m.gap > 0 else ('cf-negative val-negative' if m.gap < 0 else 'val-neutral') %}
+              <td class="{{ cls }}">
+                <strong>{{ "+" if m.gap > 0 }}{{ m.gap }}</strong>
               </td>
+            {% endfor %}
+          </tr>
+          <tr class="divider-row"><td colspan="{{ lob.months|length + 1 }}"></td></tr>
+          <tr>
+            <td class="metric-label">Peak Agents Required</td>
+            {% for m in lob.months %}
+              <td>{{ m.peak_agents|default("—") }}</td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <td class="metric-label">Avg Agents Required</td>
+            {% for m in lob.months %}
+              <td>{{ m.avg_agents|default("—") }}</td>
             {% endfor %}
           </tr>
           <tr>
@@ -169,6 +320,99 @@
     No data available for {{ year }}. Use the <a href="/capacity">Control Panel</a> to pull data first.
   </div>
 {% endif %}
+</div>
 
 <div class="plan-timestamp">Generated: {{ now }}</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── LOB multi-select picker ─────────────────────────
+function toggleLobPicker() {
+  document.getElementById('lobDropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.lob-picker')) {
+    document.getElementById('lobDropdown').classList.remove('open');
+  }
+});
+function filterLobs(q) {
+  const labels = document.querySelectorAll('#lobCheckboxes label');
+  q = q.toLowerCase();
+  labels.forEach(l => {
+    l.style.display = l.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function selectAllLobs(checked) {
+  document.querySelectorAll('#lobCheckboxes input').forEach(cb => cb.checked = checked);
+  applyLobFilter();
+}
+function applyLobFilter() {
+  const checked = [...document.querySelectorAll('#lobCheckboxes input:checked')].map(cb => cb.value);
+  const all = document.querySelectorAll('#lobCheckboxes input').length;
+  document.getElementById('lobPickerLabel').textContent =
+    checked.length === all ? 'All LOBs' : `${checked.length} of ${all} LOBs`;
+  document.querySelectorAll('.lob-card').forEach(card => {
+    card.style.display = checked.includes(card.dataset.lob) ? '' : 'none';
+  });
+}
+
+// ── FTE heat-mapping ────────────────────────────────
+function applyFteHeatmap() {
+  document.querySelectorAll('.fte-row').forEach(row => {
+    const cells = row.querySelectorAll('.fte-cell');
+    const vals = [...cells].map(c => parseFloat(c.textContent) || 0).filter(v => v > 0);
+    if (vals.length < 2) return;
+    vals.sort((a, b) => a - b);
+    const p33 = vals[Math.floor(vals.length * 0.33)];
+    const p66 = vals[Math.floor(vals.length * 0.66)];
+    cells.forEach(c => {
+      const v = parseFloat(c.textContent) || 0;
+      c.classList.remove('cf-fte-low', 'cf-fte-mid', 'cf-fte-high');
+      if (v <= 0) return;
+      if (v <= p33) c.classList.add('cf-fte-low');
+      else if (v <= p66) c.classList.add('cf-fte-mid');
+      else c.classList.add('cf-fte-high');
+    });
+  });
+}
+applyFteHeatmap();
+
+// ── Recalc (placeholder — reloads with params) ─────
+function recalcPlan() {
+  const year = document.getElementById('ctrlYear').value;
+  const shr = document.getElementById('ctrlShrinkage').value;
+  const occ = document.getElementById('ctrlOccupancy').value;
+  const ar = document.getElementById('ctrlAnswerRate').value;
+  location.href = `/capacity/plan?year=${year}&shrinkage=${shr}&occupancy=${occ}&answer_rate=${ar}`;
+}
+
+// ── Excel export ────────────────────────────────────
+function exportExcel() {
+  const tables = document.querySelectorAll('.lob-card:not([style*="display: none"])');
+  if (!tables.length) { alert('No data to export.'); return; }
+
+  let csv = '';
+  tables.forEach(card => {
+    const lob = card.querySelector('.lob-header').textContent;
+    csv += `\n${lob}\n`;
+    const rows = card.querySelectorAll('.plan-table tr');
+    rows.forEach(tr => {
+      if (tr.classList.contains('divider-row')) return;
+      const cells = [...tr.querySelectorAll('th, td')].map(c =>
+        '"' + c.textContent.trim().replace(/"/g, '""') + '"'
+      );
+      csv += cells.join(',') + '\n';
+    });
+  });
+
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `capacity_plan_${document.getElementById('ctrlYear').value}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
 {% endblock %}

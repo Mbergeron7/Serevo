@@ -228,6 +228,11 @@ def plan_view():
         year = int(request.args.get("year", now.year))
         years = list(range(2024, now.year + 2))
 
+        # User-adjustable parameters
+        shrinkage = float(request.args.get("shrinkage", 30)) / 100.0
+        occupancy = float(request.args.get("occupancy", 85)) / 100.0
+        answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
+
         sheet = _get_sheet()
         fc_ws = _get_worksheet(sheet, "FORECAST RAW")
         rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
@@ -235,7 +240,10 @@ def plan_view():
 
         plan = []
         if fc_ws or rq_ws:
-            plan = cp.compute_capacity_plan(fc_ws, rq_ws, em_ws, year)
+            plan = cp.compute_capacity_plan(
+                fc_ws, rq_ws, em_ws, year,
+                shrinkage=shrinkage, occupancy=occupancy,
+                answer_rate=answer_rate)
 
         now_str = now.strftime("%Y-%m-%d %H:%M")
         return render_template("capacity/plan.html",

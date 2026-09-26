@@ -471,7 +471,8 @@ def write_employees_to_sheet(emp_ws, employees):
 # CAPACITY PLAN COMPUTATION
 # =========================================================
 
-def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year):
+def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
+                          shrinkage=None, occupancy=None, answer_rate=None):
     """Read cached raw sheets and compute the monthly capacity plan."""
     fc_data = forecast_ws.get_all_values() if forecast_ws else []
     rq_data = req_ws.get_all_values() if req_ws else []
@@ -555,6 +556,11 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year):
             hc_by_pu.setdefault(pu, {})
             hc_by_pu[pu][m] = hc_by_pu[pu].get(m, 0) + 1
 
+    # Resolve parameter defaults
+    shr = shrinkage if shrinkage is not None else DEFAULT_SHRINKAGE
+    occ = occupancy if occupancy is not None else DEFAULT_OCCUPANCY
+    ar  = answer_rate if answer_rate is not None else 0.92
+
     # Build plan per LOB
     plan = []
     all_lobs = sorted(set(list(fc_monthly.keys()) + list(rq_monthly.keys())))
@@ -566,26 +572,53 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year):
         for m in months:
             wd = _working_days_in_month(year, m)
             fc_calls = fc_monthly.get(lob, {}).get(m, 0)
+            fc_answered = round(fc_calls * ar)
             psih_raw = rq_monthly.get(lob, {}).get(m, 0)
-            psih_shr = psih_raw / (1 - DEFAULT_SHRINKAGE) if psih_raw > 0 else 0
+            psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
             working_hrs = wd * 7.5
             fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
             actual_hc = hc_by_pu.get(pu_name, {}).get(m, 0)
             gap = round(actual_hc - fte_req, 1)
 
+            # Peak / avg agents from requirements data (per-interval)
+            peak_agents = 0
+            total_agent_intervals = 0
+            interval_count = 0
+            for row in rq_data[3:]:
+                if not row or rq_ts_col >= len(row):
+                    continue
+                ts = parse_ts(row[rq_ts_col])
+                if not ts or ts.year != year or ts.month != m:
+                    continue
+                for ci, h in enumerate(rq_headers):
+                    if ci <= rq_ts_col or not h or h != lob:
+                        continue
+                    try:
+                        v = float(row[ci]) if ci < len(row) and row[ci] else 0
+                        if v > 0:
+                            peak_agents = max(peak_agents, v)
+                            total_agent_intervals += v
+                            interval_count += 1
+                    except Exception:
+                        pass
+            avg_agents = round(total_agent_intervals / interval_count, 1) if interval_count > 0 else 0
+
             lob_plan["months"].append({
                 "month":        m,
                 "month_label":  datetime.date(year, m, 1).strftime("%b-%y"),
                 "fc_offered":   round(fc_calls),
-                "fc_answered":  round(fc_calls * DEFAULT_OCCUPANCY),
+                "fc_answered":  fc_answered,
+                "aht":          "—",
                 "psih_raw":     round(psih_raw, 1),
                 "psih_shr":     round(psih_shr, 1),
                 "fte_req":      fte_req,
                 "actual_hc":    actual_hc,
                 "gap":          gap,
-                "occupancy":    DEFAULT_OCCUPANCY,
-                "shrinkage":    DEFAULT_SHRINKAGE,
+                "occupancy":    occ,
+                "shrinkage":    shr,
                 "working_days": wd,
+                "peak_agents":  round(peak_agents, 1),
+                "avg_agents":   avg_agents,
             })
 
         plan.append(lob_plan)
