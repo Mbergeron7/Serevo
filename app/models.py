@@ -225,14 +225,67 @@ class Schedule(db.Model):
     schedule_date    = db.Column(db.Date, nullable=False)
     shift_start      = db.Column(db.Time, nullable=True)
     shift_end        = db.Column(db.Time, nullable=True)
+    shift_type       = db.Column(db.String(10), default="full")      # full | half
+    hours            = db.Column(db.Float, default=0)
     status           = db.Column(db.String(20), default="scheduled")  # scheduled | off | pto
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     employee = db.relationship("Employee", backref="schedules")
+    segments = db.relationship("ShiftSegment", backref="schedule",
+                               cascade="all, delete-orphan",
+                               order_by="ShiftSegment.sort_order",
+                               lazy="joined")
 
     __table_args__ = (
         db.Index("ix_sched_date_unit", "schedule_date", "planning_unit_id"),
     )
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id,
+            "employee": emp.full_name if emp else "",
+            "employee_id": emp.employee_id if emp else "",
+            "date": self.schedule_date.isoformat() if self.schedule_date else "",
+            "start": self.shift_start.strftime("%H:%M") if self.shift_start else "",
+            "end": self.shift_end.strftime("%H:%M") if self.shift_end else "",
+            "type": self.shift_type or "full",
+            "hours": self.hours or 0,
+            "status": self.status or "scheduled",
+            "segments": [seg.to_dict() for seg in self.segments],
+        }
+
+
+class ShiftSegment(db.Model):
+    __tablename__ = "shift_segments"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    schedule_id   = db.Column(db.Integer, db.ForeignKey("schedules.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    activity_type = db.Column(db.String(20), nullable=False, default="on-call")
+    # on-call | break | lunch | meeting | training | other
+    start_time    = db.Column(db.Time, nullable=False)
+    end_time      = db.Column(db.Time, nullable=False)
+    duration_mins = db.Column(db.Integer, default=0)
+    sort_order    = db.Column(db.Integer, default=0)
+    notes         = db.Column(db.String(255), default="")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("ix_seg_schedule", "schedule_id", "sort_order"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.activity_type,
+            "start": self.start_time.strftime("%H:%M") if self.start_time else "",
+            "end": self.end_time.strftime("%H:%M") if self.end_time else "",
+            "duration_mins": self.duration_mins,
+            "sort_order": self.sort_order,
+            "notes": self.notes or "",
+        }
 
 
 # ═══════════════════════════════════════════════════════════════

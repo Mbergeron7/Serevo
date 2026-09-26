@@ -34,12 +34,15 @@
     padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
     font-size: .85rem; background: var(--bg); color: var(--text);
   }
-  .btn-generate {
-    background: var(--brand-accent); color: #fff; border: none;
-    padding: 8px 24px; border-radius: 6px; font-weight: 700;
-    font-size: .85rem; cursor: pointer; white-space: nowrap;
+  .btn-action {
+    border: none; padding: 8px 20px; border-radius: 6px; font-weight: 700;
+    font-size: .82rem; cursor: pointer; white-space: nowrap;
   }
-  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-generate { background: var(--brand-accent); color: #fff; }
+  .btn-save { background: #059669; color: #fff; }
+  .btn-load { background: #2563eb; color: #fff; }
+  .btn-export { background: #7c3aed; color: #fff; }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
 
   /* ── View tabs ─────────────────────────────────── */
   .view-tabs {
@@ -52,9 +55,7 @@
     font-size: .8rem; font-weight: 600; cursor: pointer;
     background: transparent; color: var(--text-muted);
   }
-  .view-tab.active {
-    background: var(--brand-accent); color: #fff;
-  }
+  .view-tab.active { background: var(--brand-accent); color: #fff; }
 
   /* ── Stats row ─────────────────────────────────── */
   .stat-row {
@@ -87,73 +88,179 @@
     background: var(--brand-accent); color: #fff;
     display: flex; justify-content: space-between; align-items: center;
   }
+  .day-header-row {
+    background: var(--bg); padding: 10px 20px; font-weight: 700;
+    font-size: .85rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+  }
+  .day-header-row:hover { background: var(--brand-accent-light); }
+  .day-content { display: none; }
+  .day-content.open { display: block; }
 
-  .sched-table-wrap { overflow-x: auto; }
-  .sched-table {
-    width: 100%; font-size: .82rem; border-collapse: collapse;
-  }
-  .sched-table th {
-    background: var(--bg); font-size: .72rem; text-align: left;
-    padding: 8px 12px; border-bottom: 2px solid var(--border);
-    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; white-space: nowrap;
-  }
-  .sched-table td {
-    padding: 7px 12px; border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }
-  .sched-table tr:hover td { background: var(--brand-accent-light); }
+  /* ══ TIMELINE VIEW ═══════════════════════════════ */
+  .timeline-container { overflow-x: auto; padding: 0; }
 
-  .badge-full {
-    display: inline-block; padding: 2px 10px; border-radius: 999px;
-    font-size: .72rem; font-weight: 600;
-    background: color-mix(in srgb, #059669 15%, transparent); color: #059669;
+  .timeline-header {
+    display: flex; position: sticky; top: 0; z-index: 2;
+    background: var(--bg); border-bottom: 2px solid var(--border);
+    min-width: max-content;
   }
-  .badge-half {
-    display: inline-block; padding: 2px 10px; border-radius: 999px;
-    font-size: .72rem; font-weight: 600;
-    background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706;
+  .tl-name-col {
+    width: 180px; min-width: 180px; padding: 6px 12px;
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: .04em;
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center;
   }
-  .badge-off {
-    display: inline-block; padding: 2px 10px; border-radius: 999px;
-    font-size: .72rem; font-weight: 600;
-    background: var(--bg); color: var(--text-muted);
+  .tl-time-axis {
+    display: flex; flex: 1;
   }
-
-  /* ── Activity segment badges ──────────────────── */
-  .act-oncall  { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
-  .act-break   { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
-  .act-lunch   { background: color-mix(in srgb, #2563eb 15%, transparent); color: #2563eb; }
-  .act-meeting { background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed; }
-  .act-training{ background: color-mix(in srgb, #ea580c 15%, transparent); color: #ea580c; }
-  .act-other   { background: color-mix(in srgb, #6b7280 15%, transparent); color: #6b7280; }
-
-  .seg-badge {
-    display: inline-block; padding: 1px 7px; border-radius: 999px;
-    font-size: .68rem; font-weight: 600; margin: 1px 2px;
+  .tl-hour-mark {
+    width: 60px; min-width: 60px; text-align: center;
+    font-size: .68rem; font-weight: 600; color: var(--text-muted);
+    padding: 6px 0; border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   }
 
-  /* ── Shift timeline bar ──────────────────────── */
-  .shift-timeline {
-    display: flex; height: 18px; border-radius: 4px; overflow: hidden;
-    margin-top: 4px; min-width: 200px;
+  .timeline-body { min-width: max-content; }
+
+  .tl-row {
+    display: flex; border-bottom: 1px solid var(--border);
+    min-height: 36px; position: relative;
   }
-  .seg-bar { height: 100%; position: relative; }
-  .seg-bar-oncall   { background: #059669; }
-  .seg-bar-break    { background: #d97706; }
-  .seg-bar-lunch    { background: #2563eb; }
-  .seg-bar-meeting  { background: #7c3aed; }
-  .seg-bar-training { background: #ea580c; }
-  .seg-bar-other    { background: #6b7280; }
+  .tl-row:hover { background: var(--brand-accent-light); }
+
+  .tl-emp-name {
+    width: 180px; min-width: 180px; padding: 6px 12px;
+    font-size: .82rem; font-weight: 600; color: var(--text);
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tl-emp-name .emp-actions {
+    display: none; margin-left: auto;
+  }
+  .tl-row:hover .emp-actions { display: flex; gap: 2px; }
+  .emp-action-btn {
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    font-size: .72rem; color: var(--text-muted); border-radius: 3px;
+  }
+  .emp-action-btn:hover { background: var(--border); color: var(--text); }
+
+  .tl-bar-area {
+    flex: 1; position: relative; min-height: 28px;
+  }
+  .tl-grid-line {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: color-mix(in srgb, var(--border) 40%, transparent);
+  }
+
+  /* Segment blocks */
+  .tl-segment {
+    position: absolute; top: 4px; height: 28px;
+    border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 600; color: #fff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: opacity .15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,.15);
+  }
+  .tl-segment:hover { opacity: .85; }
+  .tl-seg-oncall   { background: #059669; }
+  .tl-seg-break    { background: #d97706; }
+  .tl-seg-lunch    { background: #2563eb; }
+  .tl-seg-meeting  { background: #7c3aed; }
+  .tl-seg-training { background: #ea580c; }
+  .tl-seg-other    { background: #6b7280; }
 
   .timeline-legend {
-    display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 20px 12px;
-    font-size: .7rem; color: var(--text-muted);
+    display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 20px 14px;
+    font-size: .72rem; color: var(--text-muted);
+    border-top: 1px solid var(--border);
   }
   .legend-dot {
-    display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-    margin-right: 3px; vertical-align: middle;
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+    margin-right: 4px; vertical-align: middle;
   }
+
+  /* ── Requirements overlay ─────────────────────── */
+  .req-overlay {
+    position: relative; height: 48px; margin: 0;
+    border-top: 1px solid var(--border);
+  }
+  .req-overlay-inner {
+    display: flex; height: 100%; align-items: flex-end;
+  }
+  .req-bar-wrap {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    height: 100%; position: relative;
+  }
+  .req-bar {
+    width: 70%; border-radius: 2px 2px 0 0;
+    background: color-mix(in srgb, var(--brand-accent) 35%, transparent);
+    min-height: 1px;
+  }
+  .req-bar-label {
+    font-size: .58rem; color: var(--text-muted);
+    position: absolute; top: 1px; font-weight: 600;
+  }
+
+  /* ── Edit modal ────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+    z-index: 1000; justify-content: center; align-items: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: 12px; padding: 24px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.3); width: 420px; max-width: 90vw;
+    max-height: 80vh; overflow-y: auto;
+  }
+  .modal-title {
+    font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-close {
+    background: none; border: none; font-size: 1.2rem; cursor: pointer;
+    color: var(--text-muted); padding: 4px;
+  }
+  .form-group { margin-bottom: 12px; }
+  .form-group label {
+    display: block; font-size: .75rem; font-weight: 700;
+    text-transform: uppercase; color: var(--text-muted);
+    letter-spacing: .04em; margin-bottom: 4px;
+  }
+  .form-group input, .form-group select {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .85rem;
+    background: var(--bg); color: var(--text); box-sizing: border-box;
+  }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+  .btn-modal {
+    padding: 8px 20px; border-radius: 6px; border: none;
+    font-weight: 700; font-size: .82rem; cursor: pointer;
+  }
+  .btn-modal-primary { background: var(--brand-accent); color: #fff; }
+  .btn-modal-danger { background: #dc2626; color: #fff; }
+  .btn-modal-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+
+  /* ── Segment list in modal ────────────────────── */
+  .seg-list { margin: 8px 0; }
+  .seg-list-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; margin-bottom: 4px;
+    background: var(--bg); font-size: .8rem;
+  }
+  .seg-type-dot {
+    width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+  }
+  .seg-list-item .seg-info { flex: 1; }
+  .seg-del-btn {
+    background: none; border: none; cursor: pointer;
+    color: #dc2626; font-size: .8rem; padding: 2px 6px; border-radius: 4px;
+  }
+  .seg-del-btn:hover { background: color-mix(in srgb, #dc2626 10%, transparent); }
 
   /* ── Coverage heatmap ──────────────────────────── */
   .coverage-card {
@@ -166,17 +273,10 @@
     border-bottom: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center;
   }
-
-  .coverage-grid {
-    display: grid; gap: 2px; padding: 16px;
-  }
+  .coverage-grid { display: grid; gap: 2px; padding: 16px; }
   .cov-cell {
     padding: 4px 6px; border-radius: 4px; text-align: center;
     font-size: .72rem; font-weight: 600; min-width: 48px;
-  }
-  .cov-header {
-    font-size: .68rem; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; padding: 4px 6px; text-align: center;
   }
   .cov-over  { background: color-mix(in srgb, #059669 20%, transparent); color: #059669; }
   .cov-met   { background: color-mix(in srgb, #059669 12%, transparent); color: #059669; }
@@ -184,36 +284,7 @@
   .cov-crit  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
   .cov-zero  { background: var(--bg); color: var(--text-muted); }
 
-  .day-header-row {
-    background: var(--bg); padding: 10px 20px; font-weight: 700;
-    font-size: .85rem; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
-    cursor: pointer;
-  }
-  .day-header-row:hover { background: var(--brand-accent-light); }
-  .day-content { display: none; }
-  .day-content.open { display: block; }
-
-  .warning-list {
-    padding: 8px 20px; font-size: .82rem; color: #d97706;
-  }
-
-  .no-data {
-    text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
-  }
-
-  .loading-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3);
-    z-index: 900; justify-content: center; align-items: center;
-  }
-  .loading-overlay.show { display: flex; }
-  .loading-box {
-    background: var(--surface); padding: 30px 40px; border-radius: var(--radius);
-    box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: center;
-    font-weight: 600; font-size: .95rem;
-  }
-
-  /* ── Month/Year summary table ──────────────────── */
+  /* ── Summary tables ────────────────────────────── */
   .summary-table {
     width: 100%; font-size: .82rem; border-collapse: collapse;
   }
@@ -227,11 +298,36 @@
     padding: 7px 12px; border-bottom: 1px solid var(--border);
   }
 
+  .warning-list { padding: 8px 20px; font-size: .82rem; color: #d97706; }
+  .no-data { text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem; }
+
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3);
+    z-index: 900; justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: var(--surface); padding: 30px 40px; border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: center;
+    font-weight: 600; font-size: .95rem;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 12px 24px;
+    border-radius: 8px; font-weight: 600; font-size: .85rem; color: #fff;
+    z-index: 1100; opacity: 0; transition: opacity .3s;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  }
+  .toast.show { opacity: 1; }
+  .toast-success { background: #059669; }
+  .toast-error { background: #dc2626; }
+
   @media (max-width: 600px) {
     .config-row { flex-direction: column; }
     .stat-row { flex-direction: column; }
     .view-tabs { width: 100%; }
     .view-tab { flex: 1; text-align: center; }
+    .tl-name-col, .tl-emp-name { width: 120px; min-width: 120px; }
   }
 </style>
 {% endblock %}
@@ -239,7 +335,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Scheduling</h1>
-  <p class="subtitle">Generate shift assignments &amp; analyze coverage gaps</p>
+  <p class="subtitle">Generate shift assignments, edit schedules &amp; analyze coverage</p>
 </div>
 
 <!-- ── Config ──────────────────────────────────────────────── -->
@@ -266,18 +362,27 @@
       <label>Shift Length (hrs)</label>
       <input type="number" id="cfgShiftHrs" value="8" min="2" max="12" step="0.5" style="width:80px">
     </div>
-    <button class="btn-generate" id="btnGenerate" onclick="generateSchedule()">
-      Generate Schedule
+    <button class="btn-action btn-generate" id="btnGenerate" onclick="generateSchedule()">
+      Generate
+    </button>
+    <button class="btn-action btn-load" onclick="loadSchedule()">
+      Load Saved
+    </button>
+    <button class="btn-action btn-save" id="btnSave" onclick="saveSchedule()" style="display:none">
+      Save
+    </button>
+    <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()" style="display:none">
+      Export CSV
     </button>
   </div>
 </div>
 
 <!-- ── View tabs ───────────────────────────────────────────── -->
 <div class="view-tabs" id="viewTabs" style="display:none">
-  <button class="view-tab active" data-view="day" onclick="switchView('day')">Day</button>
+  <button class="view-tab active" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+  <button class="view-tab" data-view="day" onclick="switchView('day')">Day List</button>
   <button class="view-tab" data-view="week" onclick="switchView('week')">Week</button>
   <button class="view-tab" data-view="month" onclick="switchView('month')">Month</button>
-  <button class="view-tab" data-view="year" onclick="switchView('year')">Year</button>
 </div>
 
 <!-- ── Stats ───────────────────────────────────────────────── -->
@@ -303,16 +408,120 @@
 <!-- ── Results container ──────────────────────────────────── -->
 <div id="resultsContainer"></div>
 
+<!-- ── Edit Shift Modal ──────────────────────────────────── -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalTitle">Edit Shift</span>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <input type="hidden" id="editDayIdx">
+    <input type="hidden" id="editShiftIdx">
+    <input type="hidden" id="editShiftDbId">
+
+    <div class="form-group">
+      <label>Employee</label>
+      <input type="text" id="editEmployee" readonly style="opacity:.7">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Shift Start</label>
+        <input type="time" id="editStart">
+      </div>
+      <div class="form-group">
+        <label>Shift End</label>
+        <input type="time" id="editEnd">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="editType">
+          <option value="full">Full</option>
+          <option value="half">Half</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="editStatus">
+          <option value="scheduled">Scheduled</option>
+          <option value="off">Off</option>
+          <option value="pto">PTO</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top: 16px; margin-bottom: 8px; font-weight: 700; font-size: .85rem;">
+      Segments
+      <button class="btn-modal btn-modal-secondary" style="float:right;padding:4px 12px;font-size:.75rem"
+        onclick="openAddSegment()">+ Add Segment</button>
+    </div>
+    <div class="seg-list" id="segmentList"></div>
+
+    <!-- Add segment sub-form (hidden by default) -->
+    <div id="addSegForm" style="display:none; margin-top:12px; padding:12px; border-radius:8px; background:var(--bg)">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Activity Type</label>
+          <select id="newSegType">
+            <option value="on-call">On-Call</option>
+            <option value="break">Break</option>
+            <option value="lunch">Lunch</option>
+            <option value="meeting">Meeting</option>
+            <option value="training">Training</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Start</label>
+          <input type="time" id="newSegStart">
+        </div>
+        <div class="form-group">
+          <label>End</label>
+          <input type="time" id="newSegEnd">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="newSegNotes" placeholder="Optional">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-modal btn-modal-secondary" onclick="cancelAddSegment()">Cancel</button>
+        <button class="btn-modal btn-modal-primary" onclick="confirmAddSegment()">Add</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:20px; justify-content:space-between">
+      <button class="btn-modal btn-modal-danger" onclick="deleteShift()">Delete Shift</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-modal btn-modal-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-modal btn-modal-primary" onclick="applyShiftEdit()">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Loading overlay ────────────────────────────────────── -->
 <div class="loading-overlay" id="loadingOverlay">
-  <div class="loading-box">Generating schedule…</div>
+  <div class="loading-box" id="loadingMsg">Generating schedule…</div>
 </div>
+
+<!-- ── Toast ──────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 let scheduleData = null;
-let currentView = 'day';
+let currentView = 'timeline';
+let scheduleSource = 'generated'; // 'generated' or 'saved'
+
+// Timeline constants
+const TL_HOUR_START = 0;
+const TL_HOUR_END = 24;
+const TL_PX_PER_HOUR = 60;
 
 // Default dates: today → 7 days out
 const today = new Date();
@@ -321,22 +530,37 @@ const nextWeek = new Date(today);
 nextWeek.setDate(nextWeek.getDate() + 6);
 document.getElementById('cfgEnd').value = fmt(nextWeek);
 
-function fmt(d) {
-  return d.toISOString().slice(0, 10);
+function fmt(d) { return d.toISOString().slice(0, 10); }
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast toast-' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'Loading…';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════
+// GENERATE
+// ═══════════════════════════════════════════════════════════
 function generateSchedule() {
   const lob = document.getElementById('cfgLOB').value;
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
   const shiftHrs = parseFloat(document.getElementById('cfgShiftHrs').value) || 8;
 
-  if (!lob) { alert('Please select a LOB.'); return; }
-  if (!start || !end) { alert('Please set start and end dates.'); return; }
+  if (!lob) { showToast('Please select a LOB.', 'error'); return; }
+  if (!start || !end) { showToast('Please set start and end dates.', 'error'); return; }
 
-  const btn = document.getElementById('btnGenerate');
-  btn.disabled = true;
-  document.getElementById('loadingOverlay').classList.add('show');
+  document.getElementById('btnGenerate').disabled = true;
+  showLoading('Generating schedule…');
 
   fetch('/scheduling/generate', {
     method: 'POST',
@@ -345,23 +569,182 @@ function generateSchedule() {
   })
   .then(r => r.json())
   .then(data => {
-    btn.disabled = false;
-    document.getElementById('loadingOverlay').classList.remove('show');
-    if (!data.success) {
-      alert('Error: ' + (data.error || 'Unknown'));
-      return;
-    }
+    document.getElementById('btnGenerate').disabled = false;
+    hideLoading();
+    if (!data.success) { showToast('Error: ' + (data.error || 'Unknown'), 'error'); return; }
     scheduleData = data;
-    updateStats();
-    document.getElementById('viewTabs').style.display = 'flex';
-    document.getElementById('statsRow').style.display = 'flex';
-    switchView(currentView);
+    scheduleSource = 'generated';
+    showResults();
   })
   .catch(e => {
-    btn.disabled = false;
-    document.getElementById('loadingOverlay').classList.remove('show');
-    alert('Generation failed: ' + e);
+    document.getElementById('btnGenerate').disabled = false;
+    hideLoading();
+    showToast('Generation failed: ' + e, 'error');
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOAD FROM DB
+// ═══════════════════════════════════════════════════════════
+function loadSchedule() {
+  const lob = document.getElementById('cfgLOB').value;
+  const start = document.getElementById('cfgStart').value;
+  const end = document.getElementById('cfgEnd').value;
+
+  if (!lob) { showToast('Please select a LOB.', 'error'); return; }
+  if (!start || !end) { showToast('Please set dates.', 'error'); return; }
+
+  showLoading('Loading saved schedule…');
+
+  fetch('/scheduling/load', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob, start_date: start, end_date: end}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    hideLoading();
+    if (!data.success) { showToast('Load error: ' + data.error, 'error'); return; }
+    if (!data.shifts || !data.shifts.length) {
+      showToast('No saved schedule found for this LOB/date range.', 'error');
+      return;
+    }
+    // Convert flat shift list into day-grouped scheduleData format
+    scheduleData = convertSavedToScheduleData(data.shifts, lob, start, end);
+    scheduleSource = 'saved';
+    showResults();
+    showToast('Schedule loaded from database.', 'success');
+  })
+  .catch(e => { hideLoading(); showToast('Load failed: ' + e, 'error'); });
+}
+
+function convertSavedToScheduleData(shifts, lob, startStr, endStr) {
+  const dayMap = {};
+  shifts.forEach(s => {
+    const d = s.date;
+    if (!dayMap[d]) dayMap[d] = {
+      date: d,
+      date_label: new Date(d + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}),
+      day_of_week: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d + 'T12:00:00').getDay()],
+      shifts: [], unassigned: [], coverage: [], summary: {avg_coverage_pct:0,peak_required:0,peak_gap:0,understaffed_intervals:0,total_intervals:0}, warnings: [],
+    };
+    dayMap[d].shifts.push(s);
+  });
+
+  const days = Object.keys(dayMap).sort().map(k => dayMap[k]);
+  let totalShifts = 0, totalHours = 0;
+  days.forEach(d => {
+    totalShifts += d.shifts.length;
+    totalHours += d.shifts.reduce((h, s) => h + (s.hours || 0), 0);
+  });
+
+  return {
+    lob, start_date: startStr, end_date: endStr,
+    days,
+    totals: { total_shifts: totalShifts, total_hours: Math.round(totalHours*10)/10, total_days: days.length, avg_coverage_pct: 0 },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAVE TO DB
+// ═══════════════════════════════════════════════════════════
+function saveSchedule() {
+  if (!scheduleData) return;
+  showLoading('Saving schedule…');
+  const lob = scheduleData.lob;
+  const promises = scheduleData.days.map(day => {
+    return fetch('/scheduling/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ lob, date: day.date, shifts: day.shifts }),
+    }).then(r => r.json());
+  });
+
+  Promise.all(promises).then(results => {
+    hideLoading();
+    const totalSaved = results.reduce((s, r) => s + (r.saved || 0), 0);
+    const errors = results.filter(r => !r.success);
+    if (errors.length) {
+      showToast('Some days failed to save.', 'error');
+    } else {
+      showToast(totalSaved + ' shifts saved to database.', 'success');
+    }
+  }).catch(e => { hideLoading(); showToast('Save failed: ' + e, 'error'); });
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT CSV
+// ═══════════════════════════════════════════════════════════
+function exportSchedule() {
+  const lob = document.getElementById('cfgLOB').value;
+  const start = document.getElementById('cfgStart').value;
+  const end = document.getElementById('cfgEnd').value;
+
+  // For generated (unsaved) data, build CSV client-side
+  if (scheduleSource === 'generated' || !scheduleData) {
+    exportClientCSV();
+    return;
+  }
+
+  // For saved data, use server endpoint
+  fetch('/scheduling/export', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob, start_date: start, end_date: end}),
+  })
+  .then(r => {
+    if (!r.ok) throw new Error('Export failed');
+    return r.blob();
+  })
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schedule_${lob}_${start}_to_${end}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported.', 'success');
+  })
+  .catch(e => showToast('Export failed: ' + e, 'error'));
+}
+
+function exportClientCSV() {
+  if (!scheduleData) return;
+  let csv = 'Date,Employee,Employee ID,Start,End,Hours,Type,Segment Type,Seg Start,Seg End,Seg Duration\n';
+  scheduleData.days.forEach(day => {
+    day.shifts.forEach(s => {
+      const segs = s.segments || [];
+      if (segs.length) {
+        segs.forEach(seg => {
+          csv += [day.date, s.employee, s.employee_id, s.start, s.end, s.hours, s.type,
+            seg.type, seg.start, seg.end, seg.duration_mins].map(v => '"'+v+'"').join(',') + '\n';
+        });
+      } else {
+        csv += [day.date, s.employee, s.employee_id, s.start, s.end, s.hours, s.type,
+          '','','',''].map(v => '"'+v+'"').join(',') + '\n';
+      }
+    });
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `schedule_${scheduleData.lob}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exported.', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DISPLAY
+// ═══════════════════════════════════════════════════════════
+function showResults() {
+  updateStats();
+  document.getElementById('viewTabs').style.display = 'flex';
+  document.getElementById('statsRow').style.display = 'flex';
+  document.getElementById('btnSave').style.display = '';
+  document.getElementById('btnExport').style.display = '';
+  switchView(currentView);
 }
 
 function updateStats() {
@@ -385,17 +768,365 @@ function switchView(view) {
   if (!scheduleData) return;
   const container = document.getElementById('resultsContainer');
   switch(view) {
-    case 'day':   renderDayView(container); break;
-    case 'week':  renderWeekView(container); break;
-    case 'month': renderMonthView(container); break;
-    case 'year':  renderYearView(container); break;
+    case 'timeline': renderTimelineView(container); break;
+    case 'day':      renderDayView(container); break;
+    case 'week':     renderWeekView(container); break;
+    case 'month':    renderMonthView(container); break;
   }
 }
 
-// ── Day View ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// TIMELINE VIEW (PeopleWare-style)
+// ═══════════════════════════════════════════════════════════
+function renderTimelineView(container) {
+  if (!scheduleData || !scheduleData.days.length) {
+    container.innerHTML = '<div class="no-data">No schedule data.</div>';
+    return;
+  }
+
+  let html = '';
+  scheduleData.days.forEach((day, dayIdx) => {
+    // Determine visible hour range for this day
+    let minH = 24, maxH = 0;
+    day.shifts.forEach(s => {
+      const sh = parseInt(s.start.split(':')[0]);
+      const eh = parseInt(s.end.split(':')[0]) + (parseInt(s.end.split(':')[1]) > 0 ? 1 : 0);
+      if (sh < minH) minH = sh;
+      if (eh > maxH) maxH = eh;
+    });
+    if (day.coverage && day.coverage.length) {
+      day.coverage.forEach(c => {
+        const h = parseInt(c.time.split(':')[0]);
+        if (h < minH) minH = h;
+        if (h + 1 > maxH) maxH = h + 1;
+      });
+    }
+    if (minH >= maxH) { minH = 6; maxH = 22; }
+    minH = Math.max(0, minH - 1);
+    maxH = Math.min(24, maxH + 1);
+    const numHours = maxH - minH;
+
+    html += `<div class="sched-card">
+      <div class="day-header-row" onclick="toggleDay(${dayIdx})">
+        <span>${day.date_label} — ${day.shifts.length} shifts</span>
+        <span style="font-size:.78rem">${covBadge(day.summary)}</span>
+      </div>
+      <div class="day-content${dayIdx === 0 ? ' open' : ''}" id="dayContent${dayIdx}">`;
+
+    if (day.warnings && day.warnings.length) {
+      html += '<div class="warning-list">' + day.warnings.map(w => '⚠ ' + w).join('<br>') + '</div>';
+    }
+
+    // Timeline
+    html += `<div class="timeline-container">`;
+
+    // Time axis header
+    html += `<div class="timeline-header">
+      <div class="tl-name-col">Employee</div>
+      <div class="tl-time-axis">`;
+    for (let h = minH; h < maxH; h++) {
+      html += `<div class="tl-hour-mark">${String(h).padStart(2,'0')}:00</div>`;
+    }
+    html += `</div></div>`;
+
+    // Employee rows
+    html += `<div class="timeline-body">`;
+    day.shifts.forEach((shift, shiftIdx) => {
+      html += `<div class="tl-row">
+        <div class="tl-emp-name">
+          <span>${shift.employee}</span>
+          <span class="emp-actions">
+            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${shiftIdx})">&#9998;</button>
+          </span>
+        </div>
+        <div class="tl-bar-area" style="width:${numHours * TL_PX_PER_HOUR}px">`;
+
+      // Grid lines
+      for (let h = minH; h < maxH; h++) {
+        const x = (h - minH) * TL_PX_PER_HOUR;
+        html += `<div class="tl-grid-line" style="left:${x}px"></div>`;
+      }
+
+      // Segments
+      const segments = shift.segments || [];
+      if (segments.length) {
+        segments.forEach((seg, segIdx) => {
+          const sMin = timeToMins(seg.start);
+          const eMin = timeToMins(seg.end);
+          const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
+          const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
+          const cls = 'tl-seg-' + seg.type.replace('-', '');
+          // Fix: on-call → oncall
+          const clsFix = cls.replace('tl-seg-on-call','tl-seg-oncall');
+          const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
+          html += `<div class="tl-segment ${clsFix}" style="left:${left}px;width:${Math.max(width,2)}px"
+            title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
+            onclick="openEditModal(${dayIdx},${shiftIdx})">${label}</div>`;
+        });
+      } else {
+        // No segments — show whole shift as on-call
+        const sMin = timeToMins(shift.start);
+        const eMin = timeToMins(shift.end);
+        const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
+        const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
+        html += `<div class="tl-segment tl-seg-oncall" style="left:${left}px;width:${Math.max(width,2)}px"
+          title="On-Call: ${shift.start}–${shift.end}"
+          onclick="openEditModal(${dayIdx},${shiftIdx})"></div>`;
+      }
+
+      html += `</div></div>`; // tl-bar-area, tl-row
+    });
+    html += `</div>`; // timeline-body
+
+    // Requirements overlay bar chart
+    if (day.coverage && day.coverage.length) {
+      const maxReq = Math.max(...day.coverage.map(c => c.required), 1);
+      html += `<div class="req-overlay">
+        <div class="req-overlay-inner" style="width:${180 + numHours * TL_PX_PER_HOUR}px">
+          <div class="tl-name-col" style="font-size:.68rem;color:var(--text-muted)">Req'd</div>
+          <div style="display:flex;flex:1;align-items:flex-end;height:100%">`;
+      day.coverage.forEach(c => {
+        const h = parseInt(c.time.split(':')[0]);
+        const m = parseInt(c.time.split(':')[1]);
+        const totalMin = h * 60 + m;
+        if (totalMin < minH * 60 || totalMin >= maxH * 60) return;
+        const barH = Math.round((c.required / maxReq) * 38);
+        const barColor = c.gap >= 0 ? '#059669' : (c.gap >= -2 ? '#d97706' : '#dc2626');
+        html += `<div class="req-bar-wrap" style="width:${TL_PX_PER_HOUR/2}px"
+          title="${c.time}: need ${c.required}, have ${c.scheduled} (${c.gap >= 0 ? '+' : ''}${c.gap})">
+          <div class="req-bar" style="height:${barH}px;background:color-mix(in srgb, ${barColor} 40%, transparent)"></div>
+        </div>`;
+      });
+      html += `</div></div></div>`;
+    }
+
+    html += `</div>`; // timeline-container
+
+    // Legend
+    html += `<div class="timeline-legend">
+      <span><span class="legend-dot" style="background:#059669"></span>On-Call</span>
+      <span><span class="legend-dot" style="background:#d97706"></span>Break</span>
+      <span><span class="legend-dot" style="background:#2563eb"></span>Lunch</span>
+      <span><span class="legend-dot" style="background:#7c3aed"></span>Meeting</span>
+      <span><span class="legend-dot" style="background:#ea580c"></span>Training</span>
+      <span><span class="legend-dot" style="background:#6b7280"></span>Other</span>
+    </div>`;
+
+    // Unassigned
+    if (day.unassigned && day.unassigned.length) {
+      html += `<div style="padding:6px 20px 12px;font-size:.82rem;color:var(--text-muted)">
+        <strong>Off/PTO:</strong> ${day.unassigned.join(', ')}</div>`;
+    }
+
+    html += '</div></div>'; // day-content, sched-card
+  });
+  container.innerHTML = html;
+}
+
+function segLabel(type) {
+  const labels = {'on-call':'On-Call','break':'Break','lunch':'Lunch','meeting':'Mtg','training':'Train','other':'Other'};
+  return labels[type] || type;
+}
+
+function timeToMins(t) {
+  if (!t) return 0;
+  const p = t.split(':');
+  return parseInt(p[0]) * 60 + parseInt(p[1]);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EDIT MODAL
+// ═══════════════════════════════════════════════════════════
+function openEditModal(dayIdx, shiftIdx) {
+  const day = scheduleData.days[dayIdx];
+  const shift = day.shifts[shiftIdx];
+
+  document.getElementById('editDayIdx').value = dayIdx;
+  document.getElementById('editShiftIdx').value = shiftIdx;
+  document.getElementById('editShiftDbId').value = shift.id || '';
+  document.getElementById('editEmployee').value = shift.employee;
+  document.getElementById('editStart').value = shift.start;
+  document.getElementById('editEnd').value = shift.end;
+  document.getElementById('editType').value = shift.type || 'full';
+  document.getElementById('editStatus').value = shift.status || 'scheduled';
+  document.getElementById('modalTitle').textContent = 'Edit Shift — ' + shift.employee;
+
+  renderSegmentList(shift.segments || []);
+  document.getElementById('addSegForm').style.display = 'none';
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+function renderSegmentList(segments) {
+  const el = document.getElementById('segmentList');
+  if (!segments.length) {
+    el.innerHTML = '<div style="font-size:.82rem;color:var(--text-muted);padding:8px">No segments</div>';
+    return;
+  }
+  const colors = {'on-call':'#059669','break':'#d97706','lunch':'#2563eb','meeting':'#7c3aed','training':'#ea580c','other':'#6b7280'};
+  let html = '';
+  segments.forEach((seg, idx) => {
+    const c = colors[seg.type] || '#6b7280';
+    html += `<div class="seg-list-item">
+      <span class="seg-type-dot" style="background:${c}"></span>
+      <span class="seg-info"><strong>${segLabel(seg.type)}</strong> ${seg.start}–${seg.end} (${seg.duration_mins}m)${seg.notes ? ' — ' + seg.notes : ''}</span>
+      <button class="seg-del-btn" onclick="removeSegment(${idx})" title="Remove">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function removeSegment(segIdx) {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const seg = shift.segments[segIdx];
+
+  // If saved to DB, delete via API
+  if (seg.id) {
+    fetch('/scheduling/segment/' + seg.id, {method: 'DELETE'})
+      .then(r => r.json())
+      .then(data => { if (!data.success) showToast('Delete failed', 'error'); });
+  }
+
+  shift.segments.splice(segIdx, 1);
+  renderSegmentList(shift.segments);
+  switchView(currentView); // refresh timeline
+}
+
+function openAddSegment() {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  document.getElementById('newSegStart').value = shift.start;
+  document.getElementById('newSegEnd').value = shift.end;
+  document.getElementById('newSegType').value = 'meeting';
+  document.getElementById('newSegNotes').value = '';
+  document.getElementById('addSegForm').style.display = 'block';
+}
+
+function cancelAddSegment() {
+  document.getElementById('addSegForm').style.display = 'none';
+}
+
+function confirmAddSegment() {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  const type = document.getElementById('newSegType').value;
+  const start = document.getElementById('newSegStart').value;
+  const end = document.getElementById('newSegEnd').value;
+  const notes = document.getElementById('newSegNotes').value;
+
+  if (!start || !end) { showToast('Start and end times required', 'error'); return; }
+
+  const dur = timeToMins(end) - timeToMins(start);
+  if (dur <= 0) { showToast('End must be after start', 'error'); return; }
+
+  const newSeg = { type, start, end, duration_mins: dur, notes, sort_order: shift.segments.length };
+
+  // If schedule is saved to DB, persist via API
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id + '/segment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(newSeg),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.segment) {
+        newSeg.id = data.segment.id;
+      }
+    });
+  }
+
+  shift.segments.push(newSeg);
+  // Re-sort by start time
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+
+  renderSegmentList(shift.segments);
+  document.getElementById('addSegForm').style.display = 'none';
+  switchView(currentView);
+}
+
+function applyShiftEdit() {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  shift.start = document.getElementById('editStart').value;
+  shift.end = document.getElementById('editEnd').value;
+  shift.type = document.getElementById('editType').value;
+  shift.status = document.getElementById('editStatus').value;
+  shift.hours = Math.round((timeToMins(shift.end) - timeToMins(shift.start)) / 60 * 10) / 10;
+
+  // If saved to DB, persist via API
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ start: shift.start, end: shift.end, type: shift.type, status: shift.status }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) showToast('Update failed: ' + data.error, 'error');
+    });
+  }
+
+  closeModal();
+  updateStats();
+  // Recalc totals
+  let totalShifts = 0, totalHours = 0;
+  scheduleData.days.forEach(d => {
+    totalShifts += d.shifts.length;
+    totalHours += d.shifts.reduce((h, s) => h + (s.hours || 0), 0);
+  });
+  scheduleData.totals.total_shifts = totalShifts;
+  scheduleData.totals.total_hours = Math.round(totalHours * 10) / 10;
+  updateStats();
+  switchView(currentView);
+}
+
+function deleteShift() {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  if (!confirm('Delete shift for ' + shift.employee + '?')) return;
+
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id, {method: 'DELETE'})
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) showToast('Delete failed', 'error');
+      });
+  }
+
+  scheduleData.days[dayIdx].shifts.splice(shiftIdx, 1);
+  closeModal();
+  // Recalc
+  let totalShifts = 0, totalHours = 0;
+  scheduleData.days.forEach(d => {
+    totalShifts += d.shifts.length;
+    totalHours += d.shifts.reduce((h, s) => h + (s.hours || 0), 0);
+  });
+  scheduleData.totals.total_shifts = totalShifts;
+  scheduleData.totals.total_hours = Math.round(totalHours * 10) / 10;
+  updateStats();
+  switchView(currentView);
+}
+
+// ═══════════════════════════════════════════════════════════
+// DAY LIST VIEW (table fallback)
+// ═══════════════════════════════════════════════════════════
 function renderDayView(container) {
   if (!scheduleData.days.length) {
-    container.innerHTML = '<div class="no-data">No schedule data generated.</div>';
+    container.innerHTML = '<div class="no-data">No schedule data.</div>';
     return;
   }
   let html = '';
@@ -403,58 +1134,139 @@ function renderDayView(container) {
     html += `<div class="sched-card">
       <div class="day-header-row" onclick="toggleDay(${idx})">
         <span>${day.date_label} — ${day.shifts.length} shifts</span>
-        <span style="font-size:.78rem;color:rgba(255,255,255,.7)">${covBadge(day.summary)}</span>
+        <span style="font-size:.78rem">${covBadge(day.summary)}</span>
       </div>
       <div class="day-content${idx === 0 ? ' open' : ''}" id="dayContent${idx}">`;
 
-    if (day.warnings.length) {
+    if (day.warnings && day.warnings.length) {
       html += '<div class="warning-list">' + day.warnings.map(w => '⚠ ' + w).join('<br>') + '</div>';
     }
 
-    // Shifts table
     if (day.shifts.length) {
-      html += `<div class="sched-table-wrap"><table class="sched-table">
-        <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Segments</th></tr></thead>
+      html += `<div style="overflow-x:auto"><table class="summary-table">
+        <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Actions</th></tr></thead>
         <tbody>`;
-      day.shifts.forEach(s => {
-        const badge = s.type === 'half' ? '<span class="badge-half">Half</span>' :
-                      '<span class="badge-full">Full</span>';
-        const timeline = renderShiftTimeline(s);
+      day.shifts.forEach((s, si) => {
+        const badge = s.type === 'half' ? '<span style="color:#d97706;font-weight:600">Half</span>' :
+                      '<span style="color:#059669;font-weight:600">Full</span>';
         html += `<tr>
           <td style="font-weight:600">${s.employee}</td>
           <td>${s.start}</td><td>${s.end}</td>
           <td>${s.hours}</td><td>${badge}</td>
-          <td>${timeline}</td></tr>`;
+          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${si})" title="Edit">&#9998; Edit</button></td></tr>`;
       });
       html += '</tbody></table></div>';
-      html += `<div class="timeline-legend">
-        <span><span class="legend-dot" style="background:#059669"></span>On-Call</span>
-        <span><span class="legend-dot" style="background:#d97706"></span>Break</span>
-        <span><span class="legend-dot" style="background:#2563eb"></span>Lunch</span>
-        <span><span class="legend-dot" style="background:#7c3aed"></span>Meeting</span>
-        <span><span class="legend-dot" style="background:#ea580c"></span>Training</span>
-      </div>`;
     }
 
-    // Unassigned
-    if (day.unassigned.length) {
+    if (day.unassigned && day.unassigned.length) {
       html += `<div style="padding:8px 20px;font-size:.82rem;color:var(--text-muted)">
         <strong>Off/PTO:</strong> ${day.unassigned.join(', ')}</div>`;
     }
 
-    // Coverage heatmap
-    if (day.coverage.length) {
+    if (day.coverage && day.coverage.length) {
       html += renderCoverageStrip(day.coverage);
     }
-
     html += '</div></div>';
   });
   container.innerHTML = html;
 }
 
+function renderCoverageStrip(coverage) {
+  const cols = coverage.length;
+  let html = `<div class="coverage-card" style="margin:12px 16px 16px">
+    <div class="coverage-card-header"><span>Coverage by Interval</span></div>
+    <div class="coverage-grid" style="grid-template-columns: repeat(${Math.min(cols, 16)}, 1fr)">`;
+  coverage.forEach(c => {
+    let cls = 'cov-zero';
+    if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
+    else if (c.coverage_pct >= 100) cls = 'cov-over';
+    else if (c.coverage_pct >= 90) cls = 'cov-met';
+    else if (c.coverage_pct >= 70) cls = 'cov-under';
+    else cls = 'cov-crit';
+    html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
+      <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}/${c.required}</div></div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEEK VIEW
+// ═══════════════════════════════════════════════════════════
+function renderWeekView(container) {
+  const weeks = groupByWeek(scheduleData.days);
+  let html = '';
+  weeks.forEach(week => {
+    const totalShifts = week.reduce((s, d) => s + d.shifts.length, 0);
+    const totalHours = week.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + (sh.hours||0), 0), 0);
+    const avgCov = avgCoverage(week);
+
+    html += `<div class="sched-card">
+      <div class="sched-card-header">
+        <span>Week of ${week[0].date_label} — ${totalShifts} shifts, ${totalHours.toFixed(1)} hrs</span>
+        <span style="font-size:.8rem">${avgCov}% avg coverage</span>
+      </div>
+      <div style="overflow-x:auto"><table class="summary-table">
+        <thead><tr><th>Day</th><th>Shifts</th><th>Hours</th><th>Peak Req</th><th>Coverage</th><th>Gaps</th></tr></thead>
+        <tbody>`;
+    week.forEach(d => {
+      const sm = d.summary;
+      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
+      html += `<tr>
+        <td style="font-weight:600">${d.date_label}</td>
+        <td>${d.shifts.length}</td>
+        <td>${d.shifts.reduce((h, s) => h + (s.hours||0), 0).toFixed(1)}</td>
+        <td>${sm.peak_required}</td>
+        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
+        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MONTH VIEW
+// ═══════════════════════════════════════════════════════════
+function renderMonthView(container) {
+  const months = groupByMonth(scheduleData.days);
+  let html = '';
+  Object.keys(months).sort().forEach(key => {
+    const days = months[key];
+    const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
+    const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + (sh.hours||0), 0), 0);
+    const avgCov = avgCoverage(days);
+    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+
+    html += `<div class="sched-card">
+      <div class="sched-card-header">
+        <span>${label}</span>
+        <span style="font-size:.8rem">${totalShifts} shifts · ${totalHours.toFixed(0)} hrs · ${avgCov}% coverage</span>
+      </div>
+      <div style="overflow-x:auto"><table class="summary-table">
+        <thead><tr><th>Date</th><th>Day</th><th>Shifts</th><th>Hours</th><th>Coverage</th><th>Gap Intervals</th></tr></thead>
+        <tbody>`;
+    days.forEach(d => {
+      const sm = d.summary;
+      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
+      html += `<tr>
+        <td style="font-weight:600">${d.date}</td>
+        <td>${d.day_of_week}</td><td>${d.shifts.length}</td>
+        <td>${d.shifts.reduce((h, s) => h + (s.hours||0), 0).toFixed(1)}</td>
+        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
+        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
 function toggleDay(idx) {
   const el = document.getElementById('dayContent' + idx);
-  el.classList.toggle('open');
+  if (el) el.classList.toggle('open');
 }
 
 function covBadge(summary) {
@@ -464,192 +1276,8 @@ function covBadge(summary) {
   return `<span class="stat-num ${cls}" style="font-size:.85rem">${pct}%</span> coverage`;
 }
 
-function renderCoverageStrip(coverage) {
-  const cols = coverage.length;
-  let html = `<div class="coverage-card" style="margin:12px 16px 16px">
-    <div class="coverage-card-header"><span>Coverage by Interval</span></div>
-    <div class="coverage-grid" style="grid-template-columns: repeat(${Math.min(cols, 16)}, 1fr)">`;
-
-  coverage.forEach(c => {
-    let cls = 'cov-zero';
-    if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
-    else if (c.coverage_pct >= 100) cls = 'cov-over';
-    else if (c.coverage_pct >= 90) cls = 'cov-met';
-    else if (c.coverage_pct >= 70) cls = 'cov-under';
-    else cls = 'cov-crit';
-
-    html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
-      <div style="font-size:.65rem">${c.time}</div>
-      <div>${c.scheduled}/${c.required}</div>
-    </div>`;
-  });
-
-  html += '</div></div>';
-  return html;
-}
-
-// ── Week View ────────────────────────────────────────
-function renderWeekView(container) {
-  // Group days into weeks (Mon-Sun)
-  const weeks = groupByWeek(scheduleData.days);
-  let html = '';
-  weeks.forEach((week, wi) => {
-    const totalShifts = week.reduce((s, d) => s + d.shifts.length, 0);
-    const totalHours = week.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
-    const avgCov = avgCoverage(week);
-
-    html += `<div class="sched-card">
-      <div class="sched-card-header">
-        <span>Week of ${week[0].date_label} — ${totalShifts} shifts, ${totalHours.toFixed(1)} hrs</span>
-        <span style="font-size:.8rem">${avgCov}% avg coverage</span>
-      </div>
-      <div class="sched-table-wrap"><table class="summary-table">
-        <thead><tr><th>Day</th><th>Shifts</th><th>Hours</th><th>Peak Req</th><th>Coverage</th><th>Gaps</th></tr></thead>
-        <tbody>`;
-    week.forEach(d => {
-      const sm = d.summary;
-      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
-      html += `<tr>
-        <td style="font-weight:600">${d.date_label}</td>
-        <td>${d.shifts.length}</td>
-        <td>${d.shifts.reduce((h, s) => h + s.hours, 0).toFixed(1)}</td>
-        <td>${sm.peak_required}</td>
-        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
-        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-
-    // Week coverage heatmap: one row per day
-    html += '<div style="padding:12px 16px">';
-    week.forEach(d => {
-      if (d.coverage.length) {
-        html += `<div style="margin-bottom:4px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:.72rem;font-weight:700;width:70px;color:var(--text-muted)">${d.day_of_week}</span>
-          <div style="display:flex;gap:2px;flex:1">`;
-        d.coverage.forEach(c => {
-          let cls = 'cov-zero';
-          if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
-          else if (c.coverage_pct >= 100) cls = 'cov-over';
-          else if (c.coverage_pct >= 90) cls = 'cov-met';
-          else if (c.coverage_pct >= 70) cls = 'cov-under';
-          else cls = 'cov-crit';
-          html += `<div class="cov-cell ${cls}" style="flex:1;min-width:0;padding:3px 0"
-            title="${c.time}: ${c.scheduled}/${c.required}">${c.scheduled}</div>`;
-        });
-        html += '</div></div>';
-      }
-    });
-    html += '</div></div>';
-  });
-  container.innerHTML = html;
-}
-
-// ── Month View ───────────────────────────────────────
-function renderMonthView(container) {
-  const months = groupByMonth(scheduleData.days);
-  let html = '';
-  Object.keys(months).sort().forEach(key => {
-    const days = months[key];
-    const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
-    const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
-    const avgCov = avgCoverage(days);
-    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
-
-    html += `<div class="sched-card">
-      <div class="sched-card-header">
-        <span>${label}</span>
-        <span style="font-size:.8rem">${totalShifts} shifts · ${totalHours.toFixed(0)} hrs · ${avgCov}% coverage</span>
-      </div>
-      <div class="sched-table-wrap"><table class="summary-table">
-        <thead><tr><th>Date</th><th>Day</th><th>Shifts</th><th>Hours</th><th>Coverage</th><th>Gap Intervals</th></tr></thead>
-        <tbody>`;
-    days.forEach(d => {
-      const sm = d.summary;
-      const covCls = sm.avg_coverage_pct >= 95 ? 'good' : sm.avg_coverage_pct >= 80 ? 'warn' : 'danger';
-      html += `<tr>
-        <td style="font-weight:600">${d.date}</td>
-        <td>${d.day_of_week}</td>
-        <td>${d.shifts.length}</td>
-        <td>${d.shifts.reduce((h, s) => h + s.hours, 0).toFixed(1)}</td>
-        <td><span class="stat-num ${covCls}" style="font-size:.82rem">${sm.avg_coverage_pct}%</span></td>
-        <td>${sm.understaffed_intervals} / ${sm.total_intervals}</td>
-      </tr>`;
-    });
-    html += '</tbody></table></div></div>';
-  });
-  container.innerHTML = html;
-}
-
-// ── Year View ────────────────────────────────────────
-function renderYearView(container) {
-  const months = groupByMonth(scheduleData.days);
-  const keys = Object.keys(months).sort();
-  if (!keys.length) {
-    container.innerHTML = '<div class="no-data">No data to display.</div>';
-    return;
-  }
-
-  let html = `<div class="sched-card">
-    <div class="sched-card-header">
-      <span>Annual Overview — ${scheduleData.lob}</span>
-    </div>
-    <div class="sched-table-wrap"><table class="summary-table">
-      <thead><tr><th>Month</th><th>Days</th><th>Total Shifts</th><th>Total Hours</th><th>Avg Coverage</th><th>Understaffed Days</th></tr></thead>
-      <tbody>`;
-
-  keys.forEach(key => {
-    const days = months[key];
-    const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
-    const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + sh.hours, 0), 0);
-    const avgCov = avgCoverage(days);
-    const understaffedDays = days.filter(d => d.summary.avg_coverage_pct < 90).length;
-    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'short', year: 'numeric'});
-    const covCls = avgCov >= 95 ? 'good' : avgCov >= 80 ? 'warn' : 'danger';
-
-    html += `<tr>
-      <td style="font-weight:600">${label}</td>
-      <td>${days.length}</td>
-      <td>${totalShifts}</td>
-      <td>${totalHours.toFixed(0)}</td>
-      <td><span class="stat-num ${covCls}" style="font-size:.82rem">${avgCov}%</span></td>
-      <td>${understaffedDays > 0 ? '<span style="color:#dc2626;font-weight:600">' + understaffedDays + '</span>' : '0'}</td>
-    </tr>`;
-  });
-
-  html += '</tbody></table></div></div>';
-  container.innerHTML = html;
-}
-
-// ── Shift timeline renderer ─────────────────────────
-function renderShiftTimeline(shift) {
-  if (!shift.segments || !shift.segments.length) {
-    return '<span class="seg-badge act-oncall">On-Call</span>';
-  }
-  const totalMins = shift.segments.reduce((s, seg) => s + seg.duration_mins, 0);
-  if (totalMins === 0) return '';
-  const barColors = {
-    'on-call': 'seg-bar-oncall', 'break': 'seg-bar-break',
-    'lunch': 'seg-bar-lunch', 'meeting': 'seg-bar-meeting',
-    'training': 'seg-bar-training', 'other': 'seg-bar-other',
-  };
-  let bars = '';
-  shift.segments.forEach(seg => {
-    const pct = (seg.duration_mins / totalMins * 100).toFixed(1);
-    const cls = barColors[seg.type] || 'seg-bar-other';
-    const label = seg.type === 'on-call' ? '' : seg.type.charAt(0).toUpperCase() + seg.type.slice(1);
-    bars += `<div class="seg-bar ${cls}" style="width:${pct}%"
-      title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)">
-      ${seg.duration_mins >= 20 ? `<span style="font-size:.6rem;color:#fff;padding:0 3px;line-height:18px">${label}</span>` : ''}
-    </div>`;
-  });
-  return `<div class="shift-timeline">${bars}</div>`;
-}
-
-// ── Helpers ──────────────────────────────────────────
 function groupByWeek(days) {
-  const weeks = [];
-  let current = [];
+  const weeks = []; let current = [];
   days.forEach(d => {
     current.push(d);
     if (d.day_of_week === 'Sun' || d === days[days.length - 1]) {
@@ -664,7 +1292,7 @@ function groupByWeek(days) {
 function groupByMonth(days) {
   const months = {};
   days.forEach(d => {
-    const key = d.date.slice(0, 7); // YYYY-MM
+    const key = d.date.slice(0, 7);
     if (!months[key]) months[key] = [];
     months[key].push(d);
   });
@@ -672,7 +1300,7 @@ function groupByMonth(days) {
 }
 
 function avgCoverage(days) {
-  const withCov = days.filter(d => d.summary.total_intervals > 0);
+  const withCov = days.filter(d => d.summary && d.summary.total_intervals > 0);
   if (!withCov.length) return 0;
   const sum = withCov.reduce((s, d) => s + d.summary.avg_coverage_pct, 0);
   return Math.round(sum / withCov.length * 10) / 10;
