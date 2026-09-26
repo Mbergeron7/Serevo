@@ -42,9 +42,13 @@ def create_app():
     with app.app_context():
         db.create_all()
 
-    # Seed the demo user if it doesn't exist
-    from app.demo_data import seed_demo_user
-    seed_demo_user(app)
+    # Seed the demo user if it doesn't exist (may fail on first run
+    # before the is_demo migration has been applied — that's fine)
+    try:
+        from app.demo_data import seed_demo_user
+        seed_demo_user(app)
+    except Exception:
+        pass
 
     # ---- inject brand variables into every template ----
     @app.context_processor
