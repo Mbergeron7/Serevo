@@ -136,6 +136,8 @@ def admin_setup():
         name = (request.form.get("name") or "").strip()
         password = request.form.get("password") or ""
 
+        is_demo_account = request.form.get("is_demo") == "on"
+
         if not email or not password:
             error = "Email and password are required."
         elif len(password) < 6:
@@ -143,10 +145,10 @@ def admin_setup():
         else:
             existing = User.query.filter_by(email=email).first()
             if existing:
-                # Update existing user's password
                 existing.password_hash = generate_password_hash(password).decode("utf-8")
                 existing.role = "admin"
                 existing.is_active = True
+                existing.is_demo = is_demo_account
                 if name:
                     existing.display_name = name
                 db.session.commit()
@@ -158,6 +160,7 @@ def admin_setup():
                     display_name=name or email.split("@")[0].title(),
                     role="admin",
                     is_active=True,
+                    is_demo=is_demo_account,
                 )
                 db.session.add(user)
                 db.session.commit()
@@ -167,6 +170,8 @@ def admin_setup():
     <html><head><title>Admin Setup</title>
     <style>body{{font-family:system-ui;max-width:400px;margin:60px auto;padding:0 16px}}
     input{{width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box}}
+    label.check{{display:flex;align-items:center;gap:8px;margin:8px 0 12px}}
+    label.check input{{width:auto}}
     button{{padding:10px 20px;background:#0f766e;color:white;border:none;cursor:pointer;border-radius:4px}}
     .err{{color:red}} .ok{{color:green}}</style></head>
     <body><h2>Admin Account Setup</h2>
@@ -176,6 +181,7 @@ def admin_setup():
     <label>Email</label><input name="email" type="email" required>
     <label>Display Name</label><input name="name" placeholder="Optional">
     <label>Password</label><input name="password" type="password" required>
+    <label class="check"><input name="is_demo" type="checkbox"> Demo account (shows sample data)</label>
     <button type="submit">Create Admin Account</button>
     </form></body></html>
     """
