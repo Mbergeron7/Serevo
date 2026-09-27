@@ -143,28 +143,56 @@ def admin_setup():
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
         else:
-            existing = User.query.filter_by(email=email).first()
-            if existing:
-                existing.password_hash = generate_password_hash(password).decode("utf-8")
-                existing.role = "admin"
-                existing.is_active = True
-                existing.is_demo = is_demo_account
-                if name:
-                    existing.display_name = name
-                db.session.commit()
-                done = True
-            else:
-                user = User(
-                    email=email,
-                    password_hash=generate_password_hash(password).decode("utf-8"),
-                    display_name=name or email.split("@")[0].title(),
-                    role="admin",
-                    is_active=True,
-                    is_demo=is_demo_account,
-                )
-                db.session.add(user)
-                db.session.commit()
-                done = True
+            try:
+                existing = User.query.filter_by(email=email).first()
+                if existing:
+                    existing.password_hash = generate_password_hash(password).decode("utf-8")
+                    existing.role = "admin"
+                    existing.is_active = True
+                    if name:
+                        existing.display_name = name
+                    try:
+                        existing.is_demo = is_demo_account
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                        # is_demo column may not exist — retry without it
+                        existing = User.query.filter_by(email=email).first()
+                        existing.password_hash = generate_password_hash(password).decode("utf-8")
+                        existing.role = "admin"
+                        existing.is_active = True
+                        if name:
+                            existing.display_name = name
+                        db.session.commit()
+                    done = True
+                else:
+                    try:
+                        user = User(
+                            email=email,
+                            password_hash=generate_password_hash(password).decode("utf-8"),
+                            display_name=name or email.split("@")[0].title(),
+                            role="admin",
+                            is_active=True,
+                            is_demo=is_demo_account,
+                        )
+                        db.session.add(user)
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                        # is_demo column may not exist — retry without it
+                        user = User(
+                            email=email,
+                            password_hash=generate_password_hash(password).decode("utf-8"),
+                            display_name=name or email.split("@")[0].title(),
+                            role="admin",
+                            is_active=True,
+                        )
+                        db.session.add(user)
+                        db.session.commit()
+                    done = True
+            except Exception as e:
+                db.session.rollback()
+                error = f"Error creating account: {e}"
 
     return f"""
     <html><head><title>Admin Setup</title>

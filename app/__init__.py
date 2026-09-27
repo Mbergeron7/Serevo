@@ -41,6 +41,15 @@ def create_app():
     # Ensure all tables exist (fallback if migrations haven't run)
     with app.app_context():
         db.create_all()
+        # Ensure is_demo column exists on users table (may be missing if
+        # migration never ran on this database)
+        try:
+            db.session.execute(db.text(
+                "ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()  # column already exists, ignore
 
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
