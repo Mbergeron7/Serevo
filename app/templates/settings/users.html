@@ -69,6 +69,10 @@
       <label for="userConfirm">Confirm Password</label>
       <input type="password" id="userConfirm" placeholder="Re-enter password">
     </div>
+    <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="userIsDemo" style="width:auto;">
+      <label for="userIsDemo" style="margin:0; font-weight:400;">Demo account (shows sample data instead of live)</label>
+    </div>
     <div id="modalResult"></div>
     <div style="display:flex; gap:.5rem; margin-top:1rem; flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="saveUser()">Save</button>
@@ -88,7 +92,7 @@
     <span class="user-role role-{{ u.role }}">{{ u.role }}</span>
     {% if not u.is_active %}<span class="user-status" style="color:#ef4444;">Inactive</span>{% endif %}
     <div class="user-actions">
-      <button class="btn btn-sm btn-outline" onclick='editUser({{ u.id }}, {{ u.email|tojson }}, {{ (u.display_name or "")|tojson }}, {{ u.role|tojson }})'>Edit</button>
+      <button class="btn btn-sm btn-outline" onclick='editUser({{ u.id }}, {{ u.email|tojson }}, {{ (u.display_name or "")|tojson }}, {{ u.role|tojson }}, {{ (u.is_demo if u.is_demo is defined else false)|tojson }})'>Edit</button>
       {% if u.id != current_user.id %}
       <button class="btn btn-sm btn-outline" onclick="toggleUser({{ u.id }}, {{ u.is_active|tojson }})"
               style="{{ 'color:#22c55e;border-color:#22c55e;' if not u.is_active else 'color:#ef4444;border-color:#ef4444;' }}">
@@ -117,12 +121,13 @@ function showAddUser() {
   document.getElementById('userRole').value = 'viewer';
   document.getElementById('userPassword').value = '';
   document.getElementById('userConfirm').value = '';
+  document.getElementById('userIsDemo').checked = false;
   document.getElementById('pwHint').textContent = '(required)';
   document.getElementById('modalResult').innerHTML = '';
   document.getElementById('userModal').style.display = 'flex';
 }
 
-function editUser(id, email, name, role) {
+function editUser(id, email, name, role, isDemo) {
   document.getElementById('modalTitle').textContent = 'Edit User';
   document.getElementById('editUserId').value = id;
   document.getElementById('userName').value = name;
@@ -131,6 +136,7 @@ function editUser(id, email, name, role) {
   document.getElementById('userRole').value = role;
   document.getElementById('userPassword').value = '';
   document.getElementById('userConfirm').value = '';
+  document.getElementById('userIsDemo').checked = !!isDemo;
   document.getElementById('pwHint').textContent = '(leave blank to keep current)';
   document.getElementById('modalResult').innerHTML = '';
   document.getElementById('userModal').style.display = 'flex';
@@ -162,7 +168,7 @@ async function saveUser() {
     const resp = await fetch('/settings/users/save', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ id: id || null, email, name, role, password: pw }),
+      body: JSON.stringify({ id: id || null, email, name, role, password: pw, is_demo: document.getElementById('userIsDemo').checked }),
     });
     const data = await resp.json();
     if (data.success) {

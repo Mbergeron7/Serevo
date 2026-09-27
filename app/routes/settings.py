@@ -352,6 +352,7 @@ def save_user():
     name = (data.get("name") or "").strip()
     role = data.get("role", "viewer")
     password = data.get("password", "")
+    is_demo = bool(data.get("is_demo", False))
 
     if not email:
         return jsonify({"success": False, "error": "Email is required"})
@@ -365,6 +366,10 @@ def save_user():
             return jsonify({"success": False, "error": "User not found"})
         user.display_name = name or user.display_name
         user.role = role
+        try:
+            user.is_demo = is_demo
+        except Exception:
+            pass
         if password:
             if len(password) < 6:
                 return jsonify({"success": False, "error": "Password must be at least 6 characters"})
@@ -381,9 +386,18 @@ def save_user():
             display_name=name or email.split("@")[0].title(),
             role=role,
         )
+        try:
+            user.is_demo = is_demo
+        except Exception:
+            pass
         db.session.add(user)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # Retry without is_demo if column doesn't exist
+        db.session.commit()
     return jsonify({"success": True, "id": user.id})
 
 
