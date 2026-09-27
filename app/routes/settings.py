@@ -366,14 +366,20 @@ def save_user():
             return jsonify({"success": False, "error": "User not found"})
         user.display_name = name or user.display_name
         user.role = role
-        try:
-            user.is_demo = is_demo
-        except Exception:
-            pass
         if password:
             if len(password) < 6:
                 return jsonify({"success": False, "error": "Password must be at least 6 characters"})
             user.password_hash = generate_password_hash(password).decode("utf-8")
+        db.session.commit()
+        # Set is_demo via raw SQL to avoid ORM column-missing issues
+        try:
+            db.session.execute(
+                db.text("UPDATE users SET is_demo = :val WHERE id = :uid"),
+                {"val": is_demo, "uid": user.id},
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     else:
         # New user
         if User.query.filter_by(email=email).first():
@@ -386,18 +392,18 @@ def save_user():
             display_name=name or email.split("@")[0].title(),
             role=role,
         )
-        try:
-            user.is_demo = is_demo
-        except Exception:
-            pass
         db.session.add(user)
+        db.session.commit()
+        # Set is_demo via raw SQL
+        try:
+            db.session.execute(
+                db.text("UPDATE users SET is_demo = :val WHERE id = :uid"),
+                {"val": is_demo, "uid": user.id},
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        # Retry without is_demo if column doesn't exist
-        db.session.commit()
     return jsonify({"success": True, "id": user.id})
 
 
@@ -417,3 +423,235 @@ def toggle_user():
     user.is_active = not user.is_active
     db.session.commit()
     return jsonify({"success": True, "is_active": user.is_active})
+
+
+# ═══════════════════════════════════════════════════════════════
+# CUSTOMIZATION (Admin-only)
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/customization")
+@admin_required
+def customization():
+    """Main customization page with tabs for segments, shifts, rotations, LOB settings."""
+    from app.models import SegmentCode, ShiftTemplate, RotationPattern, LOBSetting, PlanningUnit
+    user = get_current_user()
+
+    segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
+    shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
+    rotations = [r.to_dict() for r in RotationPattern.query.order_by(RotationPattern.name).all()]
+
+    lob_settings = [s.to_dict() for s in LOBSetting.query.all()]
+    all_lobs = [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
+
+    return render_template("settings/customization.html",
+        user=user,
+        segments=segments,
+        shifts=shifts,
+        rotations=rotations,
+        lob_settings=lob_settings,
+        all_lobs=all_lobs,
+    )
+
+
+# ── Segment Codes CRUD ───────────────────────────────────────
+
+@settings_bp.route("/customization/segments/save", methods=["POST"])
+@admin_required
+def save_segment():
+    from app.models import db, SegmentCode
+    data = request.get_json(silent=True) or {}
+    seg_id = data.get("id")
+    code = (data.get("code") or "").strip().lower().replace(" ", "_")
+    label = (data.get("label") or "").strip()
+    if not code or not label:
+        return jsonify({"success": False, "error": "Code and label are required"})
+
+    if seg_id:
+        seg = SegmentCode.query.get(seg_id)
+        if not seg:
+            return jsonify({"success": False, "error": "Segment not found"})
+        seg.code = code
+        seg.label = label
+        seg.color = data.get("color", seg.color)
+        seg.is_productive = bool(data.get("is_productive", seg.is_productive))
+        seg.is_paid = bool(data.get("is_paid", seg.is_paid))
+        seg.sort_order = int(data.get("sort_order", seg.sort_order))
+    else:
+        if SegmentCode.query.filter_by(code=code).first():
+            return jsonify({"success": False, "error": f"Code '{code}' already exists"})
+        seg = SegmentCode(
+            code=code, label=label,
+            color=data.get("color", "#6b7280"),
+            is_productive=bool(data.get("is_productive", True)),
+            is_paid=bool(data.get("is_paid", True)),
+            sort_order=int(data.get("sort_order", 0)),
+        )
+        db.session.add(seg)
+    db.session.commit()
+    return jsonify({"success": True, "segment": seg.to_dict()})
+
+
+@settings_bp.route("/customization/segments/delete", methods=["POST"])
+@admin_required
+def delete_segment():
+    from app.models import db, SegmentCode
+    data = request.get_json(silent=True) or {}
+    seg = SegmentCode.query.get(data.get("id"))
+    if not seg:
+        return jsonify({"success": False, "error": "Segment not found"})
+    if seg.is_default:
+        return jsonify({"success": False, "error": "Cannot delete a default segment code"})
+    db.session.delete(seg)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# ── Shift Templates CRUD ─────────────────────────────────────
+
+@settings_bp.route("/customization/shifts/save", methods=["POST"])
+@admin_required
+def save_shift():
+    from app.models import db, ShiftTemplate
+    data = request.get_json(silent=True) or {}
+    shift_id = data.get("id")
+    name = (data.get("name") or "").strip()
+    start_time = (data.get("start_time") or "").strip()
+    end_time = (data.get("end_time") or "").strip()
+    if not name or not start_time or not end_time:
+        return jsonify({"success": False, "error": "Name, start time, and end time are required"})
+
+    segments_json = json.dumps(data.get("segments", []))
+
+    if shift_id:
+        shift = ShiftTemplate.query.get(shift_id)
+        if not shift:
+            return jsonify({"success": False, "error": "Shift template not found"})
+        shift.name = name
+        shift.start_time = start_time
+        shift.end_time = end_time
+        shift.hours = float(data.get("hours", shift.hours))
+        shift.shift_type = data.get("shift_type", shift.shift_type)
+        shift.segments_json = segments_json
+        shift.sort_order = int(data.get("sort_order", shift.sort_order))
+    else:
+        shift = ShiftTemplate(
+            name=name, start_time=start_time, end_time=end_time,
+            hours=float(data.get("hours", 8.0)),
+            shift_type=data.get("shift_type", "full"),
+            segments_json=segments_json,
+            sort_order=int(data.get("sort_order", 0)),
+        )
+        db.session.add(shift)
+    db.session.commit()
+    return jsonify({"success": True, "shift": shift.to_dict()})
+
+
+@settings_bp.route("/customization/shifts/delete", methods=["POST"])
+@admin_required
+def delete_shift():
+    from app.models import db, ShiftTemplate
+    data = request.get_json(silent=True) or {}
+    shift = ShiftTemplate.query.get(data.get("id"))
+    if not shift:
+        return jsonify({"success": False, "error": "Shift template not found"})
+    db.session.delete(shift)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# ── Rotation Patterns CRUD ───────────────────────────────────
+
+@settings_bp.route("/customization/rotations/save", methods=["POST"])
+@admin_required
+def save_rotation():
+    from app.models import db, RotationPattern
+    data = request.get_json(silent=True) or {}
+    rot_id = data.get("id")
+    name = (data.get("name") or "").strip()
+    weeks = data.get("weeks", [])
+    if not name:
+        return jsonify({"success": False, "error": "Rotation name is required"})
+    if not weeks or len(weeks) < 1:
+        return jsonify({"success": False, "error": "At least one week is required"})
+
+    if rot_id:
+        rot = RotationPattern.query.get(rot_id)
+        if not rot:
+            return jsonify({"success": False, "error": "Rotation pattern not found"})
+        rot.name = name
+        rot.weeks_json = json.dumps(weeks)
+        rot.cycle_weeks = len(weeks)
+    else:
+        rot = RotationPattern(
+            name=name,
+            weeks_json=json.dumps(weeks),
+            cycle_weeks=len(weeks),
+        )
+        db.session.add(rot)
+    db.session.commit()
+    return jsonify({"success": True, "rotation": rot.to_dict()})
+
+
+@settings_bp.route("/customization/rotations/delete", methods=["POST"])
+@admin_required
+def delete_rotation():
+    from app.models import db, RotationPattern
+    data = request.get_json(silent=True) or {}
+    rot = RotationPattern.query.get(data.get("id"))
+    if not rot:
+        return jsonify({"success": False, "error": "Rotation pattern not found"})
+    db.session.delete(rot)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# ── LOB Settings CRUD ────────────────────────────────────────
+
+@settings_bp.route("/customization/lob-settings/save", methods=["POST"])
+@admin_required
+def save_lob_setting():
+    from app.models import db, LOBSetting
+    data = request.get_json(silent=True) or {}
+    setting_id = data.get("id")
+    pu_id = data.get("planning_unit_id")
+
+    if setting_id:
+        setting = LOBSetting.query.get(setting_id)
+        if not setting:
+            return jsonify({"success": False, "error": "LOB setting not found"})
+    else:
+        if not pu_id:
+            return jsonify({"success": False, "error": "Planning unit is required"})
+        existing = LOBSetting.query.filter_by(planning_unit_id=pu_id).first()
+        if existing:
+            setting = existing
+        else:
+            setting = LOBSetting(planning_unit_id=pu_id)
+            db.session.add(setting)
+
+    # Update fields
+    for field in ["service_level_target", "target_asa", "shrinkage_pct",
+                  "occupancy_target", "max_occupancy", "default_shift_hrs"]:
+        if field in data:
+            setattr(setting, field, float(data[field]))
+    if "interval_minutes" in data:
+        setting.interval_minutes = int(data["interval_minutes"])
+    for field in ["operating_start", "operating_end"]:
+        if field in data:
+            setattr(setting, field, data[field])
+
+    db.session.commit()
+    return jsonify({"success": True, "setting": setting.to_dict()})
+
+
+@settings_bp.route("/customization/lob-settings/delete", methods=["POST"])
+@admin_required
+def delete_lob_setting():
+    from app.models import db, LOBSetting
+    data = request.get_json(silent=True) or {}
+    setting = LOBSetting.query.get(data.get("id"))
+    if not setting:
+        return jsonify({"success": False, "error": "LOB setting not found"})
+    db.session.delete(setting)
+    db.session.commit()
+    return jsonify({"success": True})
