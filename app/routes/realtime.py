@@ -29,9 +29,13 @@ def _get_sheet():
 @login_required
 def index():
     user = get_current_user()
-    from app.realtime.engine import get_available_lobs
-    sheet = _get_sheet()
-    lobs = get_available_lobs(sheet)
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_LOBS
+        lobs = list(DEMO_LOBS)
+    else:
+        from app.realtime.engine import get_available_lobs
+        sheet = _get_sheet()
+        lobs = get_available_lobs(sheet)
     return render_template("realtime/index.html", user=user, lobs=lobs)
 
 
@@ -55,9 +59,14 @@ def snapshot():
 
         date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                     if date_str else datetime.date.today())
-        sheet = _get_sheet()
 
-        result = get_intraday_snapshot(lob, date_obj, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_realtime_snapshot
+            result = get_demo_realtime_snapshot(lob, date_obj)
+        else:
+            sheet = _get_sheet()
+            result = get_intraday_snapshot(lob, date_obj, sheet)
         result["success"] = True
         return jsonify(result)
 
@@ -86,9 +95,14 @@ def adherence():
 
         date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                     if date_str else datetime.date.today())
-        sheet = _get_sheet()
 
-        result = get_adherence_snapshot(lob, date_obj, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_adherence
+            result = get_demo_adherence(lob, date_obj)
+        else:
+            sheet = _get_sheet()
+            result = get_adherence_snapshot(lob, date_obj, sheet)
         result["success"] = True
         return jsonify(result)
 
@@ -117,9 +131,14 @@ def service_level():
 
         date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                     if date_str else datetime.date.today())
-        sheet = _get_sheet()
 
-        result = get_service_level_intraday(lob, date_obj, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_service_level
+            result = get_demo_service_level(lob, date_obj)
+        else:
+            sheet = _get_sheet()
+            result = get_service_level_intraday(lob, date_obj, sheet)
         return jsonify({"success": True, "intervals": result})
 
     except Exception as e:

@@ -98,8 +98,55 @@ def generate():
         if (end_date - start_date).days > 366:
             return jsonify({"success": False, "error": "Date range cannot exceed one year"})
 
-        sheet = _get_sheet()
-        result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_schedules, get_demo_requirements, DEMO_LOBS, DEMO_EMPLOYEES
+            # Build set of employee IDs for the requested LOB
+            lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            days = []
+            d = start_date
+            total_shifts = 0
+            total_hours = 0.0
+            while d <= end_date:
+                day_scheds = get_demo_schedules(d)
+                lob_scheds = [s for s in day_scheds if s["employee_id"] in lob_emp_ids]
+                shifts_out = [s for s in lob_scheds if s["status"] == "scheduled"]
+                reqs, _ = get_demo_requirements(lob, d)
+                coverage = []
+                for r in reqs:
+                    coverage.append({
+                        "time": r["time"],
+                        "required": r["agents_required"],
+                        "scheduled": len(shifts_out),
+                        "delta": len(shifts_out) - r["agents_required"],
+                    })
+                day_hours = sum(s.get("hours", 0) for s in shifts_out)
+                total_shifts += len(shifts_out)
+                total_hours += day_hours
+                days.append({
+                    "date": d.isoformat(),
+                    "shifts": shifts_out,
+                    "unassigned": [],
+                    "coverage": coverage,
+                    "summary": {
+                        "shifts": len(shifts_out),
+                        "hours": day_hours,
+                        "avg_coverage": round(len(shifts_out) / max(1, sum(r["agents_required"] for r in reqs) / max(1, len(reqs))), 2) if reqs else 0,
+                    },
+                    "warnings": [],
+                })
+                d += datetime.timedelta(days=1)
+            result = {
+                "days": days,
+                "totals": {
+                    "total_shifts": total_shifts,
+                    "total_hours": total_hours,
+                    "total_days": len(days),
+                },
+            }
+        else:
+            sheet = _get_sheet()
+            result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet)
         result["success"] = True
         return jsonify(result)
 
@@ -128,9 +175,35 @@ def coverage():
             return jsonify({"success": False, "error": "LOB and date are required"})
 
         date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        sheet = _get_sheet()
-        cov = analyze_coverage(lob, date_obj, shifts, sheet)
-        summary = coverage_summary(cov)
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_requirements
+            reqs, _ = get_demo_requirements(lob, date_obj)
+            cov = []
+            for r in reqs:
+                # Count how many shifts cover this interval
+                scheduled = 0
+                for s in shifts:
+                    if s.get("start") and s.get("end") and s["start"] <= r["time"] < s["end"]:
+                        scheduled += 1
+                cov.append({
+                    "time": r["time"],
+                    "required": r["agents_required"],
+                    "scheduled": scheduled,
+                    "delta": scheduled - r["agents_required"],
+                })
+            total_req = sum(c["required"] for c in cov)
+            total_sched = sum(c["scheduled"] for c in cov)
+            summary = {
+                "avg_required": round(total_req / max(1, len(cov)), 1),
+                "avg_scheduled": round(total_sched / max(1, len(cov)), 1),
+                "coverage_pct": round(total_sched / max(1, total_req) * 100, 1),
+            }
+        else:
+            sheet = _get_sheet()
+            cov = analyze_coverage(lob, date_obj, shifts, sheet)
+            summary = coverage_summary(cov)
 
         return jsonify({
             "success": True,
@@ -250,6 +323,18 @@ def load_schedule():
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_schedules, DEMO_EMPLOYEES
+            lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            shifts = []
+            d = start_date
+            while d <= end_date:
+                day_scheds = get_demo_schedules(d)
+                shifts.extend([s for s in day_scheds if s["employee_id"] in lob_emp_ids])
+                d += datetime.timedelta(days=1)
+            return jsonify({"success": True, "shifts": shifts})
 
         from app.models import PlanningUnit
         pu = PlanningUnit.query.filter(

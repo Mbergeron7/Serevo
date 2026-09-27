@@ -17,6 +17,27 @@
   <h1>Welcome back, {{ current_user.name.split(' ')[0] if current_user else '' }}</h1>
   <p class="subtitle">{{ brand_name }} dashboard — more modules coming soon.</p>
 
+  {% if demo_stats %}
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+    <div class="card" style="flex:1; min-width:140px; text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.total_employees }}</div>
+      <div style="font-size:.8rem; color:var(--text-muted);">Employees</div>
+    </div>
+    <div class="card" style="flex:1; min-width:140px; text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.on_today }}</div>
+      <div style="font-size:.8rem; color:var(--text-muted);">Scheduled Today</div>
+    </div>
+    <div class="card" style="flex:1; min-width:140px; text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.planning_units }}</div>
+      <div style="font-size:.8rem; color:var(--text-muted);">LOBs</div>
+    </div>
+    <div class="card" style="flex:1; min-width:140px; text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.pto_today }}</div>
+      <div style="font-size:.8rem; color:var(--text-muted);">On PTO Today</div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card-grid">
     <a href="/forecasting" class="card" style="text-decoration:none; color:inherit;">
       <h3>Forecasting</h3>

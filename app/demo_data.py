@@ -255,6 +255,110 @@ def get_demo_dashboard_stats():
     }
 
 
+# ── Real-Time monitoring demo data ──────────────────────────
+
+def get_demo_realtime_snapshot(lob, date_obj):
+    """Return a realistic intraday snapshot for a LOB."""
+    intervals = _generate_intervals(lob, date_obj)
+    now = datetime.datetime.now()
+    current_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+
+    snapshot_intervals = []
+    for iv in intervals:
+        is_past = iv["time"] <= current_interval
+        staffed = iv["agents_required"] + random.randint(-1, 2) if is_past else 0
+        calls_offered = iv["offered"] if is_past else 0
+        calls_handled = int(calls_offered * random.uniform(0.92, 0.99)) if is_past else 0
+        aht_actual = iv["aht"] * random.uniform(0.9, 1.1) if is_past else 0
+
+        snapshot_intervals.append({
+            "time": iv["time"],
+            "forecast_volume": iv["offered"],
+            "actual_volume": calls_offered,
+            "forecast_aht": iv["aht"],
+            "actual_aht": round(aht_actual, 1),
+            "required": iv["agents_required"],
+            "staffed": max(0, staffed),
+            "calls_handled": calls_handled,
+            "service_level": round(random.uniform(0.78, 0.95), 2) if is_past else None,
+            "is_current": iv["time"] == current_interval,
+        })
+
+    alerts = []
+    for iv in snapshot_intervals:
+        if iv["staffed"] > 0 and iv["staffed"] < iv["required"] - 1:
+            alerts.append({
+                "time": iv["time"],
+                "type": "understaffed",
+                "message": f"Understaffed at {iv['time']}: {iv['staffed']} vs {iv['required']} required",
+            })
+
+    return {
+        "lob": lob,
+        "date": date_obj.isoformat(),
+        "intervals": snapshot_intervals,
+        "alerts": alerts,
+        "summary": {
+            "total_offered": sum(iv["actual_volume"] for iv in snapshot_intervals),
+            "total_handled": sum(iv["calls_handled"] for iv in snapshot_intervals),
+            "avg_service_level": round(
+                sum(iv["service_level"] for iv in snapshot_intervals if iv["service_level"]) /
+                max(1, sum(1 for iv in snapshot_intervals if iv["service_level"])), 2),
+            "current_staffed": next((iv["staffed"] for iv in snapshot_intervals if iv["is_current"]), 0),
+            "current_required": next((iv["required"] for iv in snapshot_intervals if iv["is_current"]), 0),
+        },
+    }
+
+
+def get_demo_adherence(lob, date_obj):
+    """Return per-agent adherence data for a LOB."""
+    rng = random.Random(date_obj.toordinal() + hash(lob))
+    agents = [e for e in DEMO_EMPLOYEES
+              if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
+    result = []
+    for emp in agents:
+        adherence_pct = round(rng.uniform(0.82, 0.99), 2)
+        conformance_pct = round(rng.uniform(0.88, 1.0), 2)
+        result.append({
+            "employee": f"{emp['First Name']} {emp['Last Name']}",
+            "employee_id": emp["Employee ID"],
+            "adherence": adherence_pct,
+            "conformance": conformance_pct,
+            "status": "on-call" if rng.random() > 0.3 else rng.choice(["break", "lunch", "meeting"]),
+            "minutes_out": rng.randint(0, 15),
+        })
+    return {
+        "lob": lob,
+        "date": date_obj.isoformat(),
+        "agents": result,
+        "summary": {
+            "avg_adherence": round(sum(a["adherence"] for a in result) / max(1, len(result)), 2),
+            "avg_conformance": round(sum(a["conformance"] for a in result) / max(1, len(result)), 2),
+            "total_agents": len(result),
+        },
+    }
+
+
+def get_demo_service_level(lob, date_obj):
+    """Return interval-level service level data."""
+    intervals = _generate_intervals(lob, date_obj)
+    now = datetime.datetime.now()
+    current_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+    rng = random.Random(date_obj.toordinal() + hash(lob))
+
+    result = []
+    for iv in intervals:
+        is_past = iv["time"] <= current_interval
+        result.append({
+            "time": iv["time"],
+            "service_level": round(rng.uniform(0.75, 0.96), 2) if is_past else None,
+            "target": 0.80,
+            "offered": iv["offered"] if is_past else 0,
+            "answered_in_target": int(iv["offered"] * rng.uniform(0.78, 0.95)) if is_past else 0,
+        })
+    return result
+
+
 # ── Seed the demo user ──────────────────────────────────────
 
 def seed_demo_user(app):

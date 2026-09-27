@@ -14,4 +14,8 @@ dashboard_bp = Blueprint("dashboard", __name__)
 @login_required
 def index():
     user = get_current_user()
-    return render_template("dashboard.html", user=user)
+    demo_stats = None
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_dashboard_stats
+        demo_stats = get_demo_dashboard_stats()
+    return render_template("dashboard.html", user=user, demo_stats=demo_stats)

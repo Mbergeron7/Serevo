@@ -132,6 +132,12 @@ def panel():
 @capacity_bp.route("/test_connection")
 @login_required
 def test_connection():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({
+            "legacy": {"ok": True, "status": 200},
+            "new_api": {"ok": True, "status": 200},
+        })
     try:
         result = cp.test_connection()
         return jsonify(result)
@@ -143,6 +149,12 @@ def test_connection():
 @capacity_bp.route("/refresh", methods=["POST"])
 @login_required
 def refresh():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({"success": True, "rows_written": 0,
+                        "message": "Demo mode — data is pre-loaded",
+                        "skipped": 0, "duration": "0s"})
+
     try:
         payload = request.get_json(silent=True) or {}
         pull_type = payload.get("type", "forecast")
@@ -257,17 +269,43 @@ def plan_view():
         occupancy = float(request.args.get("occupancy", 85)) / 100.0
         answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
 
-        sheet = _get_sheet()
-        fc_ws = _get_worksheet(sheet, "FORECAST RAW")
-        rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
-        em_ws = _get_worksheet(sheet, "EMPLOYEES")
+        if user and user.get("is_demo"):
+            from app.demo_data import DEMO_LOBS, get_demo_forecast, get_demo_requirements, DEMO_EMPLOYEES
+            import calendar
+            plan = []
+            for month_num in range(1, 13):
+                month_name = calendar.month_name[month_num]
+                # Sample one day per month for averages
+                sample_day = date(year, month_num, 15)
+                month_data = {"month": month_name, "lobs": []}
+                for lob_name in DEMO_LOBS:
+                    fc, _ = get_demo_forecast(lob_name, sample_day)
+                    rq, _ = get_demo_requirements(lob_name, sample_day)
+                    avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
+                    avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
+                    emp_count = sum(1 for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob_name)
+                    fte_req = round(avg_req / (1 - shrinkage), 1)
+                    month_data["lobs"].append({
+                        "name": lob_name,
+                        "avg_volume": round(avg_vol, 0),
+                        "avg_required": round(avg_req, 1),
+                        "fte_required": fte_req,
+                        "current_headcount": emp_count,
+                        "gap": round(emp_count - fte_req, 1),
+                    })
+                plan.append(month_data)
+        else:
+            sheet = _get_sheet()
+            fc_ws = _get_worksheet(sheet, "FORECAST RAW")
+            rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
+            em_ws = _get_worksheet(sheet, "EMPLOYEES")
 
-        plan = []
-        if fc_ws or rq_ws:
-            plan = cp.compute_capacity_plan(
-                fc_ws, rq_ws, em_ws, year,
-                shrinkage=shrinkage, occupancy=occupancy,
-                answer_rate=answer_rate)
+            plan = []
+            if fc_ws or rq_ws:
+                plan = cp.compute_capacity_plan(
+                    fc_ws, rq_ws, em_ws, year,
+                    shrinkage=shrinkage, occupancy=occupancy,
+                    answer_rate=answer_rate)
 
         now_str = now.strftime("%Y-%m-%d %H:%M")
         return render_template("capacity/plan.html",
