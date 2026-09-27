@@ -11,82 +11,126 @@
 {% block content %}
 <div class="page-header">
   <h1>Customization</h1>
-  <p style="color:var(--text-muted,#6b7280);margin:0.25rem 0 0;">Configure segment codes, shift templates, rotation patterns, and LOB-level defaults.</p>
+  <p style="color:var(--text-muted,#6b7280);margin:0.25rem 0 0;">Configure every aspect of how your WFM platform works — segment codes, shifts, rules, holidays, branding, and more.</p>
 </div>
 
 <!-- Tabs -->
-<div class="tab-bar" style="display:flex;gap:0;border-bottom:2px solid var(--border,#e5e7eb);margin-bottom:1.5rem;">
-  <button class="tab-btn active" onclick="switchTab('segments',this)">Segment Codes</button>
-  <button class="tab-btn" onclick="switchTab('shifts',this)">Shift Templates</button>
-  <button class="tab-btn" onclick="switchTab('rotations',this)">Rotation Patterns</button>
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('segments',this)">Segments</button>
+  <button class="tab-btn" onclick="switchTab('shifts',this)">Shifts</button>
+  <button class="tab-btn" onclick="switchTab('rotations',this)">Rotations</button>
   <button class="tab-btn" onclick="switchTab('lob',this)">LOB Settings</button>
+  <button class="tab-btn" onclick="switchTab('timeoff',this)">Time-Off Types</button>
+  <button class="tab-btn" onclick="switchTab('overtime',this)">Overtime</button>
+  <button class="tab-btn" onclick="switchTab('schedrules',this)">Schedule Rules</button>
+  <button class="tab-btn" onclick="switchTab('holidays',this)">Holidays</button>
+  <button class="tab-btn" onclick="switchTab('skills',this)">Skill Groups</button>
+  <button class="tab-btn" onclick="switchTab('adherence',this)">Adherence Codes</button>
+  <button class="tab-btn" onclick="switchTab('alerts',this)">Alerts</button>
+  <button class="tab-btn" onclick="switchTab('branding',this)">Branding</button>
 </div>
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- TAB: Segment Codes                              -->
-<!-- ═══════════════════════════════════════════════ -->
+<!-- ═══════ TAB: Segment Codes ═══════ -->
 <div class="tab-panel" id="tab-segments">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-    <h2 style="margin:0;">Segment Codes</h2>
-    <button class="btn btn-primary" onclick="openSegmentModal()">+ Add Code</button>
-  </div>
-  <p style="color:var(--text-muted,#6b7280);margin-bottom:1rem;">Activity codes used in scheduling — on-call, break, lunch, training, etc. Clients can customize labels and colors.</p>
-
-  <table class="data-table" id="segments-table">
-    <thead>
-      <tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Order</th><th></th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div class="tab-header"><h2>Segment Codes</h2><button class="btn btn-primary" onclick="openSegmentModal()">+ Add Code</button></div>
+  <p class="tab-desc">Activity codes used in scheduling — on-call, break, lunch, training, etc.</p>
+  <table class="data-table" id="segments-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Order</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- TAB: Shift Templates                            -->
-<!-- ═══════════════════════════════════════════════ -->
+<!-- ═══════ TAB: Shift Templates ═══════ -->
 <div class="tab-panel" id="tab-shifts" hidden>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-    <h2 style="margin:0;">Shift Templates</h2>
-    <button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button>
-  </div>
-  <p style="color:var(--text-muted,#6b7280);margin-bottom:1rem;">Reusable shift definitions with start/end times and embedded segment structure (breaks, lunch, etc.).</p>
-
-  <table class="data-table" id="shifts-table">
-    <thead>
-      <tr><th>Name</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Segments</th><th></th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div class="tab-header"><h2>Shift Templates</h2><button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button></div>
+  <p class="tab-desc">Reusable shift definitions with start/end times and embedded break structure.</p>
+  <table class="data-table" id="shifts-table"><thead><tr><th>Name</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- TAB: Rotation Patterns                          -->
-<!-- ═══════════════════════════════════════════════ -->
+<!-- ═══════ TAB: Rotation Patterns ═══════ -->
 <div class="tab-panel" id="tab-rotations" hidden>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-    <h2 style="margin:0;">Rotation Patterns</h2>
-    <button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button>
-  </div>
-  <p style="color:var(--text-muted,#6b7280);margin-bottom:1rem;">Multi-week rotation cycles — e.g. Week 1: day shift, Week 2: closing shift, Week 3: weekend coverage.</p>
-
+  <div class="tab-header"><h2>Rotation Patterns</h2><button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button></div>
+  <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend.</p>
   <div id="rotations-list"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- TAB: LOB Settings                               -->
-<!-- ═══════════════════════════════════════════════ -->
+<!-- ═══════ TAB: LOB Settings ═══════ -->
 <div class="tab-panel" id="tab-lob" hidden>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-    <h2 style="margin:0;">LOB Settings</h2>
-    <button class="btn btn-primary" onclick="openLOBModal()">+ Add LOB Setting</button>
-  </div>
-  <p style="color:var(--text-muted,#6b7280);margin-bottom:1rem;">Per-LOB operational defaults — SLA targets, shrinkage, occupancy, interval length, and operating hours.</p>
+  <div class="tab-header"><h2>LOB Settings</h2><button class="btn btn-primary" onclick="openLOBModal()">+ Add LOB Setting</button></div>
+  <p class="tab-desc">Per-LOB operational defaults — SLA, shrinkage, occupancy, interval, hours of operation.</p>
+  <table class="data-table" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table>
+</div>
 
-  <table class="data-table" id="lob-table">
-    <thead>
-      <tr><th>LOB</th><th>SL Target</th><th>ASA (s)</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<!-- ═══════ TAB: Time-Off Types ═══════ -->
+<div class="tab-panel" id="tab-timeoff" hidden>
+  <div class="tab-header"><h2>Time-Off Types</h2><button class="btn btn-primary" onclick="openTimeOffModal()">+ Add Type</button></div>
+  <p class="tab-desc">Configurable PTO categories — vacation, sick, personal, FMLA, bereavement, etc.</p>
+  <table class="data-table" id="timeoff-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Paid</th><th>Approval</th><th>Max Days/Yr</th><th>Notice (days)</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Overtime Rules ═══════ -->
+<div class="tab-panel" id="tab-overtime" hidden>
+  <div class="tab-header"><h2>Overtime Rules</h2><button class="btn btn-primary" onclick="openOTModal()">+ Add Rule</button></div>
+  <p class="tab-desc">Overtime policies — max hours, approval requirements, eligibility, and pay multipliers.</p>
+  <table class="data-table" id="ot-table"><thead><tr><th>Name</th><th>Type</th><th>Max/Week</th><th>Max/Day</th><th>Approval</th><th>Pay Rate</th><th>Eligible After</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Schedule Rules ═══════ -->
+<div class="tab-panel" id="tab-schedrules" hidden>
+  <div class="tab-header"><h2>Schedule Rules</h2><button class="btn btn-primary" onclick="openSchedRuleModal()">+ Add Rule</button></div>
+  <p class="tab-desc">Scheduling constraints — min/max hours, consecutive days, rest periods, split shift limits.</p>
+  <table class="data-table" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Holidays ═══════ -->
+<div class="tab-panel" id="tab-holidays" hidden>
+  <div class="tab-header"><h2>Holiday Calendar ({{ current_year }})</h2><button class="btn btn-primary" onclick="openHolidayModal()">+ Add Holiday</button></div>
+  <p class="tab-desc">Company holidays that affect scheduling and forecast volume adjustments.</p>
+  <table class="data-table" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Skill Groups ═══════ -->
+<div class="tab-panel" id="tab-skills" hidden>
+  <div class="tab-header"><h2>Skill Groups</h2><button class="btn btn-primary" onclick="openSkillGroupModal()">+ Add Group</button></div>
+  <p class="tab-desc">Organize employees by skill proficiency for multi-skill routing and scheduling.</p>
+  <div id="skills-list"></div>
+</div>
+
+<!-- ═══════ TAB: Adherence Exception Codes ═══════ -->
+<div class="tab-panel" id="tab-adherence" hidden>
+  <div class="tab-header"><h2>Adherence Exception Codes</h2><button class="btn btn-primary" onclick="openAdherenceModal()">+ Add Code</button></div>
+  <p class="tab-desc">Exception reasons for adherence deviations — late arrival, early departure, approved absence, etc.</p>
+  <table class="data-table" id="adherence-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Category</th><th>Excused</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Alert Configuration ═══════ -->
+<div class="tab-panel" id="tab-alerts" hidden>
+  <div class="tab-header"><h2>Alert Configuration</h2><button class="btn btn-primary" onclick="openAlertModal()">+ Add Alert</button></div>
+  <p class="tab-desc">Set up threshold-based alerts for service level, staffing, adherence, and forecast variance.</p>
+  <table class="data-table" id="alerts-table"><thead><tr><th>Name</th><th>Type</th><th>Threshold</th><th>LOB</th><th>In-App</th><th>Email</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: Branding ═══════ -->
+<div class="tab-panel" id="tab-branding" hidden>
+  <div class="tab-header"><h2>Branding & White-Label</h2></div>
+  <p class="tab-desc">Customize how the platform looks for your client — company name, colors, logo, and footer.</p>
+  <form onsubmit="saveBranding(event)" style="max-width:560px;">
+    <div class="form-row">
+      <label>Company Name <input type="text" id="brand-name" placeholder="Your Client's Company"></label>
+    </div>
+    <div class="form-row">
+      <label>Tagline <input type="text" id="brand-tagline" placeholder="Workforce solutions that work"></label>
+    </div>
+    <div class="form-row">
+      <label>Accent Color <input type="color" id="brand-accent" value="#2563eb" style="height:36px;"></label>
+      <label>Contact Email <input type="email" id="brand-email" placeholder="support@client.com"></label>
+    </div>
+    <div class="form-row">
+      <label>Logo URL <input type="text" id="brand-logo" placeholder="https://..."></label>
+    </div>
+    <div class="form-row">
+      <label>Footer Text <input type="text" id="brand-footer" placeholder="© 2026 Company Name"></label>
+    </div>
+    <button type="submit" class="btn btn-primary">Save Branding</button>
+    <span id="brand-saved" style="color:var(--success,#22c55e);margin-left:1rem;display:none;">Saved!</span>
+  </form>
 </div>
 
 
@@ -100,22 +144,10 @@
     <h3 id="segment-modal-title">Add Segment Code</h3>
     <form onsubmit="saveSegment(event)">
       <input type="hidden" id="seg-id">
-      <div class="form-row">
-        <label>Code <input type="text" id="seg-code" required placeholder="e.g. lunch"></label>
-        <label>Label <input type="text" id="seg-label" required placeholder="e.g. Lunch Break"></label>
-      </div>
-      <div class="form-row">
-        <label>Color <input type="color" id="seg-color" value="#6b7280" style="height:36px;"></label>
-        <label>Sort Order <input type="number" id="seg-order" value="0" min="0"></label>
-      </div>
-      <div class="form-row" style="gap:1.5rem;">
-        <label><input type="checkbox" id="seg-productive" checked> Productive</label>
-        <label><input type="checkbox" id="seg-paid" checked> Paid</label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('segment-modal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
+      <div class="form-row"><label>Code <input type="text" id="seg-code" required placeholder="e.g. lunch"></label><label>Label <input type="text" id="seg-label" required placeholder="e.g. Lunch Break"></label></div>
+      <div class="form-row"><label>Color <input type="color" id="seg-color" value="#6b7280" style="height:36px;"></label><label>Sort Order <input type="number" id="seg-order" value="0" min="0"></label></div>
+      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="seg-productive" checked> Productive</label><label><input type="checkbox" id="seg-paid" checked> Paid</label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('segment-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>
   </div>
 </div>
@@ -126,33 +158,11 @@
     <h3 id="shift-modal-title">Add Shift Template</h3>
     <form onsubmit="saveShift(event)">
       <input type="hidden" id="shift-id">
-      <div class="form-row">
-        <label>Name <input type="text" id="shift-name" required placeholder="e.g. Standard 8hr Day"></label>
-      </div>
-      <div class="form-row">
-        <label>Start Time <input type="time" id="shift-start" required></label>
-        <label>End Time <input type="time" id="shift-end" required></label>
-        <label>Hours <input type="number" id="shift-hours" value="8" step="0.5" min="1" max="16"></label>
-      </div>
-      <div class="form-row">
-        <label>Shift Type
-          <select id="shift-type">
-            <option value="full">Full</option>
-            <option value="half">Half</option>
-            <option value="split">Split</option>
-          </select>
-        </label>
-        <label>Sort Order <input type="number" id="shift-sort" value="0" min="0"></label>
-      </div>
-      <div style="margin-top:0.75rem;">
-        <label style="font-weight:600;">Segments (break structure)</label>
-        <div id="shift-segments-list" style="margin:0.5rem 0;"></div>
-        <button type="button" class="btn btn-sm" onclick="addShiftSegment()">+ Add Segment</button>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('shift-modal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
+      <div class="form-row"><label>Name <input type="text" id="shift-name" required placeholder="e.g. Standard 8hr Day"></label></div>
+      <div class="form-row"><label>Start <input type="time" id="shift-start" required></label><label>End <input type="time" id="shift-end" required></label><label>Hours <input type="number" id="shift-hours" value="8" step="0.5" min="1" max="16"></label></div>
+      <div class="form-row"><label>Type <select id="shift-type"><option value="full">Full</option><option value="half">Half</option><option value="split">Split</option></select></label><label>Order <input type="number" id="shift-sort" value="0" min="0"></label></div>
+      <div style="margin-top:0.75rem;"><label style="font-weight:600;">Segments (break structure)</label><div id="shift-segments-list" style="margin:0.5rem 0;"></div><button type="button" class="btn btn-sm" onclick="addShiftSegment()">+ Add Segment</button></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('shift-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>
   </div>
 </div>
@@ -163,15 +173,10 @@
     <h3 id="rotation-modal-title">Add Rotation Pattern</h3>
     <form onsubmit="saveRotation(event)">
       <input type="hidden" id="rot-id">
-      <div class="form-row">
-        <label>Pattern Name <input type="text" id="rot-name" required placeholder="e.g. 3-Week Day/Close/Weekend"></label>
-      </div>
+      <div class="form-row"><label>Pattern Name <input type="text" id="rot-name" required placeholder="e.g. 3-Week Day/Close/Weekend"></label></div>
       <div id="rot-weeks-list" style="margin:0.75rem 0;"></div>
       <button type="button" class="btn btn-sm" onclick="addRotationWeek()">+ Add Week</button>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('rotation-modal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('rotation-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>
   </div>
 </div>
@@ -182,44 +187,127 @@
     <h3 id="lob-modal-title">Add LOB Setting</h3>
     <form onsubmit="saveLOBSetting(event)">
       <input type="hidden" id="lob-id">
+      <div class="form-row"><label>LOB <select id="lob-pu-id" required><option value="">— Select —</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label></div>
+      <div class="form-row"><label>SL Target (%) <input type="number" id="lob-sl" value="80" min="0" max="100"></label><label>ASA (sec) <input type="number" id="lob-asa" value="30" min="0"></label></div>
+      <div class="form-row"><label>Interval <select id="lob-interval"><option value="15">15 min</option><option value="30" selected>30 min</option></select></label><label>Shrinkage (%) <input type="number" id="lob-shrinkage" value="30" min="0" max="100"></label></div>
+      <div class="form-row"><label>Occupancy (%) <input type="number" id="lob-occ" value="85" min="0" max="100"></label><label>Max Occ (%) <input type="number" id="lob-max-occ" value="92" min="0" max="100"></label></div>
+      <div class="form-row"><label>Shift Hrs <input type="number" id="lob-shift-hrs" value="8" step="0.5"></label></div>
+      <div class="form-row"><label>Op Start <input type="time" id="lob-op-start" value="08:00"></label><label>Op End <input type="time" id="lob-op-end" value="22:00"></label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('lob-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Time-Off Type Modal -->
+<div class="modal-overlay" id="timeoff-modal" hidden>
+  <div class="modal" style="max-width:520px;">
+    <h3 id="timeoff-modal-title">Add Time-Off Type</h3>
+    <form onsubmit="saveTimeOff(event)">
+      <input type="hidden" id="to-id">
+      <div class="form-row"><label>Code <input type="text" id="to-code" required placeholder="e.g. vacation"></label><label>Label <input type="text" id="to-label" required placeholder="e.g. Vacation"></label></div>
+      <div class="form-row"><label>Color <input type="color" id="to-color" value="#3b82f6" style="height:36px;"></label><label>Order <input type="number" id="to-order" value="0" min="0"></label></div>
+      <div class="form-row"><label>Max Days/Year <input type="number" id="to-maxdays" placeholder="Unlimited" min="0"></label><label>Min Notice (days) <input type="number" id="to-notice" value="0" min="0"></label></div>
+      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="to-paid" checked> Paid</label><label><input type="checkbox" id="to-approval" checked> Requires Approval</label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('timeoff-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Overtime Rule Modal -->
+<div class="modal-overlay" id="ot-modal" hidden>
+  <div class="modal" style="max-width:520px;">
+    <h3 id="ot-modal-title">Add Overtime Rule</h3>
+    <form onsubmit="saveOTRule(event)">
+      <input type="hidden" id="ot-id">
+      <div class="form-row"><label>Name <input type="text" id="ot-name" required placeholder="e.g. Standard OT Policy"></label></div>
+      <div class="form-row"><label>Type <select id="ot-type"><option value="voluntary">Voluntary</option><option value="mandatory">Mandatory</option><option value="restricted">Restricted</option></select></label><label>Pay Multiplier <input type="number" id="ot-pay" value="1.5" step="0.25" min="1"></label></div>
+      <div class="form-row"><label>Max OT/Week (hrs) <input type="number" id="ot-maxweek" value="10" step="0.5"></label><label>Max OT/Day (hrs) <input type="number" id="ot-maxday" value="4" step="0.5"></label></div>
+      <div class="form-row"><label>Notice (hrs) <input type="number" id="ot-notice" value="24" min="0"></label><label>Eligible After (days) <input type="number" id="ot-eligible" value="90" min="0"></label></div>
+      <div class="form-row"><label><input type="checkbox" id="ot-approval" checked> Requires Approval</label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('ot-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Schedule Rule Modal -->
+<div class="modal-overlay" id="schedrule-modal" hidden>
+  <div class="modal" style="max-width:560px;">
+    <h3 id="schedrule-modal-title">Add Schedule Rule</h3>
+    <form onsubmit="saveSchedRule(event)">
+      <input type="hidden" id="sr-id">
+      <div class="form-row"><label>Rule Name <input type="text" id="sr-name" required placeholder="e.g. Standard Full-Time"></label></div>
+      <div class="form-row"><label>Min Hrs/Week <input type="number" id="sr-minwk" value="20" step="0.5"></label><label>Max Hrs/Week <input type="number" id="sr-maxwk" value="40" step="0.5"></label><label>Max Hrs/Day <input type="number" id="sr-maxday" value="10" step="0.5"></label></div>
+      <div class="form-row"><label>Max Consecutive Days <input type="number" id="sr-consec" value="6" min="1"></label><label>Min Rest Between Shifts (hrs) <input type="number" id="sr-rest" value="10" step="0.5"></label></div>
+      <div class="form-row"><label>Min Days Off/Week <input type="number" id="sr-daysoff" value="1" min="0"></label><label>Max Splits/Week <input type="number" id="sr-splits" value="0" min="0"></label></div>
+      <div class="form-row"><label><input type="checkbox" id="sr-b2b"> Allow Close-then-Open (back-to-back)</label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('schedrule-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Holiday Modal -->
+<div class="modal-overlay" id="holiday-modal" hidden>
+  <div class="modal" style="max-width:520px;">
+    <h3 id="holiday-modal-title">Add Holiday</h3>
+    <form onsubmit="saveHoliday(event)">
+      <input type="hidden" id="hol-id">
+      <div class="form-row"><label>Holiday Name <input type="text" id="hol-name" required placeholder="e.g. Christmas Day"></label></div>
+      <div class="form-row"><label>Date <input type="date" id="hol-date" required></label></div>
+      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="hol-fullday" checked> Full Day</label><label><input type="checkbox" id="hol-paid" checked> Paid</label><label><input type="checkbox" id="hol-recurring" checked> Recurring</label></div>
+      <div class="form-row"><label><input type="checkbox" id="hol-forecast" checked> Affects Forecast</label><label>Volume Factor <input type="number" id="hol-volume" value="0" step="0.1" min="0" max="2" title="0 = closed, 0.5 = half volume, 1 = normal"></label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('holiday-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Skill Group Modal -->
+<div class="modal-overlay" id="skillgroup-modal" hidden>
+  <div class="modal" style="max-width:480px;">
+    <h3 id="skillgroup-modal-title">Add Skill Group</h3>
+    <form onsubmit="saveSkillGroup(event)">
+      <input type="hidden" id="sg-id">
+      <div class="form-row"><label>Group Name <input type="text" id="sg-name" required placeholder="e.g. Billing & Payments"></label></div>
+      <div class="form-row"><label>Description <input type="text" id="sg-desc" placeholder="Handles billing inquiries and payment processing"></label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('skillgroup-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Adherence Exception Modal -->
+<div class="modal-overlay" id="adherence-modal" hidden>
+  <div class="modal" style="max-width:480px;">
+    <h3 id="adherence-modal-title">Add Adherence Exception</h3>
+    <form onsubmit="saveAdherenceCode(event)">
+      <input type="hidden" id="adh-id">
+      <div class="form-row"><label>Code <input type="text" id="adh-code" required placeholder="e.g. late_arrival"></label><label>Label <input type="text" id="adh-label" required placeholder="e.g. Late Arrival"></label></div>
+      <div class="form-row"><label>Color <input type="color" id="adh-color" value="#ef4444" style="height:36px;"></label><label>Category <select id="adh-category"><option value="late">Late</option><option value="early_out">Early Out</option><option value="absence">Absence</option><option value="break_overrun">Break Overrun</option><option value="other">Other</option></select></label></div>
+      <div class="form-row"><label><input type="checkbox" id="adh-excused"> Excused (doesn't count against adherence)</label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('adherence-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Alert Config Modal -->
+<div class="modal-overlay" id="alert-modal" hidden>
+  <div class="modal" style="max-width:520px;">
+    <h3 id="alert-modal-title">Add Alert</h3>
+    <form onsubmit="saveAlert(event)">
+      <input type="hidden" id="alrt-id">
+      <div class="form-row"><label>Alert Name <input type="text" id="alrt-name" required placeholder="e.g. SL Below 80%"></label></div>
       <div class="form-row">
-        <label>LOB / Planning Unit
-          <select id="lob-pu-id" required>
-            <option value="">— Select —</option>
-            {% for lob in all_lobs %}
-            <option value="{{ lob.id }}">{{ lob.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
+        <label>Alert Type <select id="alrt-type"><option value="sl_breach">Service Level Breach</option><option value="understaffed">Understaffed</option><option value="overstaffed">Overstaffed</option><option value="adherence">Adherence Drop</option><option value="forecast_variance">Forecast Variance</option></select></label>
       </div>
       <div class="form-row">
-        <label>SL Target (%) <input type="number" id="lob-sl" value="80" min="0" max="100" step="1"></label>
-        <label>Target ASA (sec) <input type="number" id="lob-asa" value="30" min="0"></label>
+        <label>Threshold <input type="number" id="alrt-threshold" value="80" step="1"></label>
+        <label>Operator <select id="alrt-op"><option value="lt">Below (&lt;)</option><option value="gt">Above (&gt;)</option><option value="eq">Equals (=)</option></select></label>
       </div>
       <div class="form-row">
-        <label>Interval (min)
-          <select id="lob-interval">
-            <option value="15">15</option>
-            <option value="30" selected>30</option>
-          </select>
-        </label>
-        <label>Shrinkage (%) <input type="number" id="lob-shrinkage" value="30" min="0" max="100" step="1"></label>
+        <label>LOB <select id="alrt-lob"><option value="">All LOBs</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label>
+        <label>Cooldown (min) <input type="number" id="alrt-cooldown" value="30" min="1"></label>
       </div>
-      <div class="form-row">
-        <label>Occupancy Target (%) <input type="number" id="lob-occ" value="85" min="0" max="100" step="1"></label>
-        <label>Max Occupancy (%) <input type="number" id="lob-max-occ" value="92" min="0" max="100" step="1"></label>
-      </div>
-      <div class="form-row">
-        <label>Default Shift Hrs <input type="number" id="lob-shift-hrs" value="8" step="0.5" min="1" max="16"></label>
-      </div>
-      <div class="form-row">
-        <label>Operating Start <input type="time" id="lob-op-start" value="08:00"></label>
-        <label>Operating End <input type="time" id="lob-op-end" value="22:00"></label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeModal('lob-modal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
+      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="alrt-inapp" checked> In-App</label><label><input type="checkbox" id="alrt-email"> Email</label></div>
+      <div class="form-row"><label>Email Recipients <input type="text" id="alrt-emails" placeholder="user@example.com, admin@example.com"></label></div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('alert-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>
   </div>
 </div>
@@ -227,383 +315,250 @@
 
 {% block scripts %}
 <script>
+/* ── Data from server ───────────────────── */
 const SEGMENTS = {{ segments | tojson }};
 const SHIFTS   = {{ shifts | tojson }};
 const ROTATIONS = {{ rotations | tojson }};
 const LOB_SETTINGS = {{ lob_settings | tojson }};
 const ALL_LOBS = {{ all_lobs | tojson }};
+const TIME_OFF_TYPES = {{ time_off_types | tojson }};
+const OT_RULES = {{ ot_rules | tojson }};
+const SCHED_RULES = {{ sched_rules | tojson }};
+const HOLIDAYS = {{ holidays | tojson }};
+const SKILL_GROUPS = {{ skill_groups | tojson }};
+const ADHERENCE_CODES = {{ adherence_codes | tojson }};
+const ALERTS = {{ alerts | tojson }};
+const BRAND_DATA = {{ brand_data | tojson }};
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
-/* ── Tab switching ──────────────────────────── */
+/* ── Utilities ──────────────────────────── */
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).hidden = false;
   btn.classList.add('active');
 }
-
-/* ── Modal helpers ──────────────────────────── */
 function openModal(id) { document.getElementById(id).hidden = false; }
 function closeModal(id) { document.getElementById(id).hidden = true; }
-
 async function api(url, body) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
   return r.json();
 }
+function upsert(arr, item) { const i=arr.findIndex(x=>x.id===item.id); if(i>=0)arr[i]=item; else arr.push(item); }
+function removeById(arr, id) { const i=arr.findIndex(x=>x.id===id); if(i>=0)arr.splice(i,1); }
+const ck = v => v ? '✓' : '—';
 
-/* ═══ SEGMENT CODES ═══════════════════════════ */
+/* ═══ SEGMENT CODES ═══════════════════════ */
 function renderSegments() {
   const tb = document.querySelector('#segments-table tbody');
   tb.innerHTML = SEGMENTS.map(s => `<tr>
-    <td><span style="display:inline-block;width:24px;height:24px;border-radius:4px;background:${s.color};"></span></td>
-    <td><code>${s.code}</code></td>
-    <td>${s.label}</td>
-    <td>${s.is_productive ? '✓' : '—'}</td>
-    <td>${s.is_paid ? '✓' : '—'}</td>
-    <td>${s.sort_order}</td>
-    <td>
-      <button class="btn btn-sm" onclick="editSegment(${s.id})">Edit</button>
-      ${!s.is_default ? `<button class="btn btn-sm btn-danger" onclick="deleteSegment(${s.id})">Delete</button>` : ''}
-    </td>
-  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted,#999);">No segment codes configured. Click "+ Add Code" to create one.</td></tr>';
+    <td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${s.color};"></span></td>
+    <td><code>${s.code}</code></td><td>${s.label}</td><td>${ck(s.is_productive)}</td><td>${ck(s.is_paid)}</td><td>${s.sort_order}</td>
+    <td><button class="btn btn-sm" onclick="editSegment(${s.id})">Edit</button>${!s.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteSegment(${s.id})">Del</button>`:''}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty-msg">No segment codes. Click "+ Add Code".</td></tr>';
 }
-
-function openSegmentModal(seg) {
-  document.getElementById('segment-modal-title').textContent = seg ? 'Edit Segment Code' : 'Add Segment Code';
-  document.getElementById('seg-id').value = seg ? seg.id : '';
-  document.getElementById('seg-code').value = seg ? seg.code : '';
-  document.getElementById('seg-label').value = seg ? seg.label : '';
-  document.getElementById('seg-color').value = seg ? seg.color : '#6b7280';
-  document.getElementById('seg-order').value = seg ? seg.sort_order : 0;
-  document.getElementById('seg-productive').checked = seg ? seg.is_productive : true;
-  document.getElementById('seg-paid').checked = seg ? seg.is_paid : true;
+function openSegmentModal(s) {
+  document.getElementById('segment-modal-title').textContent = s?'Edit Segment Code':'Add Segment Code';
+  document.getElementById('seg-id').value = s?s.id:'';
+  document.getElementById('seg-code').value = s?s.code:'';
+  document.getElementById('seg-label').value = s?s.label:'';
+  document.getElementById('seg-color').value = s?s.color:'#6b7280';
+  document.getElementById('seg-order').value = s?s.sort_order:0;
+  document.getElementById('seg-productive').checked = s?s.is_productive:true;
+  document.getElementById('seg-paid').checked = s?s.is_paid:true;
   openModal('segment-modal');
 }
-
-function editSegment(id) { openSegmentModal(SEGMENTS.find(s => s.id === id)); }
-
+function editSegment(id) { openSegmentModal(SEGMENTS.find(s=>s.id===id)); }
 async function saveSegment(e) {
   e.preventDefault();
-  const body = {
-    id: document.getElementById('seg-id').value || undefined,
-    code: document.getElementById('seg-code').value,
-    label: document.getElementById('seg-label').value,
-    color: document.getElementById('seg-color').value,
-    is_productive: document.getElementById('seg-productive').checked,
-    is_paid: document.getElementById('seg-paid').checked,
-    sort_order: parseInt(document.getElementById('seg-order').value) || 0,
-  };
-  const res = await api('/settings/customization/segments/save', body);
-  if (res.success) {
-    const idx = SEGMENTS.findIndex(s => s.id === res.segment.id);
-    if (idx >= 0) SEGMENTS[idx] = res.segment; else SEGMENTS.push(res.segment);
-    renderSegments();
-    closeModal('segment-modal');
-  } else { alert(res.error); }
+  const res = await api('/settings/customization/segments/save', {id:document.getElementById('seg-id').value||undefined, code:document.getElementById('seg-code').value, label:document.getElementById('seg-label').value, color:document.getElementById('seg-color').value, is_productive:document.getElementById('seg-productive').checked, is_paid:document.getElementById('seg-paid').checked, sort_order:parseInt(document.getElementById('seg-order').value)||0});
+  if(res.success){upsert(SEGMENTS,res.segment);renderSegments();closeModal('segment-modal');}else alert(res.error);
 }
+async function deleteSegment(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/segments/delete',{id});if(res.success){removeById(SEGMENTS,id);renderSegments();}else alert(res.error);}
 
-async function deleteSegment(id) {
-  if (!confirm('Delete this segment code?')) return;
-  const res = await api('/settings/customization/segments/delete', {id});
-  if (res.success) {
-    SEGMENTS.splice(SEGMENTS.findIndex(s => s.id === id), 1);
-    renderSegments();
-  } else { alert(res.error); }
-}
-
-/* ═══ SHIFT TEMPLATES ═════════════════════════ */
+/* ═══ SHIFT TEMPLATES ═════════════════════ */
 function renderShifts() {
   const tb = document.querySelector('#shifts-table tbody');
-  tb.innerHTML = SHIFTS.map(s => `<tr>
-    <td>${s.name}</td>
-    <td>${s.start_time}</td>
-    <td>${s.end_time}</td>
-    <td>${s.hours}</td>
-    <td>${s.shift_type}</td>
-    <td>${(s.segments||[]).length} segment(s)</td>
-    <td>
-      <button class="btn btn-sm" onclick="editShift(${s.id})">Edit</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Delete</button>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted,#999);">No shift templates. Click "+ Add Template" to create one.</td></tr>';
+  tb.innerHTML = SHIFTS.map(s => `<tr><td>${s.name}</td><td>${s.start_time}</td><td>${s.end_time}</td><td>${s.hours}</td><td>${s.shift_type}</td><td>${(s.segments||[]).length}</td>
+    <td><button class="btn btn-sm" onclick="editShift(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Del</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty-msg">No shift templates.</td></tr>';
 }
-
-let shiftSegments = [];
-function renderShiftSegments() {
-  const el = document.getElementById('shift-segments-list');
-  el.innerHTML = shiftSegments.map((seg, i) => `<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
-    <input type="text" value="${seg.label||''}" placeholder="Label (e.g. Break 1)" style="flex:1;" onchange="shiftSegments[${i}].label=this.value">
-    <input type="time" value="${seg.start||''}" onchange="shiftSegments[${i}].start=this.value" style="width:120px;">
-    <input type="time" value="${seg.end||''}" onchange="shiftSegments[${i}].end=this.value" style="width:120px;">
-    <select onchange="shiftSegments[${i}].code=this.value" style="width:120px;">
-      <option value="">— Code —</option>
-      ${SEGMENTS.map(s => `<option value="${s.code}" ${seg.code===s.code?'selected':''}>${s.label}</option>`).join('')}
-    </select>
+let shiftSegments=[];
+function renderShiftSegments(){
+  const el=document.getElementById('shift-segments-list');
+  el.innerHTML=shiftSegments.map((seg,i)=>`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
+    <input type="text" value="${seg.label||''}" placeholder="Label" style="flex:1;" onchange="shiftSegments[${i}].label=this.value">
+    <input type="time" value="${seg.start||''}" onchange="shiftSegments[${i}].start=this.value" style="width:110px;">
+    <input type="time" value="${seg.end||''}" onchange="shiftSegments[${i}].end=this.value" style="width:110px;">
+    <select onchange="shiftSegments[${i}].code=this.value" style="width:110px;"><option value="">Code</option>${SEGMENTS.map(s=>`<option value="${s.code}" ${seg.code===s.code?'selected':''}>${s.label}</option>`).join('')}</select>
     <button type="button" class="btn btn-sm btn-danger" onclick="shiftSegments.splice(${i},1);renderShiftSegments();">×</button>
-  </div>`).join('') || '<p style="color:var(--text-muted,#999);font-size:0.85rem;">No segments added. Shifts without segments use continuous on-call time.</p>';
+  </div>`).join('')||'<p class="empty-msg" style="font-size:0.85rem;">No segments. Continuous on-call.</p>';
 }
-
-function addShiftSegment() { shiftSegments.push({label:'',start:'',end:'',code:''}); renderShiftSegments(); }
-
-function openShiftModal(shift) {
-  document.getElementById('shift-modal-title').textContent = shift ? 'Edit Shift Template' : 'Add Shift Template';
-  document.getElementById('shift-id').value = shift ? shift.id : '';
-  document.getElementById('shift-name').value = shift ? shift.name : '';
-  document.getElementById('shift-start').value = shift ? shift.start_time : '';
-  document.getElementById('shift-end').value = shift ? shift.end_time : '';
-  document.getElementById('shift-hours').value = shift ? shift.hours : 8;
-  document.getElementById('shift-type').value = shift ? shift.shift_type : 'full';
-  document.getElementById('shift-sort').value = shift ? shift.sort_order : 0;
-  shiftSegments = shift ? JSON.parse(JSON.stringify(shift.segments||[])) : [];
-  renderShiftSegments();
-  openModal('shift-modal');
+function addShiftSegment(){shiftSegments.push({label:'',start:'',end:'',code:''});renderShiftSegments();}
+function openShiftModal(s){
+  document.getElementById('shift-modal-title').textContent=s?'Edit Shift':'Add Shift Template';
+  document.getElementById('shift-id').value=s?s.id:''; document.getElementById('shift-name').value=s?s.name:'';
+  document.getElementById('shift-start').value=s?s.start_time:''; document.getElementById('shift-end').value=s?s.end_time:'';
+  document.getElementById('shift-hours').value=s?s.hours:8; document.getElementById('shift-type').value=s?s.shift_type:'full';
+  document.getElementById('shift-sort').value=s?s.sort_order:0;
+  shiftSegments=s?JSON.parse(JSON.stringify(s.segments||[])):[]; renderShiftSegments(); openModal('shift-modal');
 }
+function editShift(id){openShiftModal(SHIFTS.find(s=>s.id===id));}
+async function saveShift(e){e.preventDefault();const res=await api('/settings/customization/shifts/save',{id:document.getElementById('shift-id').value||undefined,name:document.getElementById('shift-name').value,start_time:document.getElementById('shift-start').value,end_time:document.getElementById('shift-end').value,hours:parseFloat(document.getElementById('shift-hours').value)||8,shift_type:document.getElementById('shift-type').value,sort_order:parseInt(document.getElementById('shift-sort').value)||0,segments:shiftSegments});if(res.success){upsert(SHIFTS,res.shift);renderShifts();closeModal('shift-modal');}else alert(res.error);}
+async function deleteShift(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/shifts/delete',{id});if(res.success){removeById(SHIFTS,id);renderShifts();}else alert(res.error);}
 
-function editShift(id) { openShiftModal(SHIFTS.find(s => s.id === id)); }
-
-async function saveShift(e) {
-  e.preventDefault();
-  const body = {
-    id: document.getElementById('shift-id').value || undefined,
-    name: document.getElementById('shift-name').value,
-    start_time: document.getElementById('shift-start').value,
-    end_time: document.getElementById('shift-end').value,
-    hours: parseFloat(document.getElementById('shift-hours').value) || 8,
-    shift_type: document.getElementById('shift-type').value,
-    sort_order: parseInt(document.getElementById('shift-sort').value) || 0,
-    segments: shiftSegments,
-  };
-  const res = await api('/settings/customization/shifts/save', body);
-  if (res.success) {
-    const idx = SHIFTS.findIndex(s => s.id === res.shift.id);
-    if (idx >= 0) SHIFTS[idx] = res.shift; else SHIFTS.push(res.shift);
-    renderShifts();
-    closeModal('shift-modal');
-  } else { alert(res.error); }
+/* ═══ ROTATIONS ═══════════════════════════ */
+function renderRotations(){
+  const el=document.getElementById('rotations-list');
+  if(!ROTATIONS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns.</p>';return;}
+  el.innerHTML=ROTATIONS.map(r=>{const weeks=r.weeks||[];
+    let rows=weeks.map((w,i)=>{const cells=DAYS.map(d=>{const tid=w.shifts?w.shifts[d]:null;const t=tid?SHIFTS.find(s=>s.id==tid):null;return`<td>${t?t.name:(tid==='off'?'<em>Off</em>':'—')}</td>`;}).join('');return`<tr><td style="font-weight:600;">${w.label||'Wk '+(i+1)}</td>${cells}</tr>`;}).join('');
+    return`<div class="card" style="margin-bottom:1rem;"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3><div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div></div>
+    <table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>
+    <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.4rem 0 0;">${(r.assignments||[]).length} employee(s) assigned</p></div>`;}).join('');
 }
-
-async function deleteShift(id) {
-  if (!confirm('Delete this shift template?')) return;
-  const res = await api('/settings/customization/shifts/delete', {id});
-  if (res.success) {
-    SHIFTS.splice(SHIFTS.findIndex(s => s.id === id), 1);
-    renderShifts();
-  } else { alert(res.error); }
+let rotWeeks=[];
+function renderRotWeeks(){
+  const el=document.getElementById('rot-weeks-list');
+  el.innerHTML=rotWeeks.map((w,wi)=>{const dayInputs=DAYS.map((d,di)=>{const val=w.shifts?(w.shifts[d]||''):'';return`<div style="text-align:center;"><div style="font-size:0.75rem;font-weight:600;">${DAY_LABELS[di]}</div><select style="width:100%;font-size:0.8rem;" onchange="rotWeeks[${wi}].shifts['${d}']=this.value||null"><option value="">Off</option>${SHIFTS.map(s=>`<option value="${s.id}" ${val==s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>`;}).join('');
+    return`<div class="card" style="margin-bottom:0.75rem;padding:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;"><input type="text" value="${w.label||''}" placeholder="Week ${wi+1}" style="font-weight:600;border:none;background:transparent;font-size:0.95rem;padding:0;" onchange="rotWeeks[${wi}].label=this.value"><button type="button" class="btn btn-sm btn-danger" onclick="rotWeeks.splice(${wi},1);renderRotWeeks();">Remove</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;">${dayInputs}</div></div>`;}).join('')||'<p class="empty-msg" style="font-size:0.85rem;">Add weeks to define the cycle.</p>';
 }
+function addRotationWeek(){rotWeeks.push({label:'',shifts:{mon:null,tue:null,wed:null,thu:null,fri:null,sat:null,sun:null}});renderRotWeeks();}
+function openRotationModal(r){document.getElementById('rotation-modal-title').textContent=r?'Edit Rotation':'Add Rotation Pattern';document.getElementById('rot-id').value=r?r.id:'';document.getElementById('rot-name').value=r?r.name:'';rotWeeks=r?JSON.parse(JSON.stringify(r.weeks||[])):[];if(!rotWeeks.length)addRotationWeek();renderRotWeeks();openModal('rotation-modal');}
+function editRotation(id){openRotationModal(ROTATIONS.find(r=>r.id===id));}
+async function saveRotation(e){e.preventDefault();const res=await api('/settings/customization/rotations/save',{id:document.getElementById('rot-id').value||undefined,name:document.getElementById('rot-name').value,weeks:rotWeeks});if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();closeModal('rotation-modal');}else alert(res.error);}
+async function deleteRotation(id){if(!confirm('Delete rotation and all assignments?'))return;const res=await api('/settings/customization/rotations/delete',{id});if(res.success){removeById(ROTATIONS,id);renderRotations();}else alert(res.error);}
 
-/* ═══ ROTATION PATTERNS ═══════════════════════ */
-function renderRotations() {
-  const el = document.getElementById('rotations-list');
-  if (!ROTATIONS.length) {
-    el.innerHTML = '<p style="color:var(--text-muted,#999);text-align:center;padding:2rem 0;">No rotation patterns. Click "+ Add Pattern" to create one.</p>';
-    return;
+/* ═══ LOB SETTINGS ════════════════════════ */
+function renderLOBSettings(){
+  const tb=document.querySelector('#lob-table tbody');
+  tb.innerHTML=LOB_SETTINGS.map(s=>`<tr><td>${s.lob_name}</td><td>${Math.round(s.service_level_target*100)}%</td><td>${s.target_asa}s</td><td>${s.interval_minutes}m</td><td>${Math.round(s.shrinkage_pct*100)}%</td><td>${Math.round(s.occupancy_target*100)}%</td><td>${s.operating_start}–${s.operating_end}</td>
+    <td><button class="btn btn-sm" onclick="editLOBSetting(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteLOBSetting(${s.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No LOB settings. Using defaults.</td></tr>';
+}
+function openLOBModal(s){document.getElementById('lob-modal-title').textContent=s?'Edit LOB Setting':'Add LOB Setting';document.getElementById('lob-id').value=s?s.id:'';document.getElementById('lob-pu-id').value=s?s.planning_unit_id:'';document.getElementById('lob-pu-id').disabled=!!s;document.getElementById('lob-sl').value=s?Math.round(s.service_level_target*100):80;document.getElementById('lob-asa').value=s?s.target_asa:30;document.getElementById('lob-interval').value=s?s.interval_minutes:30;document.getElementById('lob-shrinkage').value=s?Math.round(s.shrinkage_pct*100):30;document.getElementById('lob-occ').value=s?Math.round(s.occupancy_target*100):85;document.getElementById('lob-max-occ').value=s?Math.round(s.max_occupancy*100):92;document.getElementById('lob-shift-hrs').value=s?s.default_shift_hrs:8;document.getElementById('lob-op-start').value=s?s.operating_start:'08:00';document.getElementById('lob-op-end').value=s?s.operating_end:'22:00';openModal('lob-modal');}
+function editLOBSetting(id){openLOBModal(LOB_SETTINGS.find(s=>s.id===id));}
+async function saveLOBSetting(e){e.preventDefault();const res=await api('/settings/customization/lob-settings/save',{id:document.getElementById('lob-id').value||undefined,planning_unit_id:parseInt(document.getElementById('lob-pu-id').value)||undefined,service_level_target:parseInt(document.getElementById('lob-sl').value)/100,target_asa:parseFloat(document.getElementById('lob-asa').value),interval_minutes:parseInt(document.getElementById('lob-interval').value),shrinkage_pct:parseInt(document.getElementById('lob-shrinkage').value)/100,occupancy_target:parseInt(document.getElementById('lob-occ').value)/100,max_occupancy:parseInt(document.getElementById('lob-max-occ').value)/100,default_shift_hrs:parseFloat(document.getElementById('lob-shift-hrs').value),operating_start:document.getElementById('lob-op-start').value,operating_end:document.getElementById('lob-op-end').value});if(res.success){upsert(LOB_SETTINGS,res.setting);renderLOBSettings();closeModal('lob-modal');}else alert(res.error);}
+async function deleteLOBSetting(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/lob-settings/delete',{id});if(res.success){removeById(LOB_SETTINGS,id);renderLOBSettings();}else alert(res.error);}
+
+/* ═══ TIME-OFF TYPES ══════════════════════ */
+function renderTimeOffTypes(){
+  const tb=document.querySelector('#timeoff-table tbody');
+  tb.innerHTML=TIME_OFF_TYPES.map(t=>`<tr><td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${t.color};"></span></td><td><code>${t.code}</code></td><td>${t.label}</td><td>${ck(t.is_paid)}</td><td>${ck(t.requires_approval)}</td><td>${t.max_days_per_year||'∞'}</td><td>${t.min_notice_days}</td>
+    <td><button class="btn btn-sm" onclick="editTimeOff(${t.id})">Edit</button>${!t.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteTimeOff(${t.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No time-off types.</td></tr>';
+}
+function openTimeOffModal(t){document.getElementById('timeoff-modal-title').textContent=t?'Edit Time-Off Type':'Add Time-Off Type';document.getElementById('to-id').value=t?t.id:'';document.getElementById('to-code').value=t?t.code:'';document.getElementById('to-label').value=t?t.label:'';document.getElementById('to-color').value=t?t.color:'#3b82f6';document.getElementById('to-order').value=t?t.sort_order:0;document.getElementById('to-maxdays').value=t?t.max_days_per_year||'':'';document.getElementById('to-notice').value=t?t.min_notice_days:0;document.getElementById('to-paid').checked=t?t.is_paid:true;document.getElementById('to-approval').checked=t?t.requires_approval:true;openModal('timeoff-modal');}
+function editTimeOff(id){openTimeOffModal(TIME_OFF_TYPES.find(t=>t.id===id));}
+async function saveTimeOff(e){e.preventDefault();const md=document.getElementById('to-maxdays').value;const res=await api('/settings/customization/time-off-types/save',{id:document.getElementById('to-id').value||undefined,code:document.getElementById('to-code').value,label:document.getElementById('to-label').value,color:document.getElementById('to-color').value,sort_order:parseInt(document.getElementById('to-order').value)||0,max_days_per_year:md?parseInt(md):null,min_notice_days:parseInt(document.getElementById('to-notice').value)||0,is_paid:document.getElementById('to-paid').checked,requires_approval:document.getElementById('to-approval').checked});if(res.success){upsert(TIME_OFF_TYPES,res.item);renderTimeOffTypes();closeModal('timeoff-modal');}else alert(res.error);}
+async function deleteTimeOff(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/time-off-types/delete',{id});if(res.success){removeById(TIME_OFF_TYPES,id);renderTimeOffTypes();}else alert(res.error);}
+
+/* ═══ OVERTIME RULES ══════════════════════ */
+function renderOTRules(){
+  const tb=document.querySelector('#ot-table tbody');
+  tb.innerHTML=OT_RULES.map(r=>`<tr><td>${r.name}</td><td>${r.rule_type}</td><td>${r.max_ot_hours_week}h</td><td>${r.max_ot_hours_day}h</td><td>${ck(r.requires_approval)}</td><td>${r.pay_multiplier}×</td><td>${r.eligible_after_days}d</td>
+    <td><button class="btn btn-sm" onclick="editOTRule(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteOTRule(${r.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No overtime rules.</td></tr>';
+}
+function openOTModal(r){document.getElementById('ot-modal-title').textContent=r?'Edit Overtime Rule':'Add Overtime Rule';document.getElementById('ot-id').value=r?r.id:'';document.getElementById('ot-name').value=r?r.name:'';document.getElementById('ot-type').value=r?r.rule_type:'voluntary';document.getElementById('ot-pay').value=r?r.pay_multiplier:1.5;document.getElementById('ot-maxweek').value=r?r.max_ot_hours_week:10;document.getElementById('ot-maxday').value=r?r.max_ot_hours_day:4;document.getElementById('ot-notice').value=r?r.min_notice_hours:24;document.getElementById('ot-eligible').value=r?r.eligible_after_days:90;document.getElementById('ot-approval').checked=r?r.requires_approval:true;openModal('ot-modal');}
+function editOTRule(id){openOTModal(OT_RULES.find(r=>r.id===id));}
+async function saveOTRule(e){e.preventDefault();const res=await api('/settings/customization/overtime-rules/save',{id:document.getElementById('ot-id').value||undefined,name:document.getElementById('ot-name').value,rule_type:document.getElementById('ot-type').value,pay_multiplier:parseFloat(document.getElementById('ot-pay').value),max_ot_hours_week:parseFloat(document.getElementById('ot-maxweek').value),max_ot_hours_day:parseFloat(document.getElementById('ot-maxday').value),min_notice_hours:parseInt(document.getElementById('ot-notice').value),eligible_after_days:parseInt(document.getElementById('ot-eligible').value),requires_approval:document.getElementById('ot-approval').checked});if(res.success){upsert(OT_RULES,res.item);renderOTRules();closeModal('ot-modal');}else alert(res.error);}
+async function deleteOTRule(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/overtime-rules/delete',{id});if(res.success){removeById(OT_RULES,id);renderOTRules();}else alert(res.error);}
+
+/* ═══ SCHEDULE RULES ══════════════════════ */
+function renderSchedRules(){
+  const tb=document.querySelector('#schedrules-table tbody');
+  tb.innerHTML=SCHED_RULES.map(r=>`<tr><td>${r.name}</td><td>${r.min_hours_week}</td><td>${r.max_hours_week}</td><td>${r.max_hours_day}</td><td>${r.max_consecutive_days}</td><td>${r.min_rest_between_shifts_hrs}</td><td>${r.min_days_off_per_week}</td>
+    <td><button class="btn btn-sm" onclick="editSchedRule(${r.id})">Edit</button>${!r.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteSchedRule(${r.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No schedule rules.</td></tr>';
+}
+function openSchedRuleModal(r){document.getElementById('schedrule-modal-title').textContent=r?'Edit Schedule Rule':'Add Schedule Rule';document.getElementById('sr-id').value=r?r.id:'';document.getElementById('sr-name').value=r?r.name:'';document.getElementById('sr-minwk').value=r?r.min_hours_week:20;document.getElementById('sr-maxwk').value=r?r.max_hours_week:40;document.getElementById('sr-maxday').value=r?r.max_hours_day:10;document.getElementById('sr-consec').value=r?r.max_consecutive_days:6;document.getElementById('sr-rest').value=r?r.min_rest_between_shifts_hrs:10;document.getElementById('sr-daysoff').value=r?r.min_days_off_per_week:1;document.getElementById('sr-splits').value=r?r.max_split_shifts_week:0;document.getElementById('sr-b2b').checked=r?r.allow_back_to_back:false;openModal('schedrule-modal');}
+function editSchedRule(id){openSchedRuleModal(SCHED_RULES.find(r=>r.id===id));}
+async function saveSchedRule(e){e.preventDefault();const res=await api('/settings/customization/schedule-rules/save',{id:document.getElementById('sr-id').value||undefined,name:document.getElementById('sr-name').value,min_hours_week:parseFloat(document.getElementById('sr-minwk').value),max_hours_week:parseFloat(document.getElementById('sr-maxwk').value),max_hours_day:parseFloat(document.getElementById('sr-maxday').value),max_consecutive_days:parseInt(document.getElementById('sr-consec').value),min_rest_between_shifts_hrs:parseFloat(document.getElementById('sr-rest').value),min_days_off_per_week:parseInt(document.getElementById('sr-daysoff').value),max_split_shifts_week:parseInt(document.getElementById('sr-splits').value),allow_back_to_back:document.getElementById('sr-b2b').checked});if(res.success){upsert(SCHED_RULES,res.item);renderSchedRules();closeModal('schedrule-modal');}else alert(res.error);}
+async function deleteSchedRule(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/schedule-rules/delete',{id});if(res.success){removeById(SCHED_RULES,id);renderSchedRules();}else alert(res.error);}
+
+/* ═══ HOLIDAYS ════════════════════════════ */
+function renderHolidays(){
+  const tb=document.querySelector('#holidays-table tbody');
+  tb.innerHTML=HOLIDAYS.map(h=>`<tr><td>${h.date}</td><td>${h.name}</td><td>${ck(h.is_full_day)}</td><td>${ck(h.is_paid)}</td><td>${h.affects_forecast?h.volume_factor===0?'Closed':h.volume_factor+'× volume':'Normal'}</td><td>${ck(h.is_recurring)}</td>
+    <td><button class="btn btn-sm" onclick="editHoliday(${h.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteHoliday(${h.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-msg">No holidays configured.</td></tr>';
+}
+function openHolidayModal(h){document.getElementById('holiday-modal-title').textContent=h?'Edit Holiday':'Add Holiday';document.getElementById('hol-id').value=h?h.id:'';document.getElementById('hol-name').value=h?h.name:'';document.getElementById('hol-date').value=h?h.date:'';document.getElementById('hol-fullday').checked=h?h.is_full_day:true;document.getElementById('hol-paid').checked=h?h.is_paid:true;document.getElementById('hol-recurring').checked=h?h.is_recurring:true;document.getElementById('hol-forecast').checked=h?h.affects_forecast:true;document.getElementById('hol-volume').value=h?h.volume_factor:0;openModal('holiday-modal');}
+function editHoliday(id){openHolidayModal(HOLIDAYS.find(h=>h.id===id));}
+async function saveHoliday(e){e.preventDefault();const res=await api('/settings/customization/holidays/save',{id:document.getElementById('hol-id').value||undefined,name:document.getElementById('hol-name').value,date:document.getElementById('hol-date').value,is_full_day:document.getElementById('hol-fullday').checked,is_paid:document.getElementById('hol-paid').checked,is_recurring:document.getElementById('hol-recurring').checked,affects_forecast:document.getElementById('hol-forecast').checked,volume_factor:parseFloat(document.getElementById('hol-volume').value)});if(res.success){upsert(HOLIDAYS,res.item);renderHolidays();closeModal('holiday-modal');}else alert(res.error);}
+async function deleteHoliday(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/holidays/delete',{id});if(res.success){removeById(HOLIDAYS,id);renderHolidays();}else alert(res.error);}
+
+/* ═══ SKILL GROUPS ════════════════════════ */
+function renderSkillGroups(){
+  const el=document.getElementById('skills-list');
+  if(!SKILL_GROUPS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No skill groups.</p>';return;}
+  el.innerHTML=SKILL_GROUPS.map(g=>`<div class="card" style="margin-bottom:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><h3 style="margin:0;">${g.name}</h3>${g.description?`<p style="margin:0.25rem 0 0;color:var(--text-muted,#999);font-size:0.85rem;">${g.description}</p>`:''}</div><div><button class="btn btn-sm" onclick="editSkillGroup(${g.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteSkillGroup(${g.id})">Del</button></div></div>
+    <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.4rem 0 0;">${(g.mappings||[]).length} employee(s) mapped</p></div>`).join('');
+}
+function openSkillGroupModal(g){document.getElementById('skillgroup-modal-title').textContent=g?'Edit Skill Group':'Add Skill Group';document.getElementById('sg-id').value=g?g.id:'';document.getElementById('sg-name').value=g?g.name:'';document.getElementById('sg-desc').value=g?g.description:'';openModal('skillgroup-modal');}
+function editSkillGroup(id){openSkillGroupModal(SKILL_GROUPS.find(g=>g.id===id));}
+async function saveSkillGroup(e){e.preventDefault();const res=await api('/settings/customization/skill-groups/save',{id:document.getElementById('sg-id').value||undefined,name:document.getElementById('sg-name').value,description:document.getElementById('sg-desc').value});if(res.success){upsert(SKILL_GROUPS,res.item);renderSkillGroups();closeModal('skillgroup-modal');}else alert(res.error);}
+async function deleteSkillGroup(id){if(!confirm('Delete group and all mappings?'))return;const res=await api('/settings/customization/skill-groups/delete',{id});if(res.success){removeById(SKILL_GROUPS,id);renderSkillGroups();}else alert(res.error);}
+
+/* ═══ ADHERENCE CODES ═════════════════════ */
+function renderAdherenceCodes(){
+  const tb=document.querySelector('#adherence-table tbody');
+  tb.innerHTML=ADHERENCE_CODES.map(a=>`<tr><td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${a.color};"></span></td><td><code>${a.code}</code></td><td>${a.label}</td><td>${a.category}</td><td>${ck(a.is_excused)}</td>
+    <td><button class="btn btn-sm" onclick="editAdherenceCode(${a.id})">Edit</button>${!a.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteAdherenceCode(${a.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-msg">No adherence exception codes.</td></tr>';
+}
+function openAdherenceModal(a){document.getElementById('adherence-modal-title').textContent=a?'Edit Exception Code':'Add Exception Code';document.getElementById('adh-id').value=a?a.id:'';document.getElementById('adh-code').value=a?a.code:'';document.getElementById('adh-label').value=a?a.label:'';document.getElementById('adh-color').value=a?a.color:'#ef4444';document.getElementById('adh-category').value=a?a.category:'late';document.getElementById('adh-excused').checked=a?a.is_excused:false;openModal('adherence-modal');}
+function editAdherenceCode(id){openAdherenceModal(ADHERENCE_CODES.find(a=>a.id===id));}
+async function saveAdherenceCode(e){e.preventDefault();const res=await api('/settings/customization/adherence-exceptions/save',{id:document.getElementById('adh-id').value||undefined,code:document.getElementById('adh-code').value,label:document.getElementById('adh-label').value,color:document.getElementById('adh-color').value,category:document.getElementById('adh-category').value,is_excused:document.getElementById('adh-excused').checked});if(res.success){upsert(ADHERENCE_CODES,res.item);renderAdherenceCodes();closeModal('adherence-modal');}else alert(res.error);}
+async function deleteAdherenceCode(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/adherence-exceptions/delete',{id});if(res.success){removeById(ADHERENCE_CODES,id);renderAdherenceCodes();}else alert(res.error);}
+
+/* ═══ ALERTS ══════════════════════════════ */
+const ALERT_LABELS={sl_breach:'SL Breach',understaffed:'Understaffed',overstaffed:'Overstaffed',adherence:'Adherence',forecast_variance:'Forecast Var'};
+const OP_LABELS={lt:'<',gt:'>',eq:'='};
+function renderAlerts(){
+  const tb=document.querySelector('#alerts-table tbody');
+  tb.innerHTML=ALERTS.map(a=>`<tr><td>${a.name}</td><td>${ALERT_LABELS[a.alert_type]||a.alert_type}</td><td>${OP_LABELS[a.threshold_operator]||''} ${a.threshold_value}</td><td>${a.lob_name}</td><td>${ck(a.notify_in_app)}</td><td>${ck(a.notify_email)}</td><td>${ck(a.is_active)}</td>
+    <td><button class="btn btn-sm" onclick="editAlert(${a.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteAlert(${a.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No alerts configured.</td></tr>';
+}
+function openAlertModal(a){document.getElementById('alert-modal-title').textContent=a?'Edit Alert':'Add Alert';document.getElementById('alrt-id').value=a?a.id:'';document.getElementById('alrt-name').value=a?a.name:'';document.getElementById('alrt-type').value=a?a.alert_type:'sl_breach';document.getElementById('alrt-threshold').value=a?a.threshold_value:80;document.getElementById('alrt-op').value=a?a.threshold_operator:'lt';document.getElementById('alrt-lob').value=a?a.planning_unit_id||'':'';document.getElementById('alrt-cooldown').value=a?a.cooldown_minutes:30;document.getElementById('alrt-inapp').checked=a?a.notify_in_app:true;document.getElementById('alrt-email').checked=a?a.notify_email:false;document.getElementById('alrt-emails').value=a?a.email_recipients:'';openModal('alert-modal');}
+function editAlert(id){openAlertModal(ALERTS.find(a=>a.id===id));}
+async function saveAlert(e){e.preventDefault();const res=await api('/settings/customization/alerts/save',{id:document.getElementById('alrt-id').value||undefined,name:document.getElementById('alrt-name').value,alert_type:document.getElementById('alrt-type').value,threshold_value:parseFloat(document.getElementById('alrt-threshold').value),threshold_operator:document.getElementById('alrt-op').value,planning_unit_id:document.getElementById('alrt-lob').value||null,cooldown_minutes:parseInt(document.getElementById('alrt-cooldown').value),notify_in_app:document.getElementById('alrt-inapp').checked,notify_email:document.getElementById('alrt-email').checked,email_recipients:document.getElementById('alrt-emails').value,is_active:true});if(res.success){upsert(ALERTS,res.item);renderAlerts();closeModal('alert-modal');}else alert(res.error);}
+async function deleteAlert(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/alerts/delete',{id});if(res.success){removeById(ALERTS,id);renderAlerts();}else alert(res.error);}
+
+/* ═══ BRANDING ════════════════════════════ */
+function loadBranding(){
+  if(BRAND_DATA.company_name!==undefined){
+    document.getElementById('brand-name').value=BRAND_DATA.company_name||'';
+    document.getElementById('brand-tagline').value=BRAND_DATA.tagline||'';
+    document.getElementById('brand-accent').value=BRAND_DATA.accent_color||'#2563eb';
+    document.getElementById('brand-email').value=BRAND_DATA.contact_email||'';
+    document.getElementById('brand-logo').value=BRAND_DATA.logo_url||'';
+    document.getElementById('brand-footer').value=BRAND_DATA.footer_text||'';
   }
-  el.innerHTML = ROTATIONS.map(r => {
-    const weeks = r.weeks || [];
-    let weekRows = weeks.map((w, i) => {
-      const cells = DAYS.map((d, di) => {
-        const tid = w.shifts ? w.shifts[d] : null;
-        const tmpl = tid ? SHIFTS.find(s => s.id == tid) : null;
-        const label = tmpl ? tmpl.name : (tid === 'off' ? '<em>Off</em>' : '—');
-        return `<td>${label}</td>`;
-      }).join('');
-      return `<tr><td style="font-weight:600;">${w.label||'Week '+(i+1)}</td>${cells}</tr>`;
-    }).join('');
-    return `<div class="card" style="margin-bottom:1rem;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-week cycle)</span></h3>
-        <div style="display:flex;gap:0.5rem;">
-          <button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Delete</button>
-        </div>
-      </div>
-      <table class="data-table" style="margin-top:0.75rem;font-size:0.85rem;">
-        <thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead>
-        <tbody>${weekRows}</tbody>
-      </table>
-      <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.5rem 0 0;">Assigned to ${(r.assignments||[]).length} employee(s)</p>
-    </div>`;
-  }).join('');
 }
-
-let rotWeeks = [];
-function renderRotWeeks() {
-  const el = document.getElementById('rot-weeks-list');
-  el.innerHTML = rotWeeks.map((w, wi) => {
-    const dayInputs = DAYS.map((d, di) => {
-      const val = w.shifts ? (w.shifts[d]||'') : '';
-      return `<div style="text-align:center;">
-        <div style="font-size:0.75rem;font-weight:600;margin-bottom:2px;">${DAY_LABELS[di]}</div>
-        <select style="width:100%;font-size:0.8rem;" onchange="rotWeeks[${wi}].shifts['${d}']=this.value||null">
-          <option value="">Off</option>
-          ${SHIFTS.map(s => `<option value="${s.id}" ${val==s.id?'selected':''}>${s.name}</option>`).join('')}
-        </select>
-      </div>`;
-    }).join('');
-    return `<div class="card" style="margin-bottom:0.75rem;padding:0.75rem;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-        <input type="text" value="${w.label||''}" placeholder="Week ${wi+1} label (e.g. Days)" style="font-weight:600;border:none;background:transparent;font-size:0.95rem;padding:0;" onchange="rotWeeks[${wi}].label=this.value">
-        <button type="button" class="btn btn-sm btn-danger" onclick="rotWeeks.splice(${wi},1);renderRotWeeks();">Remove</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;">${dayInputs}</div>
-    </div>`;
-  }).join('') || '<p style="color:var(--text-muted,#999);font-size:0.85rem;">Add weeks to define the rotation cycle.</p>';
-}
-
-function addRotationWeek() {
-  rotWeeks.push({label:'', shifts:{mon:null,tue:null,wed:null,thu:null,fri:null,sat:null,sun:null}});
-  renderRotWeeks();
-}
-
-function openRotationModal(rot) {
-  document.getElementById('rotation-modal-title').textContent = rot ? 'Edit Rotation Pattern' : 'Add Rotation Pattern';
-  document.getElementById('rot-id').value = rot ? rot.id : '';
-  document.getElementById('rot-name').value = rot ? rot.name : '';
-  rotWeeks = rot ? JSON.parse(JSON.stringify(rot.weeks||[])) : [];
-  if (!rotWeeks.length) addRotationWeek();
-  renderRotWeeks();
-  openModal('rotation-modal');
-}
-
-function editRotation(id) { openRotationModal(ROTATIONS.find(r => r.id === id)); }
-
-async function saveRotation(e) {
+async function saveBranding(e){
   e.preventDefault();
-  const body = {
-    id: document.getElementById('rot-id').value || undefined,
-    name: document.getElementById('rot-name').value,
-    weeks: rotWeeks,
-  };
-  const res = await api('/settings/customization/rotations/save', body);
-  if (res.success) {
-    const idx = ROTATIONS.findIndex(r => r.id === res.rotation.id);
-    if (idx >= 0) ROTATIONS[idx] = res.rotation; else ROTATIONS.push(res.rotation);
-    renderRotations();
-    closeModal('rotation-modal');
-  } else { alert(res.error); }
+  const res=await api('/settings/customization/branding/save',{company_name:document.getElementById('brand-name').value,tagline:document.getElementById('brand-tagline').value,accent_color:document.getElementById('brand-accent').value,contact_email:document.getElementById('brand-email').value,logo_url:document.getElementById('brand-logo').value,footer_text:document.getElementById('brand-footer').value});
+  if(res.success){const el=document.getElementById('brand-saved');el.style.display='inline';setTimeout(()=>el.style.display='none',2000);}else alert(res.error);
 }
 
-async function deleteRotation(id) {
-  if (!confirm('Delete this rotation pattern and all assignments?')) return;
-  const res = await api('/settings/customization/rotations/delete', {id});
-  if (res.success) {
-    ROTATIONS.splice(ROTATIONS.findIndex(r => r.id === id), 1);
-    renderRotations();
-  } else { alert(res.error); }
-}
-
-/* ═══ LOB SETTINGS ════════════════════════════ */
-function renderLOBSettings() {
-  const tb = document.querySelector('#lob-table tbody');
-  tb.innerHTML = LOB_SETTINGS.map(s => `<tr>
-    <td>${s.lob_name}</td>
-    <td>${Math.round(s.service_level_target*100)}%</td>
-    <td>${s.target_asa}s</td>
-    <td>${s.interval_minutes}min</td>
-    <td>${Math.round(s.shrinkage_pct*100)}%</td>
-    <td>${Math.round(s.occupancy_target*100)}%</td>
-    <td>${s.operating_start}–${s.operating_end}</td>
-    <td>
-      <button class="btn btn-sm" onclick="editLOBSetting(${s.id})">Edit</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteLOBSetting(${s.id})">Delete</button>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted,#999);">No LOB-specific settings. Using system defaults.</td></tr>';
-}
-
-function openLOBModal(s) {
-  document.getElementById('lob-modal-title').textContent = s ? 'Edit LOB Setting' : 'Add LOB Setting';
-  document.getElementById('lob-id').value = s ? s.id : '';
-  document.getElementById('lob-pu-id').value = s ? s.planning_unit_id : '';
-  document.getElementById('lob-pu-id').disabled = !!s;
-  document.getElementById('lob-sl').value = s ? Math.round(s.service_level_target*100) : 80;
-  document.getElementById('lob-asa').value = s ? s.target_asa : 30;
-  document.getElementById('lob-interval').value = s ? s.interval_minutes : 30;
-  document.getElementById('lob-shrinkage').value = s ? Math.round(s.shrinkage_pct*100) : 30;
-  document.getElementById('lob-occ').value = s ? Math.round(s.occupancy_target*100) : 85;
-  document.getElementById('lob-max-occ').value = s ? Math.round(s.max_occupancy*100) : 92;
-  document.getElementById('lob-shift-hrs').value = s ? s.default_shift_hrs : 8;
-  document.getElementById('lob-op-start').value = s ? s.operating_start : '08:00';
-  document.getElementById('lob-op-end').value = s ? s.operating_end : '22:00';
-  openModal('lob-modal');
-}
-
-function editLOBSetting(id) { openLOBModal(LOB_SETTINGS.find(s => s.id === id)); }
-
-async function saveLOBSetting(e) {
-  e.preventDefault();
-  const body = {
-    id: document.getElementById('lob-id').value || undefined,
-    planning_unit_id: parseInt(document.getElementById('lob-pu-id').value) || undefined,
-    service_level_target: parseInt(document.getElementById('lob-sl').value) / 100,
-    target_asa: parseFloat(document.getElementById('lob-asa').value),
-    interval_minutes: parseInt(document.getElementById('lob-interval').value),
-    shrinkage_pct: parseInt(document.getElementById('lob-shrinkage').value) / 100,
-    occupancy_target: parseInt(document.getElementById('lob-occ').value) / 100,
-    max_occupancy: parseInt(document.getElementById('lob-max-occ').value) / 100,
-    default_shift_hrs: parseFloat(document.getElementById('lob-shift-hrs').value),
-    operating_start: document.getElementById('lob-op-start').value,
-    operating_end: document.getElementById('lob-op-end').value,
-  };
-  const res = await api('/settings/customization/lob-settings/save', body);
-  if (res.success) {
-    const idx = LOB_SETTINGS.findIndex(s => s.id === res.setting.id);
-    if (idx >= 0) LOB_SETTINGS[idx] = res.setting; else LOB_SETTINGS.push(res.setting);
-    renderLOBSettings();
-    closeModal('lob-modal');
-  } else { alert(res.error); }
-}
-
-async function deleteLOBSetting(id) {
-  if (!confirm('Delete this LOB setting? The LOB will revert to system defaults.')) return;
-  const res = await api('/settings/customization/lob-settings/delete', {id});
-  if (res.success) {
-    LOB_SETTINGS.splice(LOB_SETTINGS.findIndex(s => s.id === id), 1);
-    renderLOBSettings();
-  } else { alert(res.error); }
-}
-
-/* ── Initial render ────────────────────────── */
-renderSegments();
-renderShifts();
-renderRotations();
-renderLOBSettings();
+/* ── Initial render ────────────────────── */
+renderSegments(); renderShifts(); renderRotations(); renderLOBSettings();
+renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
+renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); loadBranding();
 </script>
 
 <style>
-  .tab-btn {
-    padding: 0.6rem 1.2rem; border: none; background: none; cursor: pointer;
-    font-weight: 600; color: var(--text-muted, #6b7280); border-bottom: 2px solid transparent;
-    margin-bottom: -2px; transition: color 0.15s, border-color 0.15s;
-  }
-  .tab-btn.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); }
-  .tab-btn:hover { color: var(--brand-accent); }
-
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex;
-    align-items: center; justify-content: center; z-index: 1000; padding: 1rem;
-  }
-  .modal {
-    background: var(--card-bg, #fff); border-radius: 12px; padding: 1.5rem;
-    width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .modal { background: #1e1e2e; }
-    :root:not([data-theme="light"]) .modal-overlay { background: rgba(0,0,0,0.6); }
-  }
-  .modal h3 { margin: 0 0 1rem; }
-  .modal label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; }
-  .modal input[type="text"], .modal input[type="number"], .modal input[type="time"],
-  .modal select {
-    width: 100%; padding: 0.4rem 0.5rem; border: 1px solid var(--border,#d1d5db);
-    border-radius: 6px; font-size: 0.9rem; background: var(--input-bg, #fff);
-    color: var(--text, inherit);
-  }
-  .form-row { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; }
-  .form-row > label { flex: 1; }
-  .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border,#e5e7eb); }
-  .btn-sm { font-size: 0.8rem; padding: 0.25rem 0.6rem; }
-  .btn-danger { background: #ef4444; color: #fff; border-color: #ef4444; }
-  .btn-danger:hover { background: #dc2626; }
+  .tab-bar { display:flex; gap:0; border-bottom:2px solid var(--border,#e5e7eb); margin-bottom:1.5rem; flex-wrap:wrap; }
+  .tab-btn { padding:0.5rem 0.9rem; border:none; background:none; cursor:pointer; font-weight:600; color:var(--text-muted,#6b7280); border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .15s,border-color .15s; font-size:0.85rem; }
+  .tab-btn.active { color:var(--brand-accent); border-bottom-color:var(--brand-accent); }
+  .tab-btn:hover { color:var(--brand-accent); }
+  .tab-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; }
+  .tab-header h2 { margin:0; }
+  .tab-desc { color:var(--text-muted,#6b7280); margin:0 0 1rem; font-size:0.9rem; }
+  .empty-msg { text-align:center; color:var(--text-muted,#999); padding:1rem 0; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:1000; padding:1rem; }
+  .modal { background:var(--card-bg,#fff); border-radius:12px; padding:1.5rem; width:100%; box-shadow:0 8px 30px rgba(0,0,0,0.2); max-height:90vh; overflow-y:auto; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .modal{background:#1e1e2e;} :root:not([data-theme="light"]) .modal-overlay{background:rgba(0,0,0,0.6);} }
+  .modal h3{margin:0 0 1rem;} .modal label{display:block;font-size:0.85rem;font-weight:500;margin-bottom:0.25rem;}
+  .modal input[type="text"],.modal input[type="number"],.modal input[type="time"],.modal input[type="date"],.modal input[type="email"],.modal select{width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,inherit);}
+  .form-row{display:flex;gap:0.75rem;margin-bottom:0.75rem;} .form-row>label{flex:1;}
+  .modal-actions{display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border,#e5e7eb);}
+  .btn-sm{font-size:0.8rem;padding:0.25rem 0.6rem;} .btn-danger{background:#ef4444;color:#fff;border-color:#ef4444;} .btn-danger:hover{background:#dc2626;}
 </style>
 {% endblock %}

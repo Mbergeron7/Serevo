@@ -511,3 +511,289 @@ class LOBSetting(db.Model):
             "operating_start": self.operating_start,
             "operating_end": self.operating_end,
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# TIME-OFF REQUEST TYPES — Configurable categories
+# ═══════════════════════════════════════════════════════════════
+
+class TimeOffType(db.Model):
+    """Admin-configurable PTO/time-off categories (vacation, sick, personal, FMLA, etc.)."""
+    __tablename__ = "time_off_types"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    code          = db.Column(db.String(40), unique=True, nullable=False)
+    label         = db.Column(db.String(80), nullable=False)
+    color         = db.Column(db.String(20), default="#6b7280")
+    is_paid       = db.Column(db.Boolean, default=True)
+    requires_approval = db.Column(db.Boolean, default=True)
+    max_days_per_year = db.Column(db.Integer, nullable=True)   # None = unlimited
+    min_notice_days   = db.Column(db.Integer, default=0)       # advance notice required
+    is_default    = db.Column(db.Boolean, default=False)
+    is_active     = db.Column(db.Boolean, default=True)
+    sort_order    = db.Column(db.Integer, default=0)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "code": self.code, "label": self.label,
+            "color": self.color, "is_paid": self.is_paid,
+            "requires_approval": self.requires_approval,
+            "max_days_per_year": self.max_days_per_year,
+            "min_notice_days": self.min_notice_days,
+            "is_default": self.is_default, "is_active": self.is_active,
+            "sort_order": self.sort_order,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# OVERTIME RULES
+# ═══════════════════════════════════════════════════════════════
+
+class OvertimeRule(db.Model):
+    """Overtime policies — max hours, approval, voluntary/mandatory, blackout periods."""
+    __tablename__ = "overtime_rules"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    name              = db.Column(db.String(80), nullable=False)
+    rule_type         = db.Column(db.String(20), default="voluntary")    # voluntary | mandatory | restricted
+    max_ot_hours_week = db.Column(db.Float, default=10.0)
+    max_ot_hours_day  = db.Column(db.Float, default=4.0)
+    requires_approval = db.Column(db.Boolean, default=True)
+    min_notice_hours  = db.Column(db.Integer, default=24)                # advance notice
+    blackout_dates_json = db.Column(db.Text, default="[]")              # JSON array of date strings
+    eligible_after_days = db.Column(db.Integer, default=90)             # days of employment before eligible
+    pay_multiplier    = db.Column(db.Float, default=1.5)                # time-and-a-half, double, etc.
+    is_active         = db.Column(db.Boolean, default=True)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        import json
+        return {
+            "id": self.id, "name": self.name, "rule_type": self.rule_type,
+            "max_ot_hours_week": self.max_ot_hours_week,
+            "max_ot_hours_day": self.max_ot_hours_day,
+            "requires_approval": self.requires_approval,
+            "min_notice_hours": self.min_notice_hours,
+            "blackout_dates": json.loads(self.blackout_dates_json) if self.blackout_dates_json else [],
+            "eligible_after_days": self.eligible_after_days,
+            "pay_multiplier": self.pay_multiplier,
+            "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SCHEDULING RULES / CONSTRAINTS
+# ═══════════════════════════════════════════════════════════════
+
+class ScheduleRule(db.Model):
+    """Scheduling constraints — min/max hours, consecutive days, rest periods."""
+    __tablename__ = "schedule_rules"
+
+    id                    = db.Column(db.Integer, primary_key=True)
+    name                  = db.Column(db.String(80), nullable=False)
+    min_hours_week        = db.Column(db.Float, default=20.0)
+    max_hours_week        = db.Column(db.Float, default=40.0)
+    max_hours_day         = db.Column(db.Float, default=10.0)
+    max_consecutive_days  = db.Column(db.Integer, default=6)
+    min_rest_between_shifts_hrs = db.Column(db.Float, default=10.0)     # hours between shifts
+    min_days_off_per_week = db.Column(db.Integer, default=1)
+    max_split_shifts_week = db.Column(db.Integer, default=0)            # 0 = not allowed
+    allow_back_to_back    = db.Column(db.Boolean, default=False)        # close then open
+    is_default            = db.Column(db.Boolean, default=False)
+    is_active             = db.Column(db.Boolean, default=True)
+    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "min_hours_week": self.min_hours_week,
+            "max_hours_week": self.max_hours_week,
+            "max_hours_day": self.max_hours_day,
+            "max_consecutive_days": self.max_consecutive_days,
+            "min_rest_between_shifts_hrs": self.min_rest_between_shifts_hrs,
+            "min_days_off_per_week": self.min_days_off_per_week,
+            "max_split_shifts_week": self.max_split_shifts_week,
+            "allow_back_to_back": self.allow_back_to_back,
+            "is_default": self.is_default, "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# HOLIDAY CALENDAR
+# ═══════════════════════════════════════════════════════════════
+
+class Holiday(db.Model):
+    """Company holidays that affect scheduling and forecasting."""
+    __tablename__ = "holidays"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(100), nullable=False)
+    date          = db.Column(db.Date, nullable=False)
+    is_full_day   = db.Column(db.Boolean, default=True)
+    start_time    = db.Column(db.String(5), nullable=True)       # for partial-day holidays
+    end_time      = db.Column(db.String(5), nullable=True)
+    is_paid       = db.Column(db.Boolean, default=True)
+    affects_forecast = db.Column(db.Boolean, default=True)       # adjust forecast volume
+    volume_factor = db.Column(db.Float, default=0.0)             # 0 = closed, 0.5 = half volume
+    year          = db.Column(db.Integer, nullable=False)
+    is_recurring  = db.Column(db.Boolean, default=True)          # auto-create for next year
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "date": self.date.isoformat() if self.date else "",
+            "is_full_day": self.is_full_day,
+            "start_time": self.start_time, "end_time": self.end_time,
+            "is_paid": self.is_paid, "affects_forecast": self.affects_forecast,
+            "volume_factor": self.volume_factor, "year": self.year,
+            "is_recurring": self.is_recurring,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SKILL GROUPS — Multi-skill mapping with proficiency
+# ═══════════════════════════════════════════════════════════════
+
+class SkillGroup(db.Model):
+    """Named skill groups for organizing LOBs/queues."""
+    __tablename__ = "skill_groups"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(255), default="")
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    mappings = db.relationship("SkillMapping", backref="skill_group",
+                               cascade="all, delete-orphan", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "description": self.description, "is_active": self.is_active,
+            "mappings": [m.to_dict() for m in self.mappings],
+        }
+
+
+class SkillMapping(db.Model):
+    """Maps an employee to a skill group with proficiency level and priority."""
+    __tablename__ = "skill_mappings"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    skill_group_id = db.Column(db.Integer, db.ForeignKey("skill_groups.id", ondelete="CASCADE"),
+                               nullable=False, index=True)
+    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    proficiency   = db.Column(db.Integer, default=3)          # 1-5 scale
+    priority      = db.Column(db.Integer, default=1)          # routing priority (1 = primary)
+    is_active     = db.Column(db.Boolean, default=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship("Employee", backref="skill_mappings")
+
+    __table_args__ = (
+        db.UniqueConstraint("skill_group_id", "employee_id", name="uq_skill_employee"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id, "skill_group_id": self.skill_group_id,
+            "employee_id": emp.employee_id if emp else "",
+            "employee_name": emp.full_name if emp else "",
+            "proficiency": self.proficiency, "priority": self.priority,
+            "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# ADHERENCE EXCEPTION CODES
+# ═══════════════════════════════════════════════════════════════
+
+class AdherenceException(db.Model):
+    """Exception codes for adherence deviations (late, early out, approved absence, etc.)."""
+    __tablename__ = "adherence_exceptions"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    code         = db.Column(db.String(40), unique=True, nullable=False)
+    label        = db.Column(db.String(80), nullable=False)
+    color        = db.Column(db.String(20), default="#ef4444")
+    is_excused   = db.Column(db.Boolean, default=False)       # excused = doesn't count against adherence
+    category     = db.Column(db.String(30), default="other")  # late | early_out | absence | break_overrun | other
+    is_default   = db.Column(db.Boolean, default=False)
+    is_active    = db.Column(db.Boolean, default=True)
+    sort_order   = db.Column(db.Integer, default=0)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "code": self.code, "label": self.label,
+            "color": self.color, "is_excused": self.is_excused,
+            "category": self.category, "is_default": self.is_default,
+            "is_active": self.is_active, "sort_order": self.sort_order,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# NOTIFICATION / ALERT SETTINGS
+# ═══════════════════════════════════════════════════════════════
+
+class AlertConfig(db.Model):
+    """Configurable alert thresholds and notification preferences."""
+    __tablename__ = "alert_configs"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    name              = db.Column(db.String(80), nullable=False)
+    alert_type        = db.Column(db.String(40), nullable=False)        # sl_breach | understaffed | overstaffed | adherence | forecast_variance
+    threshold_value   = db.Column(db.Float, nullable=False)             # e.g. 0.80 for SL, 10.0 for % variance
+    threshold_operator = db.Column(db.String(10), default="lt")         # lt | gt | eq
+    planning_unit_id  = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)  # None = all LOBs
+    notify_email      = db.Column(db.Boolean, default=False)
+    notify_in_app     = db.Column(db.Boolean, default=True)
+    email_recipients  = db.Column(db.Text, default="")                  # comma-separated emails
+    cooldown_minutes  = db.Column(db.Integer, default=30)               # min time between alerts
+    is_active         = db.Column(db.Boolean, default=True)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref="alert_configs")
+
+    def to_dict(self):
+        pu = self.planning_unit
+        return {
+            "id": self.id, "name": self.name, "alert_type": self.alert_type,
+            "threshold_value": self.threshold_value,
+            "threshold_operator": self.threshold_operator,
+            "lob_name": pu.name if pu else "All",
+            "planning_unit_id": self.planning_unit_id,
+            "notify_email": self.notify_email, "notify_in_app": self.notify_in_app,
+            "email_recipients": self.email_recipients,
+            "cooldown_minutes": self.cooldown_minutes, "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# BRANDING / WHITE-LABEL SETTINGS (DB-backed)
+# ═══════════════════════════════════════════════════════════════
+
+class BrandSetting(db.Model):
+    """Per-client branding overrides — stored in DB so admins can edit via UI."""
+    __tablename__ = "brand_settings"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    company_name  = db.Column(db.String(120), default="")
+    tagline       = db.Column(db.String(255), default="")
+    accent_color  = db.Column(db.String(20), default="#2563eb")
+    contact_email = db.Column(db.String(255), default="")
+    logo_url      = db.Column(db.String(500), default="")              # URL or data-URI
+    favicon_url   = db.Column(db.String(500), default="")
+    footer_text   = db.Column(db.String(255), default="")
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "company_name": self.company_name,
+            "tagline": self.tagline, "accent_color": self.accent_color,
+            "contact_email": self.contact_email, "logo_url": self.logo_url,
+            "favicon_url": self.favicon_url, "footer_text": self.footer_text,
+        }
