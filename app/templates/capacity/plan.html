@@ -2,9 +2,16 @@
 {% block title %}Capacity Plan — {{ brand_name }}{% endblock %}
 
 {% block nav %}
-  <a href="/capacity" class="nav-link">Control Panel</a>
-  <span class="user-name">{{ user.name }}</span>
-  <a href="/logout" class="nav-link">Sign out</a>
+  <a href="/">Dashboard</a>
+  <a href="/people/">People</a>
+  <a href="/capacity" class="nav-link">Capacity</a>
+  <a href="/capacity/plan" class="active">Plan View</a>
+  {% if user and user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ user.name }}</span>
+  <a href="/logout">Sign out</a>
 {% endblock %}
 
 {% block head %}
@@ -143,9 +150,48 @@
     text-align: right; font-size: .78rem; color: var(--text-muted); margin-top: 16px;
   }
 
+  /* ── Summary cards ──────────────────────────────── */
+  .summary-row {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px 22px; min-width: 160px; flex: 1;
+  }
+  .summary-card .big-num {
+    font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .summary-card .card-label {
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-top: 2px;
+  }
+  .num-positive { color: #059669; }
+  .num-negative { color: #dc2626; }
+  .num-neutral  { color: var(--brand-accent); }
+
+  /* ── Chart area ──────────────────────────────────── */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 24px;
+  }
+  .chart-card h3 {
+    font-size: .9rem; font-weight: 700; margin-bottom: 14px;
+  }
+  .chart-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  }
+  .chart-wrap { overflow-x: auto; }
+  .chart-wrap svg text { font-family: inherit; }
+
+  @media (max-width: 800px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
   @media (max-width: 600px) {
     .controls-row { flex-direction: column; }
     .ctrl-group input[type="number"] { width: 100%; }
+    .summary-row { flex-direction: column; }
   }
 </style>
 {% endblock %}
@@ -208,6 +254,57 @@
     <button class="btn-export" onclick="exportExcel()">⬇ Export Excel</button>
   </div>
 </div>
+
+<!-- ── Summary cards ─────────────────────────────────── -->
+{% if plan %}
+{% set ns = namespace(total_hc=0, total_fte=0, hiring_lobs=0, surplus_lobs=0) %}
+{% for lob in plan %}
+  {% if lob.months %}
+    {% set cur = lob.months[0] %}
+    {% set ns.total_hc = ns.total_hc + cur.actual_hc %}
+    {% set ns.total_fte = ns.total_fte + cur.fte_req %}
+    {% if cur.gap < 0 %}{% set ns.hiring_lobs = ns.hiring_lobs + 1 %}{% endif %}
+    {% if cur.gap > 0 %}{% set ns.surplus_lobs = ns.surplus_lobs + 1 %}{% endif %}
+  {% endif %}
+{% endfor %}
+{% set total_gap = ns.total_hc - ns.total_fte %}
+<div class="summary-row">
+  <div class="summary-card">
+    <div class="big-num num-neutral">{{ ns.total_hc|int }}</div>
+    <div class="card-label">Current Headcount</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-num num-neutral">{{ ns.total_fte }}</div>
+    <div class="card-label">FTE Required</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-num {{ 'num-positive' if total_gap >= 0 else 'num-negative' }}">
+      {{ "+" if total_gap > 0 }}{{ total_gap }}
+    </div>
+    <div class="card-label">Overall Gap</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-num num-negative">{{ ns.hiring_lobs }}</div>
+    <div class="card-label">LOBs Need Hiring</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-num num-positive">{{ ns.surplus_lobs }}</div>
+    <div class="card-label">LOBs Surplus</div>
+  </div>
+</div>
+
+<!-- ── Charts ───────────────────────────────────────── -->
+<div class="chart-row">
+  <div class="chart-card">
+    <h3>Headcount vs FTE Required by LOB</h3>
+    <div class="chart-wrap"><canvas id="lobBarChart" height="260"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>Staffing Gap Trend ({{ year }})</h3>
+    <div class="chart-wrap"><canvas id="gapLineChart" height="260"></canvas></div>
+  </div>
+</div>
+{% endif %}
 
 <!-- ── Plan tables ───────────────────────────────────── -->
 <div id="planContainer">
@@ -326,6 +423,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 // ── LOB multi-select picker ─────────────────────────
 function toggleLobPicker() {
@@ -414,5 +512,87 @@ function exportExcel() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Charts ─────────────────────────────────────────
+{% if plan %}
+(function() {
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--brand-accent').trim() || '#2563eb';
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.08)';
+  const textColor = isDark ? '#ccc' : '#666';
+
+  Chart.defaults.color = textColor;
+  Chart.defaults.borderColor = gridColor;
+
+  // --- LOB Bar Chart: Headcount vs FTE Required ---
+  const lobLabels = [{% for lob in plan %}'{{ lob.lob }}'{% if not loop.last %},{% endif %}{% endfor %}];
+  const hcData = [{% for lob in plan %}{{ lob.months[0].actual_hc }}{% if not loop.last %},{% endif %}{% endfor %}];
+  const fteData = [{% for lob in plan %}{{ lob.months[0].fte_req }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+  const barCtx = document.getElementById('lobBarChart');
+  if (barCtx) {
+    new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: lobLabels,
+        datasets: [
+          { label: 'Actual HC', data: hcData, backgroundColor: accent, borderRadius: 4, barPercentage: 0.45 },
+          { label: 'FTE Required', data: fteData, backgroundColor: isDark ? '#f87171' : '#dc2626', borderRadius: 4, barPercentage: 0.45 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}` } }
+        },
+        scales: {
+          y: { beginAtZero: true, title: { display: true, text: 'FTE', font: { size: 11 } }, grid: { color: gridColor } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // --- Gap Line Chart: Monthly trend ---
+  const monthLabels = [{% for m in plan[0].months %}'{{ m.month_label }}'{% if not loop.last %},{% endif %}{% endfor %}];
+  const gapCtx = document.getElementById('gapLineChart');
+  if (gapCtx) {
+    const datasets = [];
+    const colors = ['#2563eb','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#c026d3','#ea580c'];
+    {% for lob in plan %}
+    datasets.push({
+      label: '{{ lob.lob }}',
+      data: [{% for m in lob.months %}{{ m.gap }}{% if not loop.last %},{% endif %}{% endfor %}],
+      borderColor: colors[{{ loop.index0 }} % colors.length],
+      backgroundColor: colors[{{ loop.index0 }} % colors.length] + '22',
+      fill: false,
+      tension: 0.3,
+      pointRadius: 3,
+      borderWidth: 2
+    });
+    {% endfor %}
+    new Chart(gapCtx, {
+      type: 'line',
+      data: { labels: monthLabels, datasets: datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y > 0 ? '+' : ''}${ctx.parsed.y}` } },
+          annotation: undefined
+        },
+        scales: {
+          y: {
+            title: { display: true, text: 'Gap (+ = surplus, - = need to hire)', font: { size: 11 } },
+            grid: { color: gridColor }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+})();
+{% endif %}
 </script>
 {% endblock %}

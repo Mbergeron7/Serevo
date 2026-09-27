@@ -2,9 +2,16 @@
 {% block title %}Capacity Planning — {{ brand_name }}{% endblock %}
 
 {% block nav %}
-  <a href="/capacity/plan" class="nav-link">Plan View</a>
-  <span class="user-name">{{ user.name }}</span>
-  <a href="/logout" class="nav-link">Sign out</a>
+  <a href="/">Dashboard</a>
+  <a href="/people/">People</a>
+  <a href="/capacity/" class="active">Capacity</a>
+  <a href="/capacity/plan">Plan View</a>
+  {% if current_user and current_user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
+  <a href="/logout">Sign out</a>
 {% endblock %}
 
 {% block head %}

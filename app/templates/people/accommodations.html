@@ -2,11 +2,14 @@
 {% block title %}Accommodations — {{ brand_name }}{% endblock %}
 
 {% block nav %}
-  <a href="/" class="nav-link">Dashboard</a>
-  <a href="/people" class="nav-link">People</a>
-  <a href="/people/pto" class="nav-link">Time Off</a>
-  <span class="user-name">{{ user.name }}</span>
-  <a href="/logout" class="nav-link">Sign out</a>
+  <a href="/">Dashboard</a>
+  <a href="/people/" class="active">People</a>
+  {% if current_user and current_user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
+  <a href="/logout">Sign out</a>
 {% endblock %}
 
 {% block head %}

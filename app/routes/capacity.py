@@ -271,29 +271,42 @@ def plan_view():
 
         if user and user.get("is_demo"):
             from app.demo_data import DEMO_LOBS, get_demo_forecast, get_demo_requirements, DEMO_EMPLOYEES
-            import calendar
+            import calendar, datetime as _dt
             plan = []
-            for month_num in range(1, 13):
-                month_name = calendar.month_name[month_num]
-                # Sample one day per month for averages
-                sample_day = date(year, month_num, 15)
-                month_data = {"month": month_name, "lobs": []}
-                for lob_name in DEMO_LOBS:
+            for lob_name in DEMO_LOBS:
+                lob_plan = {"lob": lob_name, "months": []}
+                emp_count = sum(1 for e in DEMO_EMPLOYEES
+                                if e.get("Latest Skill Name") == lob_name
+                                and str(e.get("Status", "Active")).strip().lower() in ("active", ""))
+                for month_num in range(1, 13):
+                    sample_day = date(year, month_num, 15)
                     fc, _ = get_demo_forecast(lob_name, sample_day)
                     rq, _ = get_demo_requirements(lob_name, sample_day)
                     avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
                     avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
-                    emp_count = sum(1 for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob_name)
+                    peak_agents = max((r["agents_required"] for r in rq), default=0)
                     fte_req = round(avg_req / (1 - shrinkage), 1)
-                    month_data["lobs"].append({
-                        "name": lob_name,
-                        "avg_volume": round(avg_vol, 0),
-                        "avg_required": round(avg_req, 1),
-                        "fte_required": fte_req,
-                        "current_headcount": emp_count,
-                        "gap": round(emp_count - fte_req, 1),
+                    gap = round(emp_count - fte_req, 1)
+                    wd = sum(1 for d in range(1, calendar.monthrange(year, month_num)[1] + 1)
+                             if _dt.date(year, month_num, d).weekday() < 5)
+                    lob_plan["months"].append({
+                        "month":        month_num,
+                        "month_label":  _dt.date(year, month_num, 1).strftime("%b-%y"),
+                        "fc_offered":   round(avg_vol * len(fc)),
+                        "fc_answered":  round(avg_vol * len(fc) * answer_rate),
+                        "aht":          "—",
+                        "psih_raw":     round(avg_req, 1),
+                        "psih_shr":     round(avg_req / (1 - shrinkage), 1),
+                        "fte_req":      fte_req,
+                        "actual_hc":    emp_count,
+                        "gap":          gap,
+                        "occupancy":    occupancy,
+                        "shrinkage":    shrinkage,
+                        "working_days": wd,
+                        "peak_agents":  round(peak_agents, 1),
+                        "avg_agents":   round(avg_req, 1),
                     })
-                plan.append(month_data)
+                plan.append(lob_plan)
         else:
             sheet = _get_sheet()
             fc_ws = _get_worksheet(sheet, "FORECAST RAW")
