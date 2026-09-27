@@ -5,10 +5,13 @@ Creates and configures the Flask app. All routes are registered via
 blueprints (to be added as modules are ported in).
 """
 
+import logging
 from datetime import timedelta
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from config import cfg
+
+log = logging.getLogger("serevo.app")
 
 bcrypt = Bcrypt()
 
@@ -41,15 +44,24 @@ def create_app():
     # Ensure all tables exist (fallback if migrations haven't run)
     with app.app_context():
         db.create_all()
-        # Ensure is_demo column exists on users table (may be missing if
-        # migration never ran on this database)
+        # Ensure is_demo column exists on users table
         try:
-            db.session.execute(db.text(
-                "ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE"
+            result = db.session.execute(db.text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'users' AND column_name = 'is_demo'"
             ))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()  # column already exists, ignore
+            has_col = result.fetchone() is not None
+            if not has_col:
+                db.session.execute(db.text(
+                    "ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE"
+                ))
+                db.session.commit()
+                log.info("Added is_demo column to users table")
+            else:
+                log.info("is_demo column already exists")
+        except Exception as e:
+            db.session.rollback()
+            log.warning("Could not ensure is_demo column: %s", e)
 
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
