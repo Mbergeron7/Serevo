@@ -114,6 +114,73 @@ def setup():
     return render_template("setup.html", error=error)
 
 
+@auth_bp.route("/admin-setup", methods=["GET", "POST"])
+def admin_setup():
+    """
+    Create an admin account from the browser — works even when users exist.
+    Protected by a secret key passed as ?key=<WFM_SECRET_KEY>.
+    """
+    from config import cfg
+    secret = request.args.get("key", "")
+    if not secret or secret != cfg.SECRET_KEY:
+        return "Not found", 404
+
+    from app.models import db, User
+    from flask_bcrypt import generate_password_hash
+
+    error = None
+    done = False
+
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        name = (request.form.get("name") or "").strip()
+        password = request.form.get("password") or ""
+
+        if not email or not password:
+            error = "Email and password are required."
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters."
+        else:
+            existing = User.query.filter_by(email=email).first()
+            if existing:
+                # Update existing user's password
+                existing.password_hash = generate_password_hash(password).decode("utf-8")
+                existing.role = "admin"
+                existing.is_active = True
+                if name:
+                    existing.display_name = name
+                db.session.commit()
+                done = True
+            else:
+                user = User(
+                    email=email,
+                    password_hash=generate_password_hash(password).decode("utf-8"),
+                    display_name=name or email.split("@")[0].title(),
+                    role="admin",
+                    is_active=True,
+                )
+                db.session.add(user)
+                db.session.commit()
+                done = True
+
+    return f"""
+    <html><head><title>Admin Setup</title>
+    <style>body{{font-family:system-ui;max-width:400px;margin:60px auto;padding:0 16px}}
+    input{{width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box}}
+    button{{padding:10px 20px;background:#0f766e;color:white;border:none;cursor:pointer;border-radius:4px}}
+    .err{{color:red}} .ok{{color:green}}</style></head>
+    <body><h2>Admin Account Setup</h2>
+    {"<p class='ok'>Account created/updated! <a href='/login'>Go to login</a></p>" if done else ""}
+    {"<p class='err'>" + error + "</p>" if error else ""}
+    <form method="POST">
+    <label>Email</label><input name="email" type="email" required>
+    <label>Display Name</label><input name="name" placeholder="Optional">
+    <label>Password</label><input name="password" type="password" required>
+    <button type="submit">Create Admin Account</button>
+    </form></body></html>
+    """
+
+
 @auth_bp.route("/logout")
 def logout():
     session.clear()
