@@ -29,9 +29,13 @@ def _get_sheet():
 @login_required
 def index():
     user = get_current_user()
-    from app.forecasting.engine import get_available_lobs
-    sheet = _get_sheet()
-    lobs = get_available_lobs(sheet)
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_LOBS
+        lobs = list(DEMO_LOBS)
+    else:
+        from app.forecasting.engine import get_available_lobs
+        sheet = _get_sheet()
+        lobs = get_available_lobs(sheet)
     return render_template("forecasting/index.html", user=user, lobs=lobs)
 
 
@@ -57,10 +61,27 @@ def forecast_data():
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
-        sheet = _get_sheet()
 
-        forecast, f_err = get_forecast_data(lob, start_date, end_date, sheet)
-        requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_forecast, get_demo_requirements
+            forecast = []
+            requirements = []
+            d = start_date
+            while d <= end_date:
+                day_fc, _ = get_demo_forecast(lob, d)
+                day_rq, _ = get_demo_requirements(lob, d)
+                for row in day_fc:
+                    forecast.append({**row, "date": d.isoformat()})
+                for row in day_rq:
+                    requirements.append({**row, "date": d.isoformat()})
+                d += datetime.timedelta(days=1)
+            f_err = None
+            r_err = None
+        else:
+            sheet = _get_sheet()
+            forecast, f_err = get_forecast_data(lob, start_date, end_date, sheet)
+            requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
 
         # Compute Erlang C requirements from forecast
         sl_target = float(payload.get("service_level", 0.80))
@@ -109,12 +130,25 @@ def generate():
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
 
-        sheet = _get_sheet()
-
-        if method == "weighted_trend":
-            result = generate_forecast_weighted(lob, hist_days, fc_days, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            # Generate demo forecast for the requested number of days
+            from app.demo_data import get_demo_forecast
+            today = datetime.date.today()
+            forecast_rows = []
+            for i in range(fc_days):
+                d = today + datetime.timedelta(days=i)
+                day_fc, _ = get_demo_forecast(lob, d)
+                for row in day_fc:
+                    forecast_rows.append({**row, "date": d.isoformat()})
+            result = {"forecast": forecast_rows}
         else:
-            result = generate_forecast_moving_avg(lob, hist_days, fc_days, window, sheet)
+            sheet = _get_sheet()
+
+            if method == "weighted_trend":
+                result = generate_forecast_weighted(lob, hist_days, fc_days, sheet)
+            else:
+                result = generate_forecast_moving_avg(lob, hist_days, fc_days, window, sheet)
 
         if result.get("error"):
             return jsonify({"success": False, "error": result["error"]})
@@ -163,9 +197,21 @@ def what_if():
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
-        sheet = _get_sheet()
 
-        forecast, err = get_forecast_data(lob, start_date, end_date, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_forecast
+            forecast = []
+            d = start_date
+            while d <= end_date:
+                day_fc, _ = get_demo_forecast(lob, d)
+                for row in day_fc:
+                    forecast.append({**row, "date": d.isoformat()})
+                d += datetime.timedelta(days=1)
+            err = None
+        else:
+            sheet = _get_sheet()
+            forecast, err = get_forecast_data(lob, start_date, end_date, sheet)
         if err or not forecast:
             return jsonify({"success": False, "error": err or "No data"})
 
@@ -217,9 +263,19 @@ def accuracy():
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
-        sheet = _get_sheet()
 
-        result = compute_accuracy(lob, start_date, end_date, sheet)
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            # For demo, return a plausible accuracy result
+            result = {
+                "mape": 8.5,
+                "bias": -1.2,
+                "intervals_compared": 28 * ((end_date - start_date).days + 1),
+                "summary": "Demo accuracy — based on sample data",
+            }
+        else:
+            sheet = _get_sheet()
+            result = compute_accuracy(lob, start_date, end_date, sheet)
         result["success"] = True
         return jsonify(result)
 
