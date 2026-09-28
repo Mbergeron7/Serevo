@@ -8,6 +8,7 @@ removing API credentials.
 
 import json
 import logging
+import datetime as _dt
 from datetime import datetime
 
 from flask import (Blueprint, render_template, request, jsonify)
@@ -436,7 +437,7 @@ def customization():
     from app.models import (SegmentCode, ShiftTemplate, RotationPattern, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
-                            BrandSetting)
+                            BrandSetting, Employee)
     user = get_current_user()
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
@@ -459,6 +460,9 @@ def customization():
     brand = BrandSetting.query.first()
     brand_data = brand.to_dict() if brand else {}
 
+    employees = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name}
+                 for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
+
     return render_template("settings/customization.html",
         user=user,
         segments=segments, shifts=shifts, rotations=rotations,
@@ -467,6 +471,7 @@ def customization():
         sched_rules=sched_rules, holidays=holidays,
         skill_groups=skill_groups, adherence_codes=adherence_codes,
         alerts=alerts, brand_data=brand_data, current_year=cur_year,
+        employees=employees,
     )
 
 
@@ -632,6 +637,205 @@ def delete_rotation():
     db.session.delete(rot)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ── Rotation Assignments CRUD ───────────────────────────────
+
+@settings_bp.route("/customization/rotations/assign", methods=["POST"])
+@admin_required
+def assign_rotation():
+    """Add an employee to a rotation pattern."""
+    from app.models import db, RotationPattern, RotationAssignment, Employee
+    data = request.get_json(silent=True) or {}
+    rot = RotationPattern.query.get(data.get("rotation_id"))
+    if not rot:
+        return jsonify({"success": False, "error": "Rotation pattern not found"})
+    emp = Employee.query.get(data.get("employee_id"))
+    if not emp:
+        return jsonify({"success": False, "error": "Employee not found"})
+    # Check for existing assignment
+    existing = RotationAssignment.query.filter_by(
+        rotation_id=rot.id, employee_id=emp.id).first()
+    if existing:
+        return jsonify({"success": False, "error": f"{emp.full_name} is already assigned"})
+    assign = RotationAssignment(
+        rotation_id=rot.id,
+        employee_id=emp.id,
+        current_week=int(data.get("current_week", 0)),
+        start_date=_dt.datetime.strptime(data["start_date"], "%Y-%m-%d").date()
+            if data.get("start_date") else None,
+    )
+    db.session.add(assign)
+    db.session.commit()
+    return jsonify({"success": True, "rotation": rot.to_dict()})
+
+
+@settings_bp.route("/customization/rotations/unassign", methods=["POST"])
+@admin_required
+def unassign_rotation():
+    """Remove an employee from a rotation pattern."""
+    from app.models import db, RotationAssignment, RotationPattern
+    data = request.get_json(silent=True) or {}
+    assign = RotationAssignment.query.get(data.get("id"))
+    if not assign:
+        return jsonify({"success": False, "error": "Assignment not found"})
+    rot_id = assign.rotation_id
+    db.session.delete(assign)
+    db.session.commit()
+    rot = RotationPattern.query.get(rot_id)
+    return jsonify({"success": True, "rotation": rot.to_dict() if rot else {}})
+
+
+# ── Rotation Schedule Generation ────────────────────────────
+
+@settings_bp.route("/customization/rotations/generate", methods=["POST"])
+@admin_required
+def generate_rotation_schedules():
+    """
+    Generate schedule rows from rotation patterns for a date range.
+    POST JSON: {rotation_id?, start_date, end_date}
+    If rotation_id is omitted, generates for ALL active rotations.
+    """
+    from app.models import (db, RotationPattern, RotationAssignment, Employee,
+                            Schedule, ShiftSegment, ShiftTemplate, PlanningUnit)
+    import json as _json
+
+    data = request.get_json(silent=True) or {}
+    start_str = data.get("start_date", "")
+    end_str = data.get("end_date", "")
+    if not start_str or not end_str:
+        return jsonify({"success": False, "error": "Start and end dates are required"})
+
+    start_date = _dt.datetime.strptime(start_str, "%Y-%m-%d").date()
+    end_date = _dt.datetime.strptime(end_str, "%Y-%m-%d").date()
+    if end_date < start_date:
+        return jsonify({"success": False, "error": "End date must be after start date"})
+    if (end_date - start_date).days > 90:
+        return jsonify({"success": False, "error": "Max 90 days per generation"})
+
+    rot_id = data.get("rotation_id")
+    if rot_id:
+        rotations = [RotationPattern.query.get(rot_id)]
+        rotations = [r for r in rotations if r]
+    else:
+        rotations = RotationPattern.query.filter_by(is_active=True).all()
+
+    if not rotations:
+        return jsonify({"success": False, "error": "No rotation patterns found"})
+
+    # Cache shift templates by id
+    templates = {t.id: t for t in ShiftTemplate.query.all()}
+
+    DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    created = 0
+    skipped = 0
+    warnings = []
+
+    for rot in rotations:
+        weeks = _json.loads(rot.weeks_json) if rot.weeks_json else []
+        if not weeks:
+            continue
+        cycle_len = len(weeks)
+
+        for assign in rot.assignments:
+            emp = assign.employee
+            if not emp or emp.status != "Active":
+                continue
+
+            # Walk each date in the range
+            d = start_date
+            while d <= end_date:
+                # Figure out which week of the cycle this date falls on
+                # Use start_date of assignment as anchor, or rotation start
+                anchor = assign.start_date or start_date
+                days_since = (d - anchor).days
+                if days_since < 0:
+                    d += _dt.timedelta(days=1)
+                    continue
+                # Week number: offset by current_week
+                week_num = ((days_since // 7) + assign.current_week) % cycle_len
+                week_def = weeks[week_num]
+                shifts_map = week_def.get("shifts", {})
+
+                day_key = DAY_KEYS[d.weekday()]
+                template_id = shifts_map.get(day_key)
+
+                if not template_id or template_id == "off" or str(template_id) == "":
+                    d += _dt.timedelta(days=1)
+                    continue
+
+                # Look up the shift template
+                try:
+                    tid = int(template_id)
+                except (ValueError, TypeError):
+                    d += _dt.timedelta(days=1)
+                    continue
+
+                tmpl = templates.get(tid)
+                if not tmpl:
+                    warnings.append(f"Shift template {tid} not found for {emp.full_name} on {d}")
+                    d += _dt.timedelta(days=1)
+                    continue
+
+                # Check if schedule already exists for this employee+date
+                existing = Schedule.query.filter_by(
+                    employee_id=emp.id, schedule_date=d).first()
+                if existing:
+                    skipped += 1
+                    d += _dt.timedelta(days=1)
+                    continue
+
+                # Determine planning unit from template or employee
+                pu_id = None
+                if hasattr(tmpl, 'planning_unit_id') and tmpl.planning_unit_id:
+                    pu_id = tmpl.planning_unit_id
+                elif emp.planning_unit_id:
+                    pu_id = emp.planning_unit_id
+
+                def _parse_hhmm(s):
+                    parts = s.strip().split(":")
+                    return _dt.time(int(parts[0]), int(parts[1]))
+
+                sched = Schedule(
+                    employee_id=emp.id,
+                    planning_unit_id=pu_id,
+                    schedule_date=d,
+                    shift_start=_parse_hhmm(tmpl.start_time),
+                    shift_end=_parse_hhmm(tmpl.end_time),
+                    shift_type=tmpl.shift_type or "full",
+                    hours=tmpl.hours or 8.0,
+                    status="scheduled",
+                )
+                db.session.add(sched)
+                db.session.flush()
+
+                # Copy segments from template JSON
+                segs = _json.loads(tmpl.segments_json) if tmpl.segments_json else []
+                for idx, seg in enumerate(segs):
+                    seg_start = seg.get("start", "")
+                    seg_end = seg.get("end", "")
+                    if not seg_start or not seg_end:
+                        continue
+                    db.session.add(ShiftSegment(
+                        schedule_id=sched.id,
+                        activity_type=seg.get("type", "on-call"),
+                        start_time=_parse_hhmm(seg_start),
+                        end_time=_parse_hhmm(seg_end),
+                        duration_mins=int(seg.get("duration_mins", 0)),
+                        sort_order=idx,
+                        notes=seg.get("notes", ""),
+                    ))
+                created += 1
+                d += _dt.timedelta(days=1)
+
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "created": created,
+        "skipped": skipped,
+        "warnings": warnings,
+        "message": f"Created {created} schedule(s), skipped {skipped} (already existed).",
+    })
 
 
 # ── LOB Settings CRUD ────────────────────────────────────────
