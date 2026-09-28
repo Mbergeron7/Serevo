@@ -16,9 +16,17 @@ branch_labels = None
 depends_on = None
 
 
+def _has_column(table, column):
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    columns = [c['name'] for c in insp.get_columns(table)]
+    return column in columns
+
+
 def upgrade():
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_demo', sa.Boolean(), nullable=True))
+        if not _has_column('users', 'is_demo'):
+            batch_op.add_column(sa.Column('is_demo', sa.Boolean(), nullable=True))
 
 
 def downgrade():

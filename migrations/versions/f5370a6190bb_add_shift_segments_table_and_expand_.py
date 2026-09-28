@@ -16,28 +16,43 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
-    # New shift_segments table
-    op.create_table('shift_segments',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('schedule_id', sa.Integer(), nullable=False),
-        sa.Column('activity_type', sa.String(length=20), nullable=False),
-        sa.Column('start_time', sa.Time(), nullable=False),
-        sa.Column('end_time', sa.Time(), nullable=False),
-        sa.Column('duration_mins', sa.Integer(), nullable=True),
-        sa.Column('sort_order', sa.Integer(), nullable=True),
-        sa.Column('notes', sa.String(length=255), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['schedule_id'], ['schedules.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_seg_schedule', 'shift_segments', ['schedule_id', 'sort_order'])
+def _table_exists(name):
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    return name in insp.get_table_names()
 
-    # Expand schedules table
+
+def _has_column(table, column):
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    columns = [c['name'] for c in insp.get_columns(table)]
+    return column in columns
+
+
+def upgrade():
+    if not _table_exists('shift_segments'):
+        op.create_table('shift_segments',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('schedule_id', sa.Integer(), nullable=False),
+            sa.Column('activity_type', sa.String(length=20), nullable=False),
+            sa.Column('start_time', sa.Time(), nullable=False),
+            sa.Column('end_time', sa.Time(), nullable=False),
+            sa.Column('duration_mins', sa.Integer(), nullable=True),
+            sa.Column('sort_order', sa.Integer(), nullable=True),
+            sa.Column('notes', sa.String(length=255), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['schedule_id'], ['schedules.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+        op.create_index('ix_seg_schedule', 'shift_segments', ['schedule_id', 'sort_order'])
+
     with op.batch_alter_table('schedules', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('shift_type', sa.String(length=10), nullable=True))
-        batch_op.add_column(sa.Column('hours', sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column('updated_at', sa.DateTime(), nullable=True))
+        if not _has_column('schedules', 'shift_type'):
+            batch_op.add_column(sa.Column('shift_type', sa.String(length=10), nullable=True))
+        if not _has_column('schedules', 'hours'):
+            batch_op.add_column(sa.Column('hours', sa.Float(), nullable=True))
+        if not _has_column('schedules', 'updated_at'):
+            batch_op.add_column(sa.Column('updated_at', sa.DateTime(), nullable=True))
 
 
 def downgrade():
