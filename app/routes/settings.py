@@ -434,11 +434,18 @@ def toggle_user():
 @admin_required
 def customization():
     """Main customization page — all admin-configurable settings."""
+    user = get_current_user()
+
+    # Demo mode — return mock data instead of querying the DB
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_settings_data
+        demo = get_demo_settings_data()
+        return render_template("settings/customization.html", user=user, **demo)
+
     from app.models import (SegmentCode, ShiftTemplate, RotationPattern, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
                             BrandSetting, Employee, FillInRule)
-    user = get_current_user()
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
     shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
@@ -478,11 +485,22 @@ def customization():
     )
 
 
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(ok=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
+
 # ── Segment Codes CRUD ───────────────────────────────────────
 
 @settings_bp.route("/customization/segments/save", methods=["POST"])
 @admin_required
 def save_segment():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, SegmentCode
     data = request.get_json(silent=True) or {}
     seg_id = data.get("id")
@@ -519,6 +537,9 @@ def save_segment():
 @settings_bp.route("/customization/segments/delete", methods=["POST"])
 @admin_required
 def delete_segment():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, SegmentCode
     data = request.get_json(silent=True) or {}
     seg = SegmentCode.query.get(data.get("id"))
@@ -536,6 +557,9 @@ def delete_segment():
 @settings_bp.route("/customization/shifts/save", methods=["POST"])
 @admin_required
 def save_shift():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, ShiftTemplate
     data = request.get_json(silent=True) or {}
     shift_id = data.get("id")
@@ -586,6 +610,9 @@ def save_shift():
 @settings_bp.route("/customization/shifts/delete", methods=["POST"])
 @admin_required
 def delete_shift():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, ShiftTemplate
     data = request.get_json(silent=True) or {}
     shift = ShiftTemplate.query.get(data.get("id"))
@@ -601,6 +628,9 @@ def delete_shift():
 @settings_bp.route("/customization/rotations/save", methods=["POST"])
 @admin_required
 def save_rotation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, RotationPattern
     data = request.get_json(silent=True) or {}
     rot_id = data.get("id")
@@ -632,6 +662,9 @@ def save_rotation():
 @settings_bp.route("/customization/rotations/delete", methods=["POST"])
 @admin_required
 def delete_rotation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, RotationPattern
     data = request.get_json(silent=True) or {}
     rot = RotationPattern.query.get(data.get("id"))
@@ -647,6 +680,9 @@ def delete_rotation():
 @settings_bp.route("/customization/rotations/assign", methods=["POST"])
 @admin_required
 def assign_rotation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     """Add an employee to a rotation pattern."""
     from app.models import db, RotationPattern, RotationAssignment, Employee
     data = request.get_json(silent=True) or {}
@@ -676,6 +712,9 @@ def assign_rotation():
 @settings_bp.route("/customization/rotations/unassign", methods=["POST"])
 @admin_required
 def unassign_rotation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     """Remove an employee from a rotation pattern."""
     from app.models import db, RotationAssignment, RotationPattern
     data = request.get_json(silent=True) or {}
@@ -694,6 +733,11 @@ def unassign_rotation():
 @settings_bp.route("/customization/fill-in-rules/list", methods=["GET", "POST"])
 @admin_required
 def list_fill_in_rules():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_settings_data
+        demo = get_demo_settings_data()
+        return jsonify({"success": True, "rules": demo["fill_in_rules"]})
     from app.models import FillInRule
     rules = FillInRule.query.order_by(FillInRule.shift_category, FillInRule.priority).all()
     return jsonify({"success": True, "rules": [r.to_dict() for r in rules]})
@@ -702,6 +746,9 @@ def list_fill_in_rules():
 @settings_bp.route("/customization/fill-in-rules/save", methods=["POST"])
 @admin_required
 def save_fill_in_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, FillInRule
     data = request.get_json(silent=True) or {}
     rule_id = data.get("id")
@@ -735,6 +782,9 @@ def save_fill_in_rule():
 @settings_bp.route("/customization/fill-in-rules/delete", methods=["POST"])
 @admin_required
 def delete_fill_in_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, FillInRule
     data = request.get_json(silent=True) or {}
     rule = FillInRule.query.get(data.get("id"))
@@ -750,6 +800,9 @@ def delete_fill_in_rule():
 @settings_bp.route("/customization/rotations/generate", methods=["POST"])
 @admin_required
 def generate_rotation_schedules():
+    dg = _demo_guard()
+    if dg:
+        return dg
     """
     Generate schedule rows from rotation patterns for a date range.
     POST JSON: {rotation_id?, start_date, end_date}
@@ -1037,6 +1090,9 @@ def generate_rotation_schedules():
 @settings_bp.route("/customization/lob-settings/save", methods=["POST"])
 @admin_required
 def save_lob_setting():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, LOBSetting
     data = request.get_json(silent=True) or {}
     setting_id = data.get("id")
@@ -1077,6 +1133,9 @@ def save_lob_setting():
 @settings_bp.route("/customization/lob-settings/delete", methods=["POST"])
 @admin_required
 def delete_lob_setting():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, LOBSetting
     data = request.get_json(silent=True) or {}
     setting = LOBSetting.query.get(data.get("id"))
@@ -1092,6 +1151,9 @@ def delete_lob_setting():
 @settings_bp.route("/customization/time-off-types/save", methods=["POST"])
 @admin_required
 def save_time_off_type():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, TimeOffType
     data = request.get_json(silent=True) or {}
     tid = data.get("id")
@@ -1124,6 +1186,9 @@ def save_time_off_type():
 @settings_bp.route("/customization/time-off-types/delete", methods=["POST"])
 @admin_required
 def delete_time_off_type():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, TimeOffType
     data = request.get_json(silent=True) or {}
     t = TimeOffType.query.get(data.get("id"))
@@ -1141,6 +1206,9 @@ def delete_time_off_type():
 @settings_bp.route("/customization/overtime-rules/save", methods=["POST"])
 @admin_required
 def save_overtime_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, OvertimeRule
     data = request.get_json(silent=True) or {}
     rid = data.get("id")
@@ -1172,6 +1240,9 @@ def save_overtime_rule():
 @settings_bp.route("/customization/overtime-rules/delete", methods=["POST"])
 @admin_required
 def delete_overtime_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, OvertimeRule
     data = request.get_json(silent=True) or {}
     r = OvertimeRule.query.get(data.get("id"))
@@ -1187,6 +1258,9 @@ def delete_overtime_rule():
 @settings_bp.route("/customization/schedule-rules/save", methods=["POST"])
 @admin_required
 def save_schedule_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, ScheduleRule
     data = request.get_json(silent=True) or {}
     rid = data.get("id")
@@ -1218,6 +1292,9 @@ def save_schedule_rule():
 @settings_bp.route("/customization/schedule-rules/delete", methods=["POST"])
 @admin_required
 def delete_schedule_rule():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, ScheduleRule
     data = request.get_json(silent=True) or {}
     r = ScheduleRule.query.get(data.get("id"))
@@ -1235,6 +1312,9 @@ def delete_schedule_rule():
 @settings_bp.route("/customization/holidays/save", methods=["POST"])
 @admin_required
 def save_holiday():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, Holiday
     data = request.get_json(silent=True) or {}
     hid = data.get("id")
@@ -1269,6 +1349,9 @@ def save_holiday():
 @settings_bp.route("/customization/holidays/delete", methods=["POST"])
 @admin_required
 def delete_holiday():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, Holiday
     data = request.get_json(silent=True) or {}
     h = Holiday.query.get(data.get("id"))
@@ -1284,6 +1367,9 @@ def delete_holiday():
 @settings_bp.route("/customization/skill-groups/save", methods=["POST"])
 @admin_required
 def save_skill_group():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, SkillGroup
     data = request.get_json(silent=True) or {}
     gid = data.get("id")
@@ -1310,6 +1396,9 @@ def save_skill_group():
 @settings_bp.route("/customization/skill-groups/delete", methods=["POST"])
 @admin_required
 def delete_skill_group():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, SkillGroup
     data = request.get_json(silent=True) or {}
     g = SkillGroup.query.get(data.get("id"))
@@ -1325,6 +1414,9 @@ def delete_skill_group():
 @settings_bp.route("/customization/adherence-exceptions/save", methods=["POST"])
 @admin_required
 def save_adherence_exception():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AdherenceException
     data = request.get_json(silent=True) or {}
     aid = data.get("id")
@@ -1355,6 +1447,9 @@ def save_adherence_exception():
 @settings_bp.route("/customization/adherence-exceptions/delete", methods=["POST"])
 @admin_required
 def delete_adherence_exception():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AdherenceException
     data = request.get_json(silent=True) or {}
     a = AdherenceException.query.get(data.get("id"))
@@ -1372,6 +1467,9 @@ def delete_adherence_exception():
 @settings_bp.route("/customization/alerts/save", methods=["POST"])
 @admin_required
 def save_alert_config():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AlertConfig
     data = request.get_json(silent=True) or {}
     aid = data.get("id")
@@ -1404,6 +1502,9 @@ def save_alert_config():
 @settings_bp.route("/customization/alerts/delete", methods=["POST"])
 @admin_required
 def delete_alert_config():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AlertConfig
     data = request.get_json(silent=True) or {}
     a = AlertConfig.query.get(data.get("id"))
@@ -1419,6 +1520,9 @@ def delete_alert_config():
 @settings_bp.route("/customization/branding/save", methods=["POST"])
 @admin_required
 def save_branding():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, BrandSetting
     data = request.get_json(silent=True) or {}
 

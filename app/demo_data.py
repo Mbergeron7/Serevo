@@ -379,3 +379,200 @@ def seed_demo_user(app):
             )
             db.session.add(demo)
             db.session.commit()
+
+
+# ═══════════════════════════════════════════════════════════════
+# DEMO SETTINGS / CUSTOMIZATION DATA
+# ═══════════════════════════════════════════════════════════════
+
+def get_demo_settings_data():
+    """Return all mock data for the Settings > Customization page.
+    Each key maps to a template variable in customization.html."""
+    import datetime as _dt
+
+    cur_year = _dt.date.today().year
+
+    segments = [
+        {"id":1,"code":"on-call","label":"On Call","color":"#22c55e","is_productive":True,"is_paid":True,"is_default":True,"sort_order":0,"is_active":True},
+        {"id":2,"code":"break","label":"Break","color":"#f59e0b","is_productive":False,"is_paid":True,"is_default":True,"sort_order":1,"is_active":True},
+        {"id":3,"code":"lunch","label":"Lunch","color":"#ef4444","is_productive":False,"is_paid":False,"is_default":True,"sort_order":2,"is_active":True},
+        {"id":4,"code":"training","label":"Training","color":"#8b5cf6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":3,"is_active":True},
+        {"id":5,"code":"meeting","label":"Team Meeting","color":"#3b82f6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":4,"is_active":True},
+        {"id":6,"code":"coaching","label":"Coaching / 1-on-1","color":"#06b6d4","is_productive":False,"is_paid":True,"is_default":False,"sort_order":5,"is_active":True},
+        {"id":7,"code":"project","label":"Project Work","color":"#10b981","is_productive":True,"is_paid":True,"is_default":False,"sort_order":6,"is_active":True},
+    ]
+
+    # Segments JSON for shift templates
+    _day_segs = [
+        {"type":"on-call","start":"08:00","end":"10:00","duration_mins":120,"notes":""},
+        {"type":"break","start":"10:00","end":"10:15","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"10:15","end":"12:00","duration_mins":105,"notes":""},
+        {"type":"lunch","start":"12:00","end":"12:30","duration_mins":30,"notes":""},
+        {"type":"on-call","start":"12:30","end":"14:30","duration_mins":120,"notes":""},
+        {"type":"break","start":"14:30","end":"14:45","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"14:45","end":"16:30","duration_mins":105,"notes":""},
+    ]
+    _close_segs = [
+        {"type":"on-call","start":"13:30","end":"15:30","duration_mins":120,"notes":""},
+        {"type":"break","start":"15:30","end":"15:45","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"15:45","end":"18:00","duration_mins":135,"notes":""},
+        {"type":"lunch","start":"18:00","end":"18:30","duration_mins":30,"notes":""},
+        {"type":"on-call","start":"18:30","end":"20:30","duration_mins":120,"notes":""},
+        {"type":"break","start":"20:30","end":"20:45","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"20:45","end":"22:00","duration_mins":75,"notes":""},
+    ]
+    _mid_segs = [
+        {"type":"on-call","start":"10:00","end":"12:00","duration_mins":120,"notes":""},
+        {"type":"break","start":"12:00","end":"12:15","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"12:15","end":"14:30","duration_mins":135,"notes":""},
+        {"type":"lunch","start":"14:30","end":"15:00","duration_mins":30,"notes":""},
+        {"type":"on-call","start":"15:00","end":"17:00","duration_mins":120,"notes":""},
+        {"type":"break","start":"17:00","end":"17:15","duration_mins":15,"notes":""},
+        {"type":"on-call","start":"17:15","end":"18:30","duration_mins":75,"notes":""},
+    ]
+
+    shifts = [
+        {"id":1,"name":"Day Shift — Weekday","start_time":"08:00","end_time":"16:30","hours":8.5,"shift_type":"full","segments":_day_segs,"planning_unit_id":"","lob_name":"All","day_type":"weekday","shift_category":"opening","is_active":True,"sort_order":0},
+        {"id":2,"name":"Closing Shift — Weekday","start_time":"13:30","end_time":"22:00","hours":8.5,"shift_type":"full","segments":_close_segs,"planning_unit_id":"","lob_name":"All","day_type":"weekday","shift_category":"closing","is_active":True,"sort_order":1},
+        {"id":3,"name":"Mid Shift — Weekday","start_time":"10:00","end_time":"18:30","hours":8.5,"shift_type":"full","segments":_mid_segs,"planning_unit_id":"","lob_name":"All","day_type":"weekday","shift_category":"mid","is_active":True,"sort_order":2},
+        {"id":4,"name":"Day Shift — Saturday","start_time":"09:00","end_time":"17:30","hours":8.5,"shift_type":"full","segments":_day_segs,"planning_unit_id":"","lob_name":"All","day_type":"saturday","shift_category":"opening","is_active":True,"sort_order":3},
+        {"id":5,"name":"Closing Shift — Saturday","start_time":"13:30","end_time":"22:00","hours":8.5,"shift_type":"full","segments":_close_segs,"planning_unit_id":"","lob_name":"All","day_type":"saturday","shift_category":"closing","is_active":True,"sort_order":4},
+        {"id":6,"name":"Sunday Shift","start_time":"10:00","end_time":"18:30","hours":8.5,"shift_type":"full","segments":_mid_segs,"planning_unit_id":"","lob_name":"All","day_type":"sunday","shift_category":"any","is_active":True,"sort_order":5},
+    ]
+
+    rotations = [
+        {
+            "id":1,"name":"TL 4-Week Rotation","cycle_weeks":4,"is_active":True,
+            "weeks":[
+                {"label":"Week 1","shifts":{"mon":1,"tue":1,"wed":1,"thu":1,"fri":1,"sat":None,"sun":None}},
+                {"label":"Week 2","shifts":{"mon":2,"tue":2,"wed":2,"thu":2,"fri":2,"sat":None,"sun":None}},
+                {"label":"Week 3","shifts":{"mon":1,"tue":1,"wed":1,"thu":1,"fri":1,"sat":4,"sun":None}},
+                {"label":"Week 4","shifts":{"mon":3,"tue":3,"wed":3,"thu":3,"fri":3,"sat":None,"sun":6}},
+            ],
+            "assignments":[
+                {"id":1,"rotation_id":1,"employee_id":"E2001","employee_name":"Jamie Torres","current_week":0,"start_date":f"{cur_year}-01-06"},
+                {"id":2,"rotation_id":1,"employee_id":"E1001","employee_name":"Alex Morgan","current_week":1,"start_date":f"{cur_year}-01-06"},
+                {"id":3,"rotation_id":1,"employee_id":"E3001","employee_name":"Harper Wilson","current_week":2,"start_date":f"{cur_year}-01-06"},
+                {"id":4,"rotation_id":1,"employee_id":"E2003","employee_name":"Drew Campbell","current_week":3,"start_date":f"{cur_year}-01-06"},
+            ],
+        },
+    ]
+
+    lob_settings = [
+        {"id":1,"planning_unit_id":1,"lob_name":"Sales Support","service_level_target":0.80,"target_asa":30,"interval_minutes":30,"shrinkage_pct":0.30,"occupancy_target":0.85,"max_occupancy":0.92,"default_shift_hrs":8.5,"operating_start":"08:00","operating_end":"22:00","sat_operating_start":"09:00","sat_operating_end":"22:00","sun_operating_start":"10:00","sun_operating_end":"18:30"},
+        {"id":2,"planning_unit_id":2,"lob_name":"Tech Help Desk","service_level_target":0.85,"target_asa":20,"interval_minutes":30,"shrinkage_pct":0.28,"occupancy_target":0.82,"max_occupancy":0.90,"default_shift_hrs":8.5,"operating_start":"08:00","operating_end":"22:00","sat_operating_start":"09:00","sat_operating_end":"20:00","sun_operating_start":"","sun_operating_end":""},
+        {"id":3,"planning_unit_id":3,"lob_name":"Billing","service_level_target":0.75,"target_asa":45,"interval_minutes":30,"shrinkage_pct":0.32,"occupancy_target":0.88,"max_occupancy":0.94,"default_shift_hrs":8.0,"operating_start":"08:00","operating_end":"20:00","sat_operating_start":"09:00","sat_operating_end":"17:00","sun_operating_start":"","sun_operating_end":""},
+    ]
+
+    all_lobs = [
+        {"id":1,"name":"Sales Support"},
+        {"id":2,"name":"Tech Help Desk"},
+        {"id":3,"name":"Billing"},
+    ]
+
+    time_off_types = [
+        {"id":1,"code":"vacation","label":"Vacation","color":"#3b82f6","is_paid":True,"requires_approval":True,"max_days_per_year":15,"min_notice_days":14,"is_default":True,"is_active":True,"sort_order":0},
+        {"id":2,"code":"sick","label":"Sick Leave","color":"#ef4444","is_paid":True,"requires_approval":False,"max_days_per_year":10,"min_notice_days":0,"is_default":True,"is_active":True,"sort_order":1},
+        {"id":3,"code":"personal","label":"Personal Day","color":"#8b5cf6","is_paid":True,"requires_approval":True,"max_days_per_year":3,"min_notice_days":7,"is_default":False,"is_active":True,"sort_order":2},
+        {"id":4,"code":"bereavement","label":"Bereavement","color":"#6b7280","is_paid":True,"requires_approval":False,"max_days_per_year":5,"min_notice_days":0,"is_default":False,"is_active":True,"sort_order":3},
+        {"id":5,"code":"unpaid","label":"Unpaid Leave","color":"#f97316","is_paid":False,"requires_approval":True,"max_days_per_year":None,"min_notice_days":7,"is_default":False,"is_active":True,"sort_order":4},
+        {"id":6,"code":"fmla","label":"FMLA","color":"#14b8a6","is_paid":False,"requires_approval":True,"max_days_per_year":None,"min_notice_days":30,"is_default":False,"is_active":True,"sort_order":5},
+    ]
+
+    ot_rules = [
+        {"id":1,"name":"Standard Voluntary OT","rule_type":"voluntary","max_ot_hours_week":10.0,"max_ot_hours_day":4.0,"requires_approval":True,"min_notice_hours":24,"blackout_dates":[],"eligible_after_days":90,"pay_multiplier":1.5,"is_active":True},
+        {"id":2,"name":"Peak Season Mandatory","rule_type":"mandatory","max_ot_hours_week":15.0,"max_ot_hours_day":4.0,"requires_approval":False,"min_notice_hours":48,"blackout_dates":[],"eligible_after_days":30,"pay_multiplier":1.5,"is_active":True},
+        {"id":3,"name":"Holiday Double-Time","rule_type":"voluntary","max_ot_hours_week":8.0,"max_ot_hours_day":8.0,"requires_approval":True,"min_notice_hours":72,"blackout_dates":[],"eligible_after_days":0,"pay_multiplier":2.0,"is_active":True},
+    ]
+
+    sched_rules = [
+        {"id":1,"name":"Full-Time Standard","min_hours_week":37.5,"max_hours_week":40.0,"max_hours_day":10.0,"max_consecutive_days":5,"min_rest_between_shifts_hrs":11.0,"min_days_off_per_week":2,"max_split_shifts_week":0,"allow_back_to_back":False,"is_default":True,"is_active":True},
+        {"id":2,"name":"Part-Time Flex","min_hours_week":16.0,"max_hours_week":28.0,"max_hours_day":8.0,"max_consecutive_days":5,"min_rest_between_shifts_hrs":10.0,"min_days_off_per_week":2,"max_split_shifts_week":1,"allow_back_to_back":False,"is_default":False,"is_active":True},
+        {"id":3,"name":"Weekend Warrior","min_hours_week":12.0,"max_hours_week":20.0,"max_hours_day":10.0,"max_consecutive_days":3,"min_rest_between_shifts_hrs":10.0,"min_days_off_per_week":4,"max_split_shifts_week":0,"allow_back_to_back":True,"is_default":False,"is_active":True},
+    ]
+
+    holidays = [
+        {"id":1,"name":"New Year's Day","date":f"{cur_year}-01-01","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":2,"name":"Family Day","date":f"{cur_year}-02-17","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":3,"name":"Good Friday","date":f"{cur_year}-04-18","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":False},
+        {"id":4,"name":"Victoria Day","date":f"{cur_year}-05-19","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":5,"name":"Canada Day","date":f"{cur_year}-07-01","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":6,"name":"Civic Holiday","date":f"{cur_year}-08-04","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.3,"year":cur_year,"is_recurring":True},
+        {"id":7,"name":"Labour Day","date":f"{cur_year}-09-01","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":8,"name":"Thanksgiving","date":f"{cur_year}-10-13","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":9,"name":"Christmas Day","date":f"{cur_year}-12-25","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+        {"id":10,"name":"Boxing Day","date":f"{cur_year}-12-26","is_full_day":True,"start_time":None,"end_time":None,"is_paid":True,"affects_forecast":True,"volume_factor":0.0,"year":cur_year,"is_recurring":True},
+    ]
+
+    skill_groups = [
+        {"id":1,"name":"Sales Support","description":"Inbound sales inquiries and upselling","is_active":True,"mappings":[
+            {"id":1,"skill_group_id":1,"employee_id":"E1001","employee_name":"Alex Morgan","proficiency":5,"priority":1,"is_active":True},
+            {"id":2,"skill_group_id":1,"employee_id":"E1002","employee_name":"Jordan Rivera","proficiency":4,"priority":1,"is_active":True},
+            {"id":3,"skill_group_id":1,"employee_id":"E1003","employee_name":"Casey Chen","proficiency":4,"priority":2,"is_active":True},
+        ]},
+        {"id":2,"name":"Tech Help Desk","description":"Technical support and troubleshooting","is_active":True,"mappings":[
+            {"id":4,"skill_group_id":2,"employee_id":"E2001","employee_name":"Jamie Torres","proficiency":5,"priority":1,"is_active":True},
+            {"id":5,"skill_group_id":2,"employee_id":"E2002","employee_name":"Avery Nguyen","proficiency":4,"priority":1,"is_active":True},
+            {"id":6,"skill_group_id":2,"employee_id":"E2003","employee_name":"Drew Campbell","proficiency":5,"priority":1,"is_active":True},
+        ]},
+        {"id":3,"name":"Billing","description":"Billing inquiries, disputes, and account changes","is_active":True,"mappings":[
+            {"id":7,"skill_group_id":3,"employee_id":"E3001","employee_name":"Harper Wilson","proficiency":5,"priority":1,"is_active":True},
+            {"id":8,"skill_group_id":3,"employee_id":"E3002","employee_name":"Rowan Garcia","proficiency":3,"priority":2,"is_active":True},
+        ]},
+        {"id":4,"name":"Escalations","description":"Cross-trained agents handling tier-2 escalations","is_active":True,"mappings":[
+            {"id":9,"skill_group_id":4,"employee_id":"E1001","employee_name":"Alex Morgan","proficiency":4,"priority":1,"is_active":True},
+            {"id":10,"skill_group_id":4,"employee_id":"E2001","employee_name":"Jamie Torres","proficiency":5,"priority":1,"is_active":True},
+        ]},
+    ]
+
+    adherence_codes = [
+        {"id":1,"code":"late","label":"Late to Shift","color":"#ef4444","is_excused":False,"category":"late","is_default":True,"is_active":True,"sort_order":0},
+        {"id":2,"code":"early_out","label":"Left Early","color":"#f97316","is_excused":False,"category":"early_out","is_default":True,"is_active":True,"sort_order":1},
+        {"id":3,"code":"ncns","label":"No Call / No Show","color":"#dc2626","is_excused":False,"category":"absence","is_default":True,"is_active":True,"sort_order":2},
+        {"id":4,"code":"approved_late","label":"Approved Late","color":"#22c55e","is_excused":True,"category":"late","is_default":False,"is_active":True,"sort_order":3},
+        {"id":5,"code":"break_over","label":"Break Overrun","color":"#f59e0b","is_excused":False,"category":"break_overrun","is_default":False,"is_active":True,"sort_order":4},
+        {"id":6,"code":"system_issue","label":"System Issue","color":"#6b7280","is_excused":True,"category":"other","is_default":False,"is_active":True,"sort_order":5},
+    ]
+
+    alerts = [
+        {"id":1,"name":"Service Level Below Target","alert_type":"sl_breach","threshold_value":0.80,"threshold_operator":"lt","lob_name":"All","planning_unit_id":None,"notify_email":True,"notify_in_app":True,"email_recipients":"ops-team@example.com","cooldown_minutes":30,"is_active":True},
+        {"id":2,"name":"Understaffed Alert","alert_type":"understaffed","threshold_value":2.0,"threshold_operator":"gt","lob_name":"Sales Support","planning_unit_id":1,"notify_email":False,"notify_in_app":True,"email_recipients":"","cooldown_minutes":15,"is_active":True},
+        {"id":3,"name":"Adherence Below 90%","alert_type":"adherence","threshold_value":0.90,"threshold_operator":"lt","lob_name":"All","planning_unit_id":None,"notify_email":True,"notify_in_app":True,"email_recipients":"wfm-lead@example.com","cooldown_minutes":60,"is_active":True},
+        {"id":4,"name":"Forecast Variance > 15%","alert_type":"forecast_variance","threshold_value":15.0,"threshold_operator":"gt","lob_name":"All","planning_unit_id":None,"notify_email":False,"notify_in_app":True,"email_recipients":"","cooldown_minutes":120,"is_active":True},
+    ]
+
+    brand_data = {
+        "id":1,"company_name":"Acme Customer Solutions","tagline":"Powering exceptional customer experiences",
+        "accent_color":"#2563eb","contact_email":"admin@acme-cs.example.com",
+        "logo_url":"","favicon_url":"","footer_text":"© Acme Customer Solutions · Workforce Management Platform",
+    }
+
+    employees = [
+        {"id": i+1, "employee_id": e["Employee ID"], "name": f'{e["First Name"]} {e["Last Name"]}'}
+        for i, e in enumerate(DEMO_EMPLOYEES)
+    ]
+
+    fill_in_rules = [
+        {"id":1,"shift_category":"closing","employee_id":2,"employee_name":"Jordan Rivera","employee_ext_id":"E1002","priority":0,"planning_unit_id":None,"fallback_template_id":2,"fallback_template_name":"Closing Shift — Weekday","is_active":True},
+        {"id":2,"shift_category":"closing","employee_id":4,"employee_name":"Taylor Brooks","employee_ext_id":"E1004","priority":1,"planning_unit_id":None,"fallback_template_id":None,"fallback_template_name":"","is_active":True},
+        {"id":3,"shift_category":"opening","employee_id":6,"employee_name":"Riley Kim","employee_ext_id":"E1006","priority":0,"planning_unit_id":None,"fallback_template_id":1,"fallback_template_name":"Day Shift — Weekday","is_active":True},
+    ]
+
+    return {
+        "segments": segments,
+        "shifts": shifts,
+        "rotations": rotations,
+        "lob_settings": lob_settings,
+        "all_lobs": all_lobs,
+        "time_off_types": time_off_types,
+        "ot_rules": ot_rules,
+        "sched_rules": sched_rules,
+        "holidays": holidays,
+        "skill_groups": skill_groups,
+        "adherence_codes": adherence_codes,
+        "alerts": alerts,
+        "brand_data": brand_data,
+        "employees": employees,
+        "fill_in_rules": fill_in_rules,
+        "current_year": cur_year,
+    }
