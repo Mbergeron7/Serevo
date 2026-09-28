@@ -396,27 +396,47 @@ class SegmentCode(db.Model):
 
 
 class ShiftTemplate(db.Model):
-    """Reusable shift definitions — start/end, break placement, segment structure."""
+    """Reusable shift definitions — start/end, break placement, segment structure.
+
+    Enhanced fields:
+      - planning_unit_id: optional FK linking the shift to a specific LOB
+      - day_type: weekday | saturday | sunday | holiday | any
+      - shift_category: opening | closing | mid | any
+    These let you define e.g. "SS TL Weekday Closing 13:30-22:00" vs
+    "PS TL Saturday Opening 9:00-17:30" as separate templates.
+    """
     __tablename__ = "shift_templates"
 
     id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(80), nullable=False)           # e.g. "Standard 8hr Day"
-    start_time  = db.Column(db.String(5), nullable=False)            # "08:00"
-    end_time    = db.Column(db.String(5), nullable=False)            # "16:30"
+    name        = db.Column(db.String(80), nullable=False)           # e.g. "SS TL Weekday Closing"
+    start_time  = db.Column(db.String(5), nullable=False)            # "13:30"
+    end_time    = db.Column(db.String(5), nullable=False)            # "22:00"
     hours       = db.Column(db.Float, default=8.0)
     shift_type  = db.Column(db.String(20), default="full")           # full | half | split
     segments_json = db.Column(db.Text, default="[]")                 # JSON array of segment defs
+    # ── New classification fields ──
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"),
+                                 nullable=True, index=True)          # NULL = applies to all LOBs
+    day_type     = db.Column(db.String(20), default="any")           # weekday | saturday | sunday | holiday | any
+    shift_category = db.Column(db.String(20), default="any")         # opening | closing | mid | any
     is_active   = db.Column(db.Boolean, default=True)
     sort_order  = db.Column(db.Integer, default=0)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
+    planning_unit = db.relationship("PlanningUnit", backref="shift_templates", foreign_keys=[planning_unit_id])
+
     def to_dict(self):
         import json
+        pu = self.planning_unit
         return {
             "id": self.id, "name": self.name,
             "start_time": self.start_time, "end_time": self.end_time,
             "hours": self.hours, "shift_type": self.shift_type,
             "segments": json.loads(self.segments_json) if self.segments_json else [],
+            "planning_unit_id": self.planning_unit_id or "",
+            "lob_name": pu.name if pu else "All",
+            "day_type": self.day_type or "any",
+            "shift_category": self.shift_category or "any",
             "is_active": self.is_active, "sort_order": self.sort_order,
         }
 
@@ -476,7 +496,14 @@ class RotationAssignment(db.Model):
 
 
 class LOBSetting(db.Model):
-    """Per-LOB operational defaults — SLA targets, shrinkage, interval length, etc."""
+    """Per-LOB operational defaults — SLA targets, shrinkage, interval length, etc.
+
+    Operating hours can differ by day type:
+      - Weekday (Mon–Fri)
+      - Saturday
+      - Sunday
+    The original operating_start/end columns are kept as the weekday default.
+    """
     __tablename__ = "lob_settings"
 
     id                    = db.Column(db.Integer, primary_key=True)
@@ -489,11 +516,26 @@ class LOBSetting(db.Model):
     occupancy_target      = db.Column(db.Float, default=0.85)         # 85%
     max_occupancy         = db.Column(db.Float, default=0.92)         # 92%
     default_shift_hrs     = db.Column(db.Float, default=8.0)
-    operating_start       = db.Column(db.String(5), default="08:00")  # earliest shift
-    operating_end         = db.Column(db.String(5), default="22:00")  # latest shift end
+    # Weekday operating hours (Mon–Fri)
+    operating_start       = db.Column(db.String(5), default="08:00")
+    operating_end         = db.Column(db.String(5), default="22:00")
+    # Saturday operating hours (NULL = same as weekday)
+    sat_operating_start   = db.Column(db.String(5), nullable=True)
+    sat_operating_end     = db.Column(db.String(5), nullable=True)
+    # Sunday operating hours (NULL = same as weekday)
+    sun_operating_start   = db.Column(db.String(5), nullable=True)
+    sun_operating_end     = db.Column(db.String(5), nullable=True)
     updated_at            = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     planning_unit = db.relationship("PlanningUnit", backref=db.backref("lob_setting", uselist=False))
+
+    def get_hours_for_day(self, day_of_week):
+        """Return (start, end) for a given day (0=Mon … 6=Sun)."""
+        if day_of_week == 5 and self.sat_operating_start:  # Saturday
+            return self.sat_operating_start, self.sat_operating_end or self.operating_end
+        if day_of_week == 6 and self.sun_operating_start:  # Sunday
+            return self.sun_operating_start, self.sun_operating_end or self.operating_end
+        return self.operating_start, self.operating_end
 
     def to_dict(self):
         pu = self.planning_unit
@@ -510,6 +552,10 @@ class LOBSetting(db.Model):
             "default_shift_hrs": self.default_shift_hrs,
             "operating_start": self.operating_start,
             "operating_end": self.operating_end,
+            "sat_operating_start": self.sat_operating_start or "",
+            "sat_operating_end": self.sat_operating_end or "",
+            "sun_operating_start": self.sun_operating_start or "",
+            "sun_operating_end": self.sun_operating_end or "",
         }
 
 

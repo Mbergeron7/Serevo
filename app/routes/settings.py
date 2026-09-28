@@ -539,6 +539,12 @@ def save_shift():
 
     segments_json = json.dumps(data.get("segments", []))
 
+    pu_id = data.get("planning_unit_id") or None
+    if pu_id:
+        pu_id = int(pu_id)
+    day_type = data.get("day_type", "any") or "any"
+    shift_category = data.get("shift_category", "any") or "any"
+
     if shift_id:
         shift = ShiftTemplate.query.get(shift_id)
         if not shift:
@@ -550,6 +556,9 @@ def save_shift():
         shift.shift_type = data.get("shift_type", shift.shift_type)
         shift.segments_json = segments_json
         shift.sort_order = int(data.get("sort_order", shift.sort_order))
+        shift.planning_unit_id = pu_id
+        shift.day_type = day_type
+        shift.shift_category = shift_category
     else:
         shift = ShiftTemplate(
             name=name, start_time=start_time, end_time=end_time,
@@ -557,6 +566,9 @@ def save_shift():
             shift_type=data.get("shift_type", "full"),
             segments_json=segments_json,
             sort_order=int(data.get("sort_order", 0)),
+            planning_unit_id=pu_id,
+            day_type=day_type,
+            shift_category=shift_category,
         )
         db.session.add(shift)
     db.session.commit()
@@ -653,9 +665,12 @@ def save_lob_setting():
             setattr(setting, field, float(data[field]))
     if "interval_minutes" in data:
         setting.interval_minutes = int(data["interval_minutes"])
-    for field in ["operating_start", "operating_end"]:
+    for field in ["operating_start", "operating_end",
+                  "sat_operating_start", "sat_operating_end",
+                  "sun_operating_start", "sun_operating_end"]:
         if field in data:
-            setattr(setting, field, data[field])
+            val = (data[field] or "").strip()
+            setattr(setting, field, val if val else None)
 
     db.session.commit()
     return jsonify({"success": True, "setting": setting.to_dict()})
