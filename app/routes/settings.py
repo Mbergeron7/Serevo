@@ -724,7 +724,10 @@ def save_fill_in_rule():
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)})
+        err = str(e)
+        if "uq_fillin_cat_employee" in err:
+            return jsonify({"success": False, "error": "This employee already has a rule for that shift category."})
+        return jsonify({"success": False, "error": err})
 
     return jsonify({"success": True, "rule": rule.to_dict()})
 
