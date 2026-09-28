@@ -260,105 +260,250 @@ def get_demo_dashboard_stats():
 # ── Real-Time monitoring demo data ──────────────────────────
 
 def get_demo_realtime_snapshot(lob, date_obj):
-    """Return a realistic intraday snapshot for a LOB."""
-    intervals = _generate_intervals(lob, date_obj)
+    """Return a realistic intraday snapshot matching the real engine shape.
+
+    Shape: {lob, date, current_interval, current_time,
+            intervals: [{time, required, scheduled, gap, coverage_pct,
+                         forecast_offered, forecast_aht, status}],
+            current: {time, required, scheduled, gap, coverage_pct, status,
+                      forecast_offered, forecast_aht},
+            shifts: [{employee, employee_id, start, end, hours, type}],
+            unassigned: [names],
+            summary: {total_intervals, understaffed_count, overstaffed_count,
+                      avg_coverage_pct, peak_required, peak_gap,
+                      total_scheduled, total_unassigned},
+            alerts: [{severity, message, time, details}]}
+    """
+    raw_ivs = _generate_intervals(lob, date_obj)
     now = datetime.datetime.now()
-    current_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+    cur_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+    rng = random.Random(date_obj.toordinal() + hash(lob) + 7)
 
-    snapshot_intervals = []
-    for iv in intervals:
-        is_past = iv["time"] <= current_interval
-        staffed = iv["agents_required"] + random.randint(-1, 2) if is_past else 0
-        calls_offered = iv["offered"] if is_past else 0
-        calls_handled = int(calls_offered * random.uniform(0.92, 0.99)) if is_past else 0
-        aht_actual = iv["aht"] * random.uniform(0.9, 1.1) if is_past else 0
-
-        snapshot_intervals.append({
-            "time": iv["time"],
-            "forecast_volume": iv["offered"],
-            "actual_volume": calls_offered,
-            "forecast_aht": iv["aht"],
-            "actual_aht": round(aht_actual, 1),
-            "required": iv["agents_required"],
-            "staffed": max(0, staffed),
-            "calls_handled": calls_handled,
-            "service_level": round(random.uniform(0.78, 0.95), 2) if is_past else None,
-            "is_current": iv["time"] == current_interval,
+    # Build demo shifts for this LOB's employees
+    lob_emps = [e for e in DEMO_EMPLOYEES
+                if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
+    shifts = []
+    unassigned = []
+    for i, emp in enumerate(lob_emps):
+        name = f"{emp['First Name']} {emp['Last Name']}"
+        # Weekend: ~30% off
+        if date_obj.weekday() >= 5 and rng.random() > 0.3:
+            unassigned.append(name)
+            continue
+        pattern = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
+        shifts.append({
+            "employee": name,
+            "employee_id": emp["Employee ID"],
+            "start": pattern[0],
+            "end": pattern[1],
+            "hours": pattern[2],
+            "type": "full",
         })
 
+    # Count scheduled agents per interval from shifts
+    sched_map = {}
+    for iv in raw_ivs:
+        sched_map[iv["time"]] = 0
+    for s in shifts:
+        sh, sm = int(s["start"][:2]), int(s["start"][3:])
+        eh, em = int(s["end"][:2]), int(s["end"][3:])
+        s_min = sh * 60 + sm
+        e_min = eh * 60 + em
+        for m in range(s_min, e_min, 30):
+            t = f"{m // 60:02d}:{m % 60:02d}"
+            if t in sched_map:
+                sched_map[t] += 1
+
+    intervals = []
+    for iv in raw_ivs:
+        t = iv["time"]
+        req = iv["agents_required"]
+        sched = sched_map.get(t, 0)
+        gap = sched - req
+        pct = round((sched / req) * 100, 1) if req > 0 else (100.0 if sched > 0 else 0)
+        if req > 0 and pct < 70:
+            status = "critical"
+        elif req > 0 and pct < 90:
+            status = "warning"
+        elif sched > req and req > 0:
+            status = "over"
+        else:
+            status = "ok"
+        intervals.append({
+            "time": t,
+            "required": req,
+            "scheduled": sched,
+            "gap": round(gap, 1),
+            "coverage_pct": pct,
+            "forecast_offered": round(iv["offered"], 1),
+            "forecast_aht": round(iv["aht"], 1),
+            "status": status,
+        })
+
+    # Current interval
+    current = None
+    for iv in intervals:
+        if iv["time"] == cur_interval:
+            current = iv
+            break
+    if not current:
+        for iv in reversed(intervals):
+            if iv["time"] <= cur_interval:
+                current = iv
+                break
+    if not current:
+        current = {"time": cur_interval, "required": 0, "scheduled": 0,
+                   "gap": 0, "coverage_pct": 0, "status": "ok",
+                   "forecast_offered": 0, "forecast_aht": 0}
+
+    # Alerts
+    cur_mins = int(cur_interval[:2]) * 60 + int(cur_interval[3:])
     alerts = []
-    for iv in snapshot_intervals:
-        if iv["staffed"] > 0 and iv["staffed"] < iv["required"] - 1:
-            alerts.append({
-                "time": iv["time"],
-                "type": "understaffed",
-                "message": f"Understaffed at {iv['time']}: {iv['staffed']} vs {iv['required']} required",
-            })
+    for iv in intervals:
+        iv_mins = int(iv["time"][:2]) * 60 + int(iv["time"][3:])
+        if iv_mins < cur_mins or iv_mins > cur_mins + 120:
+            continue
+        when = "NOW" if iv["time"] == cur_interval else f"at {iv['time']}"
+        if iv["status"] == "critical":
+            alerts.append({"severity": "critical", "message": f"Critical understaffing {when}",
+                           "time": iv["time"],
+                           "details": f"Need {iv['required']} agents, only {iv['scheduled']} scheduled ({iv['coverage_pct']}% coverage)"})
+        elif iv["status"] == "warning":
+            alerts.append({"severity": "warning", "message": f"Understaffed {when}",
+                           "time": iv["time"],
+                           "details": f"Need {iv['required']} agents, {iv['scheduled']} scheduled ({iv['coverage_pct']}% coverage)"})
+    if unassigned:
+        alerts.append({"severity": "info", "message": f"{len(unassigned)} employee(s) unavailable today",
+                       "time": "", "details": ", ".join(unassigned[:5]) + ("…" if len(unassigned) > 5 else "")})
+    sev_order = {"critical": 0, "warning": 1, "info": 2}
+    alerts.sort(key=lambda a: (sev_order.get(a["severity"], 9), a["time"]))
+
+    # Summary
+    understaffed = sum(1 for iv in intervals if iv["gap"] < 0)
+    overstaffed = sum(1 for iv in intervals if iv["gap"] > 0 and iv["required"] > 0)
+    avg_cov = sum(iv["coverage_pct"] for iv in intervals) / max(1, len(intervals))
+    peak_req = max((iv["required"] for iv in intervals), default=0)
+    peak_gap = min((iv["gap"] for iv in intervals), default=0)
 
     return {
         "lob": lob,
         "date": date_obj.isoformat(),
-        "intervals": snapshot_intervals,
-        "alerts": alerts,
+        "current_interval": cur_interval,
+        "current_time": now.strftime("%H:%M:%S"),
+        "intervals": intervals,
+        "current": current,
+        "shifts": shifts,
+        "unassigned": unassigned,
         "summary": {
-            "total_offered": sum(iv["actual_volume"] for iv in snapshot_intervals),
-            "total_handled": sum(iv["calls_handled"] for iv in snapshot_intervals),
-            "avg_service_level": round(
-                sum(iv["service_level"] for iv in snapshot_intervals if iv["service_level"]) /
-                max(1, sum(1 for iv in snapshot_intervals if iv["service_level"])), 2),
-            "current_staffed": next((iv["staffed"] for iv in snapshot_intervals if iv["is_current"]), 0),
-            "current_required": next((iv["required"] for iv in snapshot_intervals if iv["is_current"]), 0),
+            "total_intervals": len(intervals),
+            "understaffed_count": understaffed,
+            "overstaffed_count": overstaffed,
+            "avg_coverage_pct": round(avg_cov, 1),
+            "peak_required": peak_req,
+            "peak_gap": round(peak_gap, 1),
+            "total_scheduled": len(shifts),
+            "total_unassigned": len(unassigned),
         },
+        "alerts": alerts,
     }
 
 
 def get_demo_adherence(lob, date_obj):
-    """Return per-agent adherence data for a LOB."""
+    """Return per-agent adherence matching the real engine shape.
+
+    Shape: {adherence: [{employee, employee_id, shift_start, shift_end,
+                         shift_type, hours, expected_state, current_interval,
+                         is_on_shift}],
+            unassigned: [names], current_interval, on_shift_count, total_scheduled}
+    """
+    now = datetime.datetime.now()
+    cur_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+    cur_mins = now.hour * 60 + now.minute
     rng = random.Random(date_obj.toordinal() + hash(lob))
-    agents = [e for e in DEMO_EMPLOYEES
-              if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
-    result = []
-    for emp in agents:
-        adherence_pct = round(rng.uniform(0.82, 0.99), 2)
-        conformance_pct = round(rng.uniform(0.88, 1.0), 2)
-        result.append({
-            "employee": f"{emp['First Name']} {emp['Last Name']}",
+
+    lob_emps = [e for e in DEMO_EMPLOYEES
+                if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
+
+    adherence = []
+    unassigned = []
+    for i, emp in enumerate(lob_emps):
+        name = f"{emp['First Name']} {emp['Last Name']}"
+        if date_obj.weekday() >= 5 and rng.random() > 0.3:
+            unassigned.append(name)
+            continue
+        pattern = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
+        s_min = int(pattern[0][:2]) * 60 + int(pattern[0][3:])
+        e_min = int(pattern[1][:2]) * 60 + int(pattern[1][3:])
+        is_on = s_min <= cur_mins < e_min
+        if is_on:
+            expected = "On Queue"
+        elif cur_mins < s_min:
+            expected = "Not Started"
+        else:
+            expected = "Shift Ended"
+
+        adherence.append({
+            "employee": name,
             "employee_id": emp["Employee ID"],
-            "adherence": adherence_pct,
-            "conformance": conformance_pct,
-            "status": "on-call" if rng.random() > 0.3 else rng.choice(["break", "lunch", "meeting"]),
-            "minutes_out": rng.randint(0, 15),
+            "shift_start": pattern[0],
+            "shift_end": pattern[1],
+            "shift_type": "full",
+            "hours": pattern[2],
+            "expected_state": expected,
+            "current_interval": cur_interval,
+            "is_on_shift": is_on,
         })
+
+    adherence.sort(key=lambda a: (0 if a["is_on_shift"] else 1, a["employee"]))
+
     return {
-        "lob": lob,
-        "date": date_obj.isoformat(),
-        "agents": result,
-        "summary": {
-            "avg_adherence": round(sum(a["adherence"] for a in result) / max(1, len(result)), 2),
-            "avg_conformance": round(sum(a["conformance"] for a in result) / max(1, len(result)), 2),
-            "total_agents": len(result),
-        },
+        "adherence": adherence,
+        "unassigned": unassigned,
+        "current_interval": cur_interval,
+        "on_shift_count": sum(1 for a in adherence if a["is_on_shift"]),
+        "total_scheduled": len(adherence),
     }
 
 
 def get_demo_service_level(lob, date_obj):
-    """Return interval-level service level data."""
-    intervals = _generate_intervals(lob, date_obj)
-    now = datetime.datetime.now()
-    current_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
-    rng = random.Random(date_obj.toordinal() + hash(lob))
+    """Return interval-level service level matching the real engine shape.
 
-    result = []
-    for iv in intervals:
-        is_past = iv["time"] <= current_interval
-        result.append({
+    Shape: [{time, estimated_sl, agents, traffic_intensity, offered, aht}]
+    """
+    # Reuse the snapshot to get consistent intervals + scheduled counts
+    snap = get_demo_realtime_snapshot(lob, date_obj)
+    results = []
+    for iv in snap["intervals"]:
+        offered = iv.get("forecast_offered", 0)
+        aht = iv.get("forecast_aht", 0)
+        agents = iv.get("scheduled", 0)
+
+        if offered > 0 and aht > 0 and agents > 0:
+            traffic = (offered * aht) / 1800
+            if agents > traffic:
+                # Simple Erlang C approximation
+                rho = traffic / agents
+                pw = (traffic ** agents / math.factorial(int(agents))) / (
+                    sum(traffic ** k / math.factorial(k) for k in range(int(agents))) +
+                    (traffic ** agents / math.factorial(int(agents))) * (1 / (1 - rho))
+                ) if rho < 1 else 1.0
+                sl = 1 - pw * math.exp(-(agents - traffic) * (30 / aht)) if rho < 1 else 0.0
+                sl = max(0.0, min(1.0, sl))
+            else:
+                sl = 0.0
+        else:
+            traffic = 0
+            sl = 1.0 if agents > 0 else 0.0
+
+        results.append({
             "time": iv["time"],
-            "service_level": round(rng.uniform(0.75, 0.96), 2) if is_past else None,
-            "target": 0.80,
-            "offered": iv["offered"] if is_past else 0,
-            "answered_in_target": int(iv["offered"] * rng.uniform(0.78, 0.95)) if is_past else 0,
+            "estimated_sl": round(sl, 4),
+            "agents": agents,
+            "traffic_intensity": round(traffic, 2),
+            "offered": offered,
+            "aht": aht,
         })
-    return result
+    return results
 
 
 # ── Seed the demo user ──────────────────────────────────────
@@ -400,13 +545,20 @@ def get_demo_settings_data():
     cur_year = _dt.date.today().year
 
     segments = [
-        {"id":1,"code":"on-call","label":"On Call","color":"#22c55e","is_productive":True,"is_paid":True,"is_default":True,"sort_order":0,"is_active":True},
-        {"id":2,"code":"break","label":"Break","color":"#f59e0b","is_productive":False,"is_paid":True,"is_default":True,"sort_order":1,"is_active":True},
-        {"id":3,"code":"lunch","label":"Lunch","color":"#ef4444","is_productive":False,"is_paid":False,"is_default":True,"sort_order":2,"is_active":True},
-        {"id":4,"code":"training","label":"Training","color":"#8b5cf6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":3,"is_active":True},
-        {"id":5,"code":"meeting","label":"Team Meeting","color":"#3b82f6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":4,"is_active":True},
-        {"id":6,"code":"coaching","label":"Coaching / 1-on-1","color":"#06b6d4","is_productive":False,"is_paid":True,"is_default":False,"sort_order":5,"is_active":True},
-        {"id":7,"code":"project","label":"Project Work","color":"#10b981","is_productive":True,"is_paid":True,"is_default":False,"sort_order":6,"is_active":True},
+        {"id":1,"code":"on-call","label":"On Call","color":"#22c55e","is_productive":True,"is_paid":True,"is_default":True,"sort_order":0,"is_active":True,
+         "offset_mins":None,"duration_mins":None,"is_flexible":False,"window_start_mins":None,"window_end_mins":None},
+        {"id":2,"code":"break","label":"Break","color":"#f59e0b","is_productive":False,"is_paid":True,"is_default":True,"sort_order":1,"is_active":True,
+         "offset_mins":120,"duration_mins":15,"is_flexible":True,"window_start_mins":90,"window_end_mins":150},
+        {"id":3,"code":"lunch","label":"Lunch","color":"#ef4444","is_productive":False,"is_paid":False,"is_default":True,"sort_order":2,"is_active":True,
+         "offset_mins":240,"duration_mins":30,"is_flexible":True,"window_start_mins":210,"window_end_mins":300},
+        {"id":4,"code":"training","label":"Training","color":"#8b5cf6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":3,"is_active":True,
+         "offset_mins":60,"duration_mins":60,"is_flexible":False,"window_start_mins":None,"window_end_mins":None},
+        {"id":5,"code":"meeting","label":"Team Meeting","color":"#3b82f6","is_productive":False,"is_paid":True,"is_default":False,"sort_order":4,"is_active":True,
+         "offset_mins":0,"duration_mins":30,"is_flexible":False,"window_start_mins":None,"window_end_mins":None},
+        {"id":6,"code":"coaching","label":"Coaching / 1-on-1","color":"#06b6d4","is_productive":False,"is_paid":True,"is_default":False,"sort_order":5,"is_active":True,
+         "offset_mins":180,"duration_mins":30,"is_flexible":False,"window_start_mins":None,"window_end_mins":None},
+        {"id":7,"code":"project","label":"Project Work","color":"#10b981","is_productive":True,"is_paid":True,"is_default":False,"sort_order":6,"is_active":True,
+         "offset_mins":None,"duration_mins":None,"is_flexible":False,"window_start_mins":None,"window_end_mins":None},
     ]
 
     # Segments JSON for shift templates
