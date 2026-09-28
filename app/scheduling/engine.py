@@ -240,6 +240,7 @@ def _get_availability(employee_name, date_obj, availability_map=None, employee_e
         day_name = DAYS_OF_WEEK[date_obj.weekday()]
         day_val = str(accom.get(day_name, "fill")).strip().lower()
         if day_val == "off":
+            log.info(f"  → {employee_name} marked off by accommodation ({day_name}={day_val})")
             return {"available": False, "day_type": "off",
                     "shift_start": None, "shift_end": None,
                     "earliest_start": None, "latest_start": None, "latest_end": None}
@@ -255,6 +256,8 @@ def _get_availability(employee_name, date_obj, availability_map=None, employee_e
             db_avail = _get_db_availability(db_id, day_of_week)
             if db_avail:
                 if not db_avail["is_available"]:
+                    log.info(f"  → {employee_name} marked unavailable by EmployeeAvailability "
+                             f"(day_of_week={day_of_week})")
                     return {"available": False, "day_type": "off",
                             "shift_start": None, "shift_end": None,
                             "earliest_start": None, "latest_start": None, "latest_end": None}
@@ -344,7 +347,7 @@ def _generate_segments(start_time, end_time, shift_type):
     return segments
 
 
-def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
+def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_ids=None):
     """
     Generate shift assignments for a LOB on a given date.
 
@@ -368,6 +371,11 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
     requirements = _get_requirements_for_date(lob, date_obj, sheet)
     employees = _get_employees_for_lob(lob, sheet)
     warnings = []
+
+    # Filter by selected employee IDs if provided
+    if employee_ids:
+        id_set = set(str(eid) for eid in employee_ids)
+        employees = [e for e in employees if str(e.get("employee_id", "")) in id_set]
 
     if not employees:
         warnings.append(f"No active employees found for {lob}")
@@ -479,10 +487,12 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
     # fewer placement options), then unrestricted employees
     emp_avails = []
     unassigned = []
+    log.info(f"Scheduling {len(employees)} employees for {lob} on {date_obj}")
     for emp in employees:
         avail = _get_availability(emp["name"], date_obj, avail_map,
                                   employee_ext_id=emp.get("employee_id"))
         if not avail["available"]:
+            log.info(f"  SKIP {emp['name']} (unavailable, day_type={avail['day_type']})")
             unassigned.append(emp["name"])
             continue
         # Resolve DB id and check for rotation shift
@@ -662,7 +672,7 @@ def coverage_summary(coverage_intervals):
 # MULTI-DAY AGGREGATION
 # ═════════════════════════════════════════════════════════════
 
-def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sheet=None):
+def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sheet=None, employee_ids=None):
     """
     Generate shifts and coverage for a date range.
     Returns {
@@ -682,7 +692,7 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
 
     while d <= end_date:
         shifts, unassigned, warnings = generate_shifts(
-            lob, d, shift_length_hrs, sheet)
+            lob, d, shift_length_hrs, sheet, employee_ids)
         coverage = analyze_coverage(lob, d, shifts, sheet)
         summary = coverage_summary(coverage)
 

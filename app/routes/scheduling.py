@@ -161,7 +161,8 @@ def generate():
                 db.session.commit()
 
             sheet = _get_sheet()
-            result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet)
+            emp_ids = payload.get("employee_ids") or None  # list or None
+            result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
         result["success"] = True
         return jsonify(result)
 
@@ -640,4 +641,56 @@ def clear_schedule():
 
     except Exception as e:
         log.exception("Clear schedule error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+# ── Employees for LOB (API) ───────────────────────────────
+@scheduling_bp.route("/employees", methods=["POST"])
+@login_required
+def employees_for_lob():
+    """Return employees filtered by LOB for the employee picker."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import DEMO_EMPLOYEES
+            emps = []
+            for e in DEMO_EMPLOYEES:
+                if lob and e.get("Latest Skill Name", "") != lob:
+                    continue
+                if str(e.get("Status", "")).strip().lower() in ("inactive", "terminated"):
+                    continue
+                first = str(e.get("First Name", "")).strip()
+                last = str(e.get("Last Name", "")).strip()
+                emps.append({
+                    "employee_id": e.get("Employee ID", ""),
+                    "name": f"{first} {last}".strip(),
+                    "lob": e.get("Latest Skill Name", ""),
+                })
+            return jsonify({"success": True, "employees": emps})
+
+        from app.scheduling.engine import _get_employees_for_lob
+        sheet = _get_sheet()
+        emps = _get_employees_for_lob(lob, sheet) if lob else []
+
+        # If no LOB filter, return all active employees
+        if not lob:
+            from app.people.manager import get_active_employees
+            active, _ = get_active_employees(sheet)
+            emps = []
+            for e in active:
+                first = str(e.get("First Name", "")).strip()
+                last = str(e.get("Last Name", "")).strip()
+                emps.append({
+                    "employee_id": e.get("Employee ID", ""),
+                    "name": f"{first} {last}".strip(),
+                    "lob": (e.get("Latest Skill Name") or "").strip(),
+                })
+
+        return jsonify({"success": True, "employees": emps})
+
+    except Exception as e:
+        log.exception("Employees for LOB error")
         return jsonify({"success": False, "error": str(e)})

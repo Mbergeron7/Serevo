@@ -381,6 +381,35 @@
       Clear
     </button>
   </div>
+  <!-- Employee filter row -->
+  <div class="config-row" style="margin-top:12px; align-items:flex-start;">
+    <div class="config-group" style="flex:1; min-width:200px;">
+      <label>Employees <span id="empCountBadge" style="font-weight:400; text-transform:none; letter-spacing:0;"></span></label>
+      <div id="empFilterWrap" style="position:relative;">
+        <div id="empFilterPicker" style="display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px;
+             border:1px solid var(--border); border-radius:6px; background:var(--bg);
+             min-height:34px; cursor:pointer; max-height:120px; overflow-y:auto;"
+             onclick="document.getElementById('empDropdown').style.display =
+               document.getElementById('empDropdown').style.display==='none'?'block':'none'">
+          <span id="empPlaceholder" style="color:var(--text-muted); font-size:.82rem;">All employees (select LOB first)</span>
+        </div>
+        <div id="empDropdown" style="display:none; position:absolute; left:0; right:0; top:100%;
+             z-index:50; background:var(--surface); border:1px solid var(--border);
+             border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.15); max-height:220px;
+             overflow-y:auto; margin-top:2px;">
+          <div style="padding:6px 8px; border-bottom:1px solid var(--border); display:flex; gap:6px;">
+            <button type="button" onclick="empSelectAll()" style="font-size:.72rem; padding:2px 8px;
+              border:1px solid var(--border); border-radius:4px; background:var(--bg);
+              cursor:pointer; color:var(--text);">Select All</button>
+            <button type="button" onclick="empDeselectAll()" style="font-size:.72rem; padding:2px 8px;
+              border:1px solid var(--border); border-radius:4px; background:var(--bg);
+              cursor:pointer; color:var(--text);">Clear</button>
+          </div>
+          <div id="empOptionsList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── View tabs ───────────────────────────────────────────── -->
@@ -523,6 +552,8 @@
 let scheduleData = null;
 let currentView = 'timeline';
 let scheduleSource = 'generated'; // 'generated' or 'saved'
+let empList = [];          // [{employee_id, name, lob}]
+let selectedEmpIds = [];   // [] means all
 
 // Timeline constants
 const TL_HOUR_START = 0;
@@ -554,6 +585,117 @@ function hideLoading() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// EMPLOYEE PICKER
+// ═══════════════════════════════════════════════════════════
+document.getElementById('cfgLOB').addEventListener('change', function() {
+  loadEmployeesForLOB(this.value);
+});
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('empFilterWrap').contains(e.target)) {
+    document.getElementById('empDropdown').style.display = 'none';
+  }
+});
+
+function loadEmployeesForLOB(lob) {
+  empList = [];
+  selectedEmpIds = [];
+  renderEmpPicker();
+  if (!lob) return;
+  fetch('/scheduling/employees', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob: lob}),
+  }).then(r => r.json()).then(data => {
+    if (!data.success) return;
+    empList = (data.employees || []).sort((a, b) => a.name.localeCompare(b.name));
+    selectedEmpIds = []; // empty = all
+    renderEmpPicker();
+  }).catch(() => {});
+}
+
+function renderEmpPicker() {
+  const picker = document.getElementById('empFilterPicker');
+  const optList = document.getElementById('empOptionsList');
+  const badge = document.getElementById('empCountBadge');
+  const ph = document.getElementById('empPlaceholder');
+
+  // Options list
+  optList.innerHTML = empList.map(e => {
+    const checked = selectedEmpIds.length === 0 || selectedEmpIds.includes(String(e.employee_id));
+    return `<label style="display:flex; align-items:center; gap:6px; padding:5px 10px; font-size:.82rem;
+      cursor:pointer; border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);"
+      onmouseover="this.style.background='var(--brand-accent-light)'"
+      onmouseout="this.style.background=''">
+      <input type="checkbox" value="${e.employee_id}" ${checked ? 'checked' : ''}
+        onchange="toggleEmp(this.value, this.checked)" style="accent-color:var(--brand-accent);">
+      ${e.name}
+    </label>`;
+  }).join('');
+
+  // Picker display
+  if (empList.length === 0) {
+    ph.style.display = '';
+    ph.textContent = 'All employees (select LOB first)';
+    badge.textContent = '';
+  } else if (selectedEmpIds.length === 0) {
+    ph.style.display = '';
+    ph.textContent = `All ${empList.length} employees`;
+    badge.textContent = `(${empList.length})`;
+  } else {
+    ph.style.display = 'none';
+    badge.textContent = `(${selectedEmpIds.length} of ${empList.length})`;
+    // Show selected names as tags (remove old tags first)
+    picker.querySelectorAll('.emp-tag').forEach(t => t.remove());
+    const selNames = empList.filter(e => selectedEmpIds.includes(String(e.employee_id)));
+    selNames.forEach(e => {
+      const tag = document.createElement('span');
+      tag.className = 'emp-tag';
+      tag.style.cssText = 'display:inline-flex; align-items:center; gap:3px; padding:2px 8px; ' +
+        'background:var(--brand-accent); color:#fff; border-radius:4px; font-size:.72rem; font-weight:600;';
+      tag.innerHTML = `${e.name} <span onclick="event.stopPropagation(); removeEmp('${e.employee_id}')"
+        style="cursor:pointer; margin-left:2px; font-size:.8rem;">×</span>`;
+      picker.appendChild(tag);
+    });
+  }
+}
+
+function toggleEmp(id, checked) {
+  id = String(id);
+  if (checked) {
+    // If nothing was explicitly selected (all), start fresh with just this one
+    if (selectedEmpIds.length === 0) {
+      selectedEmpIds = empList.map(e => String(e.employee_id));
+    }
+    if (!selectedEmpIds.includes(id)) selectedEmpIds.push(id);
+  } else {
+    if (selectedEmpIds.length === 0) {
+      // "All" was selected, now deselect one — select all except this one
+      selectedEmpIds = empList.filter(e => String(e.employee_id) !== id).map(e => String(e.employee_id));
+    } else {
+      selectedEmpIds = selectedEmpIds.filter(x => x !== id);
+    }
+  }
+  // If all are selected, reset to empty (meaning "all")
+  if (selectedEmpIds.length === empList.length) selectedEmpIds = [];
+  renderEmpPicker();
+}
+
+function removeEmp(id) {
+  toggleEmp(id, false);
+}
+
+function empSelectAll() {
+  selectedEmpIds = [];
+  renderEmpPicker();
+}
+
+function empDeselectAll() {
+  selectedEmpIds = ['__none__']; // sentinel: nobody selected
+  renderEmpPicker();
+}
+
+// ═══════════════════════════════════════════════════════════
 // GENERATE
 // ═══════════════════════════════════════════════════════════
 function generateSchedule() {
@@ -571,7 +713,8 @@ function generateSchedule() {
   fetch('/scheduling/generate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({lob, start_date: start, end_date: end, shift_length_hrs: shiftHrs}),
+    body: JSON.stringify({lob, start_date: start, end_date: end, shift_length_hrs: shiftHrs,
+      employee_ids: selectedEmpIds.length > 0 && selectedEmpIds[0] !== '__none__' ? selectedEmpIds : null}),
   })
   .then(r => r.json())
   .then(data => {
