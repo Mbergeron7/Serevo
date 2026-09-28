@@ -49,8 +49,18 @@
 <!-- ═══════ TAB: Rotation Patterns ═══════ -->
 <div class="tab-panel" id="tab-rotations" hidden>
   <div class="tab-header"><h2>Rotation Patterns</h2><button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button></div>
-  <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend.</p>
+  <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend. Assign employees and generate schedules.</p>
   <div id="rotations-list"></div>
+  <div class="card" style="margin-top:1.5rem;padding:1rem;">
+    <h3 style="margin:0 0 0.75rem;">Generate Schedules from Rotations</h3>
+    <p style="font-size:0.85rem;color:var(--text-muted,#999);margin:0 0 0.75rem;">Create schedule entries for all assigned employees based on their rotation patterns.</p>
+    <div class="form-row">
+      <label>Start Date <input type="date" id="rot-gen-start"></label>
+      <label>End Date <input type="date" id="rot-gen-end"></label>
+      <label style="align-self:flex-end;"><button class="btn btn-primary" onclick="generateRotationSchedules()">Generate</button></label>
+    </div>
+    <div id="rot-gen-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
+  </div>
 </div>
 
 <!-- ═══════ TAB: LOB Settings ═══════ -->
@@ -342,6 +352,7 @@ const SKILL_GROUPS = {{ skill_groups | tojson }};
 const ADHERENCE_CODES = {{ adherence_codes | tojson }};
 const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
+const EMPLOYEES = {{ employees | tojson }};
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
@@ -431,9 +442,34 @@ function renderRotations(){
   if(!ROTATIONS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns.</p>';return;}
   el.innerHTML=ROTATIONS.map(r=>{const weeks=r.weeks||[];
     let rows=weeks.map((w,i)=>{const cells=DAYS.map(d=>{const tid=w.shifts?w.shifts[d]:null;const t=tid?SHIFTS.find(s=>s.id==tid):null;return`<td>${t?t.name:(tid==='off'?'<em>Off</em>':'—')}</td>`;}).join('');return`<tr><td style="font-weight:600;">${w.label||'Wk '+(i+1)}</td>${cells}</tr>`;}).join('');
-    return`<div class="card" style="margin-bottom:1rem;"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3><div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div></div>
-    <table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>
-    <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.4rem 0 0;">${(r.assignments||[]).length} employee(s) assigned</p></div>`;}).join('');
+    const assigns=(r.assignments||[]);
+    const assignRows=assigns.length?assigns.map(a=>`<tr>
+      <td>${a.employee_name}</td><td>${a.employee_id}</td>
+      <td>Week ${a.current_week+1}</td><td>${a.start_date||'—'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="unassignRotation(${a.id})">Remove</button></td>
+    </tr>`).join(''):'<tr><td colspan="5" class="empty-msg">No employees assigned yet.</td></tr>';
+    // Build employee dropdown excluding already-assigned
+    const assignedIds=new Set(assigns.map(a=>a.employee_id));
+    const availEmps=EMPLOYEES.filter(e=>!assignedIds.has(e.employee_id));
+    const empOpts=availEmps.map(e=>`<option value="${e.id}">${e.name} (${e.employee_id})</option>`).join('');
+    const weekOpts=weeks.map((w,i)=>`<option value="${i}">${w.label||'Week '+(i+1)}</option>`).join('');
+    return`<div class="card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3>
+        <div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div>
+      </div>
+      <table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:1rem;">
+        <h4 style="margin:0 0 0.5rem;font-size:0.9rem;">Assigned Employees</h4>
+        <table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Name</th><th>ID</th><th>Starting Week</th><th>Start Date</th><th></th></tr></thead><tbody>${assignRows}</tbody></table>
+        ${availEmps.length?`<div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+          <label style="flex:1;min-width:150px;font-size:0.8rem;">Employee<select id="assign-emp-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;"><option value="">— Select —</option>${empOpts}</select></label>
+          <label style="min-width:100px;font-size:0.8rem;">Starting Week<select id="assign-wk-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;">${weekOpts}</select></label>
+          <label style="min-width:120px;font-size:0.8rem;">Start Date<input type="date" id="assign-date-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;"></label>
+          <button class="btn btn-sm btn-primary" onclick="assignRotation(${r.id})">Assign</button>
+        </div>`:'<p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.5rem 0 0;">All employees are assigned.</p>'}
+      </div>
+    </div>`;}).join('');
 }
 let rotWeeks=[];
 function renderRotWeeks(){
@@ -446,6 +482,32 @@ function openRotationModal(r){document.getElementById('rotation-modal-title').te
 function editRotation(id){openRotationModal(ROTATIONS.find(r=>r.id===id));}
 async function saveRotation(e){e.preventDefault();const res=await api('/settings/customization/rotations/save',{id:document.getElementById('rot-id').value||undefined,name:document.getElementById('rot-name').value,weeks:rotWeeks});if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();closeModal('rotation-modal');}else alert(res.error);}
 async function deleteRotation(id){if(!confirm('Delete rotation and all assignments?'))return;const res=await api('/settings/customization/rotations/delete',{id});if(res.success){removeById(ROTATIONS,id);renderRotations();}else alert(res.error);}
+
+async function assignRotation(rotId){
+  const empId=document.getElementById('assign-emp-'+rotId).value;
+  const wk=document.getElementById('assign-wk-'+rotId).value;
+  const dt=document.getElementById('assign-date-'+rotId).value;
+  if(!empId){alert('Select an employee');return;}
+  const res=await api('/settings/customization/rotations/assign',{rotation_id:rotId,employee_id:parseInt(empId),current_week:parseInt(wk),start_date:dt||null});
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+}
+async function unassignRotation(assignId){
+  if(!confirm('Remove this assignment?'))return;
+  const res=await api('/settings/customization/rotations/unassign',{id:assignId});
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+}
+async function generateRotationSchedules(){
+  const start=document.getElementById('rot-gen-start').value;
+  const end=document.getElementById('rot-gen-end').value;
+  const el=document.getElementById('rot-gen-result');
+  if(!start||!end){alert('Select start and end dates');return;}
+  el.innerHTML='<em>Generating...</em>';
+  const res=await api('/settings/customization/rotations/generate',{start_date:start,end_date:end});
+  if(res.success){
+    el.innerHTML=`<span style="color:var(--success,#22c55e);font-weight:600;">✓ ${res.message}</span>`;
+    if(res.warnings&&res.warnings.length) el.innerHTML+=`<br><span style="color:var(--warning,#f59e0b);">${res.warnings.join('<br>')}</span>`;
+  }else{el.innerHTML=`<span style="color:#ef4444;">${res.error}</span>`;}
+}
 
 /* ═══ LOB SETTINGS ════════════════════════ */
 function fmtHours(s){
