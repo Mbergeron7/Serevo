@@ -201,29 +201,39 @@
 <div class="tab-panel" id="tab-availability" hidden>
   <div class="tab-header"><h2>Employee Availability</h2></div>
   <p class="tab-desc">Set per-employee availability windows for each day of the week — earliest/latest start, latest end, and days off.</p>
-  <div style="margin-bottom:1rem;">
-    <label style="font-size:.82rem;font-weight:600;">Filter Employee:
-      <select id="avail-emp-filter" onchange="renderAvailability()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;">
-        <option value="">All Employees</option>
+  <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap;align-items:end;">
+    <label style="font-size:.82rem;font-weight:600;">LOB:
+      <select id="avail-lob-filter" onchange="renderAvailEmployeeList()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;">
+        <option value="">All LOBs</option>
+      </select>
+    </label>
+    <label style="font-size:.82rem;font-weight:600;">Employee:
+      <select id="avail-emp-filter" onchange="renderAvailGrid()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;min-width:200px;">
+        <option value="">— Select an employee —</option>
       </select>
     </label>
   </div>
-  <div style="overflow-x:auto;">
-    <table class="data-table" id="avail-table">
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Day</th>
-          <th>Available</th>
-          <th>Earliest Start</th>
-          <th>Latest Start</th>
-          <th>Latest End</th>
-          <th>Notes</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+  <div id="avail-grid-area" style="display:none;">
+    <h3 id="avail-emp-name" style="margin:0 0 .75rem;font-size:1rem;"></h3>
+    <div style="overflow-x:auto;">
+      <table class="data-table" id="avail-table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Available</th>
+            <th>Earliest Start</th>
+            <th>Latest Start</th>
+            <th>Latest End</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="avail-placeholder" style="color:var(--text-muted,#6b7280);font-size:.9rem;padding:2rem 0;">
+    Select an employee above to view and edit their availability.
   </div>
 </div>
 
@@ -774,47 +784,71 @@ async function saveBranding(e){
 
 /* ── Availability ─────────────────────── */
 function renderAvailability(){
-  const filter=document.getElementById('avail-emp-filter').value;
-  // populate dropdown
-  const sel=document.getElementById('avail-emp-filter');
-  if(sel.options.length<=1){
-    EMPLOYEES.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;sel.appendChild(o);});
-    sel.value=filter;
+  // Populate LOB dropdown
+  const lobSel=document.getElementById('avail-lob-filter');
+  if(lobSel.options.length<=1){
+    const lobs=[...new Set(EMPLOYEES.map(e=>e.employee_id).length?[]:[])];//placeholder
+    // Use ALL_LOBS if available, else extract from employees
+    (typeof ALL_LOBS!=='undefined'?ALL_LOBS:[]).forEach(l=>{
+      const o=document.createElement('option');o.value=l.name||l.id;o.textContent=l.name;lobSel.appendChild(o);
+    });
   }
+  renderAvailEmployeeList();
+}
+
+function renderAvailEmployeeList(){
+  const lobFilter=document.getElementById('avail-lob-filter').value;
+  const empSel=document.getElementById('avail-emp-filter');
+  const prev=empSel.value;
+  empSel.innerHTML='<option value="">— Select an employee —</option>';
+  let emps=EMPLOYEES;
+  if(lobFilter){
+    // Match employees whose LOB/skill matches the selected LOB
+    const lobLower=lobFilter.toLowerCase();
+    const lobEmpIds=new Set();
+    // Check LOB_SETTINGS if available for employee-LOB mapping
+    if(typeof LOB_SETTINGS!=='undefined'){
+      LOB_SETTINGS.forEach(ls=>{if((ls.lob_name||'').toLowerCase()===lobLower)(ls.employee_ids||[]).forEach(id=>lobEmpIds.add(id));});
+    }
+    if(lobEmpIds.size) emps=EMPLOYEES.filter(e=>lobEmpIds.has(e.id));
+  }
+  emps.forEach(e=>{
+    const o=document.createElement('option');o.value=e.id;o.textContent=e.name;empSel.appendChild(o);
+  });
+  if(prev&&[...empSel.options].some(o=>o.value===prev)) empSel.value=prev;
+  renderAvailGrid();
+}
+
+function renderAvailGrid(){
+  const empId=document.getElementById('avail-emp-filter').value;
+  const gridArea=document.getElementById('avail-grid-area');
+  const placeholder=document.getElementById('avail-placeholder');
+  if(!empId){gridArea.style.display='none';placeholder.style.display='';return;}
+  gridArea.style.display='';placeholder.style.display='none';
+  const emp=EMPLOYEES.find(e=>String(e.id)===empId);
+  document.getElementById('avail-emp-name').textContent=emp?emp.name:'';
   const tb=document.querySelector('#avail-table tbody');
   const dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  // group by employee
-  const empMap={};
-  AVAILABILITY.forEach(a=>{
-    if(!empMap[a.employee_id])empMap[a.employee_id]=[];
-    empMap[a.employee_id].push(a);
-  });
+  const entries=AVAILABILITY.filter(a=>String(a.employee_id)===empId);
   let html='';
-  const emps=filter?EMPLOYEES.filter(e=>String(e.id)===filter):EMPLOYEES;
-  emps.forEach(emp=>{
-    const entries=empMap[emp.id]||[];
-    dayNames.forEach((day,di)=>{
-      const a=entries.find(x=>x.day_of_week===di);
-      const avail=a?a.is_available:true;
-      const es=a?a.earliest_start:'';
-      const ls=a?a.latest_start:'';
-      const le=a?a.latest_end:'';
-      const notes=a?a.notes:'';
-      const rid=a?a.id:'';
-      html+=`<tr>
-        <td style="font-weight:600">${di===0?emp.name:''}</td>
-        <td>${day}</td>
-        <td><input type="checkbox" ${avail?'checked':''} onchange="saveAvail(${emp.id},${di},this.parentElement.parentElement)"></td>
-        <td><input type="time" value="${es}" style="width:110px" data-field="earliest_start"></td>
-        <td><input type="time" value="${ls}" style="width:110px" data-field="latest_start"></td>
-        <td><input type="time" value="${le}" style="width:110px" data-field="latest_end"></td>
-        <td><input type="text" value="${notes}" placeholder="" style="width:120px" data-field="notes"></td>
-        <td><button class="btn btn-sm btn-primary" onclick="saveAvail(${emp.id},${di},this.parentElement.parentElement)">Save</button></td>
-      </tr>`;
-    });
-    html+='<tr><td colspan="8" style="padding:0;border:none;height:4px;background:var(--border,#e5e7eb)"></td></tr>';
+  dayNames.forEach((day,di)=>{
+    const a=entries.find(x=>x.day_of_week===di);
+    const avail=a?a.is_available:true;
+    const es=a?a.earliest_start||'':'';
+    const ls=a?a.latest_start||'':'';
+    const le=a?a.latest_end||'':'';
+    const notes=a?a.notes||'':'';
+    html+=`<tr>
+      <td style="font-weight:600">${day}</td>
+      <td><input type="checkbox" ${avail?'checked':''} onchange="saveAvail(${empId},${di},this.parentElement.parentElement)"></td>
+      <td><input type="time" value="${es}" style="width:120px" data-field="earliest_start"></td>
+      <td><input type="time" value="${ls}" style="width:120px" data-field="latest_start"></td>
+      <td><input type="time" value="${le}" style="width:120px" data-field="latest_end"></td>
+      <td><input type="text" value="${notes}" placeholder="" style="width:140px" data-field="notes"></td>
+      <td><button class="btn btn-sm btn-primary" onclick="saveAvail(${empId},${di},this.parentElement.parentElement)">Save</button></td>
+    </tr>`;
   });
-  tb.innerHTML=html||'<tr><td colspan="8" class="empty-msg">No employees found.</td></tr>';
+  tb.innerHTML=html;
 }
 
 async function saveAvail(empId,dayOfWeek,row){
