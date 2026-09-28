@@ -51,8 +51,9 @@
 <div class="tab-panel" id="tab-rotations" hidden>
   <div class="tab-header"><h2>Rotation Patterns</h2><button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button></div>
   <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend. Assign employees and generate schedules.</p>
-  <div id="rotations-list"></div>
-  <div class="card" style="margin-top:1.5rem;padding:1rem;">
+
+  <!-- Generate section — at the top for quick access -->
+  <div class="card" style="margin-bottom:1.5rem;padding:1rem;border-left:3px solid var(--brand-accent);">
     <h3 style="margin:0 0 0.75rem;">Generate Schedules from Rotations</h3>
     <p style="font-size:0.85rem;color:var(--text-muted,#999);margin:0 0 0.75rem;">Create schedule entries for all assigned employees based on their rotation patterns.</p>
     <div class="form-row">
@@ -62,6 +63,25 @@
     </div>
     <div id="rot-gen-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
   </div>
+
+  <!-- Filter bar -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem;">
+    <div>
+      <label style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280);display:block;margin-bottom:3px;">Filter by LOB</label>
+      <select id="rot-lob-filter" onchange="filterRotations()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;">
+        <option value="">All LOBs</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280);display:block;margin-bottom:3px;">Filter by Employee</label>
+      <select id="rot-emp-filter" onchange="filterRotations()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;min-width:180px;">
+        <option value="">All Employees</option>
+      </select>
+    </div>
+    <button class="btn btn-sm" onclick="document.getElementById('rot-lob-filter').value='';document.getElementById('rot-emp-filter').value='';filterRotations();" style="font-size:.78rem;">Clear Filters</button>
+  </div>
+
+  <div id="rotations-list"></div>
 
   <!-- Fill-In Rules -->
   <div class="card" style="margin-top:1.5rem;padding:1rem;">
@@ -531,12 +551,59 @@ async function saveShift(e){e.preventDefault();const res=await api('/settings/cu
 async function deleteShift(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/shifts/delete',{id});if(res.success){removeById(SHIFTS,id);renderShifts();}else alert(res.error);}
 
 /* ═══ ROTATIONS ═══════════════════════════ */
+function populateRotFilters(){
+  // LOB filter
+  const lobSel=document.getElementById('rot-lob-filter');
+  if(lobSel){
+    const lobs=new Set();
+    EMPLOYEES.forEach(e=>{if(e.lob)lobs.add(e.lob);if(e.latest_skill_name)lobs.add(e.latest_skill_name);});
+    if(typeof ALL_LOBS!=='undefined')ALL_LOBS.forEach(l=>lobs.add(l));
+    const prev=lobSel.value;
+    lobSel.innerHTML='<option value="">All LOBs</option>'+[...lobs].sort().map(l=>`<option value="${l}">${l}</option>`).join('');
+    lobSel.value=prev;
+  }
+  // Employee filter
+  const empSel=document.getElementById('rot-emp-filter');
+  if(empSel){
+    const lobVal=lobSel?lobSel.value:'';
+    const prev=empSel.value;
+    let emps=EMPLOYEES.slice();
+    if(lobVal) emps=emps.filter(e=>(e.lob||e.latest_skill_name||'')==lobVal);
+    empSel.innerHTML='<option value="">All Employees</option>'+emps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(e=>`<option value="${e.employee_id}">${e.name} (${e.employee_id})</option>`).join('');
+    empSel.value=prev;
+  }
+}
+function filterRotations(){populateRotFilters();renderRotations();}
+
 function renderRotations(){
+  populateRotFilters();
   const el=document.getElementById('rotations-list');
   if(!ROTATIONS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns.</p>';return;}
-  el.innerHTML=ROTATIONS.map(r=>{const weeks=r.weeks||[];
+  const lobFilter=(document.getElementById('rot-lob-filter')||{}).value||'';
+  const empFilter=(document.getElementById('rot-emp-filter')||{}).value||'';
+  // Filter rotations: show only ones that have an assigned employee matching the filter
+  let filtered=ROTATIONS;
+  if(lobFilter||empFilter){
+    filtered=ROTATIONS.filter(r=>{
+      const assigns=r.assignments||[];
+      if(!assigns.length) return !empFilter; // show unassigned patterns when no employee filter
+      return assigns.some(a=>{
+        let matchLob=true,matchEmp=true;
+        if(lobFilter){
+          const emp=EMPLOYEES.find(e=>String(e.employee_id)===String(a.employee_id));
+          matchLob=emp&&(emp.lob||emp.latest_skill_name||'')===lobFilter;
+        }
+        if(empFilter) matchEmp=String(a.employee_id)===empFilter;
+        return matchLob&&matchEmp;
+      });
+    });
+  }
+  if(!filtered.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns match the current filters.</p>';return;}
+  el.innerHTML=filtered.map(r=>{const weeks=r.weeks||[];
     let rows=weeks.map((w,i)=>{const cells=DAYS.map(d=>{const tid=w.shifts?w.shifts[d]:null;const t=tid?SHIFTS.find(s=>s.id==tid):null;return`<td>${t?t.name:(tid==='off'?'<em>Off</em>':'—')}</td>`;}).join('');return`<tr><td style="font-weight:600;">${w.label||'Wk '+(i+1)}</td>${cells}</tr>`;}).join('');
-    const assigns=(r.assignments||[]);
+    let assigns=(r.assignments||[]);
+    if(empFilter) assigns=assigns.filter(a=>String(a.employee_id)===empFilter);
+    if(lobFilter) assigns=assigns.filter(a=>{const emp=EMPLOYEES.find(e=>String(e.employee_id)===String(a.employee_id));return emp&&(emp.lob||emp.latest_skill_name||'')===lobFilter;});
     const assignRows=assigns.length?assigns.map(a=>`<tr>
       <td>${a.employee_name}</td><td>${a.employee_id}</td>
       <td>Week ${a.current_week+1}</td><td>${a.start_date||'—'}</td>
