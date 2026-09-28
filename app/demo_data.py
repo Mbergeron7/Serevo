@@ -219,7 +219,9 @@ def get_demo_schedules(schedule_date=None):
             {"id": 1, "type": "break",    "start": f"{sh+2:02d}:{sm:02d}", "end": f"{sh+2:02d}:15", "duration_mins": 15, "sort_order": 1, "notes": ""},
             {"id": 2, "type": "on-call",  "start": f"{sh+2:02d}:15", "end": f"{sh+4:02d}:{sm:02d}", "duration_mins": 105, "sort_order": 2, "notes": ""},
             {"id": 3, "type": "lunch",    "start": f"{sh+4:02d}:{sm:02d}", "end": f"{sh+4:02d}:30", "duration_mins": 30, "sort_order": 3, "notes": ""},
-            {"id": 4, "type": "on-call",  "start": f"{sh+4:02d}:30", "end": end_str, "duration_mins": int((hours - 4.75) * 60), "sort_order": 4, "notes": ""},
+            {"id": 4, "type": "on-call",  "start": f"{sh+4:02d}:30", "end": f"{sh+6:02d}:{sm:02d}", "duration_mins": 90, "sort_order": 4, "notes": ""},
+            {"id": 5, "type": "break",    "start": f"{sh+6:02d}:{sm:02d}", "end": f"{sh+6:02d}:15", "duration_mins": 15, "sort_order": 5, "notes": ""},
+            {"id": 6, "type": "on-call",  "start": f"{sh+6:02d}:15", "end": end_str, "duration_mins": int((hours - 6.5) * 60), "sort_order": 6, "notes": ""},
         ]
 
         schedules.append({
