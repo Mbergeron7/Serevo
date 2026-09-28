@@ -150,8 +150,17 @@
     <button onclick="openModal()">+ Add Accommodation</button>
   </div>
   {% if accommodations %}
+  <!-- Filter bar -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);">
+    <input type="text" id="filterName" placeholder="Search by name…" oninput="filterAccom()"
+           style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);min-width:200px;">
+    <select id="filterLOB" onchange="filterAccom()"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+      <option value="">All LOBs</option>
+    </select>
+  </div>
   <div class="accom-table-wrap">
-    <table class="accom-table">
+    <table class="accom-table" id="accomTable">
       <thead>
         <tr>
           <th>Employee</th>
@@ -165,7 +174,7 @@
       </thead>
       <tbody>
         {% for a in accommodations %}
-        <tr>
+        <tr data-name="{{ a.Employee|default('')|lower }}" data-lob="{{ a.LOB|default('')|lower }}">
           <td style="font-weight:600">{{ a.Employee }}</td>
           <td>{{ a.Group }}{% if a.LOB %} / {{ a.LOB }}{% endif %}</td>
           <td>
@@ -354,5 +363,30 @@ function deleteAccom(name) {
 }
 
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+/* ── Filters ─────────────────────────────── */
+(function initFilters() {
+  const lobs = new Set();
+  document.querySelectorAll('#accomTable tbody tr').forEach(row => {
+    const l = row.dataset.lob;
+    if (l) lobs.add(l);
+  });
+  const sel = document.getElementById('filterLOB');
+  [...lobs].sort().forEach(l => {
+    const o = document.createElement('option');
+    o.value = l; o.textContent = l.charAt(0).toUpperCase() + l.slice(1);
+    sel.appendChild(o);
+  });
+})();
+
+function filterAccom() {
+  const q = (document.getElementById('filterName').value || '').toLowerCase();
+  const lob = (document.getElementById('filterLOB').value || '').toLowerCase();
+  document.querySelectorAll('#accomTable tbody tr').forEach(row => {
+    const nameOk = !q || (row.dataset.name || '').includes(q);
+    const lobOk = !lob || (row.dataset.lob || '') === lob;
+    row.style.display = (nameOk && lobOk) ? '' : 'none';
+  });
+}
 </script>
 {% endblock %}

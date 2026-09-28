@@ -356,7 +356,11 @@
   <div id="adherenceContent" style="display:none;">
     <div class="stats-row" id="adhStats"></div>
     <div class="chart-container">
-      <div class="chart-title">Agent Status</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:0">Agent Status</div>
+        <input type="text" id="adhSearch" placeholder="Search employee…" oninput="filterAdherence()"
+               style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);width:200px;">
+      </div>
       <div style="overflow-x:auto;">
         <table class="data-table" id="tblAdherence">
           <thead>
@@ -714,7 +718,7 @@ function renderAdherence() {
   tbody.innerHTML = a.adherence.map(ag => {
     const cls = ag.expected_state === 'On Queue' ? 'adh-on' :
                 ag.expected_state === 'Shift Ended' ? 'adh-ended' : 'adh-off';
-    return `<tr>
+    return `<tr data-emp="${(ag.employee||'').toLowerCase()}">
       <td>${ag.employee}</td>
       <td>${ag.shift_start} – ${ag.shift_end}</td>
       <td>${ag.hours}h</td>
@@ -745,6 +749,14 @@ function renderServiceLevel() {
     { data: ivs.map(iv => iv.traffic_intensity), color: '#f59e0b', width: 2 },
     { data: ivs.map(iv => iv.agents), color: '#10b981', width: 2 },
   ], labels);
+}
+
+/* ── Adherence filter ─────────────────────────── */
+function filterAdherence() {
+  const q = ($('adhSearch').value || '').toLowerCase();
+  document.querySelectorAll('#tblAdherence tbody tr').forEach(row => {
+    row.style.display = (!q || (row.dataset.emp || '').includes(q)) ? '' : 'none';
+  });
 }
 
 /* ── Init ──────────────────────────────────────── */

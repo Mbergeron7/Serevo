@@ -144,6 +144,10 @@
 
 <div class="filter-bar">
   <input type="text" id="filterName" placeholder="Search by name…" oninput="filterPTO()">
+  <select id="filterLOB" onchange="filterPTO()"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+    <option value="">All LOBs</option>
+  </select>
 </div>
 
 <div class="pto-card">
@@ -168,7 +172,7 @@
       </thead>
       <tbody>
         {% for p in pto_list %}
-        <tr data-name="{{ p.Employee|default('')|lower }}">
+        <tr data-name="{{ p.Employee|default('')|lower }}" data-lob="{{ p.LOB|default('')|lower }}">
           <td style="font-weight:600">{{ p.Employee }}</td>
           <td>{{ p.Group }}{% if p.LOB %} / {{ p.LOB }}{% endif %}</td>
           <td>{{ p['Start Date']|default('—') }}</td>
@@ -323,11 +327,29 @@ function deletePTO(rowIdx, name) {
 }
 
 function filterPTO() {
-  const q = document.getElementById('filterName').value.toLowerCase();
+  const q = (document.getElementById('filterName').value || '').toLowerCase();
+  const lob = (document.getElementById('filterLOB').value || '').toLowerCase();
   document.querySelectorAll('#ptoTable tbody tr').forEach(row => {
-    row.style.display = (!q || (row.dataset.name || '').includes(q)) ? '' : 'none';
+    const nameOk = !q || (row.dataset.name || '').includes(q);
+    const lobOk = !lob || (row.dataset.lob || '') === lob;
+    row.style.display = (nameOk && lobOk) ? '' : 'none';
   });
 }
+
+/* populate LOB filter */
+(function() {
+  const lobs = new Set();
+  document.querySelectorAll('#ptoTable tbody tr').forEach(row => {
+    const l = row.dataset.lob;
+    if (l) lobs.add(l);
+  });
+  const sel = document.getElementById('filterLOB');
+  [...lobs].sort().forEach(l => {
+    const o = document.createElement('option');
+    o.value = l; o.textContent = l.charAt(0).toUpperCase() + l.slice(1);
+    sel.appendChild(o);
+  });
+})();
 
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 </script>
