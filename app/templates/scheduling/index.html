@@ -440,6 +440,9 @@
   </div>
 </div>
 
+<!-- ── Global warnings ────────────────────────────────────── -->
+<div id="globalWarnings" class="warning-list" style="display:none;margin-bottom:12px;padding:12px 16px;background:color-mix(in srgb, #d97706 10%, transparent);border-radius:var(--radius);font-size:.85rem;"></div>
+
 <!-- ── Results container ──────────────────────────────────── -->
 <div id="resultsContainer"></div>
 
@@ -922,6 +925,15 @@ function showResults() {
   document.getElementById('btnSave').style.display = '';
   document.getElementById('btnExport').style.display = '';
   document.getElementById('btnClear').style.display = '';
+  // Show global warnings if any
+  const gw = document.getElementById('globalWarnings');
+  const warnings = (scheduleData && scheduleData.warnings) || [];
+  if (warnings.length) {
+    gw.innerHTML = warnings.map(w => '⚠ ' + w).join('<br>');
+    gw.style.display = '';
+  } else {
+    gw.style.display = 'none';
+  }
   switchView(currentView);
 }
 

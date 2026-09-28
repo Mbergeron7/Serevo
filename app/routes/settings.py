@@ -522,6 +522,11 @@ def save_segment():
         seg.is_productive = bool(data.get("is_productive", seg.is_productive))
         seg.is_paid = bool(data.get("is_paid", seg.is_paid))
         seg.sort_order = int(data.get("sort_order", seg.sort_order))
+        seg.offset_mins = data.get("offset_mins") if data.get("offset_mins") is not None else seg.offset_mins
+        seg.duration_mins = data.get("duration_mins") if data.get("duration_mins") is not None else seg.duration_mins
+        seg.is_flexible = bool(data.get("is_flexible", seg.is_flexible))
+        seg.window_start_mins = data.get("window_start_mins") if data.get("window_start_mins") is not None else seg.window_start_mins
+        seg.window_end_mins = data.get("window_end_mins") if data.get("window_end_mins") is not None else seg.window_end_mins
     else:
         if SegmentCode.query.filter_by(code=code).first():
             return jsonify({"success": False, "error": f"Code '{code}' already exists"})
@@ -531,6 +536,11 @@ def save_segment():
             is_productive=bool(data.get("is_productive", True)),
             is_paid=bool(data.get("is_paid", True)),
             sort_order=int(data.get("sort_order", 0)),
+            offset_mins=data.get("offset_mins"),
+            duration_mins=data.get("duration_mins"),
+            is_flexible=bool(data.get("is_flexible", False)),
+            window_start_mins=data.get("window_start_mins"),
+            window_end_mins=data.get("window_end_mins"),
         )
         db.session.add(seg)
     db.session.commit()

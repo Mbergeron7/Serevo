@@ -22,17 +22,61 @@ DEFAULT_INTERVAL_MINS = 30
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # ── Segment / activity defaults ────────────────────────────────
-# Break/lunch placement rules (offset from shift start in minutes)
+# Hardcoded fallbacks — used only when no DB segment codes have placement rules
 SEGMENT_RULES_FULL = [
-    {"type": "break",  "offset_mins": 120, "duration_mins": 15},
-    {"type": "lunch",  "offset_mins": 240, "duration_mins": 30},
-    {"type": "break",  "offset_mins": 360, "duration_mins": 15},
+    {"type": "break",  "offset_mins": 120, "duration_mins": 15,
+     "is_flexible": True, "window_start_mins": 90, "window_end_mins": 150},
+    {"type": "lunch",  "offset_mins": 240, "duration_mins": 30,
+     "is_flexible": True, "window_start_mins": 210, "window_end_mins": 300},
+    {"type": "break",  "offset_mins": 360, "duration_mins": 15,
+     "is_flexible": True, "window_start_mins": 330, "window_end_mins": 390},
 ]
 SEGMENT_RULES_HALF = [
-    {"type": "break",  "offset_mins": 120, "duration_mins": 15},
+    {"type": "break",  "offset_mins": 120, "duration_mins": 15,
+     "is_flexible": True, "window_start_mins": 90, "window_end_mins": 150},
 ]
 
 ACTIVITY_TYPES = ["on-call", "break", "lunch", "meeting", "training", "other"]
+
+
+def _get_segment_rules(shift_type="full"):
+    """
+    Load segment placement rules from the SegmentCode DB table.
+    Falls back to hardcoded rules if no DB codes have placement data.
+    Returns list of rule dicts sorted by offset_mins.
+    """
+    try:
+        from app.models import SegmentCode
+        codes = SegmentCode.query.filter(
+            SegmentCode.is_active == True,
+            SegmentCode.offset_mins.isnot(None),
+            SegmentCode.duration_mins.isnot(None),
+        ).order_by(SegmentCode.sort_order, SegmentCode.offset_mins).all()
+
+        if not codes:
+            return list(SEGMENT_RULES_FULL if shift_type == "full" else SEGMENT_RULES_HALF)
+
+        rules = []
+        for c in codes:
+            rules.append({
+                "type": c.code,
+                "offset_mins": c.offset_mins,
+                "duration_mins": c.duration_mins,
+                "is_flexible": bool(c.is_flexible),
+                "window_start_mins": c.window_start_mins or c.offset_mins,
+                "window_end_mins": c.window_end_mins or c.offset_mins,
+            })
+
+        # For half shifts, only include segments that fit in ~half a shift
+        if shift_type == "half":
+            half_cutoff = int(DEFAULT_SHIFT_LENGTH_HRS * 60 / 2)
+            rules = [r for r in rules if r["offset_mins"] < half_cutoff]
+
+        rules.sort(key=lambda r: r["offset_mins"])
+        return rules
+    except Exception as e:
+        log.warning(f"Segment rules load error: {e}")
+        return list(SEGMENT_RULES_FULL if shift_type == "full" else SEGMENT_RULES_HALF)
 
 
 # ═════════════════════════════════════════════════════════════
@@ -268,6 +312,35 @@ def _get_availability(employee_name, date_obj, availability_map=None, employee_e
     return result
 
 
+def _explain_unavailability(employee_name, date_obj, availability_map, employee_ext_id=None):
+    """Return a human-readable reason why an employee is unavailable on a date."""
+    info = availability_map.get(employee_name, {})
+
+    # Check PTO
+    pto_dates = info.get("pto_dates", set())
+    if date_obj in pto_dates:
+        return "PTO"
+
+    # Check accommodations
+    accom = info.get("accommodations", {})
+    if accom:
+        day_name = DAYS_OF_WEEK[date_obj.weekday()]
+        day_val = str(accom.get(day_name, "fill")).strip().lower()
+        if day_val == "off":
+            return f"accommodation ({day_name}=off)"
+
+    # Check DB availability
+    if employee_ext_id:
+        db_id = _resolve_employee_db_id(employee_ext_id)
+        if db_id:
+            day_of_week = date_obj.weekday()
+            db_avail = _get_db_availability(db_id, day_of_week)
+            if db_avail and not db_avail["is_available"]:
+                return f"EmployeeAvailability (day {day_of_week}=unavailable)"
+
+    return "unknown reason"
+
+
 # ═════════════════════════════════════════════════════════════
 # SHIFT GENERATION
 # ═════════════════════════════════════════════════════════════
@@ -288,10 +361,22 @@ def _minutes_to_time(mins):
     return f"{h:02d}:{m:02d}"
 
 
-def _generate_segments(start_time, end_time, shift_type):
+def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_employees=1):
     """
     Build the segments list for a shift, inserting break and lunch
     windows into on-call blocks.
+
+    For flexible segments (breaks/lunch with windows), the stagger_index
+    distributes placement across the window so not everyone takes break
+    at the same time. Employee 0 gets the earliest slot, employee N gets
+    a later slot, evenly spread across the window.
+
+    Args:
+        start_time: "HH:MM" shift start
+        end_time: "HH:MM" shift end
+        shift_type: "full" or "half"
+        stagger_index: this employee's index (0-based) for staggering
+        total_employees: total number of employees being scheduled (for stagger spread)
 
     Returns list of:
       {type: "on-call"|"break"|"lunch", start: "HH:MM", end: "HH:MM",
@@ -299,27 +384,50 @@ def _generate_segments(start_time, end_time, shift_type):
     """
     s_min = _time_to_minutes(start_time)
     e_min = _time_to_minutes(end_time)
-    shift_len = e_min - s_min
 
-    rules = SEGMENT_RULES_FULL if shift_type == "full" else SEGMENT_RULES_HALF
+    rules = _get_segment_rules(shift_type)
 
     # Collect break/lunch windows that fit within the shift
     pauses = []
     for rule in rules:
-        p_start = s_min + rule["offset_mins"]
-        p_end = p_start + rule["duration_mins"]
+        is_flex = rule.get("is_flexible", False)
+        duration = rule["duration_mins"]
+
+        if is_flex and total_employees > 1:
+            # Stagger within the window
+            win_start = rule.get("window_start_mins", rule["offset_mins"])
+            win_end = rule.get("window_end_mins", rule["offset_mins"])
+            # Available window for start times (must leave room for duration)
+            window_range = max(0, win_end - win_start)
+            if total_employees > 1 and window_range > 0:
+                step = window_range / total_employees
+                offset = win_start + int(step * stagger_index)
+            else:
+                offset = rule["offset_mins"]
+        else:
+            offset = rule["offset_mins"]
+
+        p_start = s_min + offset
+        p_end = p_start + duration
         if p_end <= e_min:
             pauses.append({
                 "type": rule["type"],
                 "start_min": p_start,
                 "end_min": p_end,
-                "duration_mins": rule["duration_mins"],
+                "duration_mins": duration,
             })
 
     # Build segments: fill gaps between pauses with on-call
     segments = []
     cursor = s_min
     for p in sorted(pauses, key=lambda x: x["start_min"]):
+        # Resolve overlaps — if this pause starts before cursor, push it forward
+        if p["start_min"] < cursor:
+            p["start_min"] = cursor
+            p["end_min"] = cursor + p["duration_mins"]
+            if p["end_min"] > e_min:
+                continue  # doesn't fit, skip
+
         if cursor < p["start_min"]:
             segments.append({
                 "type": "on-call",
@@ -394,10 +502,14 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         "Generating default 08:00–16:00 shifts for available staff.")
         shifts = []
         unassigned = []
+        skip_reasons = []
         for emp in employees:
             avail = _get_availability(emp["name"], date_obj, avail_map,
                                       employee_ext_id=emp.get("employee_id"))
             if not avail["available"]:
+                reason = _explain_unavailability(emp["name"], date_obj, avail_map,
+                                                 emp.get("employee_id"))
+                skip_reasons.append(f"{emp['name']}: {reason}")
                 unassigned.append(emp["name"])
                 continue
 
@@ -440,8 +552,19 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 "end": end,
                 "hours": hours,
                 "type": stype,
-                "segments": _generate_segments(start, end, stype),
+                "segments": [],  # filled below with stagger
             })
+
+        # Apply staggered segments across all scheduled employees
+        total_scheduled = len(shifts)
+        for idx, shift in enumerate(shifts):
+            shift["segments"] = _generate_segments(
+                shift["start"], shift["end"], shift["type"],
+                stagger_index=idx, total_employees=total_scheduled)
+
+        if skip_reasons:
+            warnings.append(f"Skipped {len(skip_reasons)} employee(s): " +
+                            "; ".join(skip_reasons))
         return shifts, unassigned, warnings
 
     # Sort requirements by time
@@ -488,11 +611,15 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     emp_avails = []
     unassigned = []
     log.info(f"Scheduling {len(employees)} employees for {lob} on {date_obj}")
+    skip_reasons = []
     for emp in employees:
         avail = _get_availability(emp["name"], date_obj, avail_map,
                                   employee_ext_id=emp.get("employee_id"))
         if not avail["available"]:
-            log.info(f"  SKIP {emp['name']} (unavailable, day_type={avail['day_type']})")
+            reason = _explain_unavailability(emp["name"], date_obj, avail_map,
+                                             emp.get("employee_id"))
+            log.info(f"  SKIP {emp['name']} ({reason})")
+            skip_reasons.append(f"{emp['name']}: {reason}")
             unassigned.append(emp["name"])
             continue
         # Resolve DB id and check for rotation shift
@@ -586,11 +713,22 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "end": e_time,
             "hours": round(length / 60, 1),
             "type": stype,
-            "segments": _generate_segments(s_time, e_time, stype),
+            "segments": [],  # filled below with stagger
         })
+
+    # Apply staggered segments across all scheduled employees
+    total_scheduled = len(shifts)
+    for idx, shift in enumerate(shifts):
+        shift["segments"] = _generate_segments(
+            shift["start"], shift["end"], shift["type"],
+            stagger_index=idx, total_employees=total_scheduled)
 
     # Sort shifts by start time, then employee name
     shifts.sort(key=lambda s: (s["start"], s["employee"]))
+
+    if skip_reasons:
+        warnings.append(f"Skipped {len(skip_reasons)} employee(s): " +
+                        "; ".join(skip_reasons))
 
     return shifts, unassigned, warnings
 
@@ -689,10 +827,18 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
     total_hours = 0.0
     total_coverage_sum = 0.0
     total_days_with_coverage = 0
+    all_employees_seen = set()
+    all_scheduled = set()
 
     while d <= end_date:
         shifts, unassigned, warnings = generate_shifts(
             lob, d, shift_length_hrs, sheet, employee_ids)
+        for s in shifts:
+            all_scheduled.add(s["employee"])
+        for u in unassigned:
+            all_employees_seen.add(u)
+        for s in shifts:
+            all_employees_seen.add(s["employee"])
         coverage = analyze_coverage(lob, d, shifts, sheet)
         summary = coverage_summary(coverage)
 
@@ -717,6 +863,15 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
     avg_coverage = (round(total_coverage_sum / total_days_with_coverage, 1)
                     if total_days_with_coverage > 0 else 0)
 
+    never_scheduled = all_employees_seen - all_scheduled
+    global_warnings = []
+    if never_scheduled:
+        global_warnings.append(
+            f"{len(never_scheduled)} employee(s) were never scheduled across "
+            f"the entire range: {', '.join(sorted(never_scheduled))}. "
+            "Check their PTO, accommodations, and availability settings."
+        )
+
     return {
         "lob": lob,
         "start_date": start_date.strftime("%Y-%m-%d"),
@@ -728,6 +883,7 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
             "total_days": len(days),
             "avg_coverage_pct": avg_coverage,
         },
+        "warnings": global_warnings,
     }
 
 

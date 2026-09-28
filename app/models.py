@@ -384,6 +384,12 @@ class SegmentCode(db.Model):
     is_default   = db.Column(db.Boolean, default=False)                   # system default (can't be deleted)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
+    # ── Placement rules ──────────────────────────────────────
+    offset_mins       = db.Column(db.Integer, nullable=True)   # default offset from shift start (e.g. 120 = 2hrs in)
+    duration_mins     = db.Column(db.Integer, nullable=True)    # segment length (e.g. 15 for break, 30 for lunch)
+    is_flexible       = db.Column(db.Boolean, default=False)    # True = stagger within window; False = fixed placement
+    window_start_mins = db.Column(db.Integer, nullable=True)    # earliest offset from shift start (flexible only)
+    window_end_mins   = db.Column(db.Integer, nullable=True)    # latest offset from shift start (flexible only)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -392,6 +398,11 @@ class SegmentCode(db.Model):
             "color": self.color, "is_productive": self.is_productive,
             "is_paid": self.is_paid, "is_default": self.is_default,
             "sort_order": self.sort_order, "is_active": self.is_active,
+            "offset_mins": self.offset_mins,
+            "duration_mins": self.duration_mins,
+            "is_flexible": self.is_flexible,
+            "window_start_mins": self.window_start_mins,
+            "window_end_mins": self.window_end_mins,
         }
 
 
