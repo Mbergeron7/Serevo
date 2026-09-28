@@ -145,6 +145,21 @@ def generate():
                 },
             }
         else:
+            # Auto-clear any previously saved schedules for this LOB+date range
+            from app.models import PlanningUnit
+            pu = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name) == lob.lower()
+            ).first()
+            if pu:
+                old = Schedule.query.filter(
+                    Schedule.planning_unit_id == pu.id,
+                    Schedule.schedule_date >= start_date,
+                    Schedule.schedule_date <= end_date,
+                ).all()
+                for s in old:
+                    db.session.delete(s)
+                db.session.commit()
+
             sheet = _get_sheet()
             result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet)
         result["success"] = True
@@ -576,4 +591,53 @@ def export_csv():
 
     except Exception as e:
         log.exception("Export error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+# ── Clear saved schedules ────────────────────────────────────
+@scheduling_bp.route("/clear", methods=["POST"])
+@login_required
+def clear_schedule():
+    """
+    Delete all saved schedules for a LOB + date range.
+    POST JSON: {lob, start_date, end_date}
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        start_str = payload.get("start_date", "")
+        end_str = payload.get("end_date", "")
+
+        if not lob or not start_str or not end_str:
+            return jsonify({"success": False, "error": "LOB and date range required"})
+
+        start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify({"success": True, "deleted": 0, "demo": True,
+                            "message": "Schedules cleared (demo mode)."})
+
+        from app.models import PlanningUnit
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if not pu:
+            return jsonify({"success": True, "deleted": 0})
+
+        existing = Schedule.query.filter(
+            Schedule.planning_unit_id == pu.id,
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).all()
+        count = len(existing)
+        for s in existing:
+            db.session.delete(s)
+        db.session.commit()
+
+        return jsonify({"success": True, "deleted": count})
+
+    except Exception as e:
+        log.exception("Clear schedule error")
         return jsonify({"success": False, "error": str(e)})

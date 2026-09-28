@@ -377,6 +377,9 @@
     <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()" style="display:none">
       Export CSV
     </button>
+    <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">
+      Clear
+    </button>
   </div>
 </div>
 
@@ -676,6 +679,30 @@ function saveSchedule() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// CLEAR SAVED SCHEDULES
+// ═══════════════════════════════════════════════════════════
+function clearSchedule() {
+  const lob = document.getElementById('cfgLOB').value;
+  const start = document.getElementById('cfgStart').value;
+  const end = document.getElementById('cfgEnd').value;
+  if (!lob || !start || !end) { showToast('Select LOB and date range first.', 'error'); return; }
+  if (!confirm('Clear all saved schedules for ' + lob + ' from ' + start + ' to ' + end + '?')) return;
+  showLoading('Clearing schedules…');
+  api('/scheduling/clear', {lob, start_date: start, end_date: end}).then(r => {
+    hideLoading();
+    if (!r.success) { showToast(r.error || 'Clear failed', 'error'); return; }
+    scheduleData = null;
+    document.getElementById('viewTabs').style.display = 'none';
+    document.getElementById('statsRow').style.display = 'none';
+    document.getElementById('btnSave').style.display = 'none';
+    document.getElementById('btnExport').style.display = 'none';
+    document.getElementById('btnClear').style.display = 'none';
+    document.getElementById('scheduleContainer').innerHTML = '';
+    showToast((r.deleted || 0) + ' shifts cleared.', 'success');
+  }).catch(e => { hideLoading(); showToast('Clear failed: ' + e, 'error'); });
+}
+
+// ═══════════════════════════════════════════════════════════
 // EXPORT CSV
 // ═══════════════════════════════════════════════════════════
 function exportSchedule() {
@@ -747,6 +774,7 @@ function showResults() {
   document.getElementById('statsRow').style.display = 'flex';
   document.getElementById('btnSave').style.display = '';
   document.getElementById('btnExport').style.display = '';
+  document.getElementById('btnClear').style.display = '';
   switchView(currentView);
 }
 
