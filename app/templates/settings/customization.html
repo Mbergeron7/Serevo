@@ -556,8 +556,8 @@ function populateRotFilters(){
   const lobSel=document.getElementById('rot-lob-filter');
   if(lobSel){
     const lobs=new Set();
-    EMPLOYEES.forEach(e=>{if(e.lob)lobs.add(e.lob);if(e.latest_skill_name)lobs.add(e.latest_skill_name);});
-    if(typeof ALL_LOBS!=='undefined')ALL_LOBS.forEach(l=>lobs.add(l));
+    EMPLOYEES.forEach(e=>{if(e.lob)lobs.add(e.lob);});
+    if(typeof ALL_LOBS!=='undefined')ALL_LOBS.forEach(l=>{if(typeof l==='string')lobs.add(l);});
     const prev=lobSel.value;
     lobSel.innerHTML='<option value="">All LOBs</option>'+[...lobs].sort().map(l=>`<option value="${l}">${l}</option>`).join('');
     lobSel.value=prev;
@@ -568,7 +568,7 @@ function populateRotFilters(){
     const lobVal=lobSel?lobSel.value:'';
     const prev=empSel.value;
     let emps=EMPLOYEES.slice();
-    if(lobVal) emps=emps.filter(e=>(e.lob||e.latest_skill_name||'')==lobVal);
+    if(lobVal) emps=emps.filter(e=>(e.lob||'')==lobVal);
     empSel.innerHTML='<option value="">All Employees</option>'+emps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(e=>`<option value="${e.employee_id}">${e.name} (${e.employee_id})</option>`).join('');
     empSel.value=prev;
   }
@@ -591,7 +591,7 @@ function renderRotations(){
         let matchLob=true,matchEmp=true;
         if(lobFilter){
           const emp=EMPLOYEES.find(e=>String(e.employee_id)===String(a.employee_id));
-          matchLob=emp&&(emp.lob||emp.latest_skill_name||'')===lobFilter;
+          matchLob=emp&&(emp.lob||'')===lobFilter;
         }
         if(empFilter) matchEmp=String(a.employee_id)===empFilter;
         return matchLob&&matchEmp;

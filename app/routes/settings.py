@@ -467,7 +467,8 @@ def customization():
     brand = BrandSetting.query.first()
     brand_data = brand.to_dict() if brand else {}
 
-    employees = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name}
+    employees = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name,
+                  "lob": e.planning_unit.name if e.planning_unit else ""}
                  for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
 
     fill_in_rules = [r.to_dict() for r in FillInRule.query.order_by(
