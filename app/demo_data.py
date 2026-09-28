@@ -378,7 +378,12 @@ def seed_demo_user(app):
                 is_active=True,
             )
             db.session.add(demo)
-            db.session.commit()
+        else:
+            # Ensure existing demo user has admin role and is active
+            demo.role = "admin"
+            demo.is_demo = True
+            demo.is_active = True
+        db.session.commit()
 
 
 # ═══════════════════════════════════════════════════════════════
