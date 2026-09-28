@@ -43,11 +43,11 @@ def _get_requirements_for_date(lob, date_obj, sheet=None):
     """
     Pull interval-level requirements for a LOB on a specific date.
     Returns list of {time: "HH:MM", agents_required: float}.
-    Reads from the REQUIREMENTS RAW tab via data_source.
+    Uses the pluggable data source (Google Sheets or PostgreSQL).
     """
     try:
-        from app.data_source import SheetSource
-        src = SheetSource()
+        from app.data_source import get_source
+        src = get_source()
         intervals, err = src.get_requirements(lob, date_obj)
         if err:
             log.warning(f"Requirements fetch error for {lob} {date_obj}: {err}")

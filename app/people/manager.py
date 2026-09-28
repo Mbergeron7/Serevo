@@ -1,11 +1,8 @@
 """
 people/manager.py — Employee roster, accommodations & PTO
 ==========================================================
-Reads employee data from the existing EMPLOYEES sheet tab (populated by
-the Capacity module's PeopleWare pull). Stores accommodations and PTO in
-their own tabs on the same Google Sheet so data persists across sessions.
-
-All writes go through gspread to the capacity Google Sheet.
+Reads employee data from Google Sheets when configured, otherwise falls back
+to the PostgreSQL database. All writes go to whichever backend is active.
 """
 
 import os
@@ -32,7 +29,14 @@ PTO_HEADERS = [
 ]
 
 
-# ── Sheet access (reuse the same opener as capacity) ─────────
+# ── Helpers ──────────────────────────────────────────────────
+
+def _using_db():
+    """Return True if the active data source is the PostgreSQL backend."""
+    from app.data_source import get_source, PostgresSource
+    return isinstance(get_source(), PostgresSource)
+
+
 def _open_sheet():
     """Return (gspread.Spreadsheet, error_string)."""
     try:
@@ -70,14 +74,30 @@ def get_employees(sheet=None):
         if is_demo_source():
             from app.demo_data import get_demo_employees
             return get_demo_employees()
+
+        # Database fallback — if using Postgres, read from DB
+        if _using_db():
+            return _get_employees_from_db()
+
         sheet, err = _open_sheet()
         if err:
-            return [], err
+            # Final fallback: try DB anyway
+            return _get_employees_from_db()
 
     try:
         ws = sheet.worksheet(TAB_EMPLOYEES)
         records = ws.get_all_records()
         return records, None
+    except Exception as e:
+        return [], str(e)
+
+
+def _get_employees_from_db():
+    """Read employees from the PostgreSQL database."""
+    try:
+        from app.models import Employee
+        emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        return [e.to_legacy_dict() for e in emps], None
     except Exception as e:
         return [], str(e)
 
@@ -123,15 +143,20 @@ def get_employee_names(sheet=None):
 # ═════════════════════════════════════════════════════════════
 
 def get_accommodations(sheet=None):
-    """Return (list_of_dicts, error) from the ACCOMMODATIONS tab."""
+    """Return (list_of_dicts, error) from the ACCOMMODATIONS tab or DB."""
     if sheet is None:
         from app.data_source import is_demo_source
         if is_demo_source():
             from app.demo_data import get_demo_accommodations
             return get_demo_accommodations()
+
+        if _using_db():
+            return _get_accommodations_from_db()
+
         sheet, err = _open_sheet()
         if err:
-            return [], err
+            return _get_accommodations_from_db()
+
     try:
         ws = _ensure_tab(sheet, TAB_ACCOMMODATIONS, ACCOM_HEADERS)
         records = ws.get_all_records()
@@ -140,16 +165,33 @@ def get_accommodations(sheet=None):
         return [], str(e)
 
 
+def _get_accommodations_from_db():
+    """Read accommodations from the PostgreSQL database."""
+    try:
+        from app.models import Accommodation
+        accoms = Accommodation.query.all()
+        return [a.to_legacy_dict() for a in accoms], None
+    except Exception as e:
+        return [], str(e)
+
+
 def save_accommodation(data, sheet=None):
     """
     Add or update an accommodation row.
     data = {Employee, Group, LOB, Mon..Sun, Shift Start, Shift End, Notes}
-    If a row with the same Employee already exists, it is updated in place.
     """
     if sheet is None:
+        from app.data_source import is_demo_source
+        if is_demo_source():
+            return _save_accommodation_to_db(data)
+
+        if _using_db():
+            return _save_accommodation_to_db(data)
+
         sheet, err = _open_sheet()
         if err:
-            return err
+            return _save_accommodation_to_db(data)
+
     try:
         ws = _ensure_tab(sheet, TAB_ACCOMMODATIONS, ACCOM_HEADERS)
         all_vals = ws.get_all_values()
@@ -192,12 +234,59 @@ def save_accommodation(data, sheet=None):
         return str(e)
 
 
+def _save_accommodation_to_db(data):
+    """Save accommodation to the PostgreSQL database."""
+    try:
+        from app.models import db, Accommodation, Employee
+        emp_name = data.get("Employee", "").strip()
+        if not emp_name:
+            return "Employee name is required"
+
+        # Find the employee by name
+        parts = emp_name.split(None, 1)
+        first = parts[0] if parts else ""
+        last = parts[1] if len(parts) > 1 else ""
+        emp = Employee.query.filter_by(first_name=first, last_name=last).first()
+        if not emp:
+            # Try reverse (Last First)
+            emp = Employee.query.filter_by(first_name=last, last_name=first).first()
+        if not emp:
+            return f"Employee '{emp_name}' not found in database"
+
+        # Find existing accommodation or create new
+        accom = Accommodation.query.filter_by(employee_id=emp.id).first()
+        if not accom:
+            accom = Accommodation(employee_id=emp.id)
+            db.session.add(accom)
+
+        accom.mon = data.get("Mon", "fill")
+        accom.tue = data.get("Tue", "fill")
+        accom.wed = data.get("Wed", "fill")
+        accom.thu = data.get("Thu", "fill")
+        accom.fri = data.get("Fri", "fill")
+        accom.sat = data.get("Sat", "fill")
+        accom.sun = data.get("Sun", "fill")
+        accom.shift_start = data.get("Shift Start", "")
+        accom.shift_end = data.get("Shift End", "")
+        accom.notes = data.get("Notes", "")
+
+        db.session.commit()
+        return None
+    except Exception as e:
+        from app.models import db
+        db.session.rollback()
+        return str(e)
+
+
 def delete_accommodation(employee_name, sheet=None):
     """Remove an accommodation row by employee name."""
     if sheet is None:
+        if _using_db():
+            return _delete_accommodation_from_db(employee_name)
         sheet, err = _open_sheet()
         if err:
-            return err
+            return _delete_accommodation_from_db(employee_name)
+
     try:
         ws = _ensure_tab(sheet, TAB_ACCOMMODATIONS, ACCOM_HEADERS)
         all_vals = ws.get_all_values()
@@ -212,24 +301,64 @@ def delete_accommodation(employee_name, sheet=None):
         return str(e)
 
 
+def _delete_accommodation_from_db(employee_name):
+    """Delete accommodation from the PostgreSQL database."""
+    try:
+        from app.models import db, Accommodation, Employee
+        emp_name = employee_name.strip()
+        parts = emp_name.split(None, 1)
+        first = parts[0] if parts else ""
+        last = parts[1] if len(parts) > 1 else ""
+        emp = Employee.query.filter_by(first_name=first, last_name=last).first()
+        if not emp:
+            emp = Employee.query.filter_by(first_name=last, last_name=first).first()
+        if not emp:
+            return "Employee not found"
+        accom = Accommodation.query.filter_by(employee_id=emp.id).first()
+        if not accom:
+            return "No accommodation found"
+        db.session.delete(accom)
+        db.session.commit()
+        return None
+    except Exception as e:
+        from app.models import db
+        db.session.rollback()
+        return str(e)
+
+
 # ═════════════════════════════════════════════════════════════
 # PTO / TIME OFF
 # ═════════════════════════════════════════════════════════════
 
 def get_pto(sheet=None):
-    """Return (list_of_dicts, error) from the PTO tab."""
+    """Return (list_of_dicts, error) from the PTO tab or DB."""
     if sheet is None:
         from app.data_source import is_demo_source
         if is_demo_source():
             from app.demo_data import get_demo_pto
             return get_demo_pto()
+
+        if _using_db():
+            return _get_pto_from_db()
+
         sheet, err = _open_sheet()
         if err:
-            return [], err
+            return _get_pto_from_db()
+
     try:
         ws = _ensure_tab(sheet, TAB_PTO, PTO_HEADERS)
         records = ws.get_all_records()
         return records, None
+    except Exception as e:
+        return [], str(e)
+
+
+def _get_pto_from_db():
+    """Read PTO entries from the PostgreSQL database."""
+    try:
+        from app.models import PTOEntry
+        entries = PTOEntry.query.order_by(PTOEntry.start_date).all()
+        return [p.to_legacy_dict() for p in entries], None
     except Exception as e:
         return [], str(e)
 
@@ -240,9 +369,17 @@ def save_pto(data, sheet=None):
     data = {Employee, Group, LOB, Start Date, End Date, Type, Note}
     """
     if sheet is None:
+        from app.data_source import is_demo_source
+        if is_demo_source():
+            return _save_pto_to_db(data)
+
+        if _using_db():
+            return _save_pto_to_db(data)
+
         sheet, err = _open_sheet()
         if err:
-            return err
+            return _save_pto_to_db(data)
+
     try:
         ws = _ensure_tab(sheet, TAB_PTO, PTO_HEADERS)
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -262,17 +399,74 @@ def save_pto(data, sheet=None):
         return str(e)
 
 
+def _save_pto_to_db(data):
+    """Save PTO entry to the PostgreSQL database."""
+    try:
+        from app.models import db, PTOEntry, Employee
+        emp_name = data.get("Employee", "").strip()
+        if not emp_name:
+            return "Employee name is required"
+
+        parts = emp_name.split(None, 1)
+        first = parts[0] if parts else ""
+        last = parts[1] if len(parts) > 1 else ""
+        emp = Employee.query.filter_by(first_name=first, last_name=last).first()
+        if not emp:
+            emp = Employee.query.filter_by(first_name=last, last_name=first).first()
+        if not emp:
+            return f"Employee '{emp_name}' not found in database"
+
+        start_str = data.get("Start Date", "")
+        end_str = data.get("End Date", "")
+        if not start_str or not end_str:
+            return "Start and End dates are required"
+
+        entry = PTOEntry(
+            employee_id=emp.id,
+            start_date=datetime.datetime.strptime(start_str[:10], "%Y-%m-%d").date(),
+            end_date=datetime.datetime.strptime(end_str[:10], "%Y-%m-%d").date(),
+            pto_type=data.get("Type", "full"),
+            note=data.get("Note", ""),
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return None
+    except Exception as e:
+        from app.models import db
+        db.session.rollback()
+        return str(e)
+
+
 def delete_pto(row_index, sheet=None):
-    """Delete a PTO row by its 1-based sheet row index (header = row 1)."""
+    """Delete a PTO row by its 1-based sheet row index, or DB id."""
     if sheet is None:
+        if _using_db():
+            return _delete_pto_from_db(row_index)
         sheet, err = _open_sheet()
         if err:
-            return err
+            return _delete_pto_from_db(row_index)
+
     try:
         ws = _ensure_tab(sheet, TAB_PTO, PTO_HEADERS)
         ws.delete_rows(row_index)
         return None
     except Exception as e:
+        return str(e)
+
+
+def _delete_pto_from_db(entry_id):
+    """Delete a PTO entry from the PostgreSQL database by ID."""
+    try:
+        from app.models import db, PTOEntry
+        entry = PTOEntry.query.get(int(entry_id))
+        if not entry:
+            return "PTO entry not found"
+        db.session.delete(entry)
+        db.session.commit()
+        return None
+    except Exception as e:
+        from app.models import db
+        db.session.rollback()
         return str(e)
 
 
