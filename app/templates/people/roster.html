@@ -248,9 +248,7 @@
             {% endif %}
           </td>
           <td>
-            {% if emp.get('_db_id') %}
             <button class="edit-btn" onclick='editEmp({{ emp | tojson }})'>Edit</button>
-            {% endif %}
           </td>
         </tr>
         {% endfor %}
