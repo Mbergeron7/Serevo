@@ -106,12 +106,108 @@ def _get_employees_for_lob(lob, sheet=None):
         return []
 
 
-def _get_availability(employee_name, date_obj, availability_map=None):
+def _get_db_availability(employee_db_id, day_of_week):
+    """
+    Check the EmployeeAvailability DB table for per-day constraints.
+    Returns dict or None if no record exists.
+    """
+    try:
+        from app.models import EmployeeAvailability
+        row = EmployeeAvailability.query.filter_by(
+            employee_id=employee_db_id, day_of_week=day_of_week
+        ).first()
+        if not row:
+            return None
+        return {
+            "is_available": row.is_available,
+            "earliest_start": row.earliest_start.strftime("%H:%M") if row.earliest_start else None,
+            "latest_start": row.latest_start.strftime("%H:%M") if row.latest_start else None,
+            "latest_end": row.latest_end.strftime("%H:%M") if row.latest_end else None,
+        }
+    except Exception:
+        return None
+
+
+def _get_rotation_shift(employee_db_id, date_obj):
+    """
+    Check if an employee has a rotation assignment and return the
+    shift template for the given date based on their cycle position.
+    Returns ShiftTemplate dict or None.
+    """
+    try:
+        import json
+        from app.models import RotationAssignment, ShiftTemplate
+        assignment = RotationAssignment.query.filter_by(employee_id=employee_db_id).first()
+        if not assignment or not assignment.pattern or not assignment.pattern.is_active:
+            return None
+
+        pattern = assignment.pattern
+        weeks = json.loads(pattern.weeks_json) if pattern.weeks_json else []
+        if not weeks:
+            return None
+
+        # Determine which week in the cycle this date falls on
+        cycle_weeks = pattern.cycle_weeks or len(weeks)
+        if cycle_weeks < 1:
+            cycle_weeks = 1
+
+        # Calculate weeks elapsed since the assignment's start_date (or pattern creation)
+        ref_date = assignment.start_date or (pattern.created_at.date() if pattern.created_at else date_obj)
+        days_elapsed = (date_obj - ref_date).days
+        if days_elapsed < 0:
+            days_elapsed = 0
+        weeks_elapsed = days_elapsed // 7
+        current_week_idx = (assignment.current_week + weeks_elapsed) % cycle_weeks
+
+        if current_week_idx >= len(weeks):
+            return None
+
+        week_def = weeks[current_week_idx]
+        day_name = DAYS_OF_WEEK[date_obj.weekday()].lower()
+
+        # week_def.shifts is {mon: template_id|null, ...}
+        shifts_map = week_def.get("shifts", {})
+        template_id = shifts_map.get(day_name)
+        if not template_id:
+            return None
+
+        template = ShiftTemplate.query.get(template_id)
+        if not template:
+            return None
+
+        return {
+            "start": template.start_time,
+            "end": template.end_time,
+            "hours": template.hours or 8.0,
+            "type": template.shift_type or "full",
+            "name": template.name,
+        }
+    except Exception:
+        return None
+
+
+def _resolve_employee_db_id(employee_ext_id):
+    """Look up the DB primary key for an employee by their external employee_id."""
+    try:
+        from app.models import Employee
+        emp = Employee.query.filter_by(employee_id=employee_ext_id).first()
+        return emp.id if emp else None
+    except Exception:
+        return None
+
+
+def _get_availability(employee_name, date_obj, availability_map=None, employee_ext_id=None):
     """
     Check if an employee is available on a given date and what
-    restrictions they have. Returns dict:
+    restrictions they have. Merges:
+      1. PTO (highest priority — employee is off)
+      2. Accommodations from people manager (day-level off/half/fill, shift times)
+      3. EmployeeAvailability DB table (per-day windows: earliest/latest start, latest end)
+
+    Returns dict:
       {available: bool, day_type: "fill"|"off"|"half",
-       shift_start: str|None, shift_end: str|None}
+       shift_start: str|None, shift_end: str|None,
+       earliest_start: str|None, latest_start: str|None, latest_end: str|None}
     """
     if availability_map is None:
         try:
@@ -119,7 +215,8 @@ def _get_availability(employee_name, date_obj, availability_map=None):
             availability_map = get_availability_map()
         except Exception:
             return {"available": True, "day_type": "fill",
-                    "shift_start": None, "shift_end": None}
+                    "shift_start": None, "shift_end": None,
+                    "earliest_start": None, "latest_start": None, "latest_end": None}
 
     info = availability_map.get(employee_name, {})
 
@@ -127,7 +224,15 @@ def _get_availability(employee_name, date_obj, availability_map=None):
     pto_dates = info.get("pto_dates", set())
     if date_obj in pto_dates:
         return {"available": False, "day_type": "off",
-                "shift_start": None, "shift_end": None}
+                "shift_start": None, "shift_end": None,
+                "earliest_start": None, "latest_start": None, "latest_end": None}
+
+    # Start with defaults
+    result = {
+        "available": True, "day_type": "fill",
+        "shift_start": None, "shift_end": None,
+        "earliest_start": None, "latest_start": None, "latest_end": None,
+    }
 
     # Check accommodations
     accom = info.get("accommodations", {})
@@ -136,16 +241,28 @@ def _get_availability(employee_name, date_obj, availability_map=None):
         day_val = str(accom.get(day_name, "fill")).strip().lower()
         if day_val == "off":
             return {"available": False, "day_type": "off",
-                    "shift_start": None, "shift_end": None}
-        return {
-            "available": True,
-            "day_type": day_val if day_val in ("fill", "half") else "fill",
-            "shift_start": accom.get("Shift Start") or None,
-            "shift_end": accom.get("Shift End") or None,
-        }
+                    "shift_start": None, "shift_end": None,
+                    "earliest_start": None, "latest_start": None, "latest_end": None}
+        result["day_type"] = day_val if day_val in ("fill", "half") else "fill"
+        result["shift_start"] = accom.get("Shift Start") or None
+        result["shift_end"] = accom.get("Shift End") or None
 
-    return {"available": True, "day_type": "fill",
-            "shift_start": None, "shift_end": None}
+    # Check EmployeeAvailability DB table (overrides/supplements accommodations)
+    if employee_ext_id:
+        db_id = _resolve_employee_db_id(employee_ext_id)
+        if db_id:
+            day_of_week = date_obj.weekday()  # 0=Mon ... 6=Sun
+            db_avail = _get_db_availability(db_id, day_of_week)
+            if db_avail:
+                if not db_avail["is_available"]:
+                    return {"available": False, "day_type": "off",
+                            "shift_start": None, "shift_end": None,
+                            "earliest_start": None, "latest_start": None, "latest_end": None}
+                result["earliest_start"] = db_avail.get("earliest_start")
+                result["latest_start"] = db_avail.get("latest_start")
+                result["latest_end"] = db_avail.get("latest_end")
+
+    return result
 
 
 # ═════════════════════════════════════════════════════════════
@@ -270,21 +387,44 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
         shifts = []
         unassigned = []
         for emp in employees:
-            avail = _get_availability(emp["name"], date_obj, avail_map)
+            avail = _get_availability(emp["name"], date_obj, avail_map,
+                                      employee_ext_id=emp.get("employee_id"))
             if not avail["available"]:
                 unassigned.append(emp["name"])
                 continue
-            start = avail.get("shift_start") or "08:00"
-            if avail["day_type"] == "half":
-                end_mins = _time_to_minutes(start) + (shift_length_mins // 2)
-                end = _minutes_to_time(end_mins)
-                hours = shift_length_hrs / 2
-                stype = "half"
+
+            # Check for rotation-assigned shift template
+            db_id = _resolve_employee_db_id(emp.get("employee_id"))
+            rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+
+            if rot_shift:
+                start = rot_shift["start"].strftime("%H:%M") if hasattr(rot_shift["start"], "strftime") else str(rot_shift["start"])[:5]
+                end = rot_shift["end"].strftime("%H:%M") if hasattr(rot_shift["end"], "strftime") else str(rot_shift["end"])[:5]
+                hours = rot_shift.get("hours", shift_length_hrs)
+                stype = rot_shift.get("type", "full")
             else:
-                end_mins = _time_to_minutes(start) + shift_length_mins
-                end = avail.get("shift_end") or _minutes_to_time(end_mins)
-                hours = shift_length_hrs
-                stype = "full"
+                start = avail.get("shift_start") or "08:00"
+                # Apply earliest_start constraint
+                if avail.get("earliest_start"):
+                    es_min = _time_to_minutes(avail["earliest_start"])
+                    if _time_to_minutes(start) < es_min:
+                        start = avail["earliest_start"]
+                if avail["day_type"] == "half":
+                    end_mins = _time_to_minutes(start) + (shift_length_mins // 2)
+                    end = _minutes_to_time(end_mins)
+                    hours = shift_length_hrs / 2
+                    stype = "half"
+                else:
+                    end_mins = _time_to_minutes(start) + shift_length_mins
+                    end = avail.get("shift_end") or _minutes_to_time(end_mins)
+                    hours = shift_length_hrs
+                    stype = "full"
+                # Cap end time at latest_end
+                if avail.get("latest_end"):
+                    le_min = _time_to_minutes(avail["latest_end"])
+                    if _time_to_minutes(end) > le_min:
+                        end = avail["latest_end"]
+                        hours = round((_time_to_minutes(end) - _time_to_minutes(start)) / 60, 1)
             shifts.append({
                 "employee": emp["name"],
                 "employee_id": emp["employee_id"],
@@ -340,50 +480,87 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None):
     emp_avails = []
     unassigned = []
     for emp in employees:
-        avail = _get_availability(emp["name"], date_obj, avail_map)
+        avail = _get_availability(emp["name"], date_obj, avail_map,
+                                  employee_ext_id=emp.get("employee_id"))
         if not avail["available"]:
             unassigned.append(emp["name"])
             continue
-        emp_avails.append((emp, avail))
+        # Resolve DB id and check for rotation shift
+        db_id = _resolve_employee_db_id(emp.get("employee_id"))
+        rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+        emp_avails.append((emp, avail, rot_shift))
 
-    # Restricted employees first (have shift_start or half day)
+    # Restricted employees first (have shift_start, half day, or rotation)
     emp_avails.sort(key=lambda x: (
-        0 if x[1].get("shift_start") or x[1]["day_type"] == "half" else 1
+        0 if x[2] or x[1].get("shift_start") or x[1]["day_type"] == "half" else 1
     ))
 
     shifts = []
-    for emp, avail in emp_avails:
-        if avail["day_type"] == "half":
-            length = shift_length_mins // 2
+    for emp, avail, rot_shift in emp_avails:
+        # ── Rotation-assigned shift takes priority ──
+        if rot_shift:
+            rs = rot_shift["start"]
+            re = rot_shift["end"]
+            start_min = _time_to_minutes(rs.strftime("%H:%M") if hasattr(rs, "strftime") else str(rs)[:5])
+            end_min = _time_to_minutes(re.strftime("%H:%M") if hasattr(re, "strftime") else str(re)[:5])
+            length = end_min - start_min
+            if length <= 0:
+                length = shift_length_mins
+                end_min = start_min + length
         else:
-            length = shift_length_mins
+            if avail["day_type"] == "half":
+                length = shift_length_mins // 2
+            else:
+                length = shift_length_mins
 
-        # If employee has a fixed shift start, use it
-        if avail.get("shift_start"):
-            start_min = _time_to_minutes(avail["shift_start"])
-            end_min = start_min + length
-            if avail.get("shift_end"):
-                end_min = min(end_min, _time_to_minutes(avail["shift_end"]))
-                length = end_min - start_min
-        else:
-            # Find the best start time: maximize coverage of unmet demand
-            best_start = possible_starts[0] if possible_starts else ops_start_mins
-            best_score = -1
-            for s in possible_starts:
-                # Score = sum of (requirement - already_scheduled) where positive
-                score = 0
-                for m in range(s, s + length, DEFAULT_INTERVAL_MINS):
-                    req = req_by_minute.get(m, 0)
-                    already = scheduled_per_interval.get(m, 0)
-                    gap = req - already
-                    if gap > 0:
-                        score += gap
-                if score > best_score:
-                    best_score = score
-                    best_start = s
+            # Build constrained possible_starts based on availability windows
+            emp_possible_starts = list(possible_starts)  # copy
+            if avail.get("earliest_start"):
+                es_min = _time_to_minutes(avail["earliest_start"])
+                emp_possible_starts = [s for s in emp_possible_starts if s >= es_min]
+            if avail.get("latest_start"):
+                ls_min = _time_to_minutes(avail["latest_start"])
+                emp_possible_starts = [s for s in emp_possible_starts if s <= ls_min]
+            if not emp_possible_starts:
+                # Fall back to original list if constraints eliminated everything
+                emp_possible_starts = list(possible_starts) if possible_starts else [ops_start_mins]
 
-            start_min = best_start
-            end_min = start_min + length
+            # If employee has a fixed shift start from accommodations, use it
+            if avail.get("shift_start"):
+                start_min = _time_to_minutes(avail["shift_start"])
+                # Still respect earliest_start
+                if avail.get("earliest_start"):
+                    es_min = _time_to_minutes(avail["earliest_start"])
+                    start_min = max(start_min, es_min)
+                end_min = start_min + length
+                if avail.get("shift_end"):
+                    end_min = min(end_min, _time_to_minutes(avail["shift_end"]))
+                    length = end_min - start_min
+            else:
+                # Find the best start time: maximize coverage of unmet demand
+                best_start = emp_possible_starts[0] if emp_possible_starts else ops_start_mins
+                best_score = -1
+                for s in emp_possible_starts:
+                    score = 0
+                    for m in range(s, s + length, DEFAULT_INTERVAL_MINS):
+                        req = req_by_minute.get(m, 0)
+                        already = scheduled_per_interval.get(m, 0)
+                        gap = req - already
+                        if gap > 0:
+                            score += gap
+                    if score > best_score:
+                        best_score = score
+                        best_start = s
+
+                start_min = best_start
+                end_min = start_min + length
+
+            # Cap end time at latest_end from availability
+            if avail.get("latest_end"):
+                le_min = _time_to_minutes(avail["latest_end"])
+                if end_min > le_min:
+                    end_min = le_min
+                    length = end_min - start_min
 
         # Record the shift
         for m in range(start_min, end_min, DEFAULT_INTERVAL_MINS):
