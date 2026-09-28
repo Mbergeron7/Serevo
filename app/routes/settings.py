@@ -445,7 +445,7 @@ def customization():
     from app.models import (SegmentCode, ShiftTemplate, RotationPattern, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
-                            BrandSetting, Employee, FillInRule)
+                            BrandSetting, Employee, FillInRule, EmployeeAvailability)
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
     shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
@@ -482,6 +482,8 @@ def customization():
         skill_groups=skill_groups, adherence_codes=adherence_codes,
         alerts=alerts, brand_data=brand_data, current_year=cur_year,
         employees=employees, fill_in_rules=fill_in_rules,
+        availability=[a.to_dict() for a in EmployeeAvailability.query.order_by(
+            EmployeeAvailability.employee_id, EmployeeAvailability.day_of_week).all()],
     )
 
 
@@ -1540,3 +1542,39 @@ def save_branding():
     brand.footer_text = (data.get("footer_text") or "").strip()
     db.session.commit()
     return jsonify({"success": True, "brand": brand.to_dict()})
+
+
+# ── Availability ─────────────────────────────────────────────
+@settings_bp.route("/customization/availability/save", methods=["POST"])
+@admin_required
+def save_availability():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import EmployeeAvailability, db
+    data = request.get_json(force=True)
+    emp_id = data.get("employee_id")
+    day = data.get("day_of_week")
+    if emp_id is None or day is None:
+        return jsonify(success=False, error="employee_id and day_of_week required"), 400
+
+    row = EmployeeAvailability.query.filter_by(employee_id=emp_id, day_of_week=day).first()
+    if not row:
+        row = EmployeeAvailability(employee_id=emp_id, day_of_week=day)
+        db.session.add(row)
+
+    row.is_available = data.get("is_available", True)
+
+    def _parse_time(val):
+        if not val:
+            return None
+        from datetime import time as _time
+        parts = val.split(":")
+        return _time(int(parts[0]), int(parts[1]))
+
+    row.earliest_start = _parse_time(data.get("earliest_start"))
+    row.latest_start = _parse_time(data.get("latest_start"))
+    row.latest_end = _parse_time(data.get("latest_end"))
+    row.notes = (data.get("notes") or "").strip()[:255]
+    db.session.commit()
+    return jsonify(success=True, row=row.to_dict())

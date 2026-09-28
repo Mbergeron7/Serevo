@@ -30,6 +30,7 @@
   <button class="tab-btn" onclick="switchTab('adherence',this)">Adherence Codes</button>
   <button class="tab-btn" onclick="switchTab('alerts',this)">Alerts</button>
   <button class="tab-btn" onclick="switchTab('branding',this)">Branding</button>
+  <button class="tab-btn" onclick="switchTab('availability',this)">Availability</button>
 </div>
 
 <!-- ═══════ TAB: Segment Codes ═══════ -->
@@ -194,6 +195,36 @@
     <button type="submit" class="btn btn-primary">Save Branding</button>
     <span id="brand-saved" style="color:var(--success,#22c55e);margin-left:1rem;display:none;">Saved!</span>
   </form>
+</div>
+
+<!-- ═══════ TAB: Availability ═══════ -->
+<div class="tab-panel" id="tab-availability" hidden>
+  <div class="tab-header"><h2>Employee Availability</h2></div>
+  <p class="tab-desc">Set per-employee availability windows for each day of the week — earliest/latest start, latest end, and days off.</p>
+  <div style="margin-bottom:1rem;">
+    <label style="font-size:.82rem;font-weight:600;">Filter Employee:
+      <select id="avail-emp-filter" onchange="renderAvailability()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;">
+        <option value="">All Employees</option>
+      </select>
+    </label>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="avail-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Day</th>
+          <th>Available</th>
+          <th>Earliest Start</th>
+          <th>Latest Start</th>
+          <th>Latest End</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 
@@ -405,6 +436,7 @@ const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
 const EMPLOYEES = {{ employees | tojson }};
 let FILL_IN_RULES = {{ fill_in_rules | tojson }};
+let AVAILABILITY = {{ availability | tojson }};
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
@@ -740,10 +772,78 @@ async function saveBranding(e){
   if(res.success){const el=document.getElementById('brand-saved');el.style.display='inline';setTimeout(()=>el.style.display='none',2000);}else alert(res.error);
 }
 
+/* ── Availability ─────────────────────── */
+function renderAvailability(){
+  const filter=document.getElementById('avail-emp-filter').value;
+  // populate dropdown
+  const sel=document.getElementById('avail-emp-filter');
+  if(sel.options.length<=1){
+    EMPLOYEES.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;sel.appendChild(o);});
+    sel.value=filter;
+  }
+  const tb=document.querySelector('#avail-table tbody');
+  const dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  // group by employee
+  const empMap={};
+  AVAILABILITY.forEach(a=>{
+    if(!empMap[a.employee_id])empMap[a.employee_id]=[];
+    empMap[a.employee_id].push(a);
+  });
+  let html='';
+  const emps=filter?EMPLOYEES.filter(e=>String(e.id)===filter):EMPLOYEES;
+  emps.forEach(emp=>{
+    const entries=empMap[emp.id]||[];
+    dayNames.forEach((day,di)=>{
+      const a=entries.find(x=>x.day_of_week===di);
+      const avail=a?a.is_available:true;
+      const es=a?a.earliest_start:'';
+      const ls=a?a.latest_start:'';
+      const le=a?a.latest_end:'';
+      const notes=a?a.notes:'';
+      const rid=a?a.id:'';
+      html+=`<tr>
+        <td style="font-weight:600">${di===0?emp.name:''}</td>
+        <td>${day}</td>
+        <td><input type="checkbox" ${avail?'checked':''} onchange="saveAvail(${emp.id},${di},this.parentElement.parentElement)"></td>
+        <td><input type="time" value="${es}" style="width:110px" data-field="earliest_start"></td>
+        <td><input type="time" value="${ls}" style="width:110px" data-field="latest_start"></td>
+        <td><input type="time" value="${le}" style="width:110px" data-field="latest_end"></td>
+        <td><input type="text" value="${notes}" placeholder="" style="width:120px" data-field="notes"></td>
+        <td><button class="btn btn-sm btn-primary" onclick="saveAvail(${emp.id},${di},this.parentElement.parentElement)">Save</button></td>
+      </tr>`;
+    });
+    html+='<tr><td colspan="8" style="padding:0;border:none;height:4px;background:var(--border,#e5e7eb)"></td></tr>';
+  });
+  tb.innerHTML=html||'<tr><td colspan="8" class="empty-msg">No employees found.</td></tr>';
+}
+
+async function saveAvail(empId,dayOfWeek,row){
+  const cells=row.querySelectorAll('input');
+  const isAvail=cells[0].checked;
+  const earliest=row.querySelector('[data-field="earliest_start"]').value;
+  const latest=row.querySelector('[data-field="latest_start"]').value;
+  const latestEnd=row.querySelector('[data-field="latest_end"]').value;
+  const notes=row.querySelector('[data-field="notes"]').value;
+  const res=await api('/settings/customization/availability/save',{
+    employee_id:empId, day_of_week:dayOfWeek,
+    is_available:isAvail, earliest_start:earliest,
+    latest_start:latest, latest_end:latestEnd, notes:notes
+  });
+  if(res.success){
+    // update local data
+    const idx=AVAILABILITY.findIndex(a=>a.employee_id===empId&&a.day_of_week===dayOfWeek);
+    const entry={id:res.id||0,employee_id:empId,day_of_week:dayOfWeek,day_name:DAY_LABELS[dayOfWeek],
+      is_available:isAvail,earliest_start:earliest,latest_start:latest,latest_end:latestEnd,notes:notes};
+    if(idx>=0)AVAILABILITY[idx]=entry; else AVAILABILITY.push(entry);
+    row.style.background='color-mix(in srgb, #22c55e 15%, transparent)';
+    setTimeout(()=>row.style.background='',800);
+  }else alert(res.error||'Save failed');
+}
+
 /* ── Initial render ────────────────────── */
 renderSegments(); renderShifts(); renderRotations(); renderFillInRules(); renderLOBSettings();
 renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
-renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); loadBranding();
+renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); loadBranding(); renderAvailability();
 </script>
 
 <style>

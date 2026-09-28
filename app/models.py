@@ -884,3 +884,44 @@ class BrandSetting(db.Model):
             "contact_email": self.contact_email, "logo_url": self.logo_url,
             "favicon_url": self.favicon_url, "footer_text": self.footer_text,
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE AVAILABILITY
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeeAvailability(db.Model):
+    """Per-day availability window for an employee.
+    One row per employee per day-of-week (0=Mon … 6=Sun)."""
+    __tablename__ = "employee_availability"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    employee_id    = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                               nullable=False, index=True)
+    day_of_week    = db.Column(db.Integer, nullable=False)   # 0=Mon, 1=Tue … 6=Sun
+    is_available   = db.Column(db.Boolean, default=True)
+    earliest_start = db.Column(db.Time, nullable=True)       # e.g. 08:00
+    latest_start   = db.Column(db.Time, nullable=True)       # e.g. 10:00
+    latest_end     = db.Column(db.Time, nullable=True)       # e.g. 22:00
+    notes          = db.Column(db.String(255), default="")
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    employee = db.relationship("Employee", backref="availability_entries")
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "day_of_week", name="uq_avail_emp_day"),
+    )
+
+    def to_dict(self):
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "day_of_week": self.day_of_week,
+            "day_name": day_names[self.day_of_week] if 0 <= self.day_of_week <= 6 else "",
+            "is_available": self.is_available,
+            "earliest_start": self.earliest_start.strftime("%H:%M") if self.earliest_start else "",
+            "latest_start": self.latest_start.strftime("%H:%M") if self.latest_start else "",
+            "latest_end": self.latest_end.strftime("%H:%M") if self.latest_end else "",
+            "notes": self.notes or "",
+        }

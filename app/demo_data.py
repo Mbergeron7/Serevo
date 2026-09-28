@@ -557,6 +557,34 @@ def get_demo_settings_data():
         for i, e in enumerate(DEMO_EMPLOYEES)
     ]
 
+    # Availability — mock per-employee, per-day entries
+    DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    availability = []
+    avail_id = 0
+    for i, e in enumerate(DEMO_EMPLOYEES):
+        for d in range(7):
+            avail_id += 1
+            if d >= 5:  # weekend
+                availability.append({
+                    "id": avail_id, "employee_id": i+1, "day_of_week": d,
+                    "day_name": DAY_NAMES[d], "is_available": False,
+                    "earliest_start": None, "latest_start": None,
+                    "latest_end": None, "notes": "Weekend — unavailable",
+                })
+            else:
+                # Vary start windows slightly per employee
+                es_h = 7 + (i % 3)          # 07:00, 08:00, or 09:00
+                ls_h = es_h + 1
+                le_h = es_h + 9             # 9-hour max span
+                availability.append({
+                    "id": avail_id, "employee_id": i+1, "day_of_week": d,
+                    "day_name": DAY_NAMES[d], "is_available": True,
+                    "earliest_start": f"{es_h:02d}:00",
+                    "latest_start": f"{ls_h:02d}:00",
+                    "latest_end": f"{le_h:02d}:00",
+                    "notes": "",
+                })
+
     fill_in_rules = [
         {"id":1,"shift_category":"closing","employee_id":2,"employee_name":"Jordan Rivera","employee_ext_id":"E1002","priority":0,"planning_unit_id":None,"fallback_template_id":2,"fallback_template_name":"Closing Shift — Weekday","is_active":True},
         {"id":2,"shift_category":"closing","employee_id":4,"employee_name":"Taylor Brooks","employee_ext_id":"E1004","priority":1,"planning_unit_id":None,"fallback_template_id":None,"fallback_template_name":"","is_active":True},
@@ -579,5 +607,6 @@ def get_demo_settings_data():
         "brand_data": brand_data,
         "employees": employees,
         "fill_in_rules": fill_in_rules,
+        "availability": availability,
         "current_year": cur_year,
     }
