@@ -701,7 +701,7 @@ function clearSchedule() {
     document.getElementById('btnSave').style.display = 'none';
     document.getElementById('btnExport').style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
-    document.getElementById('scheduleContainer').innerHTML = '';
+    document.getElementById('resultsContainer').innerHTML = '';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
   }).catch(e => { hideLoading(); showToast('Clear failed: ' + e, 'error'); });
 }
