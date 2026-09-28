@@ -275,6 +275,10 @@ def get_demo_realtime_snapshot(lob, date_obj):
             alerts: [{severity, message, time, details}]}
     """
     raw_ivs = _generate_intervals(lob, date_obj)
+    # _generate_intervals returns time as full timestamp "YYYY-MM-DD HH:MM";
+    # realtime data uses just "HH:MM"
+    for iv in raw_ivs:
+        iv["time"] = iv["time"][11:]  # "2026-09-28 08:00" → "08:00"
     now = datetime.datetime.now()
     cur_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
     rng = random.Random(date_obj.toordinal() + hash(lob) + 7)
