@@ -691,7 +691,7 @@ def unassign_rotation():
 
 # ── Fill-In Rules CRUD ─────────────────────────────────────
 
-@settings_bp.route("/customization/fill-in-rules/list", methods=["GET"])
+@settings_bp.route("/customization/fill-in-rules/list", methods=["GET", "POST"])
 @admin_required
 def list_fill_in_rules():
     from app.models import FillInRule
