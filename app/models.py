@@ -495,6 +495,47 @@ class RotationAssignment(db.Model):
         }
 
 
+class FillInRule(db.Model):
+    """Defines backup/fill-in employees for a shift category when the primary is unavailable.
+
+    When the rotation-assigned employee for a shift category (e.g. closing) is on PTO
+    or otherwise absent, the system picks the highest-priority eligible fill-in.
+    """
+    __tablename__ = "fill_in_rules"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    shift_category   = db.Column(db.String(30), nullable=False)    # closing | opening | mid | weekend
+    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    priority         = db.Column(db.Integer, default=0)            # lower = higher priority
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    fallback_template_id = db.Column(db.Integer, db.ForeignKey("shift_templates.id"), nullable=True)
+    is_active        = db.Column(db.Boolean, default=True)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship("Employee", backref="fill_in_rules")
+    fallback_template = db.relationship("ShiftTemplate", foreign_keys=[fallback_template_id])
+
+    __table_args__ = (
+        db.UniqueConstraint("shift_category", "employee_id", name="uq_fillin_cat_employee"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        tmpl = self.fallback_template
+        return {
+            "id": self.id,
+            "shift_category": self.shift_category,
+            "employee_id": emp.id if emp else None,
+            "employee_name": emp.full_name if emp else "",
+            "employee_ext_id": emp.employee_id if emp else "",
+            "priority": self.priority,
+            "planning_unit_id": self.planning_unit_id,
+            "fallback_template_id": self.fallback_template_id,
+            "fallback_template_name": tmpl.name if tmpl else "",
+            "is_active": self.is_active,
+        }
+
+
 class LOBSetting(db.Model):
     """Per-LOB operational defaults — SLA targets, shrinkage, interval length, etc.
 

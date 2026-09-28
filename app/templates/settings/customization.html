@@ -61,6 +61,57 @@
     </div>
     <div id="rot-gen-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
   </div>
+
+  <!-- Fill-In Rules -->
+  <div class="card" style="margin-top:1.5rem;padding:1rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">Fill-In / Backup Rules</h3>
+      <button class="btn btn-primary btn-sm" onclick="openFillInModal()">+ Add Rule</button>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-muted,#999);margin:0.5rem 0 0.75rem;">
+      When the rotation-assigned employee for a shift category is on PTO, the system fills from this priority list during schedule generation.
+    </p>
+    <div id="fill-in-rules-list"></div>
+  </div>
+</div>
+
+<!-- Fill-In Rule Modal -->
+<div class="modal-overlay" id="fillin-modal">
+  <div class="modal-box" style="max-width:500px;">
+    <h3 id="fillin-modal-title">Add Fill-In Rule</h3>
+    <form onsubmit="saveFillInRule(event)">
+      <input type="hidden" id="fillin-id">
+      <div class="form-row">
+        <label style="flex:1;">Shift Category
+          <select id="fillin-category" required style="width:100%;">
+            <option value="closing">Closing</option>
+            <option value="opening">Opening</option>
+            <option value="mid">Mid</option>
+            <option value="weekend">Weekend</option>
+          </select>
+        </label>
+        <label style="flex:1;">Priority (lower = first)
+          <input type="number" id="fillin-priority" value="0" min="0" style="width:100%;">
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Employee
+          <select id="fillin-employee" required style="width:100%;"></select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Fallback Shift Template (optional)
+          <select id="fillin-template" style="width:100%;">
+            <option value="">— Auto-detect —</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
+        <button type="button" class="btn" onclick="closeModal('fillin-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- ═══════ TAB: LOB Settings ═══════ -->
@@ -353,6 +404,7 @@ const ADHERENCE_CODES = {{ adherence_codes | tojson }};
 const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
 const EMPLOYEES = {{ employees | tojson }};
+let FILL_IN_RULES = {{ fill_in_rules | tojson }};
 const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
@@ -509,6 +561,71 @@ async function generateRotationSchedules(){
   }else{el.innerHTML=`<span style="color:#ef4444;">${res.error}</span>`;}
 }
 
+/* ═══ FILL-IN RULES ══════════════════════ */
+function renderFillInRules(){
+  const el=document.getElementById('fill-in-rules-list');
+  if(!FILL_IN_RULES.length){el.innerHTML='<p class="empty-msg" style="font-size:0.85rem;">No fill-in rules configured.</p>';return;}
+  // Group by category
+  const cats={};
+  FILL_IN_RULES.forEach(r=>{cats[r.shift_category]=cats[r.shift_category]||[];cats[r.shift_category].push(r);});
+  let html='';
+  for(const [cat,rules] of Object.entries(cats)){
+    html+=`<div style="margin-bottom:1rem;">
+      <h4 style="margin:0 0 0.4rem;font-size:0.9rem;text-transform:capitalize;">${cat}</h4>
+      <table class="data-table" style="font-size:0.85rem;"><thead><tr>
+        <th>Priority</th><th>Employee</th><th>ID</th><th>Fallback Template</th><th></th>
+      </tr></thead><tbody>${rules.sort((a,b)=>a.priority-b.priority).map(r=>`<tr>
+        <td>${r.priority}</td><td>${r.employee_name}</td><td>${r.employee_ext_id}</td>
+        <td>${r.fallback_template_name||'Auto-detect'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="editFillInRule(${r.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteFillInRule(${r.id})">Del</button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+  el.innerHTML=html;
+}
+function openFillInModal(rule){
+  document.getElementById('fillin-modal-title').textContent=rule?'Edit Fill-In Rule':'Add Fill-In Rule';
+  document.getElementById('fillin-id').value=rule?rule.id:'';
+  document.getElementById('fillin-category').value=rule?rule.shift_category:'closing';
+  document.getElementById('fillin-priority').value=rule?rule.priority:FILL_IN_RULES.length;
+  // Populate employee dropdown
+  const empSel=document.getElementById('fillin-employee');
+  empSel.innerHTML='<option value="">— Select —</option>'+EMPLOYEES.map(e=>`<option value="${e.id}" ${rule&&rule.employee_id==e.id?'selected':''}>${e.name} (${e.employee_id})</option>`).join('');
+  // Populate template dropdown
+  const tmplSel=document.getElementById('fillin-template');
+  tmplSel.innerHTML='<option value="">— Auto-detect —</option>'+SHIFTS.map(s=>`<option value="${s.id}" ${rule&&rule.fallback_template_id==s.id?'selected':''}>${s.name}</option>`).join('');
+  openModal('fillin-modal');
+}
+function editFillInRule(id){openFillInModal(FILL_IN_RULES.find(r=>r.id===id));}
+async function saveFillInRule(e){
+  e.preventDefault();
+  const data={
+    id:document.getElementById('fillin-id').value||undefined,
+    shift_category:document.getElementById('fillin-category').value,
+    employee_id:document.getElementById('fillin-employee').value,
+    priority:parseInt(document.getElementById('fillin-priority').value)||0,
+    fallback_template_id:document.getElementById('fillin-template').value||null,
+  };
+  if(!data.employee_id){alert('Select an employee');return;}
+  const res=await api('/settings/customization/fill-in-rules/save',data);
+  if(res.success){
+    // Refresh the full list
+    const listRes=await api('/settings/customization/fill-in-rules/list',{});
+    if(listRes.success)FILL_IN_RULES=listRes.rules;
+    renderFillInRules();closeModal('fillin-modal');
+  }else alert(res.error);
+}
+async function deleteFillInRule(id){
+  if(!confirm('Delete this fill-in rule?'))return;
+  const res=await api('/settings/customization/fill-in-rules/delete',{id});
+  if(res.success){
+    FILL_IN_RULES=FILL_IN_RULES.filter(r=>r.id!==id);
+    renderFillInRules();
+  }else alert(res.error);
+}
+
 /* ═══ LOB SETTINGS ════════════════════════ */
 function fmtHours(s){
   let h=s.operating_start+'–'+s.operating_end;
@@ -624,7 +741,7 @@ async function saveBranding(e){
 }
 
 /* ── Initial render ────────────────────── */
-renderSegments(); renderShifts(); renderRotations(); renderLOBSettings();
+renderSegments(); renderShifts(); renderRotations(); renderFillInRules(); renderLOBSettings();
 renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
 renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); loadBranding();
 </script>

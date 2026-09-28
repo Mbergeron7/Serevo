@@ -437,7 +437,7 @@ def customization():
     from app.models import (SegmentCode, ShiftTemplate, RotationPattern, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
-                            BrandSetting, Employee)
+                            BrandSetting, Employee, FillInRule)
     user = get_current_user()
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
@@ -463,6 +463,9 @@ def customization():
     employees = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name}
                  for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
 
+    fill_in_rules = [r.to_dict() for r in FillInRule.query.order_by(
+        FillInRule.shift_category, FillInRule.priority).all()]
+
     return render_template("settings/customization.html",
         user=user,
         segments=segments, shifts=shifts, rotations=rotations,
@@ -471,7 +474,7 @@ def customization():
         sched_rules=sched_rules, holidays=holidays,
         skill_groups=skill_groups, adherence_codes=adherence_codes,
         alerts=alerts, brand_data=brand_data, current_year=cur_year,
-        employees=employees,
+        employees=employees, fill_in_rules=fill_in_rules,
     )
 
 
@@ -686,6 +689,59 @@ def unassign_rotation():
     return jsonify({"success": True, "rotation": rot.to_dict() if rot else {}})
 
 
+# ── Fill-In Rules CRUD ─────────────────────────────────────
+
+@settings_bp.route("/customization/fill-in-rules/list", methods=["GET"])
+@admin_required
+def list_fill_in_rules():
+    from app.models import FillInRule
+    rules = FillInRule.query.order_by(FillInRule.shift_category, FillInRule.priority).all()
+    return jsonify({"success": True, "rules": [r.to_dict() for r in rules]})
+
+
+@settings_bp.route("/customization/fill-in-rules/save", methods=["POST"])
+@admin_required
+def save_fill_in_rule():
+    from app.models import db, FillInRule
+    data = request.get_json(silent=True) or {}
+    rule_id = data.get("id")
+    if rule_id:
+        rule = FillInRule.query.get(rule_id)
+        if not rule:
+            return jsonify({"success": False, "error": "Rule not found"})
+    else:
+        rule = FillInRule()
+        db.session.add(rule)
+
+    rule.shift_category = data.get("shift_category", rule.shift_category or "closing")
+    rule.employee_id = int(data["employee_id"]) if data.get("employee_id") else rule.employee_id
+    rule.priority = int(data.get("priority", rule.priority or 0))
+    rule.planning_unit_id = int(data["planning_unit_id"]) if data.get("planning_unit_id") else None
+    rule.fallback_template_id = int(data["fallback_template_id"]) if data.get("fallback_template_id") else None
+    rule.is_active = data.get("is_active", True)
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)})
+
+    return jsonify({"success": True, "rule": rule.to_dict()})
+
+
+@settings_bp.route("/customization/fill-in-rules/delete", methods=["POST"])
+@admin_required
+def delete_fill_in_rule():
+    from app.models import db, FillInRule
+    data = request.get_json(silent=True) or {}
+    rule = FillInRule.query.get(data.get("id"))
+    if not rule:
+        return jsonify({"success": False, "error": "Rule not found"})
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 # ── Rotation Schedule Generation ────────────────────────────
 
 @settings_bp.route("/customization/rotations/generate", methods=["POST"])
@@ -730,6 +786,10 @@ def generate_rotation_schedules():
     created = 0
     skipped = 0
     warnings = []
+
+    def _parse_hhmm(s):
+        parts = s.strip().split(":")
+        return _dt.time(int(parts[0]), int(parts[1]))
 
     for rot in rotations:
         weeks = _json.loads(rot.weeks_json) if rot.weeks_json else []
@@ -792,10 +852,6 @@ def generate_rotation_schedules():
                 elif emp.planning_unit_id:
                     pu_id = emp.planning_unit_id
 
-                def _parse_hhmm(s):
-                    parts = s.strip().split(":")
-                    return _dt.time(int(parts[0]), int(parts[1]))
-
                 sched = Schedule(
                     employee_id=emp.id,
                     planning_unit_id=pu_id,
@@ -829,12 +885,147 @@ def generate_rotation_schedules():
                 d += _dt.timedelta(days=1)
 
     db.session.commit()
+
+    # ── FILL-IN PASS ──────────────────────────────────────────
+    # After base rotation schedules are built, detect days where a shift
+    # category has no coverage (the rotation-assigned person is on PTO or
+    # has no shift that day) and auto-fill from the FillInRule priority list.
+    from app.models import FillInRule, PTOEntry
+
+    fill_in_created = 0
+    fill_rules = FillInRule.query.filter_by(is_active=True).order_by(FillInRule.priority).all()
+
+    if fill_rules:
+        # Group rules by shift_category
+        rules_by_cat = {}
+        for rule in fill_rules:
+            rules_by_cat.setdefault(rule.shift_category, []).append(rule)
+
+        # Build a set of PTO dates per employee for quick lookup
+        pto_entries = PTOEntry.query.filter(
+            PTOEntry.start_date <= end_date,
+            PTOEntry.end_date >= start_date,
+        ).all()
+        pto_dates = {}  # {employee_id: set of dates}
+        for pto in pto_entries:
+            s = set()
+            d = max(pto.start_date, start_date)
+            while d <= min(pto.end_date, end_date):
+                s.add(d)
+                d += _dt.timedelta(days=1)
+            pto_dates.setdefault(pto.employee_id, set()).update(s)
+
+        # For each shift category that has fill-in rules, check each day
+        for cat, rules in rules_by_cat.items():
+            # Find all shift templates in this category
+            cat_templates = [t for t in templates.values()
+                            if (t.shift_category or "any") == cat and t.is_active]
+            if not cat_templates:
+                continue
+
+            d = start_date
+            while d <= end_date:
+                # Check if ANY employee already has a schedule with this category on this day
+                existing_scheds = Schedule.query.filter_by(schedule_date=d).all()
+                has_coverage = False
+                for es in existing_scheds:
+                    # Match the shift start time against category templates
+                    for ct in cat_templates:
+                        if (es.shift_start and
+                            es.shift_start.strftime("%H:%M") == ct.start_time and
+                            es.shift_end and
+                            es.shift_end.strftime("%H:%M") == ct.end_time):
+                            has_coverage = True
+                            break
+                    if has_coverage:
+                        break
+
+                if not has_coverage:
+                    # Try to fill from the priority list
+                    for rule in rules:
+                        emp = rule.employee
+                        if not emp or emp.status != "Active":
+                            continue
+                        # Check if this employee is on PTO
+                        if emp.id in pto_dates and d in pto_dates[emp.id]:
+                            continue
+                        # Check if they already have a schedule this day
+                        already = Schedule.query.filter_by(
+                            employee_id=emp.id, schedule_date=d).first()
+                        if already:
+                            continue
+
+                        # Use the fallback template from the rule, or first matching cat template
+                        tmpl = None
+                        if rule.fallback_template_id:
+                            tmpl = templates.get(rule.fallback_template_id)
+                        if not tmpl and cat_templates:
+                            # Pick template matching day type
+                            day_name = ["weekday","weekday","weekday","weekday","weekday","saturday","sunday"][d.weekday()]
+                            for ct in cat_templates:
+                                dt = ct.day_type or "any"
+                                if dt == "any" or dt == day_name:
+                                    tmpl = ct
+                                    break
+                            if not tmpl:
+                                tmpl = cat_templates[0]
+
+                        if not tmpl:
+                            continue
+
+                        pu_id = None
+                        if hasattr(tmpl, 'planning_unit_id') and tmpl.planning_unit_id:
+                            pu_id = tmpl.planning_unit_id
+                        elif emp.planning_unit_id:
+                            pu_id = emp.planning_unit_id
+
+                        sched = Schedule(
+                            employee_id=emp.id,
+                            planning_unit_id=pu_id,
+                            schedule_date=d,
+                            shift_start=_parse_hhmm(tmpl.start_time),
+                            shift_end=_parse_hhmm(tmpl.end_time),
+                            shift_type=tmpl.shift_type or "full",
+                            hours=tmpl.hours or 8.0,
+                            status="fill-in",
+                        )
+                        db.session.add(sched)
+                        db.session.flush()
+
+                        segs = _json.loads(tmpl.segments_json) if tmpl.segments_json else []
+                        for idx, seg in enumerate(segs):
+                            seg_start = seg.get("start", "")
+                            seg_end = seg.get("end", "")
+                            if not seg_start or not seg_end:
+                                continue
+                            db.session.add(ShiftSegment(
+                                schedule_id=sched.id,
+                                activity_type=seg.get("type", "on-call"),
+                                start_time=_parse_hhmm(seg_start),
+                                end_time=_parse_hhmm(seg_end),
+                                duration_mins=int(seg.get("duration_mins", 0)),
+                                sort_order=idx,
+                                notes=seg.get("notes", ""),
+                            ))
+                        fill_in_created += 1
+                        warnings.append(f"Fill-in: {emp.full_name} covers {cat} on {d}")
+                        break  # filled, move to next day
+
+                d += _dt.timedelta(days=1)
+
+        db.session.commit()
+
+    msg = f"Created {created} schedule(s), skipped {skipped} (already existed)."
+    if fill_in_created:
+        msg += f" Auto-filled {fill_in_created} gap(s)."
+
     return jsonify({
         "success": True,
-        "created": created,
+        "created": created + fill_in_created,
         "skipped": skipped,
+        "fill_ins": fill_in_created,
         "warnings": warnings,
-        "message": f"Created {created} schedule(s), skipped {skipped} (already existed).",
+        "message": msg,
     })
 
 
