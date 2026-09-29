@@ -207,15 +207,19 @@ def _get_rotation_shift(employee_db_id, date_obj):
             return None
 
         week_def = weeks[current_week_idx]
-        day_name = DAYS_OF_WEEK[date_obj.weekday()].lower()
+        day_name = DAYS_OF_WEEK[date_obj.weekday()].lower()[:3]
 
         # week_def.shifts is {mon: template_id|null, ...}
         shifts_map = week_def.get("shifts", {})
         template_id = shifts_map.get(day_name)
-        if not template_id:
-            return None
+        if template_id in (None, "", "off", 0, "0"):
+            # Employee IS on a rotation and the rotation says this is a day off
+            return {"off": True, "name": pattern.name}
 
-        template = ShiftTemplate.query.get(template_id)
+        try:
+            template = ShiftTemplate.query.get(int(template_id))
+        except (TypeError, ValueError):
+            template = None
         if not template:
             return None
 
@@ -516,6 +520,10 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             # Check for rotation-assigned shift template
             db_id = _resolve_employee_db_id(emp.get("employee_id"))
             rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+            if rot_shift and rot_shift.get("off"):
+                skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
+                unassigned.append(emp["name"])
+                continue
 
             if rot_shift:
                 start = rot_shift["start"].strftime("%H:%M") if hasattr(rot_shift["start"], "strftime") else str(rot_shift["start"])[:5]
@@ -626,6 +634,11 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         # Resolve DB id and check for rotation shift
         db_id = _resolve_employee_db_id(emp.get("employee_id"))
         rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+        if rot_shift and rot_shift.get("off"):
+            log.info(f"  SKIP {emp['name']} (rotation day off)")
+            skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
+            unassigned.append(emp["name"])
+            continue
         emp_avails.append((emp, avail, rot_shift))
 
     # Restricted employees first (have shift_start, half day, or rotation)
