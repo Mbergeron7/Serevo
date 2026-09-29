@@ -647,7 +647,8 @@ function renderEmpPicker() {
     badge.textContent = `(${empList.length})`;
   } else {
     ph.style.display = 'none';
-    badge.textContent = `(${selectedEmpIds.length} of ${empList.length})`;
+    const realSel = selectedEmpIds.filter(x => x !== '__none__');
+    badge.textContent = `(${realSel.length} of ${empList.length})`;
     // Show selected names as tags (remove old tags first)
     picker.querySelectorAll('.emp-tag').forEach(t => t.remove());
     const selNames = empList.filter(e => selectedEmpIds.includes(String(e.employee_id)));
@@ -665,11 +666,9 @@ function renderEmpPicker() {
 
 function toggleEmp(id, checked) {
   id = String(id);
+  // Drop the "nobody selected" sentinel before doing anything else
+  selectedEmpIds = selectedEmpIds.filter(x => x !== '__none__');
   if (checked) {
-    // If nothing was explicitly selected (all), start fresh with just this one
-    if (selectedEmpIds.length === 0) {
-      selectedEmpIds = empList.map(e => String(e.employee_id));
-    }
     if (!selectedEmpIds.includes(id)) selectedEmpIds.push(id);
   } else {
     if (selectedEmpIds.length === 0) {
