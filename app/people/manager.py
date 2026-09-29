@@ -75,13 +75,17 @@ def get_employees(sheet=None):
             from app.demo_data import get_demo_employees
             return get_demo_employees()
 
-        # Database fallback — if using Postgres, read from DB
+        # Always prefer DB when it has employees (manual edits go there)
+        db_result, db_err = _get_employees_from_db()
+        if not db_err and db_result:
+            return db_result, None
+
+        # Database-only mode
         if _using_db():
-            return _get_employees_from_db()
+            return db_result, db_err
 
         sheet, err = _open_sheet()
         if err:
-            # Final fallback: try DB anyway
             return _get_employees_from_db()
 
     try:
