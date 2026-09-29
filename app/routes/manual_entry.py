@@ -105,12 +105,13 @@ def save_employee():
             if not emp:
                 return jsonify({"success": False, "error": "Employee not found."})
         else:
-            # Check for duplicate employee_id
+            # Check if employee_id already exists — if so, update it
             existing = Employee.query.filter_by(employee_id=emp_id_str).first()
             if existing:
-                return jsonify({"success": False, "error": f"Employee ID '{emp_id_str}' already exists."})
-            emp = Employee(employee_id=emp_id_str)
-            db.session.add(emp)
+                emp = existing  # update existing record
+            else:
+                emp = Employee(employee_id=emp_id_str)
+                db.session.add(emp)
 
         emp.employee_id = emp_id_str
         emp.first_name = first
