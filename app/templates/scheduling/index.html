@@ -400,6 +400,12 @@
     <button class="btn-action btn-load" onclick="loadSchedule()">
       Load Saved
     </button>
+    {% if not is_demo %}
+    <button class="btn-action" id="btnImportPW" onclick="importFromPeopleWare()" title="Pull published schedules from PeopleWare for this LOB and date range, then load them"
+      style="background:var(--surface); color:var(--text); border:1px solid var(--border);">
+      Import from PeopleWare
+    </button>
+    {% endif %}
     <button class="btn-action btn-save" id="btnSave" onclick="saveSchedule()" style="display:none">
       Save
     </button>
@@ -724,6 +730,29 @@ function empSelectAll() {
 function empDeselectAll() {
   selectedEmpIds = ['__none__']; // sentinel: nobody selected
   renderEmpPicker();
+}
+
+// ═══════════════════════════════════════════════════════════
+// IMPORT FROM PEOPLEWARE
+// ═══════════════════════════════════════════════════════════
+function importFromPeopleWare() {
+  const lob = document.getElementById('cfgLOB').value;
+  const start = document.getElementById('cfgStart').value;
+  const end = document.getElementById('cfgEnd').value;
+  if (!lob) { showToast('Please select a LOB.', 'error'); return; }
+  if (!start || !end) { showToast('Please set start and end dates.', 'error'); return; }
+  const btn = document.getElementById('btnImportPW');
+  btn.disabled = true;
+  showLoading('Pulling schedules from PeopleWare… this can take a minute for a full month.');
+  fetch('/scheduling/import/peopleware', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob, start_date: start, end_date: end}),
+  }).then(r => r.json()).then(data => {
+    btn.disabled = false; hideLoading();
+    if (!data.success) { showToast(data.error || 'Import failed', 'error'); return; }
+    showToast(data.message, 'success');
+    loadSchedule();
+  }).catch(e => { btn.disabled = false; hideLoading(); showToast('Error: ' + e.message, 'error'); });
 }
 
 // ═══════════════════════════════════════════════════════════

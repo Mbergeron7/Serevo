@@ -331,34 +331,135 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
         return {}
 
 
-def fetch_employees(page_size=500):
-    """Fetch employee roster from new API."""
-    employees = []
-    page = 1
-    while True:
+def _legacy_get(session, path, **kw):
+    try:
+        r = session.get(f"{API_LEGACY}/{path}", headers=_pw_headers(), timeout=20, **kw)
+        return r.json() if r.ok else None
+    except Exception as e:
+        log.debug(f"legacy GET {path}: {e}")
+        return None
+
+
+def fetch_employees(max_workers=8):
+    """Full PeopleWare roster via the legacy API — the same fields the
+    original headcount script produced: planning unit, employment period,
+    status (from row colour), latest skill and all active skills.
+
+    Returns a list of dicts shaped like the /people output so callers
+    (write_employees_to_sheet, upsert_employees_to_db) keep working, plus
+    the extra keys: latestSkillName, latestSkillStart, latestSkillEnd,
+    personnelNumber."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    session = requests.Session()
+
+    base = _legacy_get(session, "employees")
+    if not base:
+        return []
+    employees = base.get("employees", base) if isinstance(base, dict) else base
+    employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+
+    pu_names = {}
+    pus = _legacy_get(session, "planning_units") or {}
+    for u in pus.get("planning_units", []):
         try:
-            url = f"{API_NEW}/people?include=employeeId&page={page}&pageSize={page_size}"
-            r = requests.get(url, headers=_pw_headers(), timeout=30)
-            if r.status_code != 200:
-                break
-            data = r.json()
-            batch = data.get("employees") or data.get("data") or data.get("people") or []
-            if isinstance(batch, dict):
-                batch = [batch]
-            if not batch:
-                break
-            employees.extend(batch)
-            meta = data.get("meta") or data.get("pagination") or {}
-            total = meta.get("total") or meta.get("totalCount") or 0
-            if total and len(employees) >= int(total):
-                break
-            if len(batch) < page_size:
-                break
-            page += 1
-        except Exception as e:
-            log.warning(f"Employee fetch error page {page}: {e}")
-            break
-    return employees
+            pu_names[int(u.get("planning_unit_id"))] = u.get("name", "")
+        except Exception:
+            pass
+
+    periods = {}
+    per = _legacy_get(session, "employee_employment_periods") or {}
+    for p in per.get("employee_employment_periods", []):
+        periods[str(p.get("employee_id"))] = {
+            "start": p.get("start_date", "") or "",
+            "end": "" if p.get("end_date") in (None, "", "4000-01-01") else p.get("end_date", ""),
+        }
+
+    skills = {}
+    sk = _legacy_get(session, "skills") or {}
+    for item in sk.get("skills", []):
+        try:
+            skills[int(item.get("skill_id"))] = item.get("name", "")
+        except Exception:
+            pass
+
+    INACTIVE_COLORS = {"3739363", "255"}
+    LOA_COLOR = "16711680"
+
+    def _status(color):
+        c = str(color)
+        if c == LOA_COLOR:
+            return "LOA"
+        if c in INACTIVE_COLORS:
+            return "Inactive"
+        return "Active"
+
+    def _detail(emp):
+        sess = requests.Session()
+        eid = str(emp.get("employee_id"))
+        out = {"pu": "", "latest_skill": "", "latest_start": "", "latest_end": "", "all_skills": []}
+        pu = _legacy_get(sess, f"employees/{eid}/planning_units") or {}
+        rows = pu.get("data", [])
+        if rows:
+            if "assignment_date" in rows[0]:
+                rows.sort(key=lambda x: x.get("assignment_date", ""), reverse=True)
+            try:
+                out["pu"] = pu_names.get(int(rows[0].get("planning_unit_id")), "")
+            except Exception:
+                pass
+        sl = _legacy_get(sess, f"employees/{eid}/skill_levels") or {}
+        today = datetime.date.today()
+        active = []
+        for srow in sl.get("data", []):
+            end = srow.get("end_date")
+            if not end:
+                active.append(srow)
+            else:
+                try:
+                    if datetime.datetime.strptime(end, "%Y-%m-%d").date() >= today:
+                        active.append(srow)
+                except Exception:
+                    pass
+        if active:
+            active.sort(key=lambda x: x.get("start_date", ""), reverse=True)
+            top = active[0]
+            out["latest_skill"] = skills.get(top.get("skill_id"), f"Skill {top.get('skill_id')}")
+            out["latest_start"] = top.get("start_date", "") or ""
+            out["latest_end"] = top.get("end_date", "") or ""
+            out["all_skills"] = sorted({skills.get(x.get("skill_id"), f"Skill {x.get('skill_id')}") for x in active})
+        return eid, out
+
+    details = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = [ex.submit(_detail, e) for e in employees]
+        for f in as_completed(futs):
+            try:
+                eid, d = f.result()
+                details[eid] = d
+            except Exception as e:
+                log.warning(f"employee detail error: {e}")
+
+    result = []
+    for e in employees:
+        eid = str(e.get("employee_id"))
+        d = details.get(eid, {})
+        per_ = periods.get(eid, {})
+        result.append({
+            "employeeId": eid,
+            "firstName": e.get("first_name", ""),
+            "lastName": e.get("last_name", ""),
+            "email": "",
+            "planningUnit": d.get("pu", ""),
+            "status": _status(e.get("color")),
+            "skills": [{"name": n} for n in d.get("all_skills", [])],
+            "startDate": per_.get("start", ""),
+            "endDate": per_.get("end", ""),
+            "latestSkillName": d.get("latest_skill", ""),
+            "latestSkillStart": d.get("latest_start", ""),
+            "latestSkillEnd": d.get("latest_end", ""),
+            "personnelNumber": e.get("personnel_number", ""),
+        })
+    log.info(f"PeopleWare roster: {len(result)} employees")
+    return result
 
 
 # =========================================================
@@ -680,12 +781,14 @@ def upsert_employees_to_db(employees):
             continue
         pu = emp.get("planningUnit")
         pu_name = pu.get("name", "") if isinstance(pu, dict) else str(pu or emp.get("planning_unit", ""))
+        # Serevo groups people into LOBs by their latest skill; fall back to PU
+        lob_name = emp.get("latestSkillName") or pu_name
         status_raw = str(emp.get("status") or "Active").strip()
         status = {"active": "Active", "inactive": "Inactive", "loa": "LOA",
                   "terminated": "Inactive", "deleted": "Inactive"}.get(status_raw.lower(), status_raw or "Active")
         skills = emp.get("skills")
         skills_txt = ", ".join(s.get("name", "") for s in skills if isinstance(s, dict)) if isinstance(skills, list) else ""
-        unit = _unit(pu_name)
+        unit = _unit(lob_name)
 
         row = Employee.query.filter_by(employee_id=ext_id).first()
         if row:
@@ -695,16 +798,164 @@ def upsert_employees_to_db(employees):
             if skills_txt:
                 row.all_skills = skills_txt
             ed = _date(emp.get("endDate") or emp.get("end_date"))
-            if ed:
-                row.end_date = ed
+            row.end_date = ed
+            ss = _date(emp.get("latestSkillStart"))
+            if ss:
+                row.skill_start = ss
+            row.skill_end = _date(emp.get("latestSkillEnd"))
             updated += 1
         else:
             db.session.add(Employee(
                 employee_id=ext_id, first_name=first, last_name=last, status=status,
                 planning_unit_id=unit.id if unit else None, all_skills=skills_txt,
-                skill_start=_date(emp.get("startDate") or emp.get("start_date")),
+                skill_start=_date(emp.get("latestSkillStart")) or _date(emp.get("startDate") or emp.get("start_date")),
+                skill_end=_date(emp.get("latestSkillEnd")),
                 end_date=_date(emp.get("endDate") or emp.get("end_date")),
             ))
             created += 1
     db.session.commit()
     return created, updated
+
+
+# =========================================================
+# PEOPLEWARE SCHEDULE IMPORT
+# =========================================================
+
+def _segment_type_for(activity_name):
+    """Map a PeopleWare activity name onto a Serevo segment code.
+    Exact/partial match against SegmentCode labels first, then keywords."""
+    name = (activity_name or "").strip().lower()
+    try:
+        from app.models import SegmentCode
+        for sc in SegmentCode.query.filter_by(is_active=True).all():
+            if name == (sc.label or "").lower() or name == (sc.code or "").lower():
+                return sc.code
+        for sc in SegmentCode.query.filter_by(is_active=True).all():
+            if (sc.label or "").lower() in name and len(sc.label or "") > 3:
+                return sc.code
+    except Exception:
+        pass
+    for key, code in (("lunch", "lunch"), ("meal", "lunch"), ("break", "break"),
+                      ("train", "training"), ("meeting", "meeting"), ("coach", "coaching"),
+                      ("1-on-1", "coaching"), ("project", "project"), ("admin", "other")):
+        if key in name:
+            return code
+    return "on-call"
+
+
+def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8):
+    """Pull schedules from PeopleWare for a date range.
+    Returns list of {employee_id, date, start, end, hours, segments:[{type,start,end,duration_mins,notes}]}.
+    Days with no schedule blocks are omitted."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    session = requests.Session()
+
+    acts = _legacy_get(session, "activities") or {}
+    activity_names = {}
+    for a in acts.get("activities", []):
+        if a.get("activity_id") is not None:
+            activity_names[str(a.get("activity_id"))] = a.get("name", "")
+
+    base = _legacy_get(session, "employees") or {}
+    employees = base.get("employees", base) if isinstance(base, dict) else base
+    employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+    if employee_ext_ids:
+        wanted = {str(i) for i in employee_ext_ids}
+        employees = [e for e in employees if str(e.get("employee_id")) in wanted]
+
+    days = []
+    d = start_date
+    while d <= end_date:
+        days.append(d)
+        d += datetime.timedelta(days=1)
+
+    def _one(emp, day):
+        sess = requests.Session()
+        eid = str(emp.get("employee_id"))
+        data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+        blocks = []
+        for entry in data.get("schedules", []):
+            for blk in entry.get("schedule_blocks", []):
+                try:
+                    st = datetime.datetime.fromisoformat(str(blk.get("time_start"))[:19])
+                    en = datetime.datetime.fromisoformat(str(blk.get("time_end"))[:19])
+                except Exception:
+                    continue
+                if en <= st:
+                    en += datetime.timedelta(days=1)
+                aname = activity_names.get(str(blk.get("activity_id")), str(blk.get("type") or ""))
+                blocks.append((st, en, aname))
+        if not blocks:
+            return None
+        blocks.sort(key=lambda b: b[0])
+        first = min(b[0] for b in blocks)
+        last = max(b[1] for b in blocks)
+        segs = []
+        for st, en, aname in blocks:
+            segs.append({
+                "type": _segment_type_for(aname),
+                "start": st.strftime("%H:%M"), "end": en.strftime("%H:%M"),
+                "duration_mins": int((en - st).total_seconds() // 60),
+                "notes": aname,
+            })
+        return {
+            "employee_id": eid, "date": day.isoformat(),
+            "start": first.strftime("%H:%M"), "end": last.strftime("%H:%M"),
+            "hours": round((last - first).total_seconds() / 3600, 2),
+            "segments": segs,
+        }
+
+    out = []
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = [ex.submit(_one, e, day) for e in employees for day in days]
+        for f in as_completed(futs):
+            try:
+                r = f.result()
+                if r:
+                    out.append(r)
+            except Exception as e:
+                log.warning(f"schedule fetch error: {e}")
+    log.info(f"PeopleWare schedules: {len(out)} shifts for {len(employees)} employees over {len(days)} days")
+    return out
+
+
+def upsert_pw_schedules(shifts):
+    """Write pulled schedules into Serevo's Schedule/ShiftSegment tables.
+    Replaces any existing schedule for the same employee+date.
+    Returns (created, replaced, skipped_unknown_employee)."""
+    from app.models import db, Employee, Schedule, ShiftSegment
+    created = replaced = skipped = 0
+    emp_cache = {}
+    for s in shifts:
+        ext = str(s["employee_id"])
+        if ext not in emp_cache:
+            emp_cache[ext] = Employee.query.filter_by(employee_id=ext).first()
+        emp = emp_cache[ext]
+        if not emp:
+            skipped += 1
+            continue
+        day = datetime.date.fromisoformat(s["date"])
+        existing = Schedule.query.filter_by(employee_id=emp.id, schedule_date=day).all()
+        for ex_ in existing:
+            db.session.delete(ex_)
+            replaced += 1
+        sh, sm = map(int, s["start"].split(":"))
+        eh, em = map(int, s["end"].split(":"))
+        sched = Schedule(
+            employee_id=emp.id, planning_unit_id=emp.planning_unit_id, schedule_date=day,
+            shift_start=datetime.time(sh, sm), shift_end=datetime.time(eh, em),
+            shift_type="half" if s["hours"] <= 5 else "full", hours=s["hours"], status="scheduled",
+        )
+        db.session.add(sched)
+        db.session.flush()
+        for i, seg in enumerate(s["segments"]):
+            a, b = map(int, seg["start"].split(":")), map(int, seg["end"].split(":"))
+            a, b = list(a), list(b)
+            db.session.add(ShiftSegment(
+                schedule_id=sched.id, activity_type=seg["type"],
+                start_time=datetime.time(a[0], a[1]), end_time=datetime.time(b[0], b[1]),
+                duration_mins=seg["duration_mins"], sort_order=i, notes=seg.get("notes", ""),
+            ))
+        created += 1
+    db.session.commit()
+    return created, replaced, skipped

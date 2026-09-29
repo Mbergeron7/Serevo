@@ -747,3 +747,47 @@ def employees_for_lob():
     except Exception as e:
         log.exception("Employees for LOB error")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ── Import schedules from PeopleWare ────────────────────────
+@scheduling_bp.route("/import/peopleware", methods=["POST"])
+@login_required
+def import_peopleware():
+    """POST JSON: {lob?, start_date, end_date}
+    Pulls schedules from the PeopleWare connection into Serevo for the range.
+    If lob is given, only that LOB's employees are pulled."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({"success": True, "created": 0, "replaced": 0, "skipped": 0,
+                        "message": "Demo mode — schedules are pre-loaded"})
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = (payload.get("lob") or "").strip()
+        start_date = datetime.datetime.strptime(payload["start_date"], "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(payload["end_date"], "%Y-%m-%d").date()
+        if end_date < start_date or (end_date - start_date).days > 62:
+            return jsonify({"success": False, "error": "Choose a range of up to 62 days"})
+
+        from app.capacity import planning as cp
+        ids = None
+        if lob and lob != "All":
+            from app.scheduling.engine import _get_employees_for_lob
+            ids = [e["employee_id"] for e in _get_employees_for_lob(lob, _get_sheet())]
+            if not ids:
+                return jsonify({"success": False, "error": f"No employees found for {lob} — pull the headcount first"})
+
+        shifts = cp.fetch_pw_schedules(start_date, end_date, employee_ext_ids=ids)
+        if not shifts:
+            return jsonify({"success": False,
+                            "error": "PeopleWare returned no schedules — check the API connection (Settings → API Connections) and that the date range has published schedules."})
+        created, replaced, skipped = cp.upsert_pw_schedules(shifts)
+        msg = f"Imported {created} shift(s) from PeopleWare"
+        if replaced:
+            msg += f", replaced {replaced} existing"
+        if skipped:
+            msg += f", skipped {skipped} for employees not in Serevo (pull headcount first)"
+        return jsonify({"success": True, "created": created, "replaced": replaced,
+                        "skipped": skipped, "message": msg})
+    except Exception as e:
+        log.exception("PeopleWare schedule import error")
+        return jsonify({"success": False, "error": str(e)})

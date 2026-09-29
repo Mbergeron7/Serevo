@@ -221,22 +221,9 @@ def save_connection():
 
 
 def _clean_token(raw):
-    """Strip whitespace/newlines; if the token is base64-wrapped (as older
-    PeopleWare setups store it), decode it."""
-    import base64, re
-    raw = (raw or "").strip().replace("\n", "").replace("\r", "")
-    if not raw:
-        return ""
-    # Real tokens usually contain a dot or dash; a pure base64 blob that decodes
-    # to printable text is treated as wrapped.
-    if re.fullmatch(r"[A-Za-z0-9+/=]+", raw) and len(raw) % 4 == 0:
-        try:
-            dec = base64.b64decode(raw).decode("utf-8")
-            if dec.isprintable() and len(dec) > 10:
-                return dec.strip()
-        except Exception:
-            pass
-    return raw
+    """Strip whitespace/newlines from a stored token. PeopleWare tokens are
+    used exactly as issued (they look base64 but must NOT be decoded)."""
+    return (raw or "").strip().replace("\n", "").replace("\r", "")
 
 
 @settings_bp.route("/api-connections/test", methods=["POST"])
