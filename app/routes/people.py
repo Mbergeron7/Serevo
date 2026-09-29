@@ -48,7 +48,7 @@ def roster():
     else:
         from app.people.manager import get_employees, get_accommodations, get_pto
         sheet = _get_sheet()
-        employees, emp_err = get_employees(sheet)
+        employees, emp_err = get_employees()  # always read from DB (edits go there)
         accoms, _ = get_accommodations(sheet)
         pto_list, _ = get_pto(sheet)
 
