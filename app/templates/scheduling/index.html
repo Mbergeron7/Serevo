@@ -182,6 +182,28 @@
     box-shadow: 0 1px 2px rgba(0,0,0,.15);
   }
   .tl-segment:hover { opacity: .85; }
+  .tl-segment.seg-selected { outline: 2px solid #fff; outline-offset: -1px; box-shadow: 0 0 0 3px var(--brand-accent), 0 1px 2px rgba(0,0,0,.15); z-index: 5; }
+  .tl-segment.seg-copied  { outline: 2px dashed #fff; outline-offset: -1px; box-shadow: 0 0 0 3px #7c3aed, 0 1px 2px rgba(0,0,0,.15); z-index: 5; }
+  .tl-segment.seg-dragging { opacity: .5; }
+  .tl-drag-ghost {
+    position: absolute; top: 4px; height: 28px; border-radius: 4px;
+    pointer-events: none; z-index: 10; opacity: .7;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 600; color: #fff;
+    border: 2px dashed rgba(255,255,255,.6);
+  }
+  .tl-row.paste-target { background: color-mix(in srgb, var(--brand-accent) 15%, transparent) !important; }
+  .tl-ctx-menu {
+    position: fixed; z-index: 1000; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.18); min-width: 140px; padding: 4px 0;
+    font-size: .82rem;
+  }
+  .tl-ctx-menu button {
+    display: block; width: 100%; padding: 7px 14px; text-align: left; border: none;
+    background: none; font-size: .82rem; cursor: pointer; color: var(--text);
+  }
+  .tl-ctx-menu button:hover { background: var(--brand-accent-light); }
+  .tl-ctx-menu .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
   .tl-seg-oncall   { background: #059669; }
   .tl-seg-break    { background: #d97706; }
   .tl-seg-lunch    { background: #2563eb; }
@@ -1324,7 +1346,7 @@ function renderTimelineView(container) {
     // Employee rows
     html += `<div class="timeline-body">`;
     day.shifts.forEach((shift, shiftIdx) => {
-      html += `<div class="tl-row">
+      html += `<div class="tl-row" data-day="${dayIdx}" data-shift="${shiftIdx}">
         <div class="tl-emp-name">
           <span>${shift.employee}</span>
           <span class="emp-actions">
@@ -1332,7 +1354,7 @@ function renderTimelineView(container) {
             <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${shiftIdx})" style="color:#dc2626">✕</button>
           </span>
         </div>
-        <div class="tl-bar-area" style="width:${numHours * TL_PX_PER_HOUR}px">`;
+        <div class="tl-bar-area" data-day="${dayIdx}" data-shift="${shiftIdx}" style="width:${numHours * TL_PX_PER_HOUR}px">`;
 
       // Grid lines
       for (let h = minH; h < maxH; h++) {
@@ -1354,7 +1376,9 @@ function renderTimelineView(container) {
           const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
           html += `<div class="tl-segment ${clsFix}" style="left:${left}px;width:${Math.max(width,2)}px"
             title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
-            onclick="openEditModal(${dayIdx},${shiftIdx})">${label}</div>`;
+            data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
+            onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
+            oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})">${label}</div>`;
         });
       } else {
         // No segments — show whole shift as on-call
@@ -1433,6 +1457,11 @@ function timeToMins(t) {
   if (!t) return 0;
   const p = t.split(':');
   return parseInt(p[0]) * 60 + parseInt(p[1]);
+}
+function minsToTime(m) {
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2396,6 +2425,337 @@ async function runOptimize() {
 
 document.getElementById('optimizeOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeOptimizeModal();
+});
+
+// ═══════════════════════════════════════════════════════════
+// ══  DRAG-TO-MOVE & COPY/PASTE SEGMENTS  ══════════════════
+// ═══════════════════════════════════════════════════════════
+
+const SNAP_MINS = 15; // snap to 15-min intervals
+let _dragState = null;   // {dayIdx, shiftIdx, segIdx, origSeg, startX, barArea, ghost, minH}
+let _clipboard = null;   // {type, start, end, duration_mins, notes} — copied segment
+let _selectedSeg = null; // {dayIdx, shiftIdx, segIdx} — currently selected
+
+function snapTo(mins, snap) {
+  return Math.round(mins / snap) * snap;
+}
+
+// ── Selection ──────────────────────────────
+function selectSegment(dayIdx, shiftIdx, segIdx) {
+  clearSelection();
+  _selectedSeg = {dayIdx, shiftIdx, segIdx};
+  const el = document.querySelector(`.tl-segment[data-day="${dayIdx}"][data-shift="${shiftIdx}"][data-seg="${segIdx}"]`);
+  if (el) el.classList.add('seg-selected');
+}
+
+function clearSelection() {
+  document.querySelectorAll('.tl-segment.seg-selected').forEach(el => el.classList.remove('seg-selected'));
+  _selectedSeg = null;
+}
+
+function clearCopiedHighlight() {
+  document.querySelectorAll('.tl-segment.seg-copied').forEach(el => el.classList.remove('seg-copied'));
+}
+
+// ── Mouse-down on segment: start drag or select ──
+function segMouseDown(e, dayIdx, shiftIdx, segIdx) {
+  if (e.button === 2) return; // right-click handled by contextmenu
+  e.preventDefault();
+  e.stopPropagation();
+
+  selectSegment(dayIdx, shiftIdx, segIdx);
+
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+  const segEl = e.currentTarget;
+  const barArea = segEl.parentElement;
+
+  // Find minH from the timeline's first hour mark
+  const dayEl = barArea.closest('.day-content');
+  const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
+  const minH = firstHour ? parseInt(firstHour.textContent) : 0;
+
+  _dragState = {
+    dayIdx, shiftIdx, segIdx,
+    origStart: seg.start, origEnd: seg.end,
+    origLeft: parseFloat(segEl.style.left),
+    startX: e.clientX,
+    barArea, segEl, minH,
+    moved: false
+  };
+
+  document.addEventListener('mousemove', segMouseMove);
+  document.addEventListener('mouseup', segMouseUp);
+}
+
+function segMouseMove(e) {
+  if (!_dragState) return;
+  const dx = e.clientX - _dragState.startX;
+  if (Math.abs(dx) < 4 && !_dragState.moved) return; // dead zone
+
+  if (!_dragState.moved) {
+    _dragState.moved = true;
+    _dragState.segEl.classList.add('seg-dragging');
+    // Create ghost
+    const ghost = _dragState.segEl.cloneNode(true);
+    ghost.className = _dragState.segEl.className.replace('seg-dragging','') + ' tl-drag-ghost';
+    ghost.classList.remove('seg-selected');
+    ghost.style.width = _dragState.segEl.style.width;
+    _dragState.barArea.appendChild(ghost);
+    _dragState.ghost = ghost;
+  }
+
+  // Move ghost
+  const newLeft = _dragState.origLeft + dx;
+  _dragState.ghost.style.left = Math.max(0, newLeft) + 'px';
+}
+
+function segMouseUp(e) {
+  document.removeEventListener('mousemove', segMouseMove);
+  document.removeEventListener('mouseup', segMouseUp);
+
+  if (!_dragState) return;
+  const ds = _dragState;
+  _dragState = null;
+
+  // Clean up ghost
+  if (ds.ghost) ds.ghost.remove();
+  ds.segEl.classList.remove('seg-dragging');
+
+  if (!ds.moved) {
+    // It was a click — segment is already selected
+    return;
+  }
+
+  // Calculate new time
+  const dx = e.clientX - ds.startX;
+  const dMins = (dx / TL_PX_PER_HOUR) * 60;
+  const seg = scheduleData.days[ds.dayIdx].shifts[ds.shiftIdx].segments[ds.segIdx];
+  const origStartMins = timeToMins(ds.origStart);
+  const origEndMins = timeToMins(ds.origEnd);
+  const duration = origEndMins - origStartMins;
+
+  let newStartMins = snapTo(origStartMins + dMins, SNAP_MINS);
+
+  // Clamp within shift bounds
+  const shift = scheduleData.days[ds.dayIdx].shifts[ds.shiftIdx];
+  const shiftStart = timeToMins(shift.start);
+  const shiftEnd = timeToMins(shift.end);
+  newStartMins = Math.max(shiftStart, Math.min(newStartMins, shiftEnd - duration));
+
+  const newEndMins = newStartMins + duration;
+
+  if (newStartMins === origStartMins) return; // no change
+
+  // Update in memory
+  seg.start = minsToTime(newStartMins);
+  seg.end = minsToTime(newEndMins);
+
+  // Persist to DB
+  if (seg.id) {
+    fetch('/scheduling/segment/' + seg.id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start: seg.start, end: seg.end})
+    }).then(r => r.json()).then(d => {
+      if (!d.success) showToast('Move failed: ' + (d.error || ''), 'error');
+    });
+  }
+
+  // Re-sort and re-render
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+  switchView(currentView);
+  showToast(`Moved ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
+}
+
+// ── Context menu ──────────────────────────────
+function segContextMenu(e, dayIdx, shiftIdx, segIdx) {
+  e.preventDefault();
+  e.stopPropagation();
+  selectSegment(dayIdx, shiftIdx, segIdx);
+  showCtxMenu(e.clientX, e.clientY, dayIdx, shiftIdx, segIdx);
+}
+
+function showCtxMenu(x, y, dayIdx, shiftIdx, segIdx) {
+  closeCtxMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tl-ctx-menu';
+  menu.id = 'tlCtxMenu';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+
+  menu.innerHTML = `
+    <button onclick="ctxCopy(${dayIdx},${shiftIdx},${segIdx})">📋 Copy segment</button>
+    ${_clipboard ? `<button onclick="ctxPaste(${dayIdx},${shiftIdx})">📌 Paste here</button>` : ''}
+    <div class="ctx-sep"></div>
+    <button onclick="ctxDelete(${dayIdx},${shiftIdx},${segIdx})" style="color:#dc2626">🗑 Delete</button>
+  `;
+  document.body.appendChild(menu);
+
+  // Adjust if off-screen
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+  setTimeout(() => document.addEventListener('click', closeCtxMenu, {once: true}), 50);
+}
+
+function closeCtxMenu() {
+  const m = document.getElementById('tlCtxMenu');
+  if (m) m.remove();
+}
+
+function ctxCopy(dayIdx, shiftIdx, segIdx) {
+  closeCtxMenu();
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+  _clipboard = {type: seg.type, start: seg.start, end: seg.end, duration_mins: seg.duration_mins, notes: seg.notes || ''};
+  clearCopiedHighlight();
+  const el = document.querySelector(`.tl-segment[data-day="${dayIdx}"][data-shift="${shiftIdx}"][data-seg="${segIdx}"]`);
+  if (el) el.classList.add('seg-copied');
+  showToast(`Copied ${segLabel(seg.type)} ${seg.start}–${seg.end}`);
+}
+
+function ctxPaste(dayIdx, shiftIdx) {
+  closeCtxMenu();
+  if (!_clipboard) return;
+  pasteSegment(dayIdx, shiftIdx);
+}
+
+function ctxDelete(dayIdx, shiftIdx, segIdx) {
+  closeCtxMenu();
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const seg = shift.segments[segIdx];
+  if (seg.id) {
+    fetch('/scheduling/segment/' + seg.id, {method: 'DELETE'})
+      .then(r => r.json())
+      .then(d => { if (!d.success) showToast('Delete failed', 'error'); });
+  }
+  shift.segments.splice(segIdx, 1);
+  clearSelection();
+  switchView(currentView);
+  showToast('Segment deleted');
+}
+
+// ── Paste onto a shift ──
+function pasteSegment(dayIdx, shiftIdx) {
+  if (!_clipboard) { showToast('Nothing copied', 'error'); return; }
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const newSeg = {
+    type: _clipboard.type,
+    start: _clipboard.start,
+    end: _clipboard.end,
+    duration_mins: _clipboard.duration_mins,
+    notes: _clipboard.notes,
+    sort_order: shift.segments.length
+  };
+
+  // Clamp within this shift
+  const sMin = timeToMins(newSeg.start);
+  const eMin = timeToMins(newSeg.end);
+  const dur = eMin - sMin;
+  const shiftStart = timeToMins(shift.start);
+  const shiftEnd = timeToMins(shift.end);
+  let newStart = Math.max(shiftStart, Math.min(sMin, shiftEnd - dur));
+  newSeg.start = minsToTime(newStart);
+  newSeg.end = minsToTime(newStart + dur);
+
+  // Persist
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id + '/segment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(newSeg),
+    }).then(r => r.json()).then(d => {
+      if (d.success && d.segment) newSeg.id = d.segment.id;
+    });
+  }
+
+  shift.segments.push(newSeg);
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+  switchView(currentView);
+  showToast(`Pasted ${segLabel(newSeg.type)} to ${shift.employee}`);
+}
+
+// ── Keyboard shortcuts: Ctrl+C / Ctrl+V / Delete ──
+document.addEventListener('keydown', function(e) {
+  // Only handle when not in a modal or input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === 'Escape') {
+    clearSelection();
+    clearCopiedHighlight();
+    closeCtxMenu();
+    return;
+  }
+
+  if (!_selectedSeg) return;
+  const {dayIdx, shiftIdx, segIdx} = _selectedSeg;
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    e.preventDefault();
+    ctxCopy(dayIdx, shiftIdx, segIdx);
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'v' && _clipboard) {
+    e.preventDefault();
+    // Paste into the same shift (user can right-click another row for cross-paste)
+    pasteSegment(dayIdx, shiftIdx);
+  }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    ctxDelete(dayIdx, shiftIdx, segIdx);
+  }
+});
+
+// ── Click on bar area to paste (when clipboard has content) ──
+document.addEventListener('click', function(e) {
+  const barArea = e.target.closest('.tl-bar-area');
+  if (!barArea || e.target.closest('.tl-segment')) return;
+  if (!_clipboard) return;
+
+  const dayIdx = parseInt(barArea.dataset.day);
+  const shiftIdx = parseInt(barArea.dataset.shift);
+  if (isNaN(dayIdx) || isNaN(shiftIdx)) return;
+
+  // Calculate click position to set paste time
+  const rect = barArea.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const dayEl = barArea.closest('.day-content');
+  const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
+  const minH = firstHour ? parseInt(firstHour.textContent) : 0;
+
+  const clickMins = minH * 60 + (clickX / TL_PX_PER_HOUR) * 60;
+  const dur = _clipboard.duration_mins;
+  let newStart = snapTo(clickMins, SNAP_MINS);
+
+  // Clamp within shift
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const shiftStart = timeToMins(shift.start);
+  const shiftEnd = timeToMins(shift.end);
+  newStart = Math.max(shiftStart, Math.min(newStart, shiftEnd - dur));
+
+  // Override clipboard times for this paste
+  const savedStart = _clipboard.start;
+  const savedEnd = _clipboard.end;
+  _clipboard.start = minsToTime(newStart);
+  _clipboard.end = minsToTime(newStart + dur);
+  pasteSegment(dayIdx, shiftIdx);
+  // Restore clipboard so future pastes use original times
+  _clipboard.start = savedStart;
+  _clipboard.end = savedEnd;
+});
+
+// ── Highlight paste target row on hover when clipboard has content ──
+document.addEventListener('mouseover', function(e) {
+  if (!_clipboard) return;
+  const row = e.target.closest('.tl-row');
+  if (row) row.classList.add('paste-target');
+});
+document.addEventListener('mouseout', function(e) {
+  const row = e.target.closest('.tl-row');
+  if (row) row.classList.remove('paste-target');
 });
 </script>
 {% endblock %}
