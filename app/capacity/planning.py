@@ -67,8 +67,27 @@ WORKLOADS = _load_workloads()
 # HELPERS
 # =========================================================
 
+def _connection_token():
+    """Token from the saved PeopleWare / Injixo API connection (Settings → API
+    Connections). Falls back to the PW_API_TOKEN environment variable."""
+    try:
+        import json as _json
+        from app.models import APIConnection
+        conn = (APIConnection.query.filter_by(provider="injixo", is_active=True)
+                .order_by(APIConnection.updated_at.desc()).first())
+        if conn and conn.credentials:
+            creds = _json.loads(conn.credentials)
+            raw = creds.get("access_token") or creds.get("api_key", "")
+            if raw:
+                from app.routes.settings import _clean_token
+                return _clean_token(raw)
+    except Exception as e:
+        log.debug(f"No saved PeopleWare connection: {e}")
+    return ""
+
+
 def _pw_headers():
-    token = PW_TOKEN or os.environ.get("PW_API_TOKEN", "")
+    token = _connection_token() or PW_TOKEN or os.environ.get("PW_API_TOKEN", "")
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type":  "application/json",
@@ -177,9 +196,9 @@ def _activity_id_to_name(activity_id, planning_unit_name):
 
 def test_connection():
     """Test both API endpoints. Returns dict with status."""
-    token = os.environ.get("PW_API_TOKEN", "")
+    token = _connection_token() or os.environ.get("PW_API_TOKEN", "")
     if not token:
-        return {"ok": False, "error": "PW_API_TOKEN not set in environment"}
+        return {"ok": False, "error": "No PeopleWare token — add a PeopleWare / Injixo connection in Settings → API Connections"}
 
     results = {}
 
@@ -624,3 +643,68 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
         plan.append(lob_plan)
 
     return plan
+
+
+def upsert_employees_to_db(employees):
+    """Write a PeopleWare roster into Serevo's Employee table.
+    Returns (created, updated)."""
+    from app.models import db, Employee, PlanningUnit
+    created = updated = 0
+    pu_cache = {}
+
+    def _unit(name):
+        name = (name or "").strip()
+        if not name:
+            return None
+        if name not in pu_cache:
+            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == name.lower()).first()
+            if not pu:
+                pu = PlanningUnit(name=name)
+                db.session.add(pu)
+                db.session.flush()
+            pu_cache[name] = pu
+        return pu_cache[name]
+
+    def _date(v):
+        v = str(v or "")[:10]
+        try:
+            return datetime.datetime.strptime(v, "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    for emp in employees:
+        ext_id = str(emp.get("employeeId") or emp.get("id") or "").strip()
+        first = (emp.get("firstName") or emp.get("first_name") or "").strip()
+        last = (emp.get("lastName") or emp.get("last_name") or "").strip()
+        if not ext_id or not (first or last):
+            continue
+        pu = emp.get("planningUnit")
+        pu_name = pu.get("name", "") if isinstance(pu, dict) else str(pu or emp.get("planning_unit", ""))
+        status_raw = str(emp.get("status") or "Active").strip()
+        status = {"active": "Active", "inactive": "Inactive", "loa": "LOA",
+                  "terminated": "Inactive", "deleted": "Inactive"}.get(status_raw.lower(), status_raw or "Active")
+        skills = emp.get("skills")
+        skills_txt = ", ".join(s.get("name", "") for s in skills if isinstance(s, dict)) if isinstance(skills, list) else ""
+        unit = _unit(pu_name)
+
+        row = Employee.query.filter_by(employee_id=ext_id).first()
+        if row:
+            row.first_name, row.last_name, row.status = first, last, status
+            if unit:
+                row.planning_unit_id = unit.id
+            if skills_txt:
+                row.all_skills = skills_txt
+            ed = _date(emp.get("endDate") or emp.get("end_date"))
+            if ed:
+                row.end_date = ed
+            updated += 1
+        else:
+            db.session.add(Employee(
+                employee_id=ext_id, first_name=first, last_name=last, status=status,
+                planning_unit_id=unit.id if unit else None, all_skills=skills_txt,
+                skill_start=_date(emp.get("startDate") or emp.get("start_date")),
+                end_date=_date(emp.get("endDate") or emp.get("end_date")),
+            ))
+            created += 1
+    db.session.commit()
+    return created, updated
