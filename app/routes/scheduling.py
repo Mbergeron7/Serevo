@@ -100,49 +100,65 @@ def generate():
 
         user = get_current_user()
         if user and user.get("is_demo"):
-            from app.demo_data import get_demo_schedules, get_demo_requirements, DEMO_LOBS, DEMO_EMPLOYEES
-            # Build set of employee IDs for the requested LOB
-            lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            from app.demo_data import plan_demo_day, get_demo_requirements
             days = []
             d = start_date
             total_shifts = 0
             total_hours = 0.0
+            cov_sum, cov_days = 0.0, 0
+            never = {}
             while d <= end_date:
-                day_scheds = get_demo_schedules(d)
-                lob_scheds = [s for s in day_scheds if s["employee_id"] in lob_emp_ids]
-                shifts_out = [s for s in lob_scheds if s["status"] == "scheduled"]
+                all_scheds, warnings = plan_demo_day(d, lob)
+                shifts_out = [s for s in all_scheds if s["status"] == "scheduled"]
+                unassigned = [s["employee"] for s in all_scheds if s["status"] != "scheduled"]
+                for s in all_scheds:
+                    never.setdefault(s["employee"], True)
+                    if s["status"] == "scheduled":
+                        never[s["employee"]] = False
                 reqs, _ = get_demo_requirements(lob, d)
                 coverage = []
                 for r in reqs:
-                    coverage.append({
-                        "time": r["time"],
-                        "required": r["agents_required"],
-                        "scheduled": len(shifts_out),
-                        "delta": len(shifts_out) - r["agents_required"],
-                    })
+                    t = r["time"][11:16]
+                    tm = int(t[:2]) * 60 + int(t[3:])
+                    sched = sum(1 for s in shifts_out
+                                if (int(s["start"][:2]) * 60 + int(s["start"][3:])) <= tm <
+                                   (int(s["end"][:2]) * 60 + int(s["end"][3:])))
+                    req = r["agents_required"]
+                    coverage.append({"time": t, "required": req, "scheduled": sched,
+                                     "gap": sched - req,
+                                     "coverage_pct": round(sched / req * 100, 1) if req else (100.0 if sched else 0)})
+                understaffed = sum(1 for c in coverage if c["gap"] < 0)
+                avg_pct = round(sum(c["coverage_pct"] for c in coverage) / len(coverage), 1) if coverage else 0
+                summary = {"avg_coverage_pct": avg_pct,
+                           "peak_required": max((c["required"] for c in coverage), default=0),
+                           "peak_gap": min((c["gap"] for c in coverage), default=0),
+                           "understaffed_intervals": understaffed, "total_intervals": len(coverage)}
                 day_hours = sum(s.get("hours", 0) for s in shifts_out)
                 total_shifts += len(shifts_out)
                 total_hours += day_hours
+                if coverage:
+                    cov_sum += avg_pct; cov_days += 1
                 days.append({
                     "date": d.isoformat(),
-                    "shifts": shifts_out,
-                    "unassigned": [],
-                    "coverage": coverage,
-                    "summary": {
-                        "shifts": len(shifts_out),
-                        "hours": day_hours,
-                        "avg_coverage": round(len(shifts_out) / max(1, sum(r["agents_required"] for r in reqs) / max(1, len(reqs))), 2) if reqs else 0,
-                    },
-                    "warnings": [],
+                    "date_label": d.strftime("%a %b %d"),
+                    "day_of_week": d.strftime("%a"),
+                    "shifts": shifts_out, "unassigned": unassigned,
+                    "coverage": coverage, "summary": summary, "warnings": warnings,
                 })
                 d += datetime.timedelta(days=1)
+            global_warnings = []
+            never_names = sorted(n for n, v in never.items() if v)
+            if never_names:
+                global_warnings.append(
+                    f"{len(never_names)} employee(s) were never scheduled across the entire range: "
+                    + ", ".join(never_names) + ". Check their PTO, accommodations, and availability settings.")
             result = {
+                "lob": lob, "start_date": start_str, "end_date": end_str,
                 "days": days,
-                "totals": {
-                    "total_shifts": total_shifts,
-                    "total_hours": total_hours,
-                    "total_days": len(days),
-                },
+                "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
+                           "total_days": len(days),
+                           "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
+                "warnings": global_warnings,
             }
         else:
             # mode: "overwrite" (default) — generate everything fresh; saved
@@ -307,6 +323,11 @@ def save_schedule():
 
         sched_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
 
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify({"success": True, "saved": len(shifts), "demo": True,
+                            "message": "Saved (demo mode — changes are not persisted)"})
+
         # Find or create planning unit
         from app.models import PlanningUnit
         pu = PlanningUnit.query.filter(
@@ -401,7 +422,8 @@ def load_schedule():
             d = start_date
             while d <= end_date:
                 day_scheds = get_demo_schedules(d)
-                shifts.extend([s for s in day_scheds if s["employee_id"] in lob_emp_ids])
+                shifts.extend([s for s in day_scheds
+                               if s["employee_id"] in lob_emp_ids and s.get("status") == "scheduled"])
                 d += datetime.timedelta(days=1)
             return jsonify({"success": True, "shifts": shifts})
 
@@ -433,6 +455,9 @@ def update_shift(shift_id):
     Update a single shift's times, type, or status.
     PUT JSON: {start?, end?, type?, status?}
     """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0, "message": "Demo mode — change kept on screen only"})
     try:
         sched = Schedule.query.get(shift_id)
         if not sched:
@@ -465,6 +490,9 @@ def update_shift(shift_id):
 @login_required
 def delete_shift(shift_id):
     """Delete a shift and its segments."""
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0, "message": "Demo mode — change kept on screen only"})
     try:
         sched = Schedule.query.get(shift_id)
         if not sched:
@@ -486,6 +514,9 @@ def add_segment(shift_id):
     Add a segment to a shift.
     POST JSON: {type, start, end, notes?}
     """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0, "message": "Demo mode — change kept on screen only"})
     try:
         sched = Schedule.query.get(shift_id)
         if not sched:
@@ -528,6 +559,9 @@ def update_segment(seg_id):
     Update a segment.
     PUT JSON: {type?, start?, end?, notes?}
     """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0, "message": "Demo mode — change kept on screen only"})
     try:
         seg = ShiftSegment.query.get(seg_id)
         if not seg:
@@ -559,6 +593,9 @@ def update_segment(seg_id):
 @login_required
 def delete_segment(seg_id):
     """Delete a segment."""
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0, "message": "Demo mode — change kept on screen only"})
     try:
         seg = ShiftSegment.query.get(seg_id)
         if not seg:

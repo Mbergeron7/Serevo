@@ -183,56 +183,182 @@ _SHIFT_PATTERNS = [
 ]
 
 
-def get_demo_schedules(schedule_date=None):
-    """Return a list of schedule dicts for the given date."""
-    if schedule_date is None:
-        schedule_date = datetime.date.today()
+# Demo scheduling rules — mirror what the real engine reads from Settings/People
+# Rotation "TL 4-Week Rotation" (see get_demo_settings_data): week1 Day, week2 Closing,
+# week3 Day + Sat, week4 Mid + Sun. Assigned: Jamie Torres, Alex Morgan, Harper Wilson,
+# Drew Campbell (current_week 0..3), anchored to Jan 6 of the current year.
+_DEMO_ROTATION = {
+    "E2001": 0, "E1001": 1, "E3001": 2, "E2003": 3,
+}
+_DEMO_ROT_WEEKS = [
+    {"mon": 1, "tue": 1, "wed": 1, "thu": 1, "fri": 1, "sat": None, "sun": None},
+    {"mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": None, "sun": None},
+    {"mon": 1, "tue": 1, "wed": 1, "thu": 1, "fri": 1, "sat": 4, "sun": None},
+    {"mon": 3, "tue": 3, "wed": 3, "thu": 3, "fri": 3, "sat": None, "sun": 6},
+]
+_DEMO_TEMPLATES = {  # id -> (name, start, end, category)
+    1: ("Day Shift — Weekday", "08:00", "16:30", "opening"),
+    2: ("Closing Shift — Weekday", "13:30", "22:00", "closing"),
+    3: ("Mid Shift — Weekday", "10:00", "18:30", "mid"),
+    4: ("Day Shift — Saturday", "09:00", "17:30", "opening"),
+    5: ("Closing Shift — Saturday", "13:30", "22:00", "closing"),
+    6: ("Sunday Shift", "10:00", "18:30", "any"),
+}
+# Weekend coverage: who works weekends per LOB (everyone else is off unless their rotation says so)
+_DEMO_WEEKEND_STAFF = {
+    "Sales Support":  {5: ["E1002"], 6: ["E1004"]},   # Sat: Jordan Rivera, Sun: Taylor Brooks
+    "Tech Help Desk": {5: ["E2004"], 6: ["E2006"]},   # Sat: Quinn Dubois, Sun: Dakota Singh
+    "Billing":        {5: ["E3002"], 6: ["E3005"]},   # Sat: Rowan Garcia, Sun: Blair Thompson
+}
+# Fill-in rules (see get_demo_settings_data): closing → Jordan Rivera, then Taylor Brooks
+_DEMO_FILL_IN = {"closing": ["E1002", "E1004"], "opening": ["E1006"]}
+_DEMO_ACCOM = {  # ext id -> {day_off: weekday int or None, start, end}
+    "E1003": {"day_off": 2, "start": "09:00", "end": "17:00"},  # Casey Chen — Wednesdays off
+    "E2003": {"day_off": None, "start": "10:00", "end": "18:00"},  # Drew Campbell — late start
+}
+
+
+def _demo_rotation_shift(ext_id, day):
+    """Return template tuple, {"off": True}, or None if not on rotation."""
+    if ext_id not in _DEMO_ROTATION:
+        return None
+    anchor = datetime.date(day.year, 1, 6)
+    anchor -= datetime.timedelta(days=anchor.weekday())   # Monday of that week
+    weeks = max(0, (day - anchor).days) // 7
+    week = (weeks + _DEMO_ROTATION[ext_id]) % len(_DEMO_ROT_WEEKS)
+    tid = _DEMO_ROT_WEEKS[week][["mon", "tue", "wed", "thu", "fri", "sat", "sun"][day.weekday()]]
+    if not tid:
+        return {"off": True, "name": "TL 4-Week Rotation"}
+    return _DEMO_TEMPLATES[tid]
+
+
+def _demo_pto_set(day):
+    out = set()
+    for p in _demo_pto():
+        if p["Start Date"] <= day.isoformat() <= p["End Date"]:
+            out.add(p["Employee"])
+    return out
+
+
+def _build_demo_segments(start_str, end_str, stagger_idx, total):
+    """Break/lunch placement from the demo segment rules (break1 @2h, lunch @4h, break2 @6h)."""
+    sh, sm = map(int, start_str.split(":"))
+    eh, em = map(int, end_str.split(":"))
+    s_min, e_min = sh * 60 + sm, eh * 60 + em
+    stagger = int((stagger_idx % max(1, total)) * (60 / max(1, total)))  # spread across a 1h window
+    pauses = []
+    for off, dur, typ in ((120, 15, "break"), (240, 30, "lunch"), (360, 15, "break")):
+        ps = s_min + off + stagger
+        if ps + dur <= e_min:
+            pauses.append((ps, ps + dur, dur, typ))
+    segs, cursor, sid = [], s_min, 0
+    for ps, pe, dur, typ in pauses:
+        if cursor < ps:
+            segs.append({"id": sid, "type": "on-call", "start": _mm(cursor), "end": _mm(ps),
+                         "duration_mins": ps - cursor, "sort_order": sid, "notes": ""}); sid += 1
+        segs.append({"id": sid, "type": typ, "start": _mm(ps), "end": _mm(pe),
+                     "duration_mins": dur, "sort_order": sid, "notes": ""}); sid += 1
+        cursor = pe
+    if cursor < e_min:
+        segs.append({"id": sid, "type": "on-call", "start": _mm(cursor), "end": _mm(e_min),
+                     "duration_mins": e_min - cursor, "sort_order": sid, "notes": ""})
+    return segs
+
+
+def _mm(m):
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def plan_demo_day(schedule_date, lob=None):
+    """Apply the demo rules for one date. Returns (schedules, warnings).
+    schedules: full list (status scheduled | off | pto), each with a 'reason' for non-working days."""
     if isinstance(schedule_date, str):
         schedule_date = datetime.datetime.strptime(schedule_date[:10], "%Y-%m-%d").date()
+    day = schedule_date
+    wd = day.weekday()
+    pto_names = _demo_pto_set(day)
+    schedules, warnings, skipped = [], [], []
+    scheduled_by_lob = {}
 
-    weekday = schedule_date.weekday()
-    rng = random.Random(schedule_date.toordinal())
-
-    schedules = []
     for i, emp in enumerate(DEMO_EMPLOYEES):
-        name = f"{emp['First Name']} {emp['Last Name']}"
-        shift = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
-        start_str, end_str, hours = shift
-
-        # Weekend: only ~20% of staff works
-        if weekday >= 5 and rng.random() > 0.2:
-            schedules.append({
-                "id": 8000 + i,
-                "employee": name,
-                "employee_id": emp["Employee ID"],
-                "date": schedule_date.isoformat(),
-                "start": "", "end": "",
-                "type": "full", "hours": 0,
-                "status": "off", "segments": [],
-            })
+        emp_lob = emp["Latest Skill Name"]
+        if lob and emp_lob != lob:
             continue
+        ext = emp["Employee ID"]
+        name = f"{emp['First Name']} {emp['Last Name']}"
+        base = {"id": 8000 + i + day.toordinal() % 1000, "employee": name, "employee_id": ext,
+                "date": day.isoformat(), "start": "", "end": "", "type": "full", "hours": 0,
+                "segments": [], "lob": emp_lob}
 
-        # Build segments
-        sh, sm = int(start_str[:2]), int(start_str[3:])
-        segments = [
-            {"id": 0, "type": "on-call",  "start": start_str, "end": f"{sh+2:02d}:{sm:02d}", "duration_mins": 120, "sort_order": 0, "notes": ""},
-            {"id": 1, "type": "break",    "start": f"{sh+2:02d}:{sm:02d}", "end": f"{sh+2:02d}:15", "duration_mins": 15, "sort_order": 1, "notes": ""},
-            {"id": 2, "type": "on-call",  "start": f"{sh+2:02d}:15", "end": f"{sh+4:02d}:{sm:02d}", "duration_mins": 105, "sort_order": 2, "notes": ""},
-            {"id": 3, "type": "lunch",    "start": f"{sh+4:02d}:{sm:02d}", "end": f"{sh+4:02d}:30", "duration_mins": 30, "sort_order": 3, "notes": ""},
-            {"id": 4, "type": "on-call",  "start": f"{sh+4:02d}:30", "end": f"{sh+6:02d}:{sm:02d}", "duration_mins": 90, "sort_order": 4, "notes": ""},
-            {"id": 5, "type": "break",    "start": f"{sh+6:02d}:{sm:02d}", "end": f"{sh+6:02d}:15", "duration_mins": 15, "sort_order": 5, "notes": ""},
-            {"id": 6, "type": "on-call",  "start": f"{sh+6:02d}:15", "end": end_str, "duration_mins": int((hours - 6.5) * 60), "sort_order": 6, "notes": ""},
-        ]
+        def off(status, reason):
+            schedules.append({**base, "status": status, "reason": reason})
+            skipped.append(f"{name}: {reason}")
 
-        schedules.append({
-            "id": 8000 + i,
-            "employee": name,
-            "employee_id": emp["Employee ID"],
-            "date": schedule_date.isoformat(),
-            "start": start_str, "end": end_str,
-            "type": "full", "hours": hours,
-            "status": "scheduled", "segments": segments,
-        })
+        if name in pto_names:
+            off("pto", "PTO"); continue
+        accom = _DEMO_ACCOM.get(ext)
+        if accom and accom["day_off"] == wd:
+            off("off", "accommodation — day off"); continue
+
+        rot = _demo_rotation_shift(ext, day)
+        if isinstance(rot, dict) and rot.get("off"):
+            off("off", f"rotation '{rot['name']}' day off"); continue
+
+        if rot:
+            _, start_str, end_str, _cat = rot
+        elif wd >= 5:
+            if ext not in _DEMO_WEEKEND_STAFF.get(emp_lob, {}).get(wd, []):
+                off("off", "not on weekend coverage"); continue
+            start_str, end_str = ("09:00", "17:30") if wd == 5 else ("10:00", "18:30")
+        else:
+            start_str, end_str, _ = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
+
+        if accom:
+            start_str, end_str = accom["start"], accom["end"]
+
+        sh, sm = map(int, start_str.split(":")); eh, em = map(int, end_str.split(":"))
+        hours = round(((eh * 60 + em) - (sh * 60 + sm)) / 60, 2)
+        idx = scheduled_by_lob.get(emp_lob, 0); scheduled_by_lob[emp_lob] = idx + 1
+        schedules.append({**base, "start": start_str, "end": end_str, "hours": hours,
+                          "status": "scheduled", "reason": "",
+                          "segments": _build_demo_segments(start_str, end_str, idx, 7)})
+
+    # Fill-in pass: closing shift must be covered on weekdays for each LOB with a rule
+    if wd < 5:
+        for cat, backups in _DEMO_FILL_IN.items():
+            tmpl = next((t for t in _DEMO_TEMPLATES.values() if t[3] == cat), None)
+            if not tmpl:
+                continue
+            for lob_name in (["Sales Support"] if not lob else [lob]):
+                if lob_name != "Sales Support":
+                    continue
+                covered = any(s["status"] == "scheduled" and s["lob"] == lob_name and
+                              s["start"] == tmpl[1] and s["end"] == tmpl[2] for s in schedules)
+                if covered:
+                    continue
+                for ext in backups:
+                    cand = next((s for s in schedules if s["employee_id"] == ext), None)
+                    if not cand or cand["status"] != "scheduled":
+                        continue
+                    cand["start"], cand["end"] = tmpl[1], tmpl[2]
+                    cand["hours"] = 8.5
+                    cand["segments"] = _build_demo_segments(tmpl[1], tmpl[2], 3, 7)
+                    cand["fill_in"] = True
+                    warnings.append(f"Fill-in: {cand['employee']} covers {cat} ({tmpl[0]})")
+                    break
+
+    if skipped:
+        warnings.append(f"Skipped {len(skipped)} employee(s): " + "; ".join(skipped))
+    for s in schedules:
+        s.pop("lob", None)
+    return schedules, warnings
+
+
+def get_demo_schedules(schedule_date=None):
+    """Return a list of schedule dicts for the given date (all LOBs)."""
+    if schedule_date is None:
+        schedule_date = datetime.date.today()
+    schedules, _ = plan_demo_day(schedule_date)
     return schedules
 
 
@@ -283,26 +409,12 @@ def get_demo_realtime_snapshot(lob, date_obj):
     cur_interval = f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
     rng = random.Random(date_obj.toordinal() + hash(lob) + 7)
 
-    # Build demo shifts for this LOB's employees
-    lob_emps = [e for e in DEMO_EMPLOYEES
-                if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
-    shifts = []
-    unassigned = []
-    for i, emp in enumerate(lob_emps):
-        name = f"{emp['First Name']} {emp['Last Name']}"
-        # Weekend: ~30% off
-        if date_obj.weekday() >= 5 and rng.random() > 0.3:
-            unassigned.append(name)
-            continue
-        pattern = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
-        shifts.append({
-            "employee": name,
-            "employee_id": emp["Employee ID"],
-            "start": pattern[0],
-            "end": pattern[1],
-            "hours": pattern[2],
-            "type": "full",
-        })
+    # Shifts come from the same demo planner the Scheduling page uses
+    day_plan, _ = plan_demo_day(date_obj, lob)
+    shifts = [{"employee": s["employee"], "employee_id": s["employee_id"],
+               "start": s["start"], "end": s["end"], "hours": s["hours"], "type": s["type"]}
+              for s in day_plan if s["status"] == "scheduled"]
+    unassigned = [s["employee"] for s in day_plan if s["status"] != "scheduled"]
 
     # Count scheduled agents per interval from shifts
     sched_map = {}
@@ -425,17 +537,15 @@ def get_demo_adherence(lob, date_obj):
     cur_mins = now.hour * 60 + now.minute
     rng = random.Random(date_obj.toordinal() + hash(lob))
 
-    lob_emps = [e for e in DEMO_EMPLOYEES
-                if e["Latest Skill Name"] == lob and e["Status"] == "Active"]
-
+    day_plan, _ = plan_demo_day(date_obj, lob)
     adherence = []
-    unassigned = []
-    for i, emp in enumerate(lob_emps):
-        name = f"{emp['First Name']} {emp['Last Name']}"
-        if date_obj.weekday() >= 5 and rng.random() > 0.3:
-            unassigned.append(name)
+    unassigned = [s["employee"] for s in day_plan if s["status"] != "scheduled"]
+    for s in day_plan:
+        if s["status"] != "scheduled":
             continue
-        pattern = _SHIFT_PATTERNS[i % len(_SHIFT_PATTERNS)]
+        name = s["employee"]
+        emp = {"Employee ID": s["employee_id"]}
+        pattern = (s["start"], s["end"], s["hours"])
         s_min = int(pattern[0][:2]) * 60 + int(pattern[0][3:])
         e_min = int(pattern[1][:2]) * 60 + int(pattern[1][3:])
         is_on = s_min <= cur_mins < e_min

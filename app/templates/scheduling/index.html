@@ -403,12 +403,10 @@
     <button class="btn-action btn-load" onclick="loadSchedule()">
       Load Saved
     </button>
-    {% if not is_demo %}
     <button class="btn-action" id="btnImportPW" onclick="importFromPeopleWare()" title="Pull published schedules from the connected WFM system (Settings → API Connections) for this LOB and date range, then load them"
       style="background:var(--surface); color:var(--text); border:1px solid var(--border);">
       Import from API
     </button>
-    {% endif %}
     <button class="btn-action btn-save" id="btnSave" onclick="saveSchedule()" style="display:none">
       Save
     </button>
