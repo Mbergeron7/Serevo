@@ -76,6 +76,13 @@ def list_employees():
             "skill_start": e.skill_start.isoformat() if e.skill_start else "",
             "skill_end": e.skill_end.isoformat() if e.skill_end else "",
             "end_date": e.end_date.isoformat() if e.end_date else "",
+            "languages": e.languages or "English",
+            "contract_type": e.contract_type or "Full-Time",
+            "weekly_hours": e.weekly_hours or 40.0,
+            "days_per_week": e.days_per_week or 5,
+            "hours_per_day": e.hours_per_day or 8.0,
+            "timezone": e.timezone or "America/New_York",
+            "schedule_excluded": e.schedule_excluded or False,
         })
     return jsonify({"employees": result})
 
@@ -123,6 +130,12 @@ def save_employee():
         emp.skill_end = _parse_date(data.get("skill_end"))
         emp.end_date = _parse_date(data.get("end_date"))
         emp.languages = (data.get("languages") or "English").strip()
+        emp.contract_type = (data.get("contract_type") or "Full-Time").strip()
+        emp.weekly_hours = float(data.get("weekly_hours") or 40)
+        emp.days_per_week = int(data.get("days_per_week") or 5)
+        emp.hours_per_day = float(data.get("hours_per_day") or 8)
+        emp.timezone = (data.get("timezone") or "America/New_York").strip()
+        emp.schedule_excluded = bool(data.get("schedule_excluded"))
         emp.manually_edited = True
 
         db.session.commit()

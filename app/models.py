@@ -69,6 +69,12 @@ class Employee(db.Model):
     skill_end        = db.Column(db.Date, nullable=True)
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
+    contract_type    = db.Column(db.String(20), default="Full-Time")    # Full-Time | Part-Time
+    weekly_hours     = db.Column(db.Float, default=40.0)
+    days_per_week    = db.Column(db.Integer, default=5)
+    hours_per_day    = db.Column(db.Float, default=8.0)
+    timezone         = db.Column(db.String(60), default="America/New_York")
+    schedule_excluded = db.Column(db.Boolean, default=False, server_default="false")
     manually_edited  = db.Column(db.Boolean, default=False, server_default="false")
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -94,6 +100,12 @@ class Employee(db.Model):
             "Latest Skill End": self.skill_end.isoformat() if self.skill_end else "",
             "All Skills": self.all_skills or "",
             "Languages": self.languages or "English",
+            "Contract Type": self.contract_type or "Full-Time",
+            "Weekly Hours": self.weekly_hours or 40.0,
+            "Days Per Week": self.days_per_week or 5,
+            "Hours Per Day": self.hours_per_day or 8.0,
+            "Timezone": self.timezone or "America/New_York",
+            "Schedule Excluded": self.schedule_excluded or False,
             "End Date": self.end_date.isoformat() if self.end_date else "",
         }
 

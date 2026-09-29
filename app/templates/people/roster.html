@@ -212,6 +212,7 @@
           <th>LOB / Skill</th>
           <th>Skill Start</th>
           <th>Languages</th>
+          <th>Contract</th>
           <th>Flags</th>
           <th></th>
         </tr>
@@ -241,6 +242,7 @@
           <td>{{ emp['Latest Skill Name']|default('—') }}</td>
           <td style="color:var(--text-muted)">{{ emp['Latest Skill Start']|default('—') }}</td>
           <td>{{ emp['Languages']|default('English') }}</td>
+          <td>{{ emp['Contract Type']|default('Full-Time') }} ({{ emp['Weekly Hours']|default(40)|int }}h)</td>
           <td>
             {% if full_name in accom_map %}
               <span class="badge-accom">Accommodation</span>
@@ -322,6 +324,63 @@
         </select>
       </div>
 
+      <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
+      <h3 style="font-size:.9rem; font-weight:700; margin-bottom:.5rem; color:var(--text-muted);">Contract &amp; Schedule</h3>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_contract_type">Contract Type</label>
+          <select id="emp_contract_type" onchange="updateHoursDefaults()">
+            <option value="Full-Time">Full-Time</option>
+            <option value="Part-Time">Part-Time</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="emp_weekly_hours">Weekly Hours</label>
+          <input type="number" id="emp_weekly_hours" step="0.5" min="0" max="80" value="40">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_days_per_week">Days / Week</label>
+          <input type="number" id="emp_days_per_week" min="1" max="7" value="5">
+        </div>
+        <div class="form-group">
+          <label for="emp_hours_per_day">Hours / Day</label>
+          <input type="number" id="emp_hours_per_day" step="0.5" min="0" max="24" value="8">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="emp_timezone">Time Zone</label>
+        <select id="emp_timezone">
+          <option value="America/New_York">Eastern (America/New_York)</option>
+          <option value="America/Chicago">Central (America/Chicago)</option>
+          <option value="America/Denver">Mountain (America/Denver)</option>
+          <option value="America/Los_Angeles">Pacific (America/Los_Angeles)</option>
+          <option value="America/Toronto">Eastern (America/Toronto)</option>
+          <option value="America/Winnipeg">Central (America/Winnipeg)</option>
+          <option value="America/Edmonton">Mountain (America/Edmonton)</option>
+          <option value="America/Vancouver">Pacific (America/Vancouver)</option>
+          <option value="America/Halifax">Atlantic (America/Halifax)</option>
+          <option value="America/St_Johns">Newfoundland (America/St_Johns)</option>
+          <option value="Europe/London">UK (Europe/London)</option>
+          <option value="Europe/Paris">Central Europe (Europe/Paris)</option>
+          <option value="Asia/Kolkata">India (Asia/Kolkata)</option>
+          <option value="Asia/Manila">Philippines (Asia/Manila)</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="emp_schedule_excluded" style="width:auto;">
+        <label for="emp_schedule_excluded" style="margin:0; font-weight:500;">Exclude from scheduling</label>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
+      <h3 style="font-size:.9rem; font-weight:700; margin-bottom:.5rem; color:var(--text-muted);">Dates</h3>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
         <div class="form-group">
           <label for="emp_skill_start">Skill Start</label>
@@ -352,6 +411,19 @@
 
 {% block scripts %}
 <script>
+function updateHoursDefaults() {
+  const ct = document.getElementById('emp_contract_type').value;
+  if (ct === 'Part-Time') {
+    document.getElementById('emp_weekly_hours').value = 20;
+    document.getElementById('emp_days_per_week').value = 5;
+    document.getElementById('emp_hours_per_day').value = 4;
+  } else {
+    document.getElementById('emp_weekly_hours').value = 40;
+    document.getElementById('emp_days_per_week').value = 5;
+    document.getElementById('emp_hours_per_day').value = 8;
+  }
+}
+
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
   const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
@@ -380,6 +452,12 @@ function openEmpModal(data) {
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
   document.getElementById('emp_skills').value = data ? (data.all_skills || data['All Skills'] || '') : '';
   document.getElementById('emp_languages').value = data ? (data.languages || data['Languages'] || 'English') : 'English';
+  document.getElementById('emp_contract_type').value = data ? (data.contract_type || data['Contract Type'] || 'Full-Time') : 'Full-Time';
+  document.getElementById('emp_weekly_hours').value = data ? (data.weekly_hours || data['Weekly Hours'] || 40) : 40;
+  document.getElementById('emp_days_per_week').value = data ? (data.days_per_week || data['Days Per Week'] || 5) : 5;
+  document.getElementById('emp_hours_per_day').value = data ? (data.hours_per_day || data['Hours Per Day'] || 8) : 8;
+  document.getElementById('emp_timezone').value = data ? (data.timezone || data['Timezone'] || 'America/New_York') : 'America/New_York';
+  document.getElementById('emp_schedule_excluded').checked = data ? (data.schedule_excluded || data['Schedule Excluded'] || false) : false;
   document.getElementById('emp_skill_start').value = data ? (data.skill_start || data['Latest Skill Start'] || '') : '';
   document.getElementById('emp_skill_end').value = data ? (data.skill_end || data['Latest Skill End'] || '') : '';
   document.getElementById('emp_end_date').value = data ? (data.end_date || data['End Date'] || '') : '';
@@ -428,6 +506,12 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     lob: document.getElementById('emp_lob').value,
     all_skills: document.getElementById('emp_skills').value,
     languages: document.getElementById('emp_languages').value,
+    contract_type: document.getElementById('emp_contract_type').value,
+    weekly_hours: document.getElementById('emp_weekly_hours').value,
+    days_per_week: document.getElementById('emp_days_per_week').value,
+    hours_per_day: document.getElementById('emp_hours_per_day').value,
+    timezone: document.getElementById('emp_timezone').value,
+    schedule_excluded: document.getElementById('emp_schedule_excluded').checked,
     skill_start: document.getElementById('emp_skill_start').value,
     skill_end: document.getElementById('emp_skill_end').value,
     end_date: document.getElementById('emp_end_date').value,
