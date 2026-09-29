@@ -121,13 +121,50 @@ def save_google_sheets():
     return jsonify({"success": True})
 
 
+def _friendly_sheet_error(e):
+    msg = str(e)
+    low = msg.lower()
+    if "403" in low or "permission" in low or "does not have permission" in low:
+        return ("Google refused access (403). Share the sheet with the service account email "
+                "(client_email in the JSON) as Viewer, and make sure the Google Sheets API and "
+                "Google Drive API are enabled in the Google Cloud project.")
+    if "404" in low or "not found" in low or "spreadsheetnotfound" in low:
+        return "Sheet not found (404). Check the Google Sheet key — it's the long ID between /d/ and /edit in the sheet's URL."
+    if "invalid_grant" in low or "jwt" in low or "private key" in low or "pem" in low:
+        return "The service account JSON was rejected by Google. Re-download the key file and paste the entire contents."
+    if "expecting value" in low or "jsondecode" in low:
+        return "The service account box does not contain valid JSON — paste the whole file, starting with { and ending with }."
+    return f"Could not open the sheet: {msg}"
+
+
 @settings_bp.route("/google-sheets/test", methods=["POST"])
 @admin_required
 def test_google_sheets():
     from app.models import db, AppSetting
     from app.data_source import _open_capacity_sheet
 
-    sheet, err = _open_capacity_sheet()
+    # Test whatever is in the form (unsaved), falling back to the saved config
+    data = request.get_json(silent=True) or {}
+    form_key = (data.get("sheet_key") or "").strip()
+    form_json = (data.get("service_account_json") or "").strip()
+    if form_key or form_json:
+        try:
+            import gspread
+            from oauth2client.service_account import ServiceAccountCredentials
+            key = form_key or AppSetting.get("google_sheet_key", "")
+            sa = form_json or AppSetting.get("google_service_account_json", "")
+            if not key:
+                return jsonify({"success": False, "error": "Enter the Google Sheet key first"})
+            if not sa:
+                return jsonify({"success": False, "error": "Paste the service account JSON first"})
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                json.loads(sa), ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+            sheet = gspread.authorize(creds).open_by_key(key)
+            err = None
+        except Exception as e:
+            sheet, err = None, _friendly_sheet_error(e)
+    else:
+        sheet, err = _open_capacity_sheet()
     if err:
         AppSetting.set("google_sheets_status", "error")
         db.session.commit()

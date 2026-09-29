@@ -131,7 +131,8 @@ async function saveConfig() {
     });
     const data = await resp.json();
     if (data.success) {
-      showResult('success', 'Configuration saved. Click "Test Connection" to verify.');
+      showResult('success', 'Configuration saved — testing the connection…');
+      await testConnection();
     } else {
       showResult('error', data.error);
     }
@@ -146,7 +147,10 @@ async function testConnection() {
     const resp = await fetch('/settings/google-sheets/test', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: '{}',
+      body: JSON.stringify({
+        sheet_key: document.getElementById('sheet_key').value.trim(),
+        service_account_json: document.getElementById('sa_json').value.trim(),
+      }),
     });
     const data = await resp.json();
     if (data.success) {
