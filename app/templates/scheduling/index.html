@@ -440,6 +440,9 @@
     <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">
       Mass Update
     </button>
+    <button class="btn-action" id="btnOptimize" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff;">
+      Optimize Breaks
+    </button>
     <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">
       Clear
     </button>
@@ -753,6 +756,57 @@
       </button>
       <button class="btn-modal btn-modal-primary" id="massApplyBtn" onclick="massApply()" style="display:none">
         Apply Selected
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Optimize Breaks Modal ───────────────────────────────── -->
+<div class="modal-overlay" id="optimizeOverlay">
+  <div class="modal" style="max-width:620px">
+    <h2>Optimize Breaks &amp; Lunches</h2>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:16px">
+      Re-position breaks and lunches to minimize coverage impact. The optimizer
+      staggers placements so not everyone is off the phones at the same time.
+    </p>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Segment Types to Optimize</label>
+        <div style="display:flex;gap:16px;align-items:center;padding:4px 0">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem">
+            <input type="checkbox" id="optBreaks" checked> Breaks
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem">
+            <input type="checkbox" id="optLunches" checked> Lunches
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin:12px 0 6px; font-weight:700; font-size:.85rem; display:flex; justify-content:space-between; align-items:center">
+      <span>Employees</span>
+      <label style="font-weight:400; font-size:.8rem; cursor:pointer">
+        <input type="checkbox" id="optSelectAll" onchange="optToggleAll()" checked> Select All
+      </label>
+    </div>
+    <div id="optEmpList" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:6px 10px; margin-bottom:16px; font-size:.82rem"></div>
+
+    <!-- Results area -->
+    <div id="optResults" style="display:none; margin-bottom:16px">
+      <div style="font-weight:700; font-size:.85rem; margin-bottom:8px">Changes Made</div>
+      <div style="overflow-x:auto">
+        <table class="summary-table" style="font-size:.82rem">
+          <thead><tr><th>Employee</th><th>Type</th><th>Before</th><th>After</th><th>Surplus</th></tr></thead>
+          <tbody id="optResultBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">
+      <button class="btn-modal btn-modal-secondary" onclick="closeOptimizeModal()">Cancel</button>
+      <button class="btn-modal btn-modal-primary" id="optRunBtn" onclick="runOptimize()" style="background:#0891b2">
+        Run Optimizer
       </button>
     </div>
   </div>
@@ -2196,6 +2250,152 @@ async function massApply() {
 // Close mass modal on overlay click
 document.getElementById('massOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeMassModal();
+});
+
+// ═══════════════════════════════════════════════════════════
+// OPTIMIZE BREAKS & LUNCHES
+// ═══════════════════════════════════════════════════════════
+
+function openOptimizeModal() {
+  if (!scheduleData || !scheduleData.days.length) {
+    showToast('Load or generate a schedule first.', true);
+    return;
+  }
+  document.getElementById('optResults').style.display = 'none';
+  document.getElementById('optRunBtn').style.display = '';
+  document.getElementById('optBreaks').checked = true;
+  document.getElementById('optLunches').checked = true;
+  document.getElementById('optSelectAll').checked = true;
+
+  const dayIdx = _massGetActiveDayIdx();
+  const day = scheduleData.days[dayIdx];
+  const list = document.getElementById('optEmpList');
+  if (!day || !day.shifts.length) {
+    list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts for this day.</div>';
+  } else {
+    let html = '';
+    day.shifts.forEach((s, i) => {
+      if (s.status !== 'scheduled') return;
+      // Count breaks/lunches
+      const segs = (s.segments || []).filter(sg => sg.type === 'break' || sg.type === 'lunch');
+      const segLabel = segs.length ? segs.map(sg => `${sg.type} ${sg.start}–${sg.end}`).join(', ') : 'no breaks/lunches';
+      html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+        <input type="checkbox" class="opt-emp-chk" data-shift-id="${s.id}" checked>
+        <span style="font-weight:600">${s.employee}</span>
+        <span style="color:var(--text-muted);font-size:.75rem">${segLabel}</span>
+      </label>`;
+    });
+    list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
+  }
+
+  document.getElementById('optimizeOverlay').classList.add('open');
+}
+
+function closeOptimizeModal() {
+  document.getElementById('optimizeOverlay').classList.remove('open');
+}
+
+function optToggleAll() {
+  const checked = document.getElementById('optSelectAll').checked;
+  document.querySelectorAll('.opt-emp-chk').forEach(c => c.checked = checked);
+}
+
+async function runOptimize() {
+  const dayIdx = _massGetActiveDayIdx();
+  const day = scheduleData.days[dayIdx];
+  if (!day) return;
+
+  const chks = document.querySelectorAll('.opt-emp-chk:checked');
+  const shiftIds = [...chks].map(c => parseInt(c.dataset.shiftId)).filter(id => id);
+  if (!shiftIds.length) {
+    showToast('Select at least one employee.', true);
+    return;
+  }
+
+  const types = [];
+  if (document.getElementById('optBreaks').checked) types.push('break');
+  if (document.getElementById('optLunches').checked) types.push('lunch');
+  if (!types.length) {
+    showToast('Select at least one segment type to optimize.', true);
+    return;
+  }
+
+  const btn = document.getElementById('optRunBtn');
+  btn.textContent = 'Optimizing…';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('/scheduling/optimize-segments', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        shift_ids: shiftIds,
+        activity_types: types,
+        coverage: day.coverage || [],
+      }),
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+      showToast('Error: ' + (data.error || 'Unknown'), true);
+      return;
+    }
+
+    const changes = data.changes || [];
+    if (!changes.length) {
+      showToast('No changes needed — breaks are already optimally placed.', false);
+      closeOptimizeModal();
+      return;
+    }
+
+    // Show results table
+    const tbody = document.getElementById('optResultBody');
+    tbody.innerHTML = '';
+    changes.forEach(c => {
+      const changed = c.old_start !== c.new_start;
+      const surplusColor = c.coverage_impact >= 1 ? '#059669' : c.coverage_impact >= 0 ? '#d97706' : '#dc2626';
+      tbody.innerHTML += `<tr>
+        <td style="font-weight:600">${c.employee}</td>
+        <td>${c.type}</td>
+        <td style="${changed ? 'text-decoration:line-through;color:var(--text-muted)' : ''}">${c.old_start}–${c.old_end}</td>
+        <td style="font-weight:${changed ? '700' : '400'}">${c.new_start}–${c.new_end}</td>
+        <td style="color:${surplusColor};font-weight:600">${c.coverage_impact >= 0 ? '+' : ''}${c.coverage_impact}</td>
+      </tr>`;
+    });
+
+    document.getElementById('optResults').style.display = '';
+    btn.style.display = 'none';
+
+    // Update in-memory schedule data so the timeline refreshes
+    changes.forEach(c => {
+      const shift = day.shifts.find(s => s.id === c.shift_id);
+      if (!shift || !shift.segments) return;
+      const seg = shift.segments.find(sg =>
+        sg.type === c.type && sg.start === c.old_start && sg.end === c.old_end
+      );
+      if (seg) {
+        seg.start = c.new_start;
+        seg.end = c.new_end;
+        seg.duration_mins = timeToMins(c.new_end) - timeToMins(c.new_start);
+      }
+    });
+    // Re-sort segments per shift
+    day.shifts.forEach(s => {
+      if (s.segments) s.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+    });
+    renderSchedule();
+    showToast(`Optimized ${changes.length} segment(s).`);
+
+  } catch (e) {
+    showToast('Optimize failed: ' + e, true);
+  } finally {
+    btn.textContent = 'Run Optimizer';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('optimizeOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeOptimizeModal();
 });
 </script>
 {% endblock %}

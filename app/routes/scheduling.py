@@ -1068,6 +1068,187 @@ def mass_segment_apply():
         return jsonify({"success": False, "error": str(e)})
 
 
+@scheduling_bp.route("/optimize-segments", methods=["POST"])
+@login_required
+def optimize_segments():
+    """
+    Re-position break and lunch segments across shifts for a day to
+    minimise coverage impact.  Reads existing flexible segments, removes
+    them, then re-places them using a greedy best-surplus algorithm with
+    stagger tracking so no two employees are on break at the same time
+    when avoidable.
+
+    POST JSON: {
+        shift_ids: [int],                 # shifts to optimise
+        coverage: [{time, required, scheduled, gap}],  # day's coverage
+        activity_types: [str]             # which segment types to reposition
+                                          #   default: ['break','lunch']
+    }
+    Returns {
+        success: true,
+        changes: [{shift_id, employee, type, old_start, old_end,
+                   new_start, new_end, coverage_impact}]
+    }
+    """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "changes": [],
+                        "message": "Demo mode — changes kept on screen only"})
+    try:
+        payload = request.get_json(silent=True) or {}
+        shift_ids = payload.get("shift_ids", [])
+        coverage = payload.get("coverage", [])
+        types_to_opt = set(payload.get("activity_types", ["break", "lunch"]))
+
+        if not shift_ids:
+            return jsonify({"success": False, "error": "No shifts selected"})
+
+        # Build coverage map
+        cov_map = {}
+        for c in coverage:
+            t = c.get("time", "")
+            if len(t) >= 5:
+                m = _time_to_mins(t[:5])
+                cov_map[m] = {"req": c.get("required", 0), "sched": c.get("scheduled", 0)}
+
+        cov_times = sorted(cov_map.keys())
+        interval = 15
+        if len(cov_times) >= 2:
+            interval = cov_times[1] - cov_times[0]
+        if interval < 1:
+            interval = 15
+
+        # Load shifts and their segments
+        shifts = Schedule.query.filter(Schedule.id.in_(shift_ids)).all()
+        if not shifts:
+            return jsonify({"success": False, "error": "No matching shifts found"})
+
+        # Collect all segments that we'll reposition, and track ones we won't
+        # move (so they count as "already placed" for coverage)
+        to_reposition = []   # [(shift, segment, shift_start_min, shift_end_min)]
+        fixed_placed = []    # [(start_min, end_min)]
+
+        for shift in shifts:
+            s_start = shift.shift_start
+            s_end = shift.shift_end
+            if not s_start or not s_end:
+                continue
+            s_s = s_start.hour * 60 + s_start.minute
+            s_e = s_end.hour * 60 + s_end.minute
+
+            for seg in shift.segments:
+                if seg.activity_type in types_to_opt:
+                    to_reposition.append((shift, seg, s_s, s_e))
+                elif seg.activity_type != "on-call":
+                    # Fixed segments (meetings, training, etc.) reduce coverage
+                    if seg.start_time and seg.end_time:
+                        fs = seg.start_time.hour * 60 + seg.start_time.minute
+                        fe = seg.end_time.hour * 60 + seg.end_time.minute
+                        fixed_placed.append((fs, fe))
+
+        if not to_reposition:
+            return jsonify({"success": True, "changes": [],
+                            "message": "No break/lunch segments found to optimise"})
+
+        # Get segment rules for window constraints
+        from app.scheduling.engine import _get_segment_rules
+        rules = _get_segment_rules("full")
+        rules_by_type = {}
+        for r in rules:
+            if r["type"] not in rules_by_type:
+                rules_by_type[r["type"]] = r
+
+        # Greedy placement: process each segment, find best slot
+        already_placed = list(fixed_placed)
+        changes = []
+
+        for shift, seg, s_s, s_e in to_reposition:
+            duration = seg.duration_mins or 15
+            rule = rules_by_type.get(seg.activity_type)
+
+            # Determine window: use rule window relative to shift start,
+            # or fall back to full shift
+            if rule and rule.get("is_flexible"):
+                win_s = s_s + (rule.get("window_start_mins", 0))
+                win_e = s_s + (rule.get("window_end_mins", s_e - s_s))
+            else:
+                # Non-flexible segment — still try to optimise within
+                # a ±30 minute window of its current position
+                if seg.start_time:
+                    cur_start = seg.start_time.hour * 60 + seg.start_time.minute
+                    win_s = max(s_s, cur_start - 30)
+                    win_e = min(s_e, cur_start + 30 + duration)
+                else:
+                    win_s = s_s
+                    win_e = s_e
+
+            # Clamp to shift bounds
+            win_s = max(win_s, s_s)
+            win_e = min(win_e, s_e)
+            if win_e - win_s < duration:
+                continue  # can't fit
+
+            # Find best slot
+            best_slot = None
+            best_score = -9999
+
+            t = win_s
+            while t + duration <= win_e:
+                min_surplus = 9999
+                m = t
+                while m < t + duration:
+                    cov = cov_map.get(m)
+                    if cov:
+                        surplus = cov["sched"] - cov["req"]
+                        for placed in already_placed:
+                            if placed[0] <= m < placed[1]:
+                                surplus -= 1
+                        min_surplus = min(min_surplus, surplus)
+                    m += interval
+                if min_surplus == 9999:
+                    min_surplus = 0
+                if min_surplus > best_score:
+                    best_score = min_surplus
+                    best_slot = t
+                t += interval
+
+            if best_slot is None:
+                continue
+
+            old_start = seg.start_time.strftime("%H:%M") if seg.start_time else ""
+            old_end = seg.end_time.strftime("%H:%M") if seg.end_time else ""
+            new_start_str = _mins_to_time(best_slot)
+            new_end_str = _mins_to_time(best_slot + duration)
+
+            # Update the segment in the DB
+            import datetime as _dt
+            seg.start_time = _dt.time(best_slot // 60, best_slot % 60)
+            seg.end_time = _dt.time((best_slot + duration) // 60, (best_slot + duration) % 60)
+
+            already_placed.append((best_slot, best_slot + duration))
+
+            emp = shift.employee
+            changes.append({
+                "shift_id": shift.id,
+                "segment_id": seg.id,
+                "employee": emp.full_name if emp else f"ID {shift.employee_id}",
+                "type": seg.activity_type,
+                "old_start": old_start,
+                "old_end": old_end,
+                "new_start": new_start_str,
+                "new_end": new_end_str,
+                "coverage_impact": best_score,
+            })
+
+        db.session.commit()
+        return jsonify({"success": True, "changes": changes})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Optimize segments error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 @scheduling_bp.route("/mass-segment/cross-lob-shifts", methods=["POST"])
 @login_required
 def mass_segment_cross_lob_shifts():
