@@ -791,3 +791,43 @@ def import_peopleware():
     except Exception as e:
         log.exception("PeopleWare schedule import error")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ── Helpers for manual shift entry ──────────────────────────
+@scheduling_bp.route("/segments/auto", methods=["POST"])
+@login_required
+def segments_auto():
+    """POST {start, end, type, existing_count?} → {segments:[...]} using the
+    segment-code rules (break/lunch placement), staggered by existing_count."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        from app.scheduling.engine import _generate_segments
+        idx = int(payload.get("existing_count") or 0)
+        segs = _generate_segments(payload.get("start", "09:00"), payload.get("end", "17:00"),
+                                  payload.get("type", "full"), stagger_index=idx,
+                                  total_employees=idx + 1)
+        for s_ in segs:
+            s_.setdefault("notes", "")
+        return jsonify({"success": True, "segments": segs})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "segments": []})
+
+
+@scheduling_bp.route("/shift-templates", methods=["POST"])
+@login_required
+def shift_templates():
+    """Active shift templates for the Add Shift picker."""
+    user = get_current_user()
+    try:
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_settings_data
+            t = [{"name": x["name"], "start_time": x["start_time"], "end_time": x["end_time"],
+                  "shift_type": x.get("shift_type", "full")} for x in get_demo_settings_data()["shifts"]]
+            return jsonify({"success": True, "templates": t})
+        from app.models import ShiftTemplate
+        rows = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()
+        return jsonify({"success": True, "templates": [
+            {"name": r.name, "start_time": r.start_time, "end_time": r.end_time, "shift_type": r.shift_type or "full"}
+            for r in rows]})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "templates": []})

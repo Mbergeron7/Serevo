@@ -109,6 +109,9 @@
     cursor: pointer;
   }
   .day-header-row:hover { background: var(--brand-accent-light); }
+  .btn-add-shift { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:5px; cursor:pointer;
+    border:1px solid var(--brand-accent); background:transparent; color:var(--brand-accent); }
+  .btn-add-shift:hover { background:var(--brand-accent); color:#fff; }
   .day-content { display: none; }
   .day-content.open { display: block; }
 
@@ -481,6 +484,43 @@
 <!-- ── Results container ──────────────────────────────────── -->
 <div id="resultsContainer"></div>
 
+<!-- ── Add Shift Modal ───────────────────────────────────── -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="addModalTitle">Add Shift</span>
+      <button class="modal-close" onclick="closeAddModal()">&times;</button>
+    </div>
+    <input type="hidden" id="addDayIdx">
+    <div class="form-group">
+      <label>Employee</label>
+      <select id="addEmployee"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Shift Start</label><input type="time" id="addStart" value="09:00"></div>
+      <div class="form-group"><label>Shift End</label><input type="time" id="addEnd" value="17:30"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="addType"><option value="full">Full</option><option value="half">Half</option></select>
+      </div>
+      <div class="form-group">
+        <label>Template (optional)</label>
+        <select id="addTemplate" onchange="applyAddTemplate()"><option value="">— custom times —</option></select>
+      </div>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:.85rem; margin-top:4px;">
+      <input type="checkbox" id="addAutoSegs" checked> Auto-place breaks &amp; lunch from the segment rules
+    </label>
+    <p style="font-size:.78rem; color:var(--text-muted); margin:10px 0 0;">The shift is added to this day on screen. Click <strong>Save</strong> to write it to the database.</p>
+    <div style="display:flex; gap:8px; margin-top:18px; justify-content:flex-end">
+      <button class="btn-modal btn-modal-secondary" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-modal btn-modal-primary" onclick="confirmAddShift()">Add Shift</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Edit Shift Modal ──────────────────────────────────── -->
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
@@ -815,29 +855,36 @@ function loadSchedule() {
   .then(data => {
     hideLoading();
     if (!data.success) { showToast('Load error: ' + data.error, 'error'); return; }
-    if (!data.shifts || !data.shifts.length) {
-      showToast('No saved schedule found for this LOB/date range.', 'error');
-      return;
-    }
-    // Convert flat shift list into day-grouped scheduleData format
-    scheduleData = convertSavedToScheduleData(data.shifts, lob, start, end);
+    const shifts = data.shifts || [];
+    // Convert flat shift list into day-grouped scheduleData format (every day in range, even if empty)
+    scheduleData = convertSavedToScheduleData(shifts, lob, start, end);
     scheduleSource = 'saved';
     showResults();
-    showToast('Schedule loaded from database.', 'success');
+    if (!shifts.length) showToast('No saved shifts in this range yet — use "+ Add shift" on a day to enter one manually.', 'success');
+    else showToast('Schedule loaded from database.', 'success');
   })
   .catch(e => { hideLoading(); showToast('Load failed: ' + e, 'error'); });
 }
 
+function emptyDay(d) {
+  return {
+    date: d,
+    date_label: new Date(d + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}),
+    day_of_week: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d + 'T12:00:00').getDay()],
+    shifts: [], unassigned: [], coverage: [], summary: {avg_coverage_pct:0,peak_required:0,peak_gap:0,understaffed_intervals:0,total_intervals:0}, warnings: [],
+  };
+}
+
 function convertSavedToScheduleData(shifts, lob, startStr, endStr) {
   const dayMap = {};
+  // Every date in the range gets a day, so shifts can be added to empty days
+  for (let d = new Date(startStr + 'T12:00:00'); d <= new Date(endStr + 'T12:00:00'); d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    dayMap[key] = emptyDay(key);
+  }
   shifts.forEach(s => {
     const d = s.date;
-    if (!dayMap[d]) dayMap[d] = {
-      date: d,
-      date_label: new Date(d + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}),
-      day_of_week: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d + 'T12:00:00').getDay()],
-      shifts: [], unassigned: [], coverage: [], summary: {avg_coverage_pct:0,peak_required:0,peak_gap:0,understaffed_intervals:0,total_intervals:0}, warnings: [],
-    };
+    if (!dayMap[d]) dayMap[d] = emptyDay(d);
     dayMap[d].shifts.push(s);
   });
 
@@ -1057,7 +1104,8 @@ function renderTimelineView(container) {
     html += `<div class="sched-card">
       <div class="day-header-row" onclick="toggleDay(${dayIdx})">
         <span>${day.date_label} — ${day.shifts.length} shifts</span>
-        <span style="font-size:.78rem">${covBadge(day.summary)}</span>
+        <span style="font-size:.78rem; display:flex; gap:10px; align-items:center;">${covBadge(day.summary)}
+          <button class="btn-add-shift" onclick="event.stopPropagation(); openAddModal(${dayIdx})">+ Add shift</button></span>
       </div>
       <div class="day-content${dayIdx === 0 ? ' open' : ''}" id="dayContent${dayIdx}">`;
 
@@ -1188,6 +1236,84 @@ function timeToMins(t) {
   if (!t) return 0;
   const p = t.split(':');
   return parseInt(p[0]) * 60 + parseInt(p[1]);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADD SHIFT MODAL
+// ═══════════════════════════════════════════════════════════
+let SHIFT_TEMPLATES = null;
+const ALL_EMPS = {};   // employee_id -> {name, lob} for borrowed staff
+function openAddModal(dayIdx) {
+  if (!scheduleData) return;
+  const day = scheduleData.days[dayIdx];
+  document.getElementById('addDayIdx').value = dayIdx;
+  document.getElementById('addModalTitle').textContent = 'Add Shift — ' + day.date_label;
+  // Employee list: LOB roster minus people already on this day
+  const onDay = new Set(day.shifts.map(s => String(s.employee_id)));
+  const sel = document.getElementById('addEmployee');
+  const options = empList.filter(e => !onDay.has(String(e.employee_id)));
+  const lobName = scheduleData.lob || document.getElementById('cfgLOB').value;
+  sel.innerHTML = `<optgroup label="${lobName}">` + (options.length
+    ? options.map(e => `<option value="${e.employee_id}">${e.name}</option>`).join('')
+    : '<option value="" disabled>(everyone already has a shift)</option>') + '</optgroup>';
+  // Borrow from other LOBs
+  fetch('/scheduling/employees', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lob: ''})})
+    .then(r => r.json()).then(d => {
+      const mine = new Set(empList.map(e => String(e.employee_id)));
+      const others = (d.employees || []).filter(e => !mine.has(String(e.employee_id)) && !onDay.has(String(e.employee_id)))
+        .sort((a, b) => (a.lob + a.name).localeCompare(b.lob + b.name));
+      if (others.length) {
+        sel.innerHTML += '<optgroup label="Other LOBs">' + others.map(e => `<option value="${e.employee_id}" data-name="${e.name}">${e.name} — ${e.lob || 'no LOB'}</option>`).join('') + '</optgroup>';
+        others.forEach(e => { if (!ALL_EMPS[e.employee_id]) ALL_EMPS[e.employee_id] = e; });
+      }
+    }).catch(() => {});
+  // Shift templates
+  const tsel = document.getElementById('addTemplate');
+  const fill = () => { tsel.innerHTML = '<option value="">— custom times —</option>' +
+    SHIFT_TEMPLATES.map((t, i) => `<option value="${i}">${t.name} (${t.start_time}–${t.end_time})</option>`).join(''); };
+  if (SHIFT_TEMPLATES) fill();
+  else fetch('/scheduling/shift-templates', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+    .then(r => r.json()).then(d => { SHIFT_TEMPLATES = d.templates || []; fill(); }).catch(() => { SHIFT_TEMPLATES = []; fill(); });
+  document.getElementById('addModal').classList.add('show');
+}
+function closeAddModal() { document.getElementById('addModal').classList.remove('show'); }
+function applyAddTemplate() {
+  const i = document.getElementById('addTemplate').value;
+  if (i === '' || !SHIFT_TEMPLATES) return;
+  const t = SHIFT_TEMPLATES[parseInt(i)];
+  document.getElementById('addStart').value = t.start_time;
+  document.getElementById('addEnd').value = t.end_time;
+  document.getElementById('addType').value = t.shift_type || 'full';
+}
+function confirmAddShift() {
+  const dayIdx = parseInt(document.getElementById('addDayIdx').value);
+  const day = scheduleData.days[dayIdx];
+  const empId = document.getElementById('addEmployee').value;
+  const start = document.getElementById('addStart').value;
+  const end = document.getElementById('addEnd').value;
+  const type = document.getElementById('addType').value;
+  if (!empId) { showToast('Pick an employee.', 'error'); return; }
+  if (!start || !end || timeToMins(end) <= timeToMins(start)) { showToast('End must be after start.', 'error'); return; }
+  const emp = empList.find(e => String(e.employee_id) === String(empId)) || ALL_EMPS[empId];
+  const hours = Math.round((timeToMins(end) - timeToMins(start)) / 60 * 100) / 100;
+  const finish = (segments) => {
+    day.shifts.push({ employee: emp ? emp.name : empId, employee_id: empId, date: day.date,
+      start, end, hours, type, status: 'scheduled', segments, manual: true });
+    day.shifts.sort((a, b) => (a.start + a.employee).localeCompare(b.start + b.employee));
+    day.unassigned = (day.unassigned || []).filter(n => n !== (emp ? emp.name : empId));
+    closeAddModal();
+    updateStats();
+    switchView(currentView);
+    showToast(`Added ${emp ? emp.name : empId} on ${day.date_label} — click Save to keep it.`, 'success');
+  };
+  if (document.getElementById('addAutoSegs').checked) {
+    fetch('/scheduling/segments/auto', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({start, end, type, existing_count: day.shifts.length})})
+      .then(r => r.json()).then(d => finish(d.segments || [{type:'on-call', start, end, duration_mins: timeToMins(end)-timeToMins(start), notes:''}]))
+      .catch(() => finish([{type:'on-call', start, end, duration_mins: timeToMins(end)-timeToMins(start), notes:''}]));
+  } else {
+    finish([{type:'on-call', start, end, duration_mins: timeToMins(end)-timeToMins(start), notes:''}]);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1390,7 +1516,8 @@ function renderDayView(container) {
     html += `<div class="sched-card">
       <div class="day-header-row" onclick="toggleDay(${idx})">
         <span>${day.date_label} — ${day.shifts.length} shifts</span>
-        <span style="font-size:.78rem">${covBadge(day.summary)}</span>
+        <span style="font-size:.78rem; display:flex; gap:10px; align-items:center;">${covBadge(day.summary)}
+          <button class="btn-add-shift" onclick="event.stopPropagation(); openAddModal(${idx})">+ Add shift</button></span>
       </div>
       <div class="day-content${idx === 0 ? ' open' : ''}" id="dayContent${idx}">`;
 
