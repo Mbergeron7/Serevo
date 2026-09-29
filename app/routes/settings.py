@@ -122,18 +122,28 @@ def save_google_sheets():
 
 
 def _friendly_sheet_error(e):
+    log.warning("Google Sheets error (%s): %s", type(e).__name__, e)
+    cls = type(e).__name__.lower()
     msg = str(e)
     low = msg.lower()
+    # gspread raises SpreadsheetNotFound with an empty message for permission / not-shared errors
+    if "spreadsheetnotfound" in cls or (not msg and "notfound" in cls):
+        return ("The sheet could not be found. Make sure the sheet key is correct AND the sheet "
+                "is shared with the service account email (client_email in your JSON key file).")
     if "403" in low or "permission" in low or "does not have permission" in low:
         return ("Google refused access (403). Share the sheet with the service account email "
                 "(client_email in the JSON) as Viewer, and make sure the Google Sheets API and "
                 "Google Drive API are enabled in the Google Cloud project.")
-    if "404" in low or "not found" in low or "spreadsheetnotfound" in low:
+    if "404" in low or "not found" in low:
         return "Sheet not found (404). Check the Google Sheet key — it's the long ID between /d/ and /edit in the sheet's URL."
     if "invalid_grant" in low or "jwt" in low or "private key" in low or "pem" in low:
         return "The service account JSON was rejected by Google. Re-download the key file and paste the entire contents."
     if "expecting value" in low or "jsondecode" in low:
         return "The service account box does not contain valid JSON — paste the whole file, starting with { and ending with }."
+    if not msg:
+        return ("Could not connect to Google Sheets. Make sure the sheet is shared with the "
+                "service account email and both the Google Sheets API and Google Drive API are "
+                "enabled in the Google Cloud project.")
     return f"Could not open the sheet: {msg}"
 
 
