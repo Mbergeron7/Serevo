@@ -325,9 +325,7 @@ const SKILL_GROUPS = {{ skill_groups | tojson }};
 const ADHERENCE_CODES = {{ adherence_codes | tojson }};
 const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
-const EMPLOYEES = {{ employees | tojson }};
-const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
-const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
 
 /* ── Utilities ──────────────────────────── */
 function switchTab(name, btn) {
@@ -340,7 +338,7 @@ function switchTab(name, btn) {
   if (btn) btn.classList.add('active');
   try { history.replaceState(null, '', '#' + name); } catch (e) {}
 }
-// Open the tab named in the URL hash (e.g. #rotations, #availability)
+// Open the tab named in the URL hash (e.g. #segments, #shifts)
 window.addEventListener('DOMContentLoaded', () => {
   const h = (location.hash || '').replace('#', '');
   if (h) switchTab(h, null);

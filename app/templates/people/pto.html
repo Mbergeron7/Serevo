@@ -14,10 +14,6 @@
 
 {% block head %}
 <style>
-  .page-header { margin-bottom: 28px; }
-  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
-  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
-
   .pto-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
@@ -130,9 +126,19 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Time Off</h1>
-  <p class="subtitle">Track PTO, vacation &amp; scheduled absences</p>
+<div class="people-header">
+  <div>
+    <h1>People</h1>
+    <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <a href="/people/">Roster</a>
+  <a href="/people/availability">Availability</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/people/pto" class="active">Time Off</a>
+  <a href="/people/rotations">Rotations</a>
 </div>
 
 {% if error %}

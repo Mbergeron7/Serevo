@@ -8,7 +8,6 @@ removing API credentials.
 
 import json
 import logging
-import datetime as _dt
 from datetime import datetime
 
 from flask import (Blueprint, render_template, request, jsonify)
@@ -514,7 +513,7 @@ def customization():
     from app.models import (SegmentCode, ShiftTemplate, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
-                            BrandSetting, Employee)
+                            BrandSetting)
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
     shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
@@ -535,10 +534,6 @@ def customization():
     brand = BrandSetting.query.first()
     brand_data = brand.to_dict() if brand else {}
 
-    employees = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name,
-                  "lob": e.planning_unit.name if e.planning_unit else ""}
-                 for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
-
     return render_template("settings/customization.html",
         user=user,
         segments=segments, shifts=shifts,
@@ -547,7 +542,6 @@ def customization():
         sched_rules=sched_rules, holidays=holidays,
         skill_groups=skill_groups, adherence_codes=adherence_codes,
         alerts=alerts, brand_data=brand_data, current_year=cur_year,
-        employees=employees,
     )
 
 

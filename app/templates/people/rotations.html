@@ -14,26 +14,11 @@
 
 {% block head %}
 <style>
-  .people-header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
-  .people-header div h1 { font-size: 1.5rem; margin-bottom: 2px; }
-  .people-header .subtitle { color: var(--text-muted); font-size: .9rem; }
-
-  .tab-bar {
-    display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border);
-  }
-  .tab-bar a {
-    padding: 10px 20px; font-size: .875rem; font-weight: 500;
-    color: var(--text-muted); text-decoration: none;
-    border-bottom: 2px solid transparent; margin-bottom: -2px;
-    transition: color .15s, border-color .15s;
-  }
-  .tab-bar a:hover { color: var(--text); }
-  .tab-bar a.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); font-weight: 600; }
-
   .card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
     padding: 1rem; margin-bottom: 1rem;
+    overflow: hidden; min-width: 0;
   }
   .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
   .tab-header h2 { margin: 0; }
@@ -48,8 +33,11 @@
   }
   .data-table td {
     padding: 7px 12px; border-bottom: 1px solid var(--border);
-    white-space: nowrap; font-size: 0.85rem;
+    font-size: 0.85rem;
   }
+  .rot-week-table { table-layout: fixed; }
+  .rot-week-table td, .rot-week-table th { white-space: normal; word-break: break-word; text-align: center; font-size: 0.8rem; padding: 6px 4px; }
+  .rot-week-table td:first-child, .rot-week-table th:first-child { text-align: left; width: 70px; }
   .data-table tr:hover td { background: var(--brand-accent-light); }
 
   .empty-msg { text-align: center; color: var(--text-muted); padding: 1rem 0; }
@@ -266,7 +254,7 @@ function renderRotations(){
         <h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3>
         <div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div>
       </div>
-      <div style="overflow-x:auto;"><table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;min-width:500px;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="overflow-x:auto;"><table class="data-table rot-week-table" style="margin-top:0.5rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin-top:1rem;">
         <h4 style="margin:0 0 0.5rem;font-size:0.9rem;">Assigned Employees</h4>
         <table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Name</th><th>ID</th><th>Starting Week</th><th>Start Date</th><th></th></tr></thead><tbody>${assignRows}</tbody></table>

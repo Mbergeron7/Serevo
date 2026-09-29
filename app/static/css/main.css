@@ -414,6 +414,39 @@ footer {
 }
 .column-hints p { color: var(--text); margin-bottom: 4px; }
 
+/* ---------- people section ---------- */
+.people-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+.people-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+.people-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+.tab-bar a {
+  padding: 10px 20px;
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+}
+.tab-bar a:hover { color: var(--text); }
+.tab-bar a.active {
+  color: var(--brand-accent);
+  border-bottom-color: var(--brand-accent);
+  font-weight: 600;
+}
+
 /* ---------- text helpers ---------- */
 .text-muted { color: var(--text-muted); }
 
@@ -474,6 +507,11 @@ footer {
 
   /* page headers */
   .page-header h1 { font-size: 1.25rem; }
+  .people-header h1 { font-size: 1.25rem; }
+
+  /* tab bar — scroll on small screens */
+  .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-bar a { white-space: nowrap; padding: 10px 14px; font-size: .8rem; }
 
   /* modals */
   .modal { padding: 20px; }

@@ -14,21 +14,6 @@
 
 {% block head %}
 <style>
-  .page-header { margin-bottom: 28px; }
-  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
-  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
-
-  .tab-bar {
-    display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border);
-  }
-  .tab-bar a {
-    padding: 10px 20px; font-size: .875rem; font-weight: 500;
-    color: var(--text-muted); text-decoration: none;
-    border-bottom: 2px solid transparent; margin-bottom: -2px;
-    transition: color .15s, border-color .15s;
-  }
-  .tab-bar a:hover { color: var(--text); }
-  .tab-bar a.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); font-weight: 600; }
 
   .avail-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -96,9 +81,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Employee Availability</h1>
-  <p class="subtitle">Set weekly availability windows per employee — used by the scheduler</p>
+<div class="people-header">
+  <div>
+    <h1>People</h1>
+    <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  </div>
 </div>
 
 <div class="tab-bar">
