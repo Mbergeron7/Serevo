@@ -255,6 +255,113 @@ def refresh():
 
 
 # ── Capacity Plan View ─────────────────────────────────────────
+def _build_plan(user, year, shrinkage, occupancy, answer_rate):
+    """Compute the monthly capacity plan (list of {lob, months[...]}) for a year."""
+    plan = []
+    if True:
+            if user and user.get("is_demo"):
+                from app.demo_data import DEMO_LOBS, get_demo_forecast, get_demo_requirements, DEMO_EMPLOYEES
+                import calendar, datetime as _dt
+                plan = []
+                for lob_name in DEMO_LOBS:
+                    lob_plan = {"lob": lob_name, "months": []}
+                    emp_count = sum(1 for e in DEMO_EMPLOYEES
+                                    if e.get("Latest Skill Name") == lob_name
+                                    and str(e.get("Status", "Active")).strip().lower() in ("active", ""))
+                    for month_num in range(1, 13):
+                        sample_day = date(year, month_num, 15)
+                        fc, _ = get_demo_forecast(lob_name, sample_day)
+                        rq, _ = get_demo_requirements(lob_name, sample_day)
+                        avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
+                        avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
+                        peak_agents = max((r["agents_required"] for r in rq), default=0)
+                        fte_req = round(avg_req / (1 - shrinkage), 1)
+                        gap = round(emp_count - fte_req, 1)
+                        wd = sum(1 for d in range(1, calendar.monthrange(year, month_num)[1] + 1)
+                                 if _dt.date(year, month_num, d).weekday() < 5)
+                        lob_plan["months"].append({
+                            "month":        month_num,
+                            "month_label":  _dt.date(year, month_num, 1).strftime("%b-%y"),
+                            "fc_offered":   round(avg_vol * len(fc)),
+                            "fc_answered":  round(avg_vol * len(fc) * answer_rate),
+                            "aht":          "—",
+                            "psih_raw":     round(avg_req, 1),
+                            "psih_shr":     round(avg_req / (1 - shrinkage), 1),
+                            "fte_req":      fte_req,
+                            "actual_hc":    emp_count,
+                            "gap":          gap,
+                            "occupancy":    occupancy,
+                            "shrinkage":    shrinkage,
+                            "working_days": wd,
+                            "peak_agents":  round(peak_agents, 1),
+                            "avg_agents":   round(avg_req, 1),
+                        })
+                    plan.append(lob_plan)
+            else:
+                sheet = _get_sheet()
+                fc_ws = _get_worksheet(sheet, "FORECAST RAW")
+                rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
+                em_ws = _get_worksheet(sheet, "EMPLOYEES")
+
+                plan = []
+                if fc_ws or rq_ws:
+                    plan = cp.compute_capacity_plan(
+                        fc_ws, rq_ws, em_ws, year,
+                        shrinkage=shrinkage, occupancy=occupancy,
+                        answer_rate=answer_rate)
+
+    return plan
+
+
+def _employee_headcount(user):
+    """Headcount by LOB / planning unit: active, inactive, on-leave, total."""
+    from collections import defaultdict
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_EMPLOYEES
+        emps = DEMO_EMPLOYEES
+    else:
+        try:
+            from app.people.manager import get_employees
+            emps, _ = get_employees(_get_sheet())
+            emps = emps or []
+        except Exception:
+            emps = []
+    by = defaultdict(lambda: {"active": 0, "inactive": 0, "on_leave": 0, "total": 0})
+    for e in emps:
+        pu = (e.get("Latest Skill Name") or e.get("LOB") or "Unassigned").strip() or "Unassigned"
+        st = str(e.get("Status", "Active")).strip().lower()
+        if st in ("loa", "leave", "on leave"):
+            by[pu]["on_leave"] += 1
+        elif st in ("inactive", "terminated", "deleted"):
+            by[pu]["inactive"] += 1
+        else:
+            by[pu]["active"] += 1
+        by[pu]["total"] += 1
+    rows = []
+    for pu, c in sorted(by.items()):
+        rows.append({"planning_unit": pu, **c,
+                     "loa_pct": round(c["on_leave"] / c["total"] * 100, 1) if c["total"] else 0})
+    return rows
+
+
+def _summary_rows(plan, months=None):
+    """One row per LOB per month — the numeric capacity summary."""
+    rows = []
+    for lob in plan:
+        for m in lob["months"]:
+            if months and m["month"] not in months:
+                continue
+            rows.append({
+                "lob": lob["lob"], "month": m["month"], "month_label": m["month_label"],
+                "total_calls": m.get("fc_offered", 0), "answered": m.get("fc_answered", 0),
+                "aht": m.get("aht", "—"), "psih_raw": m.get("psih_raw", 0), "psih_shr": m.get("psih_shr", 0),
+                "fte_req": m.get("fte_req", 0), "actual_hc": m.get("actual_hc", 0), "gap": m.get("gap", 0),
+                "peak_agents": m.get("peak_agents", 0), "avg_agents": m.get("avg_agents", 0),
+                "working_days": m.get("working_days", 0),
+            })
+    return rows
+
+
 @capacity_bp.route("/plan")
 @login_required
 def plan_view():
@@ -263,63 +370,10 @@ def plan_view():
         now = datetime.now(ZoneInfo(TIMEZONE))
         year = int(request.args.get("year", now.year))
         years = list(range(2024, now.year + 2))
-
-        # User-adjustable parameters
         shrinkage = float(request.args.get("shrinkage", 30)) / 100.0
         occupancy = float(request.args.get("occupancy", 85)) / 100.0
         answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
-
-        if user and user.get("is_demo"):
-            from app.demo_data import DEMO_LOBS, get_demo_forecast, get_demo_requirements, DEMO_EMPLOYEES
-            import calendar, datetime as _dt
-            plan = []
-            for lob_name in DEMO_LOBS:
-                lob_plan = {"lob": lob_name, "months": []}
-                emp_count = sum(1 for e in DEMO_EMPLOYEES
-                                if e.get("Latest Skill Name") == lob_name
-                                and str(e.get("Status", "Active")).strip().lower() in ("active", ""))
-                for month_num in range(1, 13):
-                    sample_day = date(year, month_num, 15)
-                    fc, _ = get_demo_forecast(lob_name, sample_day)
-                    rq, _ = get_demo_requirements(lob_name, sample_day)
-                    avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
-                    avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
-                    peak_agents = max((r["agents_required"] for r in rq), default=0)
-                    fte_req = round(avg_req / (1 - shrinkage), 1)
-                    gap = round(emp_count - fte_req, 1)
-                    wd = sum(1 for d in range(1, calendar.monthrange(year, month_num)[1] + 1)
-                             if _dt.date(year, month_num, d).weekday() < 5)
-                    lob_plan["months"].append({
-                        "month":        month_num,
-                        "month_label":  _dt.date(year, month_num, 1).strftime("%b-%y"),
-                        "fc_offered":   round(avg_vol * len(fc)),
-                        "fc_answered":  round(avg_vol * len(fc) * answer_rate),
-                        "aht":          "—",
-                        "psih_raw":     round(avg_req, 1),
-                        "psih_shr":     round(avg_req / (1 - shrinkage), 1),
-                        "fte_req":      fte_req,
-                        "actual_hc":    emp_count,
-                        "gap":          gap,
-                        "occupancy":    occupancy,
-                        "shrinkage":    shrinkage,
-                        "working_days": wd,
-                        "peak_agents":  round(peak_agents, 1),
-                        "avg_agents":   round(avg_req, 1),
-                    })
-                plan.append(lob_plan)
-        else:
-            sheet = _get_sheet()
-            fc_ws = _get_worksheet(sheet, "FORECAST RAW")
-            rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
-            em_ws = _get_worksheet(sheet, "EMPLOYEES")
-
-            plan = []
-            if fc_ws or rq_ws:
-                plan = cp.compute_capacity_plan(
-                    fc_ws, rq_ws, em_ws, year,
-                    shrinkage=shrinkage, occupancy=occupancy,
-                    answer_rate=answer_rate)
-
+        plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
         now_str = now.strftime("%Y-%m-%d %H:%M")
         return render_template("capacity/plan.html",
             user=user, plan=plan, year=year, years=years, now=now_str)
@@ -327,3 +381,73 @@ def plan_view():
     except Exception as e:
         log.exception("Capacity plan view error")
         return f"Capacity plan error: {str(e)}", 500
+
+
+# ── Capacity Summary (numeric) + Headcount ─────────────────────
+@capacity_bp.route("/summary")
+@login_required
+def summary_view():
+    user = get_current_user()
+    try:
+        now = datetime.now(ZoneInfo(TIMEZONE))
+        year = int(request.args.get("year", now.year))
+        years = list(range(2024, now.year + 2))
+        shrinkage = float(request.args.get("shrinkage", 30)) / 100.0
+        occupancy = float(request.args.get("occupancy", 85)) / 100.0
+        answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
+        sel_months = [int(m) for m in request.args.getlist("months") if m.isdigit()]
+        sel_lobs = [l for l in request.args.getlist("lobs") if l]
+
+        plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
+        all_lobs = [p["lob"] for p in plan]
+        if sel_lobs:
+            plan = [p for p in plan if p["lob"] in sel_lobs]
+        rows = _summary_rows(plan, sel_months or None)
+        headcount = _employee_headcount(user)
+
+        # Totals across selected rows
+        tot = {"total_calls": sum(r["total_calls"] for r in rows),
+               "fte_req": round(sum(r["fte_req"] for r in rows), 1),
+               "actual_hc": sum(r["actual_hc"] for r in rows),
+               "gap": round(sum(r["gap"] for r in rows), 1)}
+        return render_template("capacity/summary.html", user=user, rows=rows, totals=tot,
+                               headcount=headcount, year=year, years=years,
+                               all_lobs=all_lobs, sel_lobs=sel_lobs, sel_months=sel_months,
+                               shrinkage_pct=int(shrinkage * 100), occupancy_pct=int(occupancy * 100),
+                               answer_rate_pct=int(answer_rate * 100),
+                               now=now.strftime("%Y-%m-%d %H:%M"),
+                               month_names=[(m, date(year, m, 1).strftime("%b")) for m in range(1, 13)])
+    except Exception as e:
+        log.exception("Capacity summary error")
+        return f"Capacity summary error: {str(e)}", 500
+
+
+@capacity_bp.route("/summary/export")
+@login_required
+def summary_export():
+    """CSV export of the summary rows (opens in Excel)."""
+    import csv, io
+    from flask import Response
+    user = get_current_user()
+    now = datetime.now(ZoneInfo(TIMEZONE))
+    year = int(request.args.get("year", now.year))
+    shrinkage = float(request.args.get("shrinkage", 30)) / 100.0
+    occupancy = float(request.args.get("occupancy", 85)) / 100.0
+    answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
+    sel_months = [int(m) for m in request.args.getlist("months") if m.isdigit()]
+    sel_lobs = [l for l in request.args.getlist("lobs") if l]
+    plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
+    if sel_lobs:
+        plan = [p for p in plan if p["lob"] in sel_lobs]
+    rows = _summary_rows(plan, sel_months or None)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["LOB", "Month", "Forecast Calls", "Forecast Answered", "AHT (s)", "PSIH (no shrink)",
+                f"PSIH ({int(shrinkage*100)}% shrink)", "FTE Required", "Actual HC", "Gap (HC - FTE)",
+                "Peak Agents", "Avg Agents", "Working Days"])
+    for r in rows:
+        w.writerow([r["lob"], r["month_label"], r["total_calls"], r["answered"], r["aht"], r["psih_raw"],
+                    r["psih_shr"], r["fte_req"], r["actual_hc"], r["gap"], r["peak_agents"],
+                    r["avg_agents"], r["working_days"]])
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=capacity_summary_{year}.csv"})

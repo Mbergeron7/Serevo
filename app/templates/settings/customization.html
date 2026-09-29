@@ -50,19 +50,7 @@
 <!-- ═══════ TAB: Rotation Patterns ═══════ -->
 <div class="tab-panel" id="tab-rotations" hidden>
   <div class="tab-header"><h2>Rotation Patterns</h2><button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button></div>
-  <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend. Assign employees and generate schedules.</p>
-
-  <!-- Generate section — at the top for quick access -->
-  <div class="card" style="margin-bottom:1.5rem;padding:1rem;border-left:3px solid var(--brand-accent);">
-    <h3 style="margin:0 0 0.75rem;">Generate Schedules from Rotations</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted,#999);margin:0 0 0.75rem;">Create schedule entries for all assigned employees based on their rotation patterns.</p>
-    <div class="form-row">
-      <label>Start Date <input type="date" id="rot-gen-start"></label>
-      <label>End Date <input type="date" id="rot-gen-end"></label>
-      <label style="align-self:flex-end;"><button class="btn btn-primary" onclick="generateRotationSchedules()">Generate</button></label>
-    </div>
-    <div id="rot-gen-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
-  </div>
+  <p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend. Assign employees here; schedules are generated from the <a href="/scheduling/">Scheduling</a> page.</p>
 
   <!-- Filter bar -->
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem;">
@@ -477,11 +465,20 @@ const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 /* ── Utilities ──────────────────────────── */
 function switchTab(name, btn) {
+  const panel = document.getElementById('tab-' + name);
+  if (!panel) return;
   document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).hidden = false;
-  btn.classList.add('active');
+  panel.hidden = false;
+  if (!btn) btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => (b.getAttribute('onclick')||'').includes("'" + name + "'"));
+  if (btn) btn.classList.add('active');
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
 }
+// Open the tab named in the URL hash (e.g. #rotations, #availability)
+window.addEventListener('DOMContentLoaded', () => {
+  const h = (location.hash || '').replace('#', '');
+  if (h) switchTab(h, null);
+});
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 async function api(url, body) {
@@ -670,19 +667,6 @@ async function unassignRotation(assignId){
   const res=await api('/settings/customization/rotations/unassign',{id:assignId});
   if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
 }
-async function generateRotationSchedules(){
-  const start=document.getElementById('rot-gen-start').value;
-  const end=document.getElementById('rot-gen-end').value;
-  const el=document.getElementById('rot-gen-result');
-  if(!start||!end){alert('Select start and end dates');return;}
-  el.innerHTML='<em>Generating...</em>';
-  const res=await api('/settings/customization/rotations/generate',{start_date:start,end_date:end});
-  if(res.success){
-    el.innerHTML=`<span style="color:var(--success,#22c55e);font-weight:600;">✓ ${res.message}</span>`;
-    if(res.warnings&&res.warnings.length) el.innerHTML+=`<br><span style="color:var(--warning,#f59e0b);">${res.warnings.join('<br>')}</span>`;
-  }else{el.innerHTML=`<span style="color:#ef4444;">${res.error}</span>`;}
-}
-
 /* ═══ FILL-IN RULES ══════════════════════ */
 function renderFillInRules(){
   const el=document.getElementById('fill-in-rules-list');

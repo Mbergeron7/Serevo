@@ -349,3 +349,97 @@ def service_level():
     except Exception as e:
         log.error(f"SL tracker error: {e}")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ═════════════════════════════════════════════════════════════
+# NUMERIC RTM REPORTS (Forecast/OTF, Interval, SVL, Absenteeism,
+# Agent Status, Efficiency, Combined Dashboard)
+# ═════════════════════════════════════════════════════════════
+
+@realtime_bp.route("/reports")
+@login_required
+def reports():
+    user = get_current_user()
+    lobs = _all_lobs(user)
+    return render_template("realtime/reports.html", user=user, lobs=lobs,
+                           today=datetime.date.today().isoformat())
+
+
+def _report_args():
+    """Parse {lob | lobs, date} from JSON body. lob='All' → every LOB."""
+    payload = request.get_json(silent=True) or {}
+    user = get_current_user()
+    all_lobs = _all_lobs(user)
+    sel = payload.get("lobs") or payload.get("lob") or "All"
+    if isinstance(sel, str):
+        sel = [sel]
+    sel = [s.strip() for s in sel if s and s.strip()]
+    if not sel or "All" in sel:
+        lobs = all_lobs
+    else:
+        lobs = [l for l in all_lobs if l in sel] or sel
+    date_str = payload.get("date", "")
+    date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                if date_str else datetime.date.today())
+    return user, lobs, date_obj
+
+
+def _run_report(fn):
+    try:
+        user, lobs, date_obj = _report_args()
+        sheet = None if (user and user.get("is_demo")) else _get_sheet()
+        result = fn(lobs, date_obj, user, sheet)
+        result["success"] = True
+        return jsonify(result)
+    except Exception as e:
+        log.exception("RTM report error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@realtime_bp.route("/reports/forecast", methods=["POST"])
+@login_required
+def report_forecast():
+    from app.realtime.reports import forecast_otf_report
+    return _run_report(forecast_otf_report)
+
+
+@realtime_bp.route("/reports/interval", methods=["POST"])
+@login_required
+def report_interval():
+    from app.realtime.reports import interval_report
+    return _run_report(interval_report)
+
+
+@realtime_bp.route("/reports/svl", methods=["POST"])
+@login_required
+def report_svl():
+    from app.realtime.reports import service_level_report
+    return _run_report(service_level_report)
+
+
+@realtime_bp.route("/reports/absenteeism", methods=["POST"])
+@login_required
+def report_absenteeism():
+    from app.realtime.reports import absenteeism_report
+    return _run_report(absenteeism_report)
+
+
+@realtime_bp.route("/reports/agent-status", methods=["POST"])
+@login_required
+def report_agent_status():
+    from app.realtime.reports import agent_status_report
+    return _run_report(agent_status_report)
+
+
+@realtime_bp.route("/reports/efficiency", methods=["POST"])
+@login_required
+def report_efficiency():
+    from app.realtime.reports import efficiency_report
+    return _run_report(efficiency_report)
+
+
+@realtime_bp.route("/reports/dashboard", methods=["POST"])
+@login_required
+def report_dashboard():
+    from app.realtime.reports import combined_dashboard
+    return _run_report(combined_dashboard)

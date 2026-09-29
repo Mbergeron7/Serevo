@@ -48,6 +48,16 @@ UPLOAD_TYPES = {
         "required": ["Employee", "Start Date", "End Date"],
         "optional": ["Type", "Note"],
     },
+    "actuals": {
+        "label": "Call Actuals (ACD intervals)",
+        "required": ["Timestamp", "LOB", "Offered", "Answered"],
+        "optional": ["Answered Within", "Abandoned", "Rolled", "ASA", "AHT", "Max Queued"],
+    },
+    "agent_status": {
+        "label": "Agent Status Events",
+        "required": ["Employee ID", "Status", "Start"],
+        "optional": ["End"],
+    },
 }
 
 
@@ -185,6 +195,10 @@ def _import_rows(upload_type, rows, uploaded_by=""):
             imported, skipped, errors = _import_accommodations(rows)
         elif upload_type == "pto":
             imported, skipped, errors = _import_pto(rows)
+        elif upload_type == "actuals":
+            imported, skipped, errors = _import_actuals(rows)
+        elif upload_type == "agent_status":
+            imported, skipped, errors = _import_agent_status(rows)
 
         upload.rows_imported = imported
         upload.rows_skipped = skipped
@@ -407,6 +421,90 @@ def _import_pto(rows):
             note=_get_val(row, "Note"),
         )
         db.session.add(entry)
+        imported += 1
+    db.session.flush()
+    return imported, skipped, errors
+
+
+def _parse_ts(ts_str):
+    """Parse 'YYYY-MM-DD HH:MM[:SS]' or 'YYYY-MM-DD'; returns datetime or None."""
+    ts_str = str(ts_str or "").strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(ts_str[:19], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _num(v, default=0):
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _import_actuals(rows):
+    """Interval call actuals. Upserts on (LOB, Timestamp)."""
+    from app.models import db, IntervalActual
+    imported, skipped = 0, 0
+    errors = []
+    for i, row in enumerate(rows, start=2):
+        ts = _parse_ts(_get_val(row, "Timestamp"))
+        lob = _get_val(row, "LOB")
+        if not ts or not lob:
+            skipped += 1
+            if lob and not ts:
+                errors.append(f"Row {i}: bad timestamp")
+            continue
+        unit = _get_or_create_unit(lob)
+        rec = IntervalActual.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
+        if not rec:
+            rec = IntervalActual(planning_unit_id=unit.id, timestamp=ts)
+            db.session.add(rec)
+        rec.offered         = int(_num(_get_val(row, "Offered")))
+        rec.answered        = int(_num(_get_val(row, "Answered")))
+        aw = _get_val(row, "Answered Within")
+        rec.answered_within = int(_num(aw)) if aw not in (None, "") else rec.answered
+        rec.abandoned       = int(_num(_get_val(row, "Abandoned")))
+        rec.rolled          = int(_num(_get_val(row, "Rolled")))
+        asa = _get_val(row, "ASA"); aht = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
+        rec.asa_secs   = _num(asa) if asa not in (None, "") else None
+        rec.aht_secs   = _num(aht) if aht not in (None, "") else None
+        rec.max_queued = int(_num(mq)) if mq not in (None, "") else None
+        rec.source = "upload"
+        imported += 1
+    db.session.flush()
+    return imported, skipped, errors
+
+
+def _import_agent_status(rows):
+    """Agent status periods keyed by external Employee ID."""
+    from app.models import db, Employee, AgentStatusEvent
+    imported, skipped = 0, 0
+    errors = []
+    emp_cache = {}
+    for i, row in enumerate(rows, start=2):
+        ext_id = str(_get_val(row, "Employee ID") or "").strip()
+        status = str(_get_val(row, "Status") or "").strip()
+        start = _parse_ts(_get_val(row, "Start"))
+        end = _parse_ts(_get_val(row, "End"))
+        if not ext_id or not status or not start:
+            skipped += 1
+            continue
+        if ext_id not in emp_cache:
+            emp_cache[ext_id] = Employee.query.filter_by(employee_id=ext_id).first()
+        emp = emp_cache[ext_id]
+        if not emp:
+            skipped += 1
+            errors.append(f"Row {i}: unknown employee '{ext_id}'")
+            continue
+        existing = AgentStatusEvent.query.filter_by(employee_id=emp.id, start_ts=start).first()
+        if existing:
+            existing.status = status; existing.end_ts = end
+        else:
+            db.session.add(AgentStatusEvent(employee_id=emp.id, status=status,
+                                            start_ts=start, end_ts=end, source="upload"))
         imported += 1
     db.session.flush()
     return imported, skipped, errors

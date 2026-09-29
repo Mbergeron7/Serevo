@@ -936,3 +936,78 @@ class EmployeeAvailability(db.Model):
             "latest_end": self.latest_end.strftime("%H:%M") if self.latest_end else "",
             "notes": self.notes or "",
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# REAL-TIME ACTUALS (ACD interval stats + agent status events)
+# ═══════════════════════════════════════════════════════════════
+
+class IntervalActual(db.Model):
+    """Half-hour (or 15-min) call statistics from the phone system / ACD.
+    One row per LOB per interval. Fed by CSV upload, Google Sheet tab
+    'ACTUALS RAW', or an API connector."""
+    __tablename__ = "interval_actuals"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False, index=True)
+    timestamp        = db.Column(db.DateTime, nullable=False, index=True)   # interval start (local)
+    offered          = db.Column(db.Integer, default=0)
+    answered         = db.Column(db.Integer, default=0)
+    answered_within  = db.Column(db.Integer, default=0)   # answered within SL threshold
+    abandoned        = db.Column(db.Integer, default=0)
+    rolled           = db.Column(db.Integer, default=0)   # rolled over / overflowed
+    asa_secs         = db.Column(db.Float, nullable=True) # average speed of answer
+    aht_secs         = db.Column(db.Float, nullable=True) # actual average handle time
+    max_queued       = db.Column(db.Integer, nullable=True)
+    source           = db.Column(db.String(30), default="upload")  # upload | sheet | api | demo
+    uploaded_at      = db.Column(db.DateTime, default=datetime.utcnow)
+
+    planning_unit = db.relationship("PlanningUnit")
+
+    __table_args__ = (
+        db.UniqueConstraint("planning_unit_id", "timestamp", name="uq_actual_unit_ts"),
+    )
+
+    def to_dict(self):
+        return {
+            "time": self.timestamp.strftime("%H:%M"),
+            "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M"),
+            "offered": self.offered or 0,
+            "answered": self.answered or 0,
+            "answered_within": self.answered_within or 0,
+            "abandoned": self.abandoned or 0,
+            "rolled": self.rolled or 0,
+            "asa": self.asa_secs,
+            "aht": self.aht_secs,
+            "max_queued": self.max_queued,
+        }
+
+
+class AgentStatusEvent(db.Model):
+    """A period an agent spent in one ACD status (On Queue, Break, Lunch,
+    Meeting, Offline, ...). Drives Agent Status, Absenteeism, Efficiency."""
+    __tablename__ = "agent_status_events"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    status       = db.Column(db.String(40), nullable=False)          # normalised label
+    start_ts     = db.Column(db.DateTime, nullable=False, index=True)
+    end_ts       = db.Column(db.DateTime, nullable=True)              # null = still in this status
+    source       = db.Column(db.String(30), default="upload")
+    uploaded_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship("Employee", backref=db.backref("status_events", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_agent_status_emp_start", "employee_id", "start_ts"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "employee": emp.full_name if emp else "",
+            "employee_id": emp.employee_id if emp else "",
+            "status": self.status,
+            "start": self.start_ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "end": self.end_ts.strftime("%Y-%m-%d %H:%M:%S") if self.end_ts else None,
+        }

@@ -145,24 +145,77 @@ def generate():
                 },
             }
         else:
-            # Auto-clear any previously saved schedules for this LOB+date range
-            from app.models import PlanningUnit
-            pu = PlanningUnit.query.filter(
-                db.func.lower(PlanningUnit.name) == lob.lower()
-            ).first()
-            if pu:
-                old = Schedule.query.filter(
-                    Schedule.planning_unit_id == pu.id,
-                    Schedule.schedule_date >= start_date,
-                    Schedule.schedule_date <= end_date,
-                ).all()
-                for s in old:
-                    db.session.delete(s)
-                db.session.commit()
-
+            # mode: "overwrite" (default) — generate everything fresh; saved
+            #       schedules are replaced when the user clicks Save.
+            #       "fill"      — keep saved schedules in the range and only
+            #       generate for employees/days that have none.
+            mode = (payload.get("mode") or "overwrite").strip().lower()
             sheet = _get_sheet()
             emp_ids = payload.get("employee_ids") or None  # list or None
-            result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
+
+            existing_by_day = {}
+            if mode == "fill":
+                from app.models import PlanningUnit
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lob.lower()
+                ).first()
+                if pu:
+                    saved = Schedule.query.filter(
+                        Schedule.planning_unit_id == pu.id,
+                        Schedule.schedule_date >= start_date,
+                        Schedule.schedule_date <= end_date,
+                    ).all()
+                    for s in saved:
+                        existing_by_day.setdefault(s.schedule_date, []).append(s.to_dict())
+
+            if not existing_by_day:
+                result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
+            else:
+                # Generate day by day, excluding employees who already have a saved shift
+                from app.scheduling.engine import generate_shifts, analyze_coverage, coverage_summary, DAYS_OF_WEEK
+                from app.people.manager import get_employees
+                all_emps, _ = get_employees(sheet)
+                lob_ids = [str(e.get("Employee ID", "")) for e in all_emps
+                           if (e.get("Latest Skill Name") or "").strip().lower() == lob.lower()]
+                if emp_ids:
+                    lob_ids = [i for i in lob_ids if i in {str(x) for x in emp_ids}]
+
+                days, total_shifts, total_hours, cov_sum, cov_days = [], 0, 0.0, 0.0, 0
+                d = start_date
+                while d <= end_date:
+                    kept = existing_by_day.get(d, [])
+                    kept_ids = {str(k["employee_id"]) for k in kept}
+                    todo = [i for i in lob_ids if i not in kept_ids]
+                    new_shifts, unassigned, warnings = ([], [], [])
+                    if todo:
+                        new_shifts, unassigned, warnings = generate_shifts(lob, d, shift_hrs, sheet, todo)
+                    for k in kept:
+                        k["saved"] = True
+                    shifts = kept + new_shifts
+                    shifts.sort(key=lambda s: (s["start"], s["employee"]))
+                    coverage = analyze_coverage(lob, d, shifts, sheet)
+                    summary = coverage_summary(coverage)
+                    total_shifts += len(shifts)
+                    total_hours += sum(float(s.get("hours") or 0) for s in shifts)
+                    if summary["total_intervals"] > 0:
+                        cov_sum += summary["avg_coverage_pct"]; cov_days += 1
+                    if kept:
+                        warnings.insert(0, f"Kept {len(kept)} saved shift(s)")
+                    days.append({
+                        "date": d.strftime("%Y-%m-%d"),
+                        "date_label": d.strftime("%a %b %d"),
+                        "day_of_week": DAYS_OF_WEEK[d.weekday()],
+                        "shifts": shifts, "unassigned": unassigned,
+                        "coverage": coverage, "summary": summary, "warnings": warnings,
+                    })
+                    d += datetime.timedelta(days=1)
+                result = {
+                    "lob": lob, "start_date": start_str, "end_date": end_str, "days": days,
+                    "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
+                               "total_days": len(days),
+                               "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
+                    "warnings": [],
+                }
         result["success"] = True
         return jsonify(result)
 

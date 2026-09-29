@@ -562,6 +562,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 shift["start"], shift["end"], shift["type"],
                 stagger_index=idx, total_employees=total_scheduled)
 
+        warnings.extend(_apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map))
         if skip_reasons:
             warnings.append(f"Skipped {len(skip_reasons)} employee(s): " +
                             "; ".join(skip_reasons))
@@ -723,6 +724,10 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             shift["start"], shift["end"], shift["type"],
             stagger_index=idx, total_employees=total_scheduled)
 
+    # Fill-in / backup rules: cover shift categories nobody landed on
+    fill_warnings = _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map)
+    warnings.extend(fill_warnings)
+
     # Sort shifts by start time, then employee name
     shifts.sort(key=lambda s: (s["start"], s["employee"]))
 
@@ -731,6 +736,99 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         "; ".join(skip_reasons))
 
     return shifts, unassigned, warnings
+
+
+def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):
+    """
+    After the main assignment pass, check each shift category that has
+    FillInRule entries (e.g. "closing"). If no scheduled shift matches a
+    template in that category for this day, schedule the highest-priority
+    available fill-in employee on that template. Mutates `shifts`.
+    Returns a list of warning strings describing fill-ins made.
+    """
+    notes = []
+    try:
+        from app.models import FillInRule, ShiftTemplate, PlanningUnit, db
+    except Exception:
+        return notes
+
+    try:
+        rules = FillInRule.query.filter_by(is_active=True).order_by(FillInRule.priority).all()
+        if not rules:
+            return notes
+
+        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu_id = pu.id if pu else None
+        templates = ShiftTemplate.query.filter_by(is_active=True).all()
+        day_name = ["weekday"] * 5 + ["saturday", "sunday"]
+        day_name = day_name[date_obj.weekday()]
+
+        rules_by_cat = {}
+        for r in rules:
+            # LOB-specific rules only apply to their LOB
+            if r.planning_unit_id and pu_id and r.planning_unit_id != pu_id:
+                continue
+            rules_by_cat.setdefault(r.shift_category, []).append(r)
+
+        scheduled_ids = {str(s["employee_id"]) for s in shifts}
+        lob_emp_ids = {str(e.get("employee_id", "")) for e in employees}
+
+        for cat, cat_rules in rules_by_cat.items():
+            cat_templates = [t for t in templates
+                             if (t.shift_category or "any") == cat
+                             and (t.day_type or "any") in ("any", day_name)
+                             and (not t.planning_unit_id or t.planning_unit_id == pu_id)]
+            if not cat_templates:
+                continue  # category doesn't operate today
+
+            covered = any(
+                s["start"] == t.start_time and s["end"] == t.end_time
+                for s in shifts for t in cat_templates
+            )
+            if covered:
+                continue
+
+            for rule in cat_rules:
+                emp = rule.employee
+                if not emp or str(emp.status or "Active").lower() not in ("active", ""):
+                    continue
+                ext_id = str(emp.employee_id)
+                if ext_id in scheduled_ids or ext_id not in lob_emp_ids:
+                    continue
+                avail = _get_availability(emp.full_name, date_obj, avail_map, employee_ext_id=ext_id)
+                if not avail["available"]:
+                    continue
+
+                tmpl = rule.fallback_template if rule.fallback_template else cat_templates[0]
+                s_min = _time_to_minutes(tmpl.start_time)
+                e_min = _time_to_minutes(tmpl.end_time)
+                if avail.get("shift_start"):
+                    s_min = _time_to_minutes(avail["shift_start"])
+                if avail.get("shift_end"):
+                    e_min = _time_to_minutes(avail["shift_end"])
+                if avail.get("latest_end"):
+                    e_min = min(e_min, _time_to_minutes(avail["latest_end"]))
+                if e_min <= s_min:
+                    continue
+                stype = "half" if avail["day_type"] == "half" else (tmpl.shift_type or "full")
+                shifts.append({
+                    "employee": emp.full_name,
+                    "employee_id": ext_id,
+                    "start": _minutes_to_time(s_min),
+                    "end": _minutes_to_time(e_min),
+                    "hours": round((e_min - s_min) / 60, 1),
+                    "type": stype,
+                    "segments": _generate_segments(_minutes_to_time(s_min), _minutes_to_time(e_min),
+                                                   stype, stagger_index=len(shifts),
+                                                   total_employees=len(shifts) + 1),
+                    "fill_in": True,
+                })
+                scheduled_ids.add(ext_id)
+                notes.append(f"Fill-in: {emp.full_name} covers {cat} ({tmpl.name})")
+                break
+    except Exception as e:
+        log.warning(f"Fill-in rules error: {e}")
+    return notes
 
 
 # ═════════════════════════════════════════════════════════════

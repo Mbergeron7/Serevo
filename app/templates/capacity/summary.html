@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Capacity Summary — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/">Dashboard</a>
+  <a href="/people/">People</a>
+  <a href="/capacity" class="nav-link">Capacity</a>
+  <a href="/capacity/plan">Plan View</a>
+  <a href="/capacity/summary" class="active">Summary</a>
+  {% if user and user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ user.name }}</span>
+  <a href="/logout">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .plan-header { margin-bottom: 20px; }
+  .plan-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .plan-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+  .controls-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 14px 18px; margin-bottom: 20px; }
+  .controls-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .ctrl-group { display: flex; flex-direction: column; }
+  .ctrl-group label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); margin-bottom: 4px; }
+  .ctrl-group select, .ctrl-group input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); }
+  .ctrl-group input[type="number"] { width: 80px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
+  .chip { font-size: .78rem; padding: 4px 10px; border: 1px solid var(--border); border-radius: 14px;
+    cursor: pointer; background: var(--bg); user-select: none; }
+  .chip input { display: none; }
+  .chip.on { background: var(--brand-accent); color: #fff; border-color: var(--brand-accent); }
+  .btn-action { background: var(--brand-accent); color: #fff; border: none; padding: 8px 20px; border-radius: 6px;
+    font-weight: 700; font-size: .85rem; cursor: pointer; }
+  .btn-export { background: #059669; color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 6px;
+    font-weight: 700; font-size: .85rem; }
+
+  .report-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+  .report-card h3 { font-size: .95rem; padding: 11px 16px; margin: 0; border-bottom: 1px solid var(--border); }
+  .report-card h3 .hint { font-size: .75rem; font-weight: 400; color: var(--text-muted); margin-left: 8px; }
+  .wrap { overflow-x: auto; }
+  .rt { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
+  .rt th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+    padding: 8px 10px; text-align: right; border-bottom: 2px solid var(--border); white-space: nowrap; background: var(--bg); }
+  .rt td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .rt th:first-child, .rt td:first-child, .rt th.l, .rt td.l { text-align: left; }
+  .rt td:first-child { font-weight: 600; }
+  .rt tr.total td { font-weight: 700; background: var(--bg); border-top: 2px solid var(--border); }
+  .rt tr.lob-break td { border-top: 2px solid var(--border); }
+  .pos { background: #d1fae5; color: #065f46; font-weight: 700; }
+  .neg { background: #fee2e2; color: #991b1b; font-weight: 700; }
+  .zero { color: var(--text-muted); }
+  :root:not([data-theme="light"]) .pos, :root[data-theme="dark"] .pos { background: #064e3b; color: #a7f3d0; }
+  :root:not([data-theme="light"]) .neg, :root[data-theme="dark"] .neg { background: #7f1d1d; color: #fecaca; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .pos { background: #d1fae5; color: #065f46; }
+    :root:not([data-theme="dark"]) .neg { background: #fee2e2; color: #991b1b; }
+  }
+  .empty { padding: 36px; text-align: center; color: var(--text-muted); }
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stat { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .v { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-top: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-header">
+  <h1>Capacity Summary</h1>
+  <p class="subtitle">One row per LOB per month — forecast calls, FTE required, actual headcount and the gap. Computed {{ now }}.</p>
+</div>
+
+<form method="get" action="/capacity/summary" class="controls-card" id="filterForm">
+  <div class="controls-row">
+    <div class="ctrl-group">
+      <label>Year</label>
+      <select name="year">{% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select>
+    </div>
+    <div class="ctrl-group"><label>Shrinkage %</label><input type="number" name="shrinkage" value="{{ shrinkage_pct }}" min="0" max="80"></div>
+    <div class="ctrl-group"><label>Occupancy %</label><input type="number" name="occupancy" value="{{ occupancy_pct }}" min="50" max="100"></div>
+    <div class="ctrl-group"><label>Answer rate %</label><input type="number" name="answer_rate" value="{{ answer_rate_pct }}" min="50" max="100"></div>
+    <button class="btn-action" type="submit">Apply</button>
+    <a class="btn-export" id="exportLink" href="#">⬇ Export CSV</a>
+  </div>
+  <div class="controls-row" style="margin-top:12px;">
+    <div class="ctrl-group">
+      <label>Months <span style="font-weight:400;text-transform:none;letter-spacing:0;">(none = all)</span></label>
+      <div class="chip-row">
+        {% for num, name in month_names %}
+        <label class="chip {% if num in sel_months %}on{% endif %}"><input type="checkbox" name="months" value="{{ num }}" {% if num in sel_months %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked)">{{ name }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <label>LOBs <span style="font-weight:400;text-transform:none;letter-spacing:0;">(none = all)</span></label>
+      <div class="chip-row">
+        {% for lob in all_lobs %}
+        <label class="chip {% if lob in sel_lobs %}on{% endif %}"><input type="checkbox" name="lobs" value="{{ lob }}" {% if lob in sel_lobs %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked)">{{ lob }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if rows %}
+<div class="stats-row">
+  <div class="stat"><div class="v">{{ "{:,}".format(totals.total_calls) }}</div><div class="l">Forecast calls (selection)</div></div>
+  <div class="stat"><div class="v">{{ totals.fte_req }}</div><div class="l">FTE required (sum of rows)</div></div>
+  <div class="stat"><div class="v">{{ totals.actual_hc }}</div><div class="l">Actual HC (sum of rows)</div></div>
+  <div class="stat"><div class="v {% if totals.gap > 0 %}pos{% elif totals.gap < 0 %}neg{% endif %}" style="display:inline-block;padding:0 6px;border-radius:4px;">{{ "%+.1f"|format(totals.gap) }}</div><div class="l">Gap (HC − FTE)</div></div>
+</div>
+
+<div class="report-card">
+  <h3>Capacity Summary <span class="hint">{{ rows|length }} rows · gap = actual HC − FTE required (positive = surplus)</span></h3>
+  <div class="wrap">
+    <table class="rt">
+      <thead><tr>
+        <th>LOB</th><th class="l">Month</th><th>Forecast calls</th><th>Answered</th><th>AHT (s)</th>
+        <th>PSIH (no shrink)</th><th>PSIH ({{ shrinkage_pct }}% shrink)</th><th>FTE required</th>
+        <th>Actual HC</th><th>Gap (HC − FTE)</th><th>Peak agents</th><th>Avg agents</th><th>Working days</th>
+      </tr></thead>
+      <tbody>
+        {% set ns = namespace(prev=None) %}
+        {% for r in rows %}
+        <tr class="{% if ns.prev and ns.prev != r.lob %}lob-break{% endif %}">
+          <td>{% if ns.prev != r.lob %}{{ r.lob }}{% endif %}</td>
+          <td class="l">{{ r.month_label }}</td>
+          <td>{{ "{:,}".format(r.total_calls) }}</td>
+          <td>{{ "{:,}".format(r.answered) }}</td>
+          <td>{{ r.aht }}</td>
+          <td>{{ r.psih_raw }}</td>
+          <td>{{ r.psih_shr }}</td>
+          <td><strong>{{ r.fte_req }}</strong></td>
+          <td><strong>{{ r.actual_hc }}</strong></td>
+          <td class="{% if r.gap > 0 %}pos{% elif r.gap < 0 %}neg{% else %}zero{% endif %}">{{ "%+.1f"|format(r.gap) }}</td>
+          <td>{{ r.peak_agents }}</td>
+          <td>{{ r.avg_agents }}</td>
+          <td>{{ r.working_days }}</td>
+        </tr>
+        {% set ns.prev = r.lob %}
+        {% endfor %}
+        <tr class="total">
+          <td>Total</td><td class="l"></td><td>{{ "{:,}".format(totals.total_calls) }}</td><td colspan="4"></td>
+          <td>{{ totals.fte_req }}</td><td>{{ totals.actual_hc }}</td>
+          <td class="{% if totals.gap > 0 %}pos{% elif totals.gap < 0 %}neg{% endif %}">{{ "%+.1f"|format(totals.gap) }}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="report-card"><div class="empty">No capacity data for {{ year }}. Pull forecast and requirements from the <a href="/capacity">Control Panel</a> or upload them in Data Import.</div></div>
+{% endif %}
+
+<div class="report-card">
+  <h3>Headcount by LOB <span class="hint">from the employee roster</span></h3>
+  <div class="wrap">
+    <table class="rt">
+      <thead><tr><th>LOB / Planning unit</th><th>Active</th><th>On leave</th><th>Inactive</th><th>Total</th><th>On leave %</th></tr></thead>
+      <tbody>
+        {% for h in headcount %}
+        <tr><td>{{ h.planning_unit }}</td><td><strong>{{ h.active }}</strong></td><td>{{ h.on_leave }}</td><td>{{ h.inactive }}</td><td>{{ h.total }}</td><td>{{ h.loa_pct }}%</td></tr>
+        {% endfor %}
+        {% if headcount %}
+        <tr class="total"><td>Total</td><td>{{ headcount|sum(attribute='active') }}</td><td>{{ headcount|sum(attribute='on_leave') }}</td><td>{{ headcount|sum(attribute='inactive') }}</td><td>{{ headcount|sum(attribute='total') }}</td><td></td></tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">No employees loaded.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Export link mirrors the current filter form
+function syncExport() {
+  const fd = new FormData(document.getElementById('filterForm'));
+  document.getElementById('exportLink').href = '/capacity/summary/export?' + new URLSearchParams(fd).toString();
+}
+document.getElementById('filterForm').addEventListener('change', syncExport);
+syncExport();
+</script>
+{% endblock %}

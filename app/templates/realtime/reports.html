@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}RTM Reports — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/">Dashboard</a>
+  <a href="/people/">People</a>
+  <a href="/scheduling/">Scheduling</a>
+  <a href="/realtime/" class="active">Real-Time</a>
+  {% if current_user and current_user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
+  <a href="/logout">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 18px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+  .sub-nav { display:flex; gap:14px; flex-wrap:wrap; font-size:.85rem; margin-bottom:16px; }
+  .sub-nav a { font-weight:600; }
+  .sub-nav a.active { color: var(--text); border-bottom: 2px solid var(--brand-accent); }
+
+  .top-bar { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+  .config-group { display:flex; flex-direction:column; }
+  .config-group label { font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--text-muted); margin-bottom:4px; }
+  .config-group select, .config-group input { padding:7px 10px; border:1px solid var(--border);
+    border-radius:6px; font-size:.85rem; background:var(--bg); color:var(--text); }
+  .btn-action { background:var(--brand-accent); color:#fff; border:none; padding:8px 22px;
+    border-radius:6px; font-weight:700; font-size:.85rem; cursor:pointer; }
+  .as-of { margin-left:auto; font-size:.78rem; color:var(--text-muted); font-weight:600; }
+  .auto-refresh { font-size:.78rem; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
+
+  .view-tabs { display:flex; gap:2px; margin-bottom:18px; background:var(--bg);
+    border-radius:8px; padding:3px; width:fit-content; flex-wrap:wrap; }
+  .view-tab { padding:7px 16px; border-radius:6px; border:none; background:transparent;
+    color:var(--text-muted); font-size:.82rem; font-weight:600; cursor:pointer; }
+  .view-tab.active { background:var(--brand-accent); color:#fff; }
+  .view-panel { display:none; }
+  .view-panel.active { display:block; }
+
+  .report-card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    margin-bottom:18px; overflow:hidden; }
+  .report-card h3 { font-size:.95rem; padding:11px 16px; margin:0; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; }
+  .report-card h3 .hint { font-size:.75rem; font-weight:400; color:var(--text-muted); }
+  .rt { width:100%; border-collapse:collapse; font-size:.82rem; font-variant-numeric: tabular-nums; }
+  .rt th { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+    padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); white-space:nowrap;
+    background:var(--bg); position:sticky; top:0; }
+  .rt td { padding:6px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .rt th:first-child, .rt td:first-child { text-align:left; font-weight:600; }
+  .rt tr.total td { font-weight:700; background:var(--bg); border-top:2px solid var(--border); }
+  .rt tr.current td { background: color-mix(in srgb, var(--brand-accent) 12%, transparent); }
+  .rt tr.future td { color: var(--text-muted); }
+  .wrap { overflow-x:auto; max-height:70vh; }
+  .empty { padding:36px; text-align:center; color:var(--text-muted); font-size:.88rem; }
+  .empty strong { display:block; color:var(--text); margin-bottom:6px; }
+
+  .good { color:#059669; font-weight:700; }
+  .warn { color:#d97706; font-weight:700; }
+  .bad  { color:#dc2626; font-weight:700; }
+  .cell-good { background:#d1fae5; color:#065f46; font-weight:700; }
+  .cell-warn { background:#fef3c7; color:#92400e; font-weight:700; }
+  .cell-bad  { background:#fee2e2; color:#991b1b; font-weight:700; }
+  :root:not([data-theme="light"]) .cell-good, :root[data-theme="dark"] .cell-good { background:#064e3b; color:#a7f3d0; }
+  :root:not([data-theme="light"]) .cell-warn, :root[data-theme="dark"] .cell-warn { background:#78350f; color:#fde68a; }
+  :root:not([data-theme="light"]) .cell-bad,  :root[data-theme="dark"] .cell-bad  { background:#7f1d1d; color:#fecaca; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .cell-good { background:#d1fae5; color:#065f46; }
+    :root:not([data-theme="dark"]) .cell-warn { background:#fef3c7; color:#92400e; }
+    :root:not([data-theme="dark"]) .cell-bad { background:#fee2e2; color:#991b1b; } }
+
+  .bar { display:inline-block; width:90px; height:9px; background:var(--border); border-radius:5px; vertical-align:middle; overflow:hidden; }
+  .bar span { display:block; height:100%; background:var(--brand-accent); }
+  .pill { display:inline-block; font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.03em; }
+  .pill.high { background:#fee2e2; color:#991b1b; } .pill.medium { background:#fef3c7; color:#92400e; } .pill.low { background:#e0e7ff; color:#3730a3; }
+  .stats-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .stat { flex:1; min-width:140px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .stat .v { font-size:1.45rem; font-weight:700; line-height:1.1; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-top:3px; }
+  .grid-2 { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:18px; }
+  .filter-inline { display:flex; gap:10px; align-items:center; padding:8px 16px; border-bottom:1px solid var(--border); font-size:.8rem; }
+  .filter-inline input, .filter-inline select { padding:4px 8px; border:1px solid var(--border); border-radius:5px; font-size:.8rem; background:var(--bg); color:var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Real-Time Management Reports</h1>
+  <p class="subtitle">Numbers first — forecast vs actual, service level, absenteeism, agent status and efficiency</p>
+</div>
+<div class="sub-nav">
+  <a href="/realtime/">Intraday monitor</a>
+  <a href="/realtime/reports" class="active">RTM reports</a>
+  <a href="/capacity/summary">Capacity summary</a>
+</div>
+
+<div class="top-bar">
+  <div class="config-group">
+    <label>Line of Business</label>
+    <select id="selLob" style="min-width:180px;">
+      <option value="All" selected>All LOBs</option>
+      {% for lob in lobs %}<option value="{{ lob }}">{{ lob }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="config-group">
+    <label>Date</label>
+    <input type="date" id="inpDate" value="{{ today }}">
+  </div>
+  <button class="btn-action" onclick="loadAll()">Load</button>
+  <label class="auto-refresh"><input type="checkbox" id="chkAuto" checked> Auto-refresh (60s)</label>
+  <span class="as-of" id="asOf"></span>
+</div>
+
+<div class="view-tabs">
+  <button class="view-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+  <button class="view-tab" data-view="forecast" onclick="showView('forecast')">Forecast &amp; OTF</button>
+  <button class="view-tab" data-view="interval" onclick="showView('interval')">Interval Report</button>
+  <button class="view-tab" data-view="svl" onclick="showView('svl')">SVL Calculator</button>
+  <button class="view-tab" data-view="absent" onclick="showView('absent')">Absenteeism</button>
+  <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status</button>
+  <button class="view-tab" data-view="eff" onclick="showView('eff')">Efficiency</button>
+</div>
+
+<div id="view-dashboard" class="view-panel active"><div class="empty">Click <strong>Load</strong> to run the reports.</div></div>
+<div id="view-forecast" class="view-panel"></div>
+<div id="view-interval" class="view-panel"></div>
+<div id="view-svl" class="view-panel"></div>
+<div id="view-absent" class="view-panel"></div>
+<div id="view-status" class="view-panel"></div>
+<div id="view-eff" class="view-panel"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+const DATA = {};
+let timer = null;
+
+async function api(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  return r.json();
+}
+function selectedLobs() {
+  return [$('selLob').value || 'All'];
+}
+function showView(name) {
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === 'view-' + name));
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+}
+const fmt = (v, d=0) => (v === null || v === undefined) ? '—' : Number(v).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
+const pct = v => (v === null || v === undefined) ? '—' : fmt(v, 1) + '%';
+const secs = v => (v === null || v === undefined) ? '—' : fmt(v) + 's';
+function slClass(v, target) { if (v === null || v === undefined) return ''; return v >= target ? 'cell-good' : (v >= target - 10 ? 'cell-warn' : 'cell-bad'); }
+function otfClass(v) { if (v === null || v === undefined) return ''; return (v >= 90 && v <= 110) ? 'cell-good' : ((v >= 80 && v <= 125) ? 'cell-warn' : 'cell-bad'); }
+function abClass(v) { if (v === null || v === undefined) return ''; return v <= 3 ? 'cell-good' : (v <= 6 ? 'cell-warn' : 'cell-bad'); }
+function effClass(v) { if (v === null || v === undefined) return ''; return v >= 85 ? 'cell-good' : (v >= 70 ? 'cell-warn' : 'cell-bad'); }
+function bar(p) { const w = Math.max(0, Math.min(100, p || 0)); return `<span class="bar"><span style="width:${w}%"></span></span> ${pct(p)}`; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function loadAll(silent) {
+  const body = { lobs: selectedLobs(), date: $('inpDate').value };
+  const names = ['dashboard','forecast','interval','svl','absenteeism','agent-status','efficiency'];
+  const res = await Promise.all(names.map(n => api('/realtime/reports/' + n, body).catch(e => ({success:false, error:e.message}))));
+  names.forEach((n, i) => DATA[n] = res[i]);
+  renderDashboard(DATA.dashboard); renderForecast(DATA.forecast); renderInterval(DATA.interval);
+  renderSvl(DATA.svl); renderAbsent(DATA.absenteeism); renderStatus(DATA['agent-status']); renderEff(DATA.efficiency);
+  const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
+  $('asOf').textContent = asOf ? `As of ${asOf}` : '';
+  clearInterval(timer);
+  if ($('chkAuto').checked) timer = setInterval(() => loadAll(true), 60000);
+}
+$('chkAuto').addEventListener('change', function(){ clearInterval(timer); if (this.checked && DATA.dashboard) timer = setInterval(() => loadAll(true), 60000); });
+
+function noData(el, msg, hint) { el.innerHTML = `<div class="report-card"><div class="empty"><strong>${msg}</strong>${hint || ''}</div></div>`; }
+const IMPORT_HINT = 'Upload <em>Call Actuals</em> and <em>Agent Status Events</em> in Data Import, add the ACTUALS RAW / AGENT STATUS RAW tabs to your Google Sheet, or connect an API.';
+
+/* ── Dashboard ─────────────────────────────────────── */
+function renderDashboard(d) {
+  const el = $('view-dashboard');
+  if (!d || !d.success) return noData(el, 'Dashboard unavailable', d && d.error);
+  const t = d.totals;
+  let h = `<div class="stats-row">
+    <div class="stat"><div class="v ${t.service_level==null?'':(t.service_level>=80?'good':'bad')}">${pct(t.service_level)}</div><div class="l">Service level</div></div>
+    <div class="stat"><div class="v">${pct(t.otf_pct)}</div><div class="l">OTF (actual vs forecast to now)</div></div>
+    <div class="stat"><div class="v">${fmt(t.actual_offered)}</div><div class="l">Calls offered</div></div>
+    <div class="stat"><div class="v ${t.abandoned_pct==null?'':(t.abandoned_pct<=5?'good':'bad')}">${pct(t.abandoned_pct)}</div><div class="l">Abandoned</div></div>
+    <div class="stat"><div class="v">${fmt(d.absent.length)}</div><div class="l">Not logged in</div></div>
+    <div class="stat"><div class="v">${pct(d.efficiency_total.efficiency_pct)}</div><div class="l">Production efficiency</div></div>
+  </div>`;
+  if (!d.has_actuals && !d.has_events) h += `<div class="report-card"><div class="empty"><strong>No actuals loaded for this date</strong>${IMPORT_HINT}</div></div>`;
+
+  h += `<div class="report-card"><h3>Actions <span class="hint">what needs attention right now</span></h3>`;
+  if (!d.actions.length) h += `<div class="empty">Nothing needs attention.</div>`;
+  else h += `<div class="wrap"><table class="rt"><thead><tr><th>Lvl</th><th style="text-align:left">LOB</th><th style="text-align:left">Action</th><th style="text-align:left">Owner</th><th style="text-align:left">Status</th></tr></thead><tbody>` +
+    d.actions.map(a => `<tr><td><span class="pill ${a.level}">${a.level}</span></td><td style="text-align:left">${esc(a.lob)}</td><td style="text-align:left;white-space:normal">${esc(a.action)}</td><td style="text-align:left">${esc(a.owner)}</td><td style="text-align:left">${esc(a.status)}</td></tr>`).join('') + `</tbody></table></div>`;
+  h += `</div>`;
+
+  h += `<div class="report-card"><h3>By LOB</h3><div class="wrap"><table class="rt"><thead><tr>
+    <th>LOB</th><th>SVL</th><th>Target</th><th>OTF</th><th>Offered</th><th>Fcst to now</th><th>ABND %</th><th>Scheduled</th><th>Absent</th><th>Absence %</th><th>Late</th><th>Efficiency</th></tr></thead><tbody>` +
+    d.lobs.map(r => `<tr><td>${esc(r.lob)}</td><td class="${slClass(r.service_level, r.sl_target)}">${pct(r.service_level)}</td><td>${r.sl_target}%</td>
+      <td class="${otfClass(r.otf_pct)}">${pct(r.otf_pct)}</td><td>${fmt(r.offered)}</td><td>${fmt(r.forecast_up_to_now)}</td>
+      <td class="${abClass(r.abandoned_pct)}">${pct(r.abandoned_pct)}</td><td>${fmt(r.scheduled)}</td><td>${fmt(r.absent)}</td><td>${pct(r.absence_pct)}</td><td>${fmt(r.late)}</td>
+      <td class="${effClass(r.efficiency_pct)}">${pct(r.efficiency_pct)}</td></tr>`).join('') +
+    `<tr class="total"><td>All LOBs</td><td>${pct(t.service_level)}</td><td></td><td>${pct(t.otf_pct)}</td><td>${fmt(t.actual_offered)}</td><td>${fmt(t.forecast_up_to_now)}</td><td>${pct(t.abandoned_pct)}</td><td colspan="5"></td></tr>
+    </tbody></table></div></div>`;
+
+  h += `<div class="grid-2">`;
+  h += `<div class="report-card"><h3>Not logged in</h3>` + (d.absent.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>From</th><th>To</th><th style="text-align:left">Status</th></tr></thead><tbody>` +
+    d.absent.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.scheduled_to}</td><td style="text-align:left" class="bad">${esc(a.status)}</td></tr>`).join('') + `</tbody></table></div>` : `<div class="empty">Everyone scheduled has logged in.</div>`) + `</div>`;
+  h += `<div class="report-card"><h3>Late starts</h3>` + (d.late.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled</th><th>Actual</th><th>Min late</th></tr></thead><tbody>` +
+    d.late.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.actual_start}</td><td class="warn">${a.minutes_late}</td></tr>`).join('') + `</tbody></table></div>` : `<div class="empty">No late starts.</div>`) + `</div>`;
+  h += `<div class="report-card"><h3>Agents by status</h3>` + (d.status_summary.length ? `<div class="wrap"><table class="rt"><thead><tr><th>LOB</th>${uniqueStatuses(d.status_summary).map(s => `<th>${esc(s)}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
+    d.status_summary.map(r => `<tr><td>${esc(r.lob)}</td>${uniqueStatuses(d.status_summary).map(s => `<td>${fmt(r.statuses[s] || 0)}</td>`).join('')}<td><strong>${r.total}</strong></td></tr>`).join('') + `</tbody></table></div>` : `<div class="empty">No agent status data.</div>`) + `</div>`;
+  h += `<div class="report-card"><h3>Early leaves</h3>` + (d.early_leave.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Sched to</th><th>Last offline</th><th>Min early</th></tr></thead><tbody>` +
+    d.early_leave.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_to}</td><td>${a.last_offline}</td><td class="warn">${a.minutes_early}</td></tr>`).join('') + `</tbody></table></div>` : `<div class="empty">No early leaves.</div>`) + `</div>`;
+  h += `</div>`;
+  el.innerHTML = h;
+}
+function uniqueStatuses(rows) { const s = new Set(); rows.forEach(r => Object.keys(r.statuses).forEach(k => s.add(k))); return Array.from(s).sort(); }
+
+/* ── Forecast & OTF ────────────────────────────────── */
+function renderForecast(d) {
+  const el = $('view-forecast');
+  if (!d || !d.success) return noData(el, 'Forecast report unavailable', d && d.error);
+  const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.forecast_daily_cv)}</td><td>${fmt(r.forecast_up_to_now)}</td><td>${fmt(r.actual_offered)}</td>
+    <td class="${otfClass(r.otf_pct)}">${pct(r.otf_pct)}</td><td>${fmt(r.answered_within)}</td><td class="${slClass(r.service_level, r.sl_target || 80)}">${pct(r.service_level)}</td>
+    <td>${fmt(r.abandoned)}</td><td class="${abClass(r.abandoned_pct)}">${pct(r.abandoned_pct)}</td><td>${bar(r.progress_pct)}</td></tr>`;
+  el.innerHTML = `<div class="report-card"><h3>Forecast &amp; OTF by LOB <span class="hint">up to ${d.cutoff} · OTF = actual offered ÷ forecast up to now</span></h3>
+    <div class="wrap"><table class="rt"><thead><tr><th>LOB</th><th>Forecast daily CV</th><th>Forecast up to now</th><th>Actual offered</th><th>OTF %</th><th>Answered within</th><th>Service level</th><th>Abandoned</th><th>Abandoned %</th><th>Day progress</th></tr></thead>
+    <tbody>${d.rows.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>` +
+    (d.rows.some(r => r.has_actuals) ? '' : `<div class="report-card"><div class="empty"><strong>No call actuals for this date</strong>${IMPORT_HINT}</div></div>`);
+}
+
+/* ── Interval Report ───────────────────────────────── */
+function renderInterval(d) {
+  const el = $('view-interval');
+  if (!d || !d.success) return noData(el, 'Interval report unavailable', d && d.error);
+  if (!d.rows.length) return noData(el, 'No forecast or actuals for this date', IMPORT_HINT);
+  const t = d.total;
+  el.innerHTML = `<div class="report-card"><h3>Interval Report <span class="hint">${esc(d.lobs.join(', '))} · ${d.cutoff === '23:59' ? 'full day' : 'current interval ' + d.cutoff}</span></h3>
+    <div class="wrap"><table class="rt"><thead><tr><th>Interval</th><th>Forecast CV</th><th>Calls offered</th><th>OTF</th><th>Answered</th><th>Answered WI</th><th>ABND</th><th>Rolled</th><th>% lost</th><th>Service level</th><th>ASA</th><th>Actual AHT</th><th>Forecast AHT</th><th>Max queued</th></tr></thead><tbody>` +
+    d.rows.map(r => `<tr class="${r.is_current ? 'current' : (!r.is_past ? 'future' : '')}"><td>${r.time}</td><td>${fmt(r.forecast_cv)}</td><td>${fmt(r.offered)}</td><td class="${r.offered==null?'':otfClass(r.otf_pct)}">${pct(r.otf_pct)}</td>
+      <td>${fmt(r.answered)}</td><td>${fmt(r.answered_within)}</td><td>${fmt(r.abandoned)}</td><td>${fmt(r.rolled)}</td><td class="${r.offered==null?'':abClass(r.pct_lost)}">${pct(r.pct_lost)}</td>
+      <td class="${r.offered==null?'':slClass(r.service_level, 80)}">${pct(r.service_level)}</td><td>${secs(r.asa)}</td><td>${secs(r.actual_aht)}</td><td>${secs(r.forecast_aht)}</td><td>${fmt(r.max_queued)}</td></tr>`).join('') +
+    `<tr class="total"><td>Day total</td><td>${fmt(t.forecast_cv)}</td><td>${fmt(t.offered)}</td><td>${pct(t.otf_pct)}</td><td>${fmt(t.answered)}</td><td>${fmt(t.answered_within)}</td><td>${fmt(t.abandoned)}</td><td>${fmt(t.rolled)}</td><td>${pct(t.pct_lost)}</td><td>${pct(t.service_level)}</td><td>${secs(t.asa)}</td><td>${secs(t.actual_aht)}</td><td></td><td></td></tr>
+    </tbody></table></div></div>`;
+}
+
+/* ── SVL Calculator ────────────────────────────────── */
+function renderSvl(d) {
+  const el = $('view-svl');
+  if (!d || !d.success) return noData(el, 'SVL calculator unavailable', d && d.error);
+  const outlook = o => ({'on track':'good','at risk':'warn','unreachable':'bad','final':'','n/a':''}[o] || '');
+  el.innerHTML = `<div class="report-card"><h3>SVL Calculator <span class="hint">what it takes to end the day on target</span></h3>
+    <div class="wrap"><table class="rt"><thead><tr><th>LOB</th><th>Target</th><th>Offered so far</th><th>Answered within</th><th>SVL so far</th><th>Remaining forecast</th><th>Projected total</th><th>Need within (remaining)</th><th>Required rate</th><th>Cushion (calls)</th><th>Outlook</th></tr></thead><tbody>` +
+    d.rows.map(r => `<tr><td>${esc(r.lob)}</td><td>${r.sl_target}% / ${r.threshold_secs}s</td><td>${fmt(r.actual_offered)}</td><td>${fmt(r.answered_within)}</td>
+      <td class="${slClass(r.service_level, r.sl_target)}">${pct(r.service_level)}</td><td>${fmt(r.remaining_forecast)}</td><td>${fmt(r.projected_total_offered)}</td>
+      <td>${fmt(r.needed_within_remaining)}</td><td class="${r.required_rate_remaining_pct==null?'':(r.required_rate_remaining_pct>100?'cell-bad':(r.required_rate_remaining_pct>95?'cell-warn':'cell-good'))}">${pct(r.required_rate_remaining_pct)}</td>
+      <td>${fmt(r.cushion_calls)}</td><td class="${outlook(r.outlook)}" style="text-transform:capitalize">${r.outlook}</td></tr>`).join('') +
+    `<tr class="total"><td>All LOBs</td><td></td><td>${fmt(d.total.actual_offered)}</td><td>${fmt(d.total.answered_within)}</td><td>${pct(d.total.service_level)}</td><td>${fmt(d.total.remaining_forecast)}</td><td colspan="5"></td></tr>
+    </tbody></table></div>
+    <p style="padding:10px 16px; font-size:.78rem; color:var(--text-muted); margin:0;">Required rate = share of the remaining forecast calls that must be answered within threshold to finish at target. Cushion = calls you can still miss and stay on target.</p></div>`;
+}
+
+/* ── Absenteeism ───────────────────────────────────── */
+function renderAbsent(d) {
+  const el = $('view-absent');
+  if (!d || !d.success) return noData(el, 'Absenteeism unavailable', d && d.error);
+  const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.scheduled)}</td><td>${fmt(r.absent)}</td><td class="${r.absence_pct==null?'':(r.absence_pct<=5?'cell-good':(r.absence_pct<=10?'cell-warn':'cell-bad'))}">${pct(r.absence_pct)}</td><td>${fmt(r.late)}</td><td>${pct(r.late_pct)}</td><td>${fmt(r.early_leave)}</td><td>${pct(r.early_leave_pct)}</td></tr>`;
+  let h = `<div class="report-card"><h3>Absenteeism by LOB</h3><div class="wrap"><table class="rt"><thead><tr><th>LOB</th><th>Scheduled</th><th>Absent</th><th>Absence %</th><th>Late</th><th>Late %</th><th>Early leave</th><th>Early leave %</th></tr></thead><tbody>${d.by_lob.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>`;
+  if (!d.has_events) h += `<div class="report-card"><div class="empty"><strong>No agent status events for this date</strong>${IMPORT_HINT}</div></div>`;
+  h += `<div class="grid-2">`;
+  h += `<div class="report-card"><h3>Absent / not logged in</h3>` + (d.absent.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>From</th><th>To</th><th style="text-align:left">Status</th></tr></thead><tbody>${d.absent.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.scheduled_to}</td><td style="text-align:left" class="bad">${esc(a.status)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
+  h += `<div class="report-card"><h3>Late starts</h3>` + (d.late.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled</th><th>Actual start</th><th>Min late</th><th style="text-align:left">Recent status</th></tr></thead><tbody>${d.late.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.actual_start}</td><td class="warn">${a.minutes_late}</td><td style="text-align:left">${esc(a.recent_status)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
+  h += `<div class="report-card"><h3>Early leaves</h3>` + (d.early_leave.length ? `<div class="wrap"><table class="rt"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled to</th><th>Last offline</th><th>Min early</th></tr></thead><tbody>${d.early_leave.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_to}</td><td>${a.last_offline}</td><td class="warn">${a.minutes_early}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
+  h += `</div>`;
+  el.innerHTML = h;
+}
+
+/* ── Agent Status ──────────────────────────────────── */
+function renderStatus(d) {
+  const el = $('view-status');
+  if (!d || !d.success) return noData(el, 'Agent status unavailable', d && d.error);
+  if (!d.has_events) return noData(el, 'No agent status events for this date', IMPORT_HINT);
+  let h = `<div class="report-card"><h3>Current status <span class="hint">as of ${d.as_of}</span></h3>
+    <div class="filter-inline">Filter <input id="stFilter" placeholder="name, LOB or status" oninput="filterRows('stTable', this.value)"></div>
+    <div class="wrap"><table class="rt" id="stTable"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th style="text-align:left">Status</th><th>Since</th><th>Minutes</th></tr></thead><tbody>` +
+    d.current.map(r => `<tr><td>${esc(r.employee)}</td><td style="text-align:left">${esc(r.lob)}</td><td style="text-align:left"><strong>${esc(r.status)}</strong>${r.is_live ? '' : ' <span class="hint" style="color:var(--text-muted)">(ended)</span>'}</td><td>${r.since}</td><td>${fmt(r.duration_mins)}</td></tr>`).join('') + `</tbody></table></div></div>`;
+  h += `<div class="report-card"><h3>Status history <span class="hint">${d.history.length} periods</span></h3>
+    <div class="filter-inline">Filter <input placeholder="name, LOB or status" oninput="filterRows('hsTable', this.value)"></div>
+    <div class="wrap"><table class="rt" id="hsTable"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th style="text-align:left">Status</th><th>Start</th><th>End</th><th>Minutes</th><th>Seconds</th></tr></thead><tbody>` +
+    d.history.map(r => `<tr><td>${esc(r.employee)}</td><td style="text-align:left">${esc(r.lob)}</td><td style="text-align:left">${esc(r.status)}</td><td>${r.start}</td><td>${r.end || '<em>live</em>'}</td><td>${fmt(r.minutes)}</td><td>${fmt(r.seconds)}</td></tr>`).join('') + `</tbody></table></div></div>`;
+  el.innerHTML = h;
+}
+function filterRows(tableId, q) { q = q.toLowerCase(); document.querySelectorAll('#' + tableId + ' tbody tr').forEach(tr => tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none'); }
+
+/* ── Efficiency ────────────────────────────────────── */
+function renderEff(d) {
+  const el = $('view-eff');
+  if (!d || !d.success) return noData(el, 'Efficiency unavailable', d && d.error);
+  const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.agents)}</td><td>${fmt(r.scheduled_hrs,1)}</td><td>${fmt(r.paid_hrs,1)}</td><td>${fmt(r.logged_in_hrs,1)}</td><td>${fmt(r.productive_hrs,1)}</td><td class="${effClass(r.efficiency_pct)}">${pct(r.efficiency_pct)}</td></tr>`;
+  let h = `<div class="report-card"><h3>Production efficiency by LOB <span class="hint">productive hours ÷ paid hours</span></h3><div class="wrap"><table class="rt"><thead><tr><th>LOB</th><th>Agents</th><th>Sched hours</th><th>Paid hours</th><th>Logged in</th><th>Productive</th><th>Efficiency</th></tr></thead><tbody>${d.by_lob.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>`;
+  if (!d.has_events) h += `<div class="report-card"><div class="empty"><strong>No agent status events for this date</strong>${IMPORT_HINT}</div></div>`;
+  h += `<div class="report-card"><h3>By agent</h3><div class="filter-inline">Filter <input placeholder="name or LOB" oninput="filterRows('efTable', this.value)"></div>
+    <div class="wrap"><table class="rt" id="efTable"><thead><tr><th>Name</th><th style="text-align:left">LOB</th><th>Sched</th><th>Paid</th><th>Logged in</th><th>Productive</th><th>Efficiency</th></tr></thead><tbody>` +
+    d.agents.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${fmt(a.scheduled_hrs,2)}</td><td>${fmt(a.paid_hrs,2)}</td><td>${fmt(a.logged_in_hrs,2)}</td><td>${fmt(a.productive_hrs,2)}</td><td class="${effClass(a.efficiency_pct)}">${pct(a.efficiency_pct)}</td></tr>`).join('') + `</tbody></table></div></div>`;
+  el.innerHTML = h;
+}
+
+// Deep link (#interval etc.) + auto-load
+(function(){ const h = (location.hash || '').replace('#',''); if (h) showView(h); loadAll(); })();
+</script>
+{% endblock %}

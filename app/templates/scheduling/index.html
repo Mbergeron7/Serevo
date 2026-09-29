@@ -18,6 +18,17 @@
   .page-header { margin-bottom: 28px; }
   .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
   .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+  .inputs-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    padding: 10px 14px; margin-bottom: 18px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border); font-size: .82rem;
+  }
+  .inputs-bar .inputs-label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-right: 4px;
+  }
+  .inputs-bar a { color: var(--brand-accent); font-weight: 600; text-decoration: none; }
+  .inputs-bar a:hover { text-decoration: underline; }
 
   /* ── Config panel ──────────────────────────────── */
   .config-card {
@@ -341,6 +352,17 @@
   <p class="subtitle">Generate shift assignments, edit schedules &amp; analyze coverage</p>
 </div>
 
+<!-- ── Scheduling inputs ──────────────────────────────────── -->
+<div class="inputs-bar">
+  <span class="inputs-label">Inputs the generator uses</span>
+  <a href="/settings/customization#rotations">Rotations &amp; fill-in rules</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/settings/customization#availability">Availability</a>
+  <a href="/people/pto">PTO</a>
+  <a href="/settings/customization#shifts">Shift templates</a>
+  <a href="/settings/customization#segments">Breaks &amp; lunch rules</a>
+</div>
+
 <!-- ── Config ──────────────────────────────────────────────── -->
 <div class="config-card">
   <div class="config-row">
@@ -364,6 +386,13 @@
     <div class="config-group">
       <label>Shift Length (hrs)</label>
       <input type="number" id="cfgShiftHrs" value="8" min="2" max="12" step="0.5" style="width:80px">
+    </div>
+    <div class="config-group">
+      <label>Saved schedules</label>
+      <select id="cfgMode" title="What to do with schedules already saved for this LOB and date range">
+        <option value="overwrite">Regenerate all (replace on Save)</option>
+        <option value="fill">Keep saved, fill gaps only</option>
+      </select>
     </div>
     <button class="btn-action btn-generate" id="btnGenerate" onclick="generateSchedule()">
       Generate
@@ -716,6 +745,7 @@ function generateSchedule() {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lob, start_date: start, end_date: end, shift_length_hrs: shiftHrs,
+      mode: document.getElementById('cfgMode').value,
       employee_ids: selectedEmpIds.length > 0 && selectedEmpIds[0] !== '__none__' ? selectedEmpIds : null}),
   })
   .then(r => r.json())
@@ -1044,7 +1074,7 @@ function renderTimelineView(container) {
           const eMin = timeToMins(seg.end);
           const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
           const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
-          const cls = 'tl-seg-' + seg.type.replace('-', '');
+          const cls = 'tl-seg-' + baseSegType(seg.type).replace('-', '');
           // Fix: on-call → oncall
           const clsFix = cls.replace('tl-seg-on-call','tl-seg-oncall');
           const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
@@ -1112,9 +1142,17 @@ function renderTimelineView(container) {
   container.innerHTML = html;
 }
 
+// Map variants like "break1", "break_2", "lunch-b" onto their base type for colours/labels
+function baseSegType(t) {
+  t = String(t || '').toLowerCase();
+  for (const b of ['on-call','break','lunch','meeting','training']) {
+    if (t === b || t.startsWith(b)) return b;
+  }
+  return t;
+}
 function segLabel(type) {
   const labels = {'on-call':'On-Call','break':'Break','lunch':'Lunch','meeting':'Mtg','training':'Train','other':'Other'};
-  return labels[type] || type;
+  return labels[baseSegType(type)] || type;
 }
 
 function timeToMins(t) {
@@ -1158,7 +1196,7 @@ function renderSegmentList(segments) {
   const colors = {'on-call':'#059669','break':'#d97706','lunch':'#2563eb','meeting':'#7c3aed','training':'#ea580c','other':'#6b7280'};
   let html = '';
   segments.forEach((seg, idx) => {
-    const c = colors[seg.type] || '#6b7280';
+    const c = colors[baseSegType(seg.type)] || '#6b7280';
     html += `<div class="seg-list-item">
       <span class="seg-type-dot" style="background:${c}"></span>
       <span class="seg-info"><strong>${segLabel(seg.type)}</strong> ${seg.start}–${seg.end} (${seg.duration_mins}m)${seg.notes ? ' — ' + seg.notes : ''}</span>

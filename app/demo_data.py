@@ -510,6 +510,106 @@ def get_demo_service_level(lob, date_obj):
     return results
 
 
+# ── Real-time actuals demo data (ACD intervals + agent status) ─────
+
+def get_demo_interval_actuals(lob, date_obj):
+    """Fake ACD interval stats up to the current interval (whole day for past dates)."""
+    now = datetime.datetime.now()
+    if date_obj > now.date():
+        return []
+    cutoff = "23:59" if date_obj < now.date() else f"{now.hour:02d}:{(now.minute // 30) * 30:02d}"
+    rng = random.Random(date_obj.toordinal() * 31 + hash(lob) % 1000)
+    snap = get_demo_realtime_snapshot(lob, date_obj)
+    sched_by_time = {iv["time"]: iv["scheduled"] for iv in snap["intervals"]}
+    out = []
+    for iv in _generate_intervals(lob, date_obj):
+        t = iv["time"][11:]
+        if t >= cutoff:
+            break
+        fc = iv["offered"]
+        offered = max(0, int(round(fc * rng.uniform(0.82, 1.18))))
+        agents = sched_by_time.get(t, 0)
+        need = iv["agents_required"]
+        # Coverage drives how many calls get answered quickly
+        cov = (agents / need) if need else 1.0
+        within_rate = max(0.35, min(0.97, 0.55 + 0.4 * cov + rng.uniform(-0.08, 0.08)))
+        aband_rate = max(0.0, min(0.25, 0.10 - 0.08 * cov + rng.uniform(-0.02, 0.04)))
+        abandoned = int(round(offered * aband_rate))
+        rolled = int(round(offered * 0.01)) if rng.random() < 0.2 else 0
+        answered = max(0, offered - abandoned - rolled)
+        within = int(round(answered * within_rate))
+        asa = round(max(5, 60 - 45 * within_rate + rng.uniform(-5, 10)), 1) if answered else None
+        aht = round(iv["aht"] * rng.uniform(0.9, 1.12), 1) if answered else None
+        out.append({
+            "time": t, "timestamp": iv["time"],
+            "offered": offered, "answered": answered, "answered_within": within,
+            "abandoned": abandoned, "rolled": rolled, "asa": asa, "aht": aht,
+            "max_queued": int(max(0, (offered - answered * 0.6) // 3 + rng.randint(0, 3))) if offered else 0,
+        })
+    return out
+
+
+def get_demo_agent_events(date_obj):
+    """Fake agent status timeline for everyone scheduled on the date."""
+    now = datetime.datetime.now()
+    if date_obj > now.date():
+        return []
+    is_today = date_obj == now.date()
+    rng = random.Random(date_obj.toordinal() * 7)
+    events = []
+    for i, s in enumerate(get_demo_schedules(date_obj)):
+        if s.get("status") == "off" or not s.get("start"):
+            continue
+        sh, sm = map(int, s["start"].split(":"))
+        eh, em = map(int, s["end"].split(":"))
+        sh_start = datetime.datetime.combine(date_obj, datetime.time(sh, sm))
+        sh_end = datetime.datetime.combine(date_obj, datetime.time(eh, em))
+        r = rng.random()
+        if r < 0.06:
+            continue  # no-show
+        late_mins = rng.choice([0, 0, 0, 0, 2, 4, 7, 12, 18]) if r > 0.1 else 25
+        cursor = sh_start + datetime.timedelta(minutes=late_mins)
+        leave_early = rng.random() < 0.08
+        planned_end = sh_end - datetime.timedelta(minutes=rng.randint(20, 45)) if leave_early else sh_end
+        seq = []
+        for seg in s.get("segments", []):
+            st = datetime.datetime.combine(date_obj, datetime.time(*map(int, seg["start"].split(":"))))
+            en = datetime.datetime.combine(date_obj, datetime.time(*map(int, seg["end"].split(":"))))
+            typ = seg["type"]
+            if typ == "on-call":
+                # alternate On Queue / Interacting / ACW blocks
+                t = max(st, cursor)
+                while t < en:
+                    block = min(en, t + datetime.timedelta(minutes=rng.randint(8, 25)))
+                    status = rng.choice(["On Queue", "Interacting", "Interacting", "ACW"])
+                    seq.append((status, t, block))
+                    t = block
+            else:
+                label = {"break": "Break", "lunch": "Lunch"}.get(typ, typ.title())
+                seq.append((label, max(st, cursor), en))
+            cursor = max(cursor, en)
+        # Clip to planned end, and to "now" for today
+        for status, st, en in seq:
+            if st >= planned_end:
+                break
+            en = min(en, planned_end)
+            if is_today:
+                if st >= now:
+                    break
+                if en > now:
+                    en = None  # still in this status
+            events.append({
+                "employee": s["employee"], "employee_id": s["employee_id"], "status": status,
+                "start": st.strftime("%Y-%m-%d %H:%M:%S"),
+                "end": en.strftime("%Y-%m-%d %H:%M:%S") if en else None,
+            })
+        if (not is_today or planned_end <= now) and events and events[-1]["employee_id"] == s["employee_id"]:
+            events.append({"employee": s["employee"], "employee_id": s["employee_id"], "status": "Offline",
+                           "start": planned_end.strftime("%Y-%m-%d %H:%M:%S"),
+                           "end": (planned_end + datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")})
+    return events
+
+
 # ── Seed the demo user ──────────────────────────────────────
 
 def seed_demo_user(app):
