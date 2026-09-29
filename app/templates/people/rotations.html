@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}Rotations — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/">Dashboard</a>
+  <a href="/people/" class="active">People</a>
+  {% if current_user and current_user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
+  <a href="/logout">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .people-header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .people-header div h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .people-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  .tab-bar {
+    display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border);
+  }
+  .tab-bar a {
+    padding: 10px 20px; font-size: .875rem; font-weight: 500;
+    color: var(--text-muted); text-decoration: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-bar a:hover { color: var(--text); }
+  .tab-bar a.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); font-weight: 600; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 1rem; margin-bottom: 1rem;
+  }
+  .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+  .tab-header h2 { margin: 0; }
+  .tab-desc { color: var(--text-muted,#6b7280); margin: 0 0 1rem; font-size: 0.9rem; }
+
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    background: var(--bg); font-size: .72rem; text-align: left;
+    padding: 8px 12px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; white-space: nowrap;
+  }
+  .data-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    white-space: nowrap; font-size: 0.85rem;
+  }
+  .data-table tr:hover td { background: var(--brand-accent-light); }
+
+  .empty-msg { text-align: center; color: var(--text-muted); padding: 1rem 0; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); padding: 1.5rem; width: 90%; max-width: 600px;
+  }
+  .form-row { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; }
+  .form-row input, .form-row select { padding: 0.4rem; border: 1px solid var(--border,#d1d5db); border-radius: 6px; font-size: 0.85rem; }
+  .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+  @media (max-width: 600px) {
+    .people-header { flex-direction: column; }
+    .form-row { flex-direction: column; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="people-header">
+  <div>
+    <h1>People</h1>
+    <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <a href="/people/">Roster</a>
+  <a href="/people/availability">Availability</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/people/pto">Time Off</a>
+  <a href="/people/rotations" class="active">Rotations</a>
+</div>
+
+<!-- Rotation Patterns -->
+<div class="tab-header"><h2>Rotation Patterns</h2><button class="btn btn-primary" onclick="openRotationModal()">+ Add Pattern</button></div>
+<p class="tab-desc">Multi-week rotation cycles — e.g. Week 1: days, Week 2: closing, Week 3: weekend. Assign employees here; schedules are generated from the <a href="/scheduling/">Scheduling</a> page.</p>
+
+<!-- Filter bar -->
+<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem;">
+  <div>
+    <label style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280);display:block;margin-bottom:3px;">Filter by LOB</label>
+    <select id="rot-lob-filter" onchange="filterRotations()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;">
+      <option value="">All LOBs</option>
+    </select>
+  </div>
+  <div>
+    <label style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280);display:block;margin-bottom:3px;">Filter by Employee</label>
+    <select id="rot-emp-filter" onchange="filterRotations()" style="padding:6px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;font-size:.85rem;min-width:180px;">
+      <option value="">All Employees</option>
+    </select>
+  </div>
+  <button class="btn btn-sm" onclick="document.getElementById('rot-lob-filter').value='';document.getElementById('rot-emp-filter').value='';filterRotations();" style="font-size:.78rem;">Clear Filters</button>
+</div>
+
+<div id="rotations-list"></div>
+
+<!-- Fill-In Rules -->
+<div class="card" style="margin-top:1.5rem;padding:1rem;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h3 style="margin:0;">Fill-In / Backup Rules</h3>
+    <button class="btn btn-primary btn-sm" onclick="openFillInModal()">+ Add Rule</button>
+  </div>
+  <p style="font-size:0.85rem;color:var(--text-muted,#999);margin:0.5rem 0 0.75rem;">
+    When the rotation-assigned employee for a shift category is on PTO, the system fills from this priority list during schedule generation.
+  </p>
+  <div id="fill-in-rules-list"></div>
+</div>
+
+<!-- Fill-In Rule Modal -->
+<div class="modal-overlay" id="fillin-modal">
+  <div class="modal" style="max-width:500px;">
+    <h3 id="fillin-modal-title">Add Fill-In Rule</h3>
+    <form onsubmit="saveFillInRule(event)">
+      <input type="hidden" id="fillin-id">
+      <div class="form-row">
+        <label style="flex:1;">Shift Category
+          <select id="fillin-category" required style="width:100%;">
+            <option value="closing">Closing</option>
+            <option value="opening">Opening</option>
+            <option value="mid">Mid</option>
+            <option value="weekend">Weekend</option>
+          </select>
+        </label>
+        <label style="flex:1;">Priority (lower = first)
+          <input type="number" id="fillin-priority" value="0" min="0" style="width:100%;">
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Employee
+          <select id="fillin-employee" required style="width:100%;"></select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Fallback Shift Template (optional)
+          <select id="fillin-template" style="width:100%;">
+            <option value="">— Auto-detect —</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
+        <button type="button" class="btn" onclick="closeModal('fillin-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rotation Pattern Modal -->
+<div class="modal-overlay" id="rotation-modal">
+  <div class="modal" style="max-width:700px;">
+    <h3 id="rotation-modal-title">Add Rotation Pattern</h3>
+    <form onsubmit="saveRotation(event)">
+      <input type="hidden" id="rot-id">
+      <div class="form-row"><label>Pattern Name <input type="text" id="rot-name" required placeholder="e.g. 3-Week Day/Close/Weekend"></label></div>
+      <div id="rot-weeks-list" style="margin:0.75rem 0;"></div>
+      <button type="button" class="btn btn-sm" onclick="addRotationWeek()">+ Add Week</button>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('rotation-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Data from server ───────────────────── */
+const ROTATIONS = {{ rotations | tojson }};
+const SHIFTS   = {{ shifts | tojson }};
+const EMPLOYEES = {{ employees | tojson }};
+const ALL_LOBS = {{ all_lobs | tojson }};
+let FILL_IN_RULES = {{ fill_in_rules | tojson }};
+const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+/* ── Utilities ──────────────────────────── */
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+async function api(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  return r.json();
+}
+function upsert(arr, item) { const i=arr.findIndex(x=>x.id===item.id); if(i>=0)arr[i]=item; else arr.push(item); }
+function removeById(arr, id) { const i=arr.findIndex(x=>x.id===id); if(i>=0)arr.splice(i,1); }
+
+/* ═══ ROTATIONS ═══════════════════════════ */
+function populateRotFilters(){
+  const lobSel=document.getElementById('rot-lob-filter');
+  if(lobSel){
+    const lobs=new Set();
+    EMPLOYEES.forEach(e=>{if(e.lob)lobs.add(e.lob);});
+    if(typeof ALL_LOBS!=='undefined')ALL_LOBS.forEach(l=>{if(typeof l==='string')lobs.add(l);});
+    const prev=lobSel.value;
+    lobSel.innerHTML='<option value="">All LOBs</option>'+[...lobs].sort().map(l=>`<option value="${l}">${l}</option>`).join('');
+    lobSel.value=prev;
+  }
+  const empSel=document.getElementById('rot-emp-filter');
+  if(empSel){
+    const lobVal=lobSel?lobSel.value:'';
+    const prev=empSel.value;
+    let emps=EMPLOYEES.slice();
+    if(lobVal) emps=emps.filter(e=>(e.lob||'')==lobVal);
+    empSel.innerHTML='<option value="">All Employees</option>'+emps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(e=>`<option value="${e.employee_id}">${e.name} (${e.employee_id})</option>`).join('');
+    empSel.value=prev;
+  }
+}
+function filterRotations(){populateRotFilters();renderRotations();}
+
+function renderRotations(){
+  populateRotFilters();
+  const el=document.getElementById('rotations-list');
+  if(!ROTATIONS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns.</p>';return;}
+  const lobFilter=(document.getElementById('rot-lob-filter')||{}).value||'';
+  const empFilter=(document.getElementById('rot-emp-filter')||{}).value||'';
+  let filtered=ROTATIONS;
+  if(lobFilter||empFilter){
+    filtered=ROTATIONS.filter(r=>{
+      const assigns=r.assignments||[];
+      if(!assigns.length) return !empFilter;
+      return assigns.some(a=>{
+        let matchLob=true,matchEmp=true;
+        if(lobFilter){
+          const emp=EMPLOYEES.find(e=>String(e.employee_id)===String(a.employee_id));
+          matchLob=emp&&(emp.lob||'')===lobFilter;
+        }
+        if(empFilter) matchEmp=String(a.employee_id)===empFilter;
+        return matchLob&&matchEmp;
+      });
+    });
+  }
+  if(!filtered.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No rotation patterns match the current filters.</p>';return;}
+  el.innerHTML=filtered.map(r=>{const weeks=r.weeks||[];
+    let rows=weeks.map((w,i)=>{const cells=DAYS.map(d=>{const tid=w.shifts?w.shifts[d]:null;const t=tid?SHIFTS.find(s=>s.id==tid):null;return`<td>${t?t.name:(tid==='off'?'<em>Off</em>':'—')}</td>`;}).join('');return`<tr><td style="font-weight:600;">${w.label||'Wk '+(i+1)}</td>${cells}</tr>`;}).join('');
+    let assigns=(r.assignments||[]);
+    if(empFilter) assigns=assigns.filter(a=>String(a.employee_id)===empFilter);
+    if(lobFilter) assigns=assigns.filter(a=>{const emp=EMPLOYEES.find(e=>String(e.employee_id)===String(a.employee_id));return emp&&(emp.lob||emp.latest_skill_name||'')===lobFilter;});
+    const assignRows=assigns.length?assigns.map(a=>`<tr>
+      <td>${a.employee_name}</td><td>${a.employee_id}</td>
+      <td>Week ${a.current_week+1}</td><td>${a.start_date||'—'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="unassignRotation(${a.id})">Remove</button></td>
+    </tr>`).join(''):'<tr><td colspan="5" class="empty-msg">No employees assigned yet.</td></tr>';
+    const assignedIds=new Set(assigns.map(a=>a.employee_id));
+    const availEmps=EMPLOYEES.filter(e=>!assignedIds.has(e.employee_id));
+    const empOpts=availEmps.map(e=>`<option value="${e.id}">${e.name} (${e.employee_id})</option>`).join('');
+    const weekOpts=weeks.map((w,i)=>`<option value="${i}">${w.label||'Week '+(i+1)}</option>`).join('');
+    return`<div class="card" style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3>
+        <div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div>
+      </div>
+      <table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:1rem;">
+        <h4 style="margin:0 0 0.5rem;font-size:0.9rem;">Assigned Employees</h4>
+        <table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Name</th><th>ID</th><th>Starting Week</th><th>Start Date</th><th></th></tr></thead><tbody>${assignRows}</tbody></table>
+        ${availEmps.length?`<div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+          <label style="flex:1;min-width:150px;font-size:0.8rem;">Employee<select id="assign-emp-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;"><option value="">— Select —</option>${empOpts}</select></label>
+          <label style="min-width:100px;font-size:0.8rem;">Starting Week<select id="assign-wk-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;">${weekOpts}</select></label>
+          <label style="min-width:120px;font-size:0.8rem;">Start Date<input type="date" id="assign-date-${r.id}" style="width:100%;font-size:0.85rem;padding:0.3rem;border:1px solid var(--border,#d1d5db);border-radius:6px;"></label>
+          <button class="btn btn-sm btn-primary" onclick="assignRotation(${r.id})">Assign</button>
+        </div>`:'<p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.5rem 0 0;">All employees are assigned.</p>'}
+      </div>
+    </div>`;}).join('');
+}
+
+let rotWeeks=[];
+function renderRotWeeks(){
+  const el=document.getElementById('rot-weeks-list');
+  el.innerHTML=rotWeeks.map((w,wi)=>{const dayInputs=DAYS.map((d,di)=>{const val=w.shifts?(w.shifts[d]||''):'';return`<div style="text-align:center;"><div style="font-size:0.75rem;font-weight:600;">${DAY_LABELS[di]}</div><select style="width:100%;font-size:0.8rem;" onchange="rotWeeks[${wi}].shifts['${d}']=this.value||null"><option value="">Off</option>${SHIFTS.map(s=>`<option value="${s.id}" ${val==s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>`;}).join('');
+    return`<div class="card" style="margin-bottom:0.75rem;padding:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;"><input type="text" value="${w.label||''}" placeholder="Week ${wi+1}" style="font-weight:600;border:none;background:transparent;font-size:0.95rem;padding:0;" onchange="rotWeeks[${wi}].label=this.value"><button type="button" class="btn btn-sm btn-danger" onclick="rotWeeks.splice(${wi},1);renderRotWeeks();">Remove</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;">${dayInputs}</div></div>`;}).join('')||'<p class="empty-msg" style="font-size:0.85rem;">Add weeks to define the cycle.</p>';
+}
+function addRotationWeek(){rotWeeks.push({label:'',shifts:{mon:null,tue:null,wed:null,thu:null,fri:null,sat:null,sun:null}});renderRotWeeks();}
+function openRotationModal(r){document.getElementById('rotation-modal-title').textContent=r?'Edit Rotation':'Add Rotation Pattern';document.getElementById('rot-id').value=r?r.id:'';document.getElementById('rot-name').value=r?r.name:'';rotWeeks=r?JSON.parse(JSON.stringify(r.weeks||[])):[];if(!rotWeeks.length)addRotationWeek();renderRotWeeks();openModal('rotation-modal');}
+function editRotation(id){openRotationModal(ROTATIONS.find(r=>r.id===id));}
+async function saveRotation(e){e.preventDefault();const res=await api('/people/rotations/save',{id:document.getElementById('rot-id').value||undefined,name:document.getElementById('rot-name').value,weeks:rotWeeks});if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();closeModal('rotation-modal');}else alert(res.error);}
+async function deleteRotation(id){if(!confirm('Delete rotation and all assignments?'))return;const res=await api('/people/rotations/delete',{id});if(res.success){removeById(ROTATIONS,id);renderRotations();}else alert(res.error);}
+
+async function assignRotation(rotId){
+  const empId=document.getElementById('assign-emp-'+rotId).value;
+  const wk=document.getElementById('assign-wk-'+rotId).value;
+  const dt=document.getElementById('assign-date-'+rotId).value;
+  if(!empId){alert('Select an employee');return;}
+  const res=await api('/people/rotations/assign',{rotation_id:rotId,employee_id:parseInt(empId),current_week:parseInt(wk),start_date:dt||null});
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+}
+async function unassignRotation(assignId){
+  if(!confirm('Remove this assignment?'))return;
+  const res=await api('/people/rotations/unassign',{id:assignId});
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+}
+
+/* ═══ FILL-IN RULES ══════════════════════ */
+function renderFillInRules(){
+  const el=document.getElementById('fill-in-rules-list');
+  if(!FILL_IN_RULES.length){el.innerHTML='<p class="empty-msg" style="font-size:0.85rem;">No fill-in rules configured.</p>';return;}
+  const cats={};
+  FILL_IN_RULES.forEach(r=>{cats[r.shift_category]=cats[r.shift_category]||[];cats[r.shift_category].push(r);});
+  let html='';
+  for(const [cat,rules] of Object.entries(cats)){
+    html+=`<div style="margin-bottom:1rem;">
+      <h4 style="margin:0 0 0.4rem;font-size:0.9rem;text-transform:capitalize;">${cat}</h4>
+      <table class="data-table" style="font-size:0.85rem;"><thead><tr>
+        <th>Priority</th><th>Employee</th><th>ID</th><th>Fallback Template</th><th></th>
+      </tr></thead><tbody>${rules.sort((a,b)=>a.priority-b.priority).map(r=>`<tr>
+        <td>${r.priority}</td><td>${r.employee_name}</td><td>${r.employee_ext_id}</td>
+        <td>${r.fallback_template_name||'Auto-detect'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="editFillInRule(${r.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteFillInRule(${r.id})">Del</button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+  el.innerHTML=html;
+}
+function openFillInModal(rule){
+  document.getElementById('fillin-modal-title').textContent=rule?'Edit Fill-In Rule':'Add Fill-In Rule';
+  document.getElementById('fillin-id').value=rule?rule.id:'';
+  document.getElementById('fillin-category').value=rule?rule.shift_category:'closing';
+  document.getElementById('fillin-priority').value=rule?rule.priority:FILL_IN_RULES.length;
+  const empSel=document.getElementById('fillin-employee');
+  empSel.innerHTML='<option value="">— Select —</option>'+EMPLOYEES.map(e=>`<option value="${e.id}" ${rule&&rule.employee_id==e.id?'selected':''}>${e.name} (${e.employee_id})</option>`).join('');
+  const tmplSel=document.getElementById('fillin-template');
+  tmplSel.innerHTML='<option value="">— Auto-detect —</option>'+SHIFTS.map(s=>`<option value="${s.id}" ${rule&&rule.fallback_template_id==s.id?'selected':''}>${s.name}</option>`).join('');
+  openModal('fillin-modal');
+}
+function editFillInRule(id){openFillInModal(FILL_IN_RULES.find(r=>r.id===id));}
+async function saveFillInRule(e){
+  e.preventDefault();
+  const data={
+    id:document.getElementById('fillin-id').value||undefined,
+    shift_category:document.getElementById('fillin-category').value,
+    employee_id:document.getElementById('fillin-employee').value,
+    priority:parseInt(document.getElementById('fillin-priority').value)||0,
+    fallback_template_id:document.getElementById('fillin-template').value||null,
+  };
+  if(!data.employee_id){alert('Select an employee');return;}
+  const res=await api('/people/rotations/fill-in-rules/save',data);
+  if(res.success){
+    const listRes=await api('/people/rotations/fill-in-rules/list',{});
+    if(listRes.success)FILL_IN_RULES=listRes.rules;
+    renderFillInRules();closeModal('fillin-modal');
+  }else alert(res.error);
+}
+async function deleteFillInRule(id){
+  if(!confirm('Delete this fill-in rule?'))return;
+  const res=await api('/people/rotations/fill-in-rules/delete',{id});
+  if(res.success){
+    FILL_IN_RULES=FILL_IN_RULES.filter(r=>r.id!==id);
+    renderFillInRules();
+  }else alert(res.error);
+}
+
+/* ── Initial render ────────────────────── */
+renderRotations(); renderFillInRules();
+</script>
+{% endblock %}

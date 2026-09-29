@@ -152,6 +152,7 @@
   <a href="/people/availability">Availability</a>
   <a href="/people/accommodations">Accommodations</a>
   <a href="/people/pto">Time Off</a>
+  <a href="/people/rotations">Rotations</a>
 </div>
 
 <div class="stat-row">
@@ -255,8 +256,8 @@
             {% if full_name in avail_map %}
               <span class="flag-badge flag-avail" title="Availability set">Avail</span>
             {% endif %}
-            {% if full_name in schedule_map %}
-              <span class="flag-badge flag-rot" title="Has schedule">Sched</span>
+            {% if full_name in rotation_map %}
+              <span class="flag-badge flag-rot" title="In rotation">Rot</span>
             {% endif %}
             </div>
           </td>
