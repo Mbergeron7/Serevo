@@ -149,6 +149,7 @@
 
 <div class="tab-bar">
   <a href="/people/" class="active">Roster</a>
+  <a href="/people/availability">Availability</a>
   <a href="/people/accommodations">Accommodations</a>
   <a href="/people/pto">Time Off</a>
 </div>
@@ -249,6 +250,9 @@
             {% endif %}
             {% if full_name in pto_map %}
               <span class="badge-pto">{{ pto_map[full_name]|length }} PTO</span>
+            {% endif %}
+            {% if full_name in avail_map %}
+              <span class="badge-accom" style="background:color-mix(in srgb, #2563eb 15%, transparent); color:#2563eb;">Availability</span>
             {% endif %}
           </td>
           <td>

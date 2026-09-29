@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
 from app.auth import login_required, get_current_user
+from app.models import db, EmployeeAvailability
 
 log = logging.getLogger("serevo.people")
 
@@ -65,6 +66,17 @@ def roster():
         if name:
             pto_map.setdefault(name, []).append(p)
 
+    # Build availability map — which employees have availability set
+    avail_emp_ids = set(
+        r[0] for r in db.session.query(EmployeeAvailability.employee_id).distinct().all()
+    )
+    avail_map = {}
+    for e in employees:
+        db_id = e.get("_db_id")
+        if db_id and db_id in avail_emp_ids:
+            full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+            avail_map[full] = True
+
     # Count stats
     active = [e for e in employees
               if str(e.get("Status", "")).strip().lower() in ("active", "")]
@@ -79,6 +91,7 @@ def roster():
         employees=employees,
         accom_map=accom_map,
         pto_map=pto_map,
+        avail_map=avail_map,
         emp_error=emp_err,
         active_count=len(active),
         total_count=len(employees),
@@ -196,6 +209,26 @@ def delete_pto():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+# ── Availability ────────────────────────────────────────────
+@people_bp.route("/availability")
+@login_required
+def availability():
+    user = get_current_user()
+
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_employees
+        employees, emp_err = get_demo_employees()
+    else:
+        from app.people.manager import get_employees
+        employees, emp_err = get_employees()
+
+    return render_template("people/availability.html",
+        user=user,
+        employees=employees,
+        emp_error=emp_err,
+    )
 
 
 # ── API: employee names (for other modules to use) ───────────

@@ -10,7 +10,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from app.auth import login_required
-from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval
+from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability
 
 log = logging.getLogger("serevo.manual_entry")
 
@@ -290,3 +290,71 @@ def save_requirement_interval():
         db.session.rollback()
         log.exception("save_requirement error")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE AVAILABILITY
+# ═══════════════════════════════════════════════════════════════
+
+@manual_entry_bp.route("/availability/<int:emp_id>", methods=["GET"])
+@login_required
+def get_availability(emp_id):
+    """Return availability entries for an employee."""
+    entries = EmployeeAvailability.query.filter_by(employee_id=emp_id)\
+        .order_by(EmployeeAvailability.day_of_week).all()
+    return jsonify({"availability": [e.to_dict() for e in entries]})
+
+
+@manual_entry_bp.route("/availability/save", methods=["POST"])
+@login_required
+def save_availability():
+    """Save all 7 days of availability for an employee (bulk upsert)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        emp_id = data.get("employee_id")
+        if not emp_id:
+            return jsonify({"success": False, "error": "Employee ID is required."})
+
+        emp = Employee.query.get(int(emp_id))
+        if not emp:
+            return jsonify({"success": False, "error": "Employee not found."})
+
+        days = data.get("days", [])
+        for day_data in days:
+            dow = int(day_data.get("day_of_week", -1))
+            if dow < 0 or dow > 6:
+                continue
+
+            entry = EmployeeAvailability.query.filter_by(
+                employee_id=emp.id, day_of_week=dow
+            ).first()
+            if not entry:
+                entry = EmployeeAvailability(employee_id=emp.id, day_of_week=dow)
+                db.session.add(entry)
+
+            entry.is_available = bool(day_data.get("is_available", True))
+            es = (day_data.get("earliest_start") or "").strip()
+            ls = (day_data.get("latest_start") or "").strip()
+            le = (day_data.get("latest_end") or "").strip()
+            from datetime import time as dt_time
+            entry.earliest_start = dt_time.fromisoformat(es) if es else None
+            entry.latest_start = dt_time.fromisoformat(ls) if ls else None
+            entry.latest_end = dt_time.fromisoformat(le) if le else None
+            entry.notes = (day_data.get("notes") or "").strip()
+
+        db.session.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("save_availability error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@manual_entry_bp.route("/availability/employees-with", methods=["GET"])
+@login_required
+def employees_with_availability():
+    """Return list of employee IDs that have availability entries."""
+    rows = db.session.query(EmployeeAvailability.employee_id)\
+        .distinct().all()
+    return jsonify({"employee_ids": [r[0] for r in rows]})
