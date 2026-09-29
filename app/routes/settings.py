@@ -855,103 +855,175 @@ def generate_rotation_schedules():
     created = 0
     skipped = 0
     warnings = []
+    skip_notes = {}   # reason -> count (rolled up so the list stays readable)
+
+    def _note(reason):
+        skip_notes[reason] = skip_notes.get(reason, 0) + 1
 
     def _parse_hhmm(s):
-        parts = s.strip().split(":")
+        parts = str(s).strip().split(":")
         return _dt.time(int(parts[0]), int(parts[1]))
+
+    def _to_min(s):
+        t = _parse_hhmm(s)
+        return t.hour * 60 + t.minute
+
+    def _to_hhmm(m):
+        return f"{m // 60:02d}:{m % 60:02d}"
+
+    # Availability (PTO + accommodations + per-day availability) via the
+    # scheduling engine so rotations honour the same rules as Generate.
+    from app.scheduling.engine import _get_availability, _explain_unavailability, _generate_segments
+    try:
+        from app.people.manager import get_availability_map
+        avail_map = get_availability_map()
+    except Exception as e:
+        avail_map = {}
+        warnings.append(f"Could not load availability/accommodations: {e}")
+
+    # Per-day stagger counters so breaks/lunches are spread across staff
+    per_day_index = {}
+
+    def _build_schedule(emp, d, tmpl, status):
+        """Create a Schedule (+ segments) for emp on date d from template tmpl,
+        adjusted for the employee's accommodation. Returns (sched, reason)."""
+        avail = _get_availability(emp.full_name, d, avail_map,
+                                  employee_ext_id=emp.employee_id)
+        if not avail["available"]:
+            return None, _explain_unavailability(emp.full_name, d, avail_map, emp.employee_id)
+
+        start_min = _to_min(tmpl.start_time)
+        end_min = _to_min(tmpl.end_time)
+        shift_type = tmpl.shift_type or "full"
+
+        # Accommodation: fixed shift start / end override the template
+        adjusted = False
+        if avail.get("shift_start"):
+            start_min = _to_min(avail["shift_start"]); adjusted = True
+        if avail.get("shift_end"):
+            end_min = _to_min(avail["shift_end"]); adjusted = True
+        if avail.get("earliest_start") and start_min < _to_min(avail["earliest_start"]):
+            start_min = _to_min(avail["earliest_start"]); adjusted = True
+        if avail.get("latest_end") and end_min > _to_min(avail["latest_end"]):
+            end_min = _to_min(avail["latest_end"]); adjusted = True
+        if avail["day_type"] == "half":
+            shift_type = "half"
+            half = (end_min - start_min) // 2
+            end_min = start_min + half
+            adjusted = True
+        if end_min <= start_min:
+            return None, "accommodation window leaves no shift time"
+
+        hours = round((end_min - start_min) / 60, 2)
+        pu_id = tmpl.planning_unit_id if getattr(tmpl, "planning_unit_id", None) else emp.planning_unit_id
+
+        sched = Schedule(
+            employee_id=emp.id,
+            planning_unit_id=pu_id,
+            schedule_date=d,
+            shift_start=_dt.time(start_min // 60, start_min % 60),
+            shift_end=_dt.time(end_min // 60, end_min % 60),
+            shift_type=shift_type,
+            hours=hours,
+            status=status,
+        )
+        db.session.add(sched)
+        db.session.flush()
+
+        # Segments: use the template's own segments when the shift is unchanged,
+        # otherwise generate break/lunch placement from the segment-code rules.
+        segs = []
+        if not adjusted and tmpl.segments_json:
+            try:
+                segs = _json.loads(tmpl.segments_json) or []
+            except Exception:
+                segs = []
+        if not segs:
+            idx = per_day_index.get(d, 0)
+            per_day_index[d] = idx + 1
+            segs = _generate_segments(_to_hhmm(start_min), _to_hhmm(end_min), shift_type,
+                                      stagger_index=idx, total_employees=max(1, idx + 1))
+        for i, seg in enumerate(segs):
+            if not seg.get("start") or not seg.get("end"):
+                continue
+            db.session.add(ShiftSegment(
+                schedule_id=sched.id,
+                activity_type=seg.get("type", "on-call"),
+                start_time=_parse_hhmm(seg["start"]),
+                end_time=_parse_hhmm(seg["end"]),
+                duration_mins=int(seg.get("duration_mins", 0)),
+                sort_order=i,
+                notes=seg.get("notes", ""),
+            ))
+        return sched, None
+
+    covered = set()  # (date, shift_category) covered by rotation schedules
+    total_assignments = 0
 
     for rot in rotations:
         weeks = _json.loads(rot.weeks_json) if rot.weeks_json else []
         if not weeks:
+            warnings.append(f"Rotation '{rot.name}' has no weeks defined — skipped.")
             continue
         cycle_len = len(weeks)
+        if not rot.assignments:
+            warnings.append(f"Rotation '{rot.name}' has no employees assigned.")
+            continue
 
         for assign in rot.assignments:
             emp = assign.employee
-            if not emp or emp.status != "Active":
+            if not emp:
+                _note("assignment has no employee")
                 continue
+            if str(emp.status or "Active").strip().lower() not in ("active", ""):
+                _note(f"{emp.full_name} is {emp.status}")
+                continue
+            total_assignments += 1
 
-            # Walk each date in the range
             d = start_date
             while d <= end_date:
-                # Figure out which week of the cycle this date falls on
-                # Use start_date of assignment as anchor, or rotation start
                 anchor = assign.start_date or start_date
                 days_since = (d - anchor).days
                 if days_since < 0:
+                    _note(f"{emp.full_name}: date before rotation start ({anchor})")
                     d += _dt.timedelta(days=1)
                     continue
-                # Week number: offset by current_week
-                week_num = ((days_since // 7) + assign.current_week) % cycle_len
-                week_def = weeks[week_num]
-                shifts_map = week_def.get("shifts", {})
+                week_num = ((days_since // 7) + (assign.current_week or 0)) % cycle_len
+                shifts_map = weeks[week_num].get("shifts", {})
+                template_id = shifts_map.get(DAY_KEYS[d.weekday()])
 
-                day_key = DAY_KEYS[d.weekday()]
-                template_id = shifts_map.get(day_key)
-
-                if not template_id or template_id == "off" or str(template_id) == "":
+                if not template_id or str(template_id).lower() in ("off", ""):
                     d += _dt.timedelta(days=1)
                     continue
-
-                # Look up the shift template
                 try:
                     tid = int(template_id)
                 except (ValueError, TypeError):
+                    _note(f"invalid template id '{template_id}'")
                     d += _dt.timedelta(days=1)
                     continue
-
                 tmpl = templates.get(tid)
                 if not tmpl:
                     warnings.append(f"Shift template {tid} not found for {emp.full_name} on {d}")
                     d += _dt.timedelta(days=1)
                     continue
 
-                # Check if schedule already exists for this employee+date
-                existing = Schedule.query.filter_by(
-                    employee_id=emp.id, schedule_date=d).first()
+                existing = Schedule.query.filter_by(employee_id=emp.id, schedule_date=d).first()
                 if existing:
                     skipped += 1
+                    covered.add((d, tmpl.shift_category or "any"))
                     d += _dt.timedelta(days=1)
                     continue
 
-                # Determine planning unit from template or employee
-                pu_id = None
-                if hasattr(tmpl, 'planning_unit_id') and tmpl.planning_unit_id:
-                    pu_id = tmpl.planning_unit_id
-                elif emp.planning_unit_id:
-                    pu_id = emp.planning_unit_id
-
-                sched = Schedule(
-                    employee_id=emp.id,
-                    planning_unit_id=pu_id,
-                    schedule_date=d,
-                    shift_start=_parse_hhmm(tmpl.start_time),
-                    shift_end=_parse_hhmm(tmpl.end_time),
-                    shift_type=tmpl.shift_type or "full",
-                    hours=tmpl.hours or 8.0,
-                    status="scheduled",
-                )
-                db.session.add(sched)
-                db.session.flush()
-
-                # Copy segments from template JSON
-                segs = _json.loads(tmpl.segments_json) if tmpl.segments_json else []
-                for idx, seg in enumerate(segs):
-                    seg_start = seg.get("start", "")
-                    seg_end = seg.get("end", "")
-                    if not seg_start or not seg_end:
-                        continue
-                    db.session.add(ShiftSegment(
-                        schedule_id=sched.id,
-                        activity_type=seg.get("type", "on-call"),
-                        start_time=_parse_hhmm(seg_start),
-                        end_time=_parse_hhmm(seg_end),
-                        duration_mins=int(seg.get("duration_mins", 0)),
-                        sort_order=idx,
-                        notes=seg.get("notes", ""),
-                    ))
-                created += 1
+                sched, reason = _build_schedule(emp, d, tmpl, "scheduled")
+                if sched:
+                    created += 1
+                    covered.add((d, tmpl.shift_category or "any"))
+                else:
+                    _note(f"{emp.full_name}: {reason}")
                 d += _dt.timedelta(days=1)
+
+    if total_assignments == 0:
+        warnings.append("No active employees are assigned to any rotation — nothing to generate.")
 
     db.session.commit()
 
@@ -992,97 +1064,60 @@ def generate_rotation_schedules():
             if not cat_templates:
                 continue
 
+            DAY_TYPES = ["weekday"] * 5 + ["saturday", "sunday"]
             d = start_date
             while d <= end_date:
-                # Check if ANY employee already has a schedule with this category on this day
-                existing_scheds = Schedule.query.filter_by(schedule_date=d).all()
-                has_coverage = False
-                for es in existing_scheds:
-                    # Match the shift start time against category templates
-                    for ct in cat_templates:
-                        if (es.shift_start and
-                            es.shift_start.strftime("%H:%M") == ct.start_time and
-                            es.shift_end and
-                            es.shift_end.strftime("%H:%M") == ct.end_time):
-                            has_coverage = True
+                day_name = DAY_TYPES[d.weekday()]
+                # Only fill days this category actually operates on
+                day_templates = [ct for ct in cat_templates
+                                 if (ct.day_type or "any") in ("any", day_name)]
+                if not day_templates:
+                    d += _dt.timedelta(days=1)
+                    continue
+
+                has_coverage = (d, cat) in covered
+                if not has_coverage:
+                    # Also check schedules already in the DB (from earlier runs)
+                    for es in Schedule.query.filter_by(schedule_date=d).all():
+                        for ct in cat_templates:
+                            if (es.shift_start and es.shift_end and
+                                    es.shift_start.strftime("%H:%M") == ct.start_time and
+                                    es.shift_end.strftime("%H:%M") == ct.end_time):
+                                has_coverage = True
+                                break
+                        if has_coverage:
                             break
-                    if has_coverage:
-                        break
 
                 if not has_coverage:
-                    # Try to fill from the priority list
                     for rule in rules:
                         emp = rule.employee
-                        if not emp or emp.status != "Active":
+                        if not emp or str(emp.status or "Active").strip().lower() not in ("active", ""):
                             continue
-                        # Check if this employee is on PTO
                         if emp.id in pto_dates and d in pto_dates[emp.id]:
                             continue
-                        # Check if they already have a schedule this day
-                        already = Schedule.query.filter_by(
-                            employee_id=emp.id, schedule_date=d).first()
-                        if already:
+                        if Schedule.query.filter_by(employee_id=emp.id, schedule_date=d).first():
                             continue
 
-                        # Use the fallback template from the rule, or first matching cat template
-                        tmpl = None
-                        if rule.fallback_template_id:
-                            tmpl = templates.get(rule.fallback_template_id)
-                        if not tmpl and cat_templates:
-                            # Pick template matching day type
-                            day_name = ["weekday","weekday","weekday","weekday","weekday","saturday","sunday"][d.weekday()]
-                            for ct in cat_templates:
-                                dt = ct.day_type or "any"
-                                if dt == "any" or dt == day_name:
-                                    tmpl = ct
-                                    break
-                            if not tmpl:
-                                tmpl = cat_templates[0]
-
+                        tmpl = templates.get(rule.fallback_template_id) if rule.fallback_template_id else None
                         if not tmpl:
+                            tmpl = day_templates[0]
+
+                        sched, reason = _build_schedule(emp, d, tmpl, "fill-in")
+                        if not sched:
+                            _note(f"fill-in {emp.full_name}: {reason}")
                             continue
-
-                        pu_id = None
-                        if hasattr(tmpl, 'planning_unit_id') and tmpl.planning_unit_id:
-                            pu_id = tmpl.planning_unit_id
-                        elif emp.planning_unit_id:
-                            pu_id = emp.planning_unit_id
-
-                        sched = Schedule(
-                            employee_id=emp.id,
-                            planning_unit_id=pu_id,
-                            schedule_date=d,
-                            shift_start=_parse_hhmm(tmpl.start_time),
-                            shift_end=_parse_hhmm(tmpl.end_time),
-                            shift_type=tmpl.shift_type or "full",
-                            hours=tmpl.hours or 8.0,
-                            status="fill-in",
-                        )
-                        db.session.add(sched)
-                        db.session.flush()
-
-                        segs = _json.loads(tmpl.segments_json) if tmpl.segments_json else []
-                        for idx, seg in enumerate(segs):
-                            seg_start = seg.get("start", "")
-                            seg_end = seg.get("end", "")
-                            if not seg_start or not seg_end:
-                                continue
-                            db.session.add(ShiftSegment(
-                                schedule_id=sched.id,
-                                activity_type=seg.get("type", "on-call"),
-                                start_time=_parse_hhmm(seg_start),
-                                end_time=_parse_hhmm(seg_end),
-                                duration_mins=int(seg.get("duration_mins", 0)),
-                                sort_order=idx,
-                                notes=seg.get("notes", ""),
-                            ))
                         fill_in_created += 1
+                        covered.add((d, cat))
                         warnings.append(f"Fill-in: {emp.full_name} covers {cat} on {d}")
                         break  # filled, move to next day
 
                 d += _dt.timedelta(days=1)
 
         db.session.commit()
+
+    # Roll up skip reasons into readable warnings
+    for reason, count in sorted(skip_notes.items(), key=lambda x: -x[1]):
+        warnings.insert(0, f"Skipped {count} day(s) — {reason}")
 
     msg = f"Created {created} schedule(s), skipped {skipped} (already existed)."
     if fill_in_created:
