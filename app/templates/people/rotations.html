@@ -61,7 +61,7 @@
   .modal-overlay.show { display: flex; }
   .modal {
     background: var(--surface); border-radius: var(--radius);
-    box-shadow: 0 8px 30px rgba(0,0,0,.3); padding: 1.5rem; width: 90%; max-width: 600px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); padding: 1.5rem; width: 90%; max-width: 720px;
   }
   .form-row { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
   .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; }
@@ -266,7 +266,7 @@ function renderRotations(){
         <h3 style="margin:0;">${r.name} <span style="font-weight:400;color:var(--text-muted,#999);">(${r.cycle_weeks}-wk)</span></h3>
         <div><button class="btn btn-sm" onclick="editRotation(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteRotation(${r.id})">Del</button></div>
       </div>
-      <table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>
+      <div style="overflow-x:auto;"><table class="data-table" style="margin-top:0.5rem;font-size:0.85rem;min-width:500px;"><thead><tr><th></th>${DAY_LABELS.map(d=>'<th>'+d+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin-top:1rem;">
         <h4 style="margin:0 0 0.5rem;font-size:0.9rem;">Assigned Employees</h4>
         <table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Name</th><th>ID</th><th>Starting Week</th><th>Start Date</th><th></th></tr></thead><tbody>${assignRows}</tbody></table>
@@ -284,7 +284,7 @@ let rotWeeks=[];
 function renderRotWeeks(){
   const el=document.getElementById('rot-weeks-list');
   el.innerHTML=rotWeeks.map((w,wi)=>{const dayInputs=DAYS.map((d,di)=>{const val=w.shifts?(w.shifts[d]||''):'';return`<div style="text-align:center;"><div style="font-size:0.75rem;font-weight:600;">${DAY_LABELS[di]}</div><select style="width:100%;font-size:0.8rem;" onchange="rotWeeks[${wi}].shifts['${d}']=this.value||null"><option value="">Off</option>${SHIFTS.map(s=>`<option value="${s.id}" ${val==s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>`;}).join('');
-    return`<div class="card" style="margin-bottom:0.75rem;padding:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;"><input type="text" value="${w.label||''}" placeholder="Week ${wi+1}" style="font-weight:600;border:none;background:transparent;font-size:0.95rem;padding:0;" onchange="rotWeeks[${wi}].label=this.value"><button type="button" class="btn btn-sm btn-danger" onclick="rotWeeks.splice(${wi},1);renderRotWeeks();">Remove</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;">${dayInputs}</div></div>`;}).join('')||'<p class="empty-msg" style="font-size:0.85rem;">Add weeks to define the cycle.</p>';
+    return`<div class="card" style="margin-bottom:0.75rem;padding:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;"><input type="text" value="${w.label||''}" placeholder="Week ${wi+1}" style="font-weight:600;border:none;background:transparent;font-size:0.95rem;padding:0;" onchange="rotWeeks[${wi}].label=this.value"><button type="button" class="btn btn-sm btn-danger" onclick="rotWeeks.splice(${wi},1);renderRotWeeks();">Remove</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;overflow-x:auto;min-width:0;">${dayInputs}</div></div>`;}).join('')||'<p class="empty-msg" style="font-size:0.85rem;">Add weeks to define the cycle.</p>';
 }
 function addRotationWeek(){rotWeeks.push({label:'',shifts:{mon:null,tue:null,wed:null,thu:null,fri:null,sat:null,sun:null}});renderRotWeeks();}
 function openRotationModal(r){document.getElementById('rotation-modal-title').textContent=r?'Edit Rotation':'Add Rotation Pattern';document.getElementById('rot-id').value=r?r.id:'';document.getElementById('rot-name').value=r?r.name:'';rotWeeks=r?JSON.parse(JSON.stringify(r.weeks||[])):[];if(!rotWeeks.length)addRotationWeek();renderRotWeeks();openModal('rotation-modal');}
