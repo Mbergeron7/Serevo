@@ -220,6 +220,25 @@ def save_connection():
     return jsonify({"success": True, "id": conn.id})
 
 
+def _clean_token(raw):
+    """Strip whitespace/newlines; if the token is base64-wrapped (as older
+    PeopleWare setups store it), decode it."""
+    import base64, re
+    raw = (raw or "").strip().replace("\n", "").replace("\r", "")
+    if not raw:
+        return ""
+    # Real tokens usually contain a dot or dash; a pure base64 blob that decodes
+    # to printable text is treated as wrapped.
+    if re.fullmatch(r"[A-Za-z0-9+/=]+", raw) and len(raw) % 4 == 0:
+        try:
+            dec = base64.b64decode(raw).decode("utf-8")
+            if dec.isprintable() and len(dec) > 10:
+                return dec.strip()
+        except Exception:
+            pass
+    return raw
+
+
 @settings_bp.route("/api-connections/test", methods=["POST"])
 @admin_required
 def test_connection():
@@ -250,11 +269,27 @@ def test_connection():
 
         # Build a simple health-check request
         url = conn.base_url.rstrip("/")
-        req = urllib.request.Request(url, method="GET")
-        req.add_header("User-Agent", "Serevo/1.0")
+        provider = (conn.provider or "").lower()
 
-        if conn.auth_type == "bearer":
-            token = creds.get("access_token") or creds.get("api_key", "")
+        # PeopleWare / Injixo: always Bearer, token may be stored base64-encoded,
+        # and a bare host needs a real endpoint to answer 200.
+        if provider == "injixo":
+            token = _clean_token(creds.get("access_token") or creds.get("api_key", ""))
+            if url.endswith("peopleware.com") or url.endswith("/people") or url.endswith("/v1"):
+                url = "https://legacy-api.peopleware.com/v1/employees"
+            req = urllib.request.Request(url, method="GET")
+            req.add_header("User-Agent", "Serevo/1.0")
+            req.add_header("Accept", "application/json")
+            if token:
+                req.add_header("Authorization", f"Bearer {token}")
+        else:
+            req = urllib.request.Request(url, method="GET")
+            req.add_header("User-Agent", "Serevo/1.0")
+
+        if provider == "injixo":
+            pass
+        elif conn.auth_type == "bearer":
+            token = _clean_token(creds.get("access_token") or creds.get("api_key", ""))
             if token:
                 req.add_header("Authorization", f"Bearer {token}")
         elif conn.auth_type == "basic":
