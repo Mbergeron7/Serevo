@@ -98,16 +98,16 @@
     font-size: .72rem; font-weight: 600;
     background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed;
   }
-  .badge-accom {
-    display: inline-block; padding: 1px 8px; border-radius: 999px;
-    font-size: .7rem; font-weight: 600;
-    background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706;
+  .flag-badges { display: flex; gap: 3px; flex-wrap: wrap; }
+  .flag-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 999px;
+    font-size: .65rem; font-weight: 700; letter-spacing: .02em;
+    white-space: nowrap; cursor: default;
   }
-  .badge-pto {
-    display: inline-block; padding: 1px 8px; border-radius: 999px;
-    font-size: .7rem; font-weight: 600;
-    background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed;
-  }
+  .flag-acc  { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+  .flag-pto  { background: color-mix(in srgb, #7c3aed 15%, transparent); color: #7c3aed; }
+  .flag-avail { background: color-mix(in srgb, #2563eb 15%, transparent); color: #2563eb; }
+  .flag-rot  { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
 
   .filter-bar {
     display: flex; gap: 10px; align-items: center; margin-bottom: 16px;
@@ -245,15 +245,20 @@
           <td>{{ emp['Languages']|default('English') }}</td>
           <td>{{ emp['Contract Type']|default('Full-Time') }} ({{ emp['Weekly Hours']|default(40)|int }}h)</td>
           <td>
+            <div class="flag-badges">
             {% if full_name in accom_map %}
-              <span class="badge-accom">Accommodation</span>
+              <span class="flag-badge flag-acc" title="Has accommodation">Acc</span>
             {% endif %}
             {% if full_name in pto_map %}
-              <span class="badge-pto">{{ pto_map[full_name]|length }} PTO</span>
+              <span class="flag-badge flag-pto" title="PTO entries">PTO</span>
             {% endif %}
             {% if full_name in avail_map %}
-              <span class="badge-accom" style="background:color-mix(in srgb, #2563eb 15%, transparent); color:#2563eb;">Availability</span>
+              <span class="flag-badge flag-avail" title="Availability set">Avail</span>
             {% endif %}
+            {% if full_name in rotation_map %}
+              <span class="flag-badge flag-rot" title="In rotation">Rot</span>
+            {% endif %}
+            </div>
           </td>
           <td>
             <button class="edit-btn" onclick='editEmp({{ emp | tojson }})'>Edit</button>

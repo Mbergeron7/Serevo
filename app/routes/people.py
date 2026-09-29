@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
 from app.auth import login_required, get_current_user
-from app.models import db, EmployeeAvailability
+from app.models import db, EmployeeAvailability, RotationAssignment
 
 log = logging.getLogger("serevo.people")
 
@@ -77,6 +77,17 @@ def roster():
             full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
             avail_map[full] = True
 
+    # Build rotation map — which employees are in a rotation
+    rot_emp_ids = set(
+        r[0] for r in db.session.query(RotationAssignment.employee_id).distinct().all()
+    )
+    rotation_map = {}
+    for e in employees:
+        db_id = e.get("_db_id")
+        if db_id and db_id in rot_emp_ids:
+            full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+            rotation_map[full] = True
+
     # Count stats
     active = [e for e in employees
               if str(e.get("Status", "")).strip().lower() in ("active", "")]
@@ -92,6 +103,7 @@ def roster():
         accom_map=accom_map,
         pto_map=pto_map,
         avail_map=avail_map,
+        rotation_map=rotation_map,
         emp_error=emp_err,
         active_count=len(active),
         total_count=len(employees),
