@@ -119,6 +119,17 @@ def panel():
         except Exception:
             pass
 
+    # Employee count from Serevo's own roster (API pulls land here)
+    try:
+        from app.models import Employee
+        db_count = Employee.query.filter(Employee.status != "Inactive").count()
+        if db_count:
+            status["emp_count"] = db_count
+            latest = Employee.query.order_by(Employee.updated_at.desc()).first() if hasattr(Employee, "updated_at") else None
+            status["emp_updated"] = latest.updated_at.strftime("%Y-%m-%d %H:%M") if latest and latest.updated_at else "in database"
+    except Exception:
+        pass
+
     return render_template("capacity/panel.html",
         user=user,
         api_status=api_status,
@@ -169,13 +180,35 @@ def refresh():
         all_days = [(start_dt + timedelta(days=i))
                     for i in range((end_dt - start_dt).days + 1)]
 
-        sheet = _get_sheet()
-        if not sheet:
-            return jsonify({"success": False, "error": "Could not open Google Sheet"})
-
         t0 = time.time()
         rows_written = 0
         skipped = 0
+
+        # Employees: pull from the API straight into Serevo's roster (no sheet needed)
+        if pull_type == "employees":
+            employees = cp.fetch_employees()
+            if not employees:
+                return jsonify({"success": False,
+                                "error": "The connected system returned no employees — check the API connection in Settings → API Connections (Test must pass)."})
+            created, updated = cp.upsert_employees_to_db(employees)
+            sheet = _get_sheet()
+            if sheet:
+                try:
+                    try:
+                        em_ws = sheet.worksheet("EMPLOYEES")
+                    except Exception:
+                        em_ws = sheet.add_worksheet("EMPLOYEES", rows="1000", cols="25")
+                    cp.write_employees_to_sheet(em_ws, employees)
+                except Exception as e:
+                    log.warning(f"Employee sheet write skipped: {e}")
+            return jsonify({"success": True, "rows_written": created + updated,
+                            "created": created, "updated": updated, "skipped": 0,
+                            "duration": f"{int(time.time() - t0)}s",
+                            "message": f"Headcount updated: {created} new, {updated} updated employees"})
+
+        sheet = _get_sheet()
+        if not sheet:
+            return jsonify({"success": False, "error": "Could not open Google Sheet"})
 
         if pull_type in ("forecast", "all"):
             try:

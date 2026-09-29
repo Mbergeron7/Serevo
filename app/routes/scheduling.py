@@ -779,9 +779,9 @@ def import_peopleware():
         shifts = cp.fetch_pw_schedules(start_date, end_date, employee_ext_ids=ids)
         if not shifts:
             return jsonify({"success": False,
-                            "error": "PeopleWare returned no schedules — check the API connection (Settings → API Connections) and that the date range has published schedules."})
+                            "error": "The connected system returned no schedules — check the API connection (Settings → API Connections) and that the date range has published schedules."})
         created, replaced, skipped = cp.upsert_pw_schedules(shifts)
-        msg = f"Imported {created} shift(s) from PeopleWare"
+        msg = f"Imported {created} shift(s) from the connected system"
         if replaced:
             msg += f", replaced {replaced} existing"
         if skipped:
