@@ -353,8 +353,10 @@ async function startRefresh(type) {
       showToast("Pull failed: " + (data.error || "Unknown error"), "error");
     }
   } catch(e) {
-    document.getElementById("progressLabel").textContent = "Network error";
-    showToast("Request failed: " + e.message, "error");
+    document.getElementById("progressLabel").textContent = "Error";
+    document.getElementById("progressDetail").textContent =
+      "The request timed out or the server could not be reached. This can happen if the API pull takes too long. Try pulling employees first, then forecast/requirements separately.";
+    showToast("Request failed — try a smaller pull or check API connection.", "error");
   }
 }
 </script>

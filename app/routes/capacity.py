@@ -8,6 +8,7 @@ import time
 import logging
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
+import requests
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
@@ -186,7 +187,18 @@ def refresh():
 
         # Employees: pull from the API straight into Serevo's roster (no sheet needed)
         if pull_type == "employees":
-            employees = cp.fetch_employees()
+            try:
+                employees = cp.fetch_employees()
+            except requests.exceptions.Timeout:
+                return jsonify({"success": False,
+                                "error": "The connected system took too long to respond. Try again — if this persists, the API may be experiencing high load."})
+            except requests.exceptions.ConnectionError:
+                return jsonify({"success": False,
+                                "error": "Could not reach the connected system — check your internet connection and API settings."})
+            except Exception as e:
+                log.exception("Employee pull error")
+                return jsonify({"success": False,
+                                "error": f"Employee pull failed: {e}"})
             if not employees:
                 return jsonify({"success": False,
                                 "error": "The connected system returned no employees — check the API connection in Settings → API Connections (Test must pass)."})

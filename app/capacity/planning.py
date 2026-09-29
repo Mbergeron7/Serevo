@@ -205,7 +205,7 @@ def test_connection():
     # Test legacy API
     try:
         r = requests.get(f"{API_LEGACY}/employees",
-                         headers=_pw_headers(), timeout=15)
+                         headers=_pw_headers(), timeout=8)
         results["legacy"] = {"status": r.status_code, "ok": r.status_code == 200}
     except Exception as e:
         results["legacy"] = {"status": 0, "ok": False, "error": str(e)}
@@ -218,7 +218,7 @@ def test_connection():
         wid = list(WORKLOADS.values())[0] if WORKLOADS else ""
         url = (f"{API_NEW}/workloads/{wid}/forecasts"
                f"?startTime={_to_utc(open_dt)}&endTime={_to_utc(close_dt)}")
-        r = requests.get(url, headers=_pw_headers(), timeout=15)
+        r = requests.get(url, headers=_pw_headers(), timeout=8)
         results["new_api"] = {"status": r.status_code, "ok": r.status_code == 200}
     except Exception as e:
         results["new_api"] = {"status": 0, "ok": False, "error": str(e)}
@@ -333,14 +333,24 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
 
 def _legacy_get(session, path, **kw):
     try:
-        r = session.get(f"{API_LEGACY}/{path}", headers=_pw_headers(), timeout=20, **kw)
-        return r.json() if r.ok else None
+        r = session.get(f"{API_LEGACY}/{path}", headers=_pw_headers(), timeout=10, **kw)
+        if r.ok:
+            try:
+                return r.json()
+            except ValueError:
+                log.warning(f"legacy GET {path}: non-JSON response (status {r.status_code})")
+                return None
+        log.debug(f"legacy GET {path}: HTTP {r.status_code}")
+        return None
+    except requests.exceptions.Timeout:
+        log.warning(f"legacy GET {path}: timeout")
+        return None
     except Exception as e:
         log.debug(f"legacy GET {path}: {e}")
         return None
 
 
-def fetch_employees(max_workers=8):
+def fetch_employees(max_workers=4):
     """Full PeopleWare roster via the legacy API — the same fields the
     original headcount script produced: planning unit, employment period,
     status (from row colour), latest skill and all active skills.
@@ -349,7 +359,9 @@ def fetch_employees(max_workers=8):
     (write_employees_to_sheet, upsert_employees_to_db) keep working, plus
     the extra keys: latestSkillName, latestSkillStart, latestSkillEnd,
     personnelNumber."""
+    import time as _time
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    _t0 = _time.time()
     session = requests.Session()
 
     base = _legacy_get(session, "employees")
