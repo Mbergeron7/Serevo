@@ -127,7 +127,7 @@ def _get_employees_for_lob(lob, sheet=None):
         from app.people.manager import get_employees
         employees, err = get_employees(sheet)
         if err:
-            return []
+            employees = []
         results = []
         for emp in employees:
             status = str(emp.get("Status", "")).strip().lower()
@@ -144,6 +144,62 @@ def _get_employees_for_lob(lob, sheet=None):
                 "employee_id": emp.get("Employee ID", ""),
                 "lob": skill,
             })
+
+        # Fallback 1: DB join — employees may have planning_unit_id set
+        # but to_legacy_dict() returned empty skill (relationship not loaded)
+        if not results:
+            try:
+                from app.models import db, Employee, PlanningUnit
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lob.strip().lower()
+                ).first()
+                if pu:
+                    db_emps = Employee.query.filter_by(
+                        planning_unit_id=pu.id
+                    ).filter(
+                        db.func.lower(Employee.status).notin_(
+                            ["inactive", "terminated", "deleted"]
+                        )
+                    ).all()
+                    for e in db_emps:
+                        results.append({
+                            "name": e.full_name,
+                            "employee_id": e.employee_id,
+                            "lob": pu.name,
+                        })
+                    if results:
+                        log.info(f"LOB '{lob}': found {len(results)} employees via DB join fallback")
+            except Exception as fb_err:
+                log.warning(f"DB join fallback error: {fb_err}")
+
+        # Fallback 2: read Google Sheet directly if still empty
+        if not results and sheet is None:
+            try:
+                from app.people.manager import _open_sheet
+                sh, sh_err = _open_sheet()
+                if sh and not sh_err:
+                    ws = sh.worksheet("EMPLOYEES")
+                    records = ws.get_all_records()
+                    for rec in records:
+                        status = str(rec.get("Status", "")).strip().lower()
+                        if status in ("inactive", "terminated", "deleted"):
+                            continue
+                        skill = (rec.get("Latest Skill Name") or "").strip()
+                        if skill.lower() != lob.strip().lower():
+                            continue
+                        first = str(rec.get("First Name", "")).strip()
+                        last = str(rec.get("Last Name", "")).strip()
+                        name = f"{first} {last}".strip()
+                        results.append({
+                            "name": name,
+                            "employee_id": rec.get("Employee ID", ""),
+                            "lob": skill,
+                        })
+                    if results:
+                        log.info(f"LOB '{lob}': found {len(results)} employees via sheet fallback")
+            except Exception as sh_err:
+                log.warning(f"Sheet fallback error: {sh_err}")
+
         return results
     except Exception as e:
         log.warning(f"Employee load error: {e}")
