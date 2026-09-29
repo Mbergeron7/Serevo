@@ -122,6 +122,7 @@ def save_employee():
         emp.skill_start = _parse_date(data.get("skill_start"))
         emp.skill_end = _parse_date(data.get("skill_end"))
         emp.end_date = _parse_date(data.get("end_date"))
+        emp.languages = (data.get("languages") or "English").strip()
         emp.manually_edited = True
 
         db.session.commit()

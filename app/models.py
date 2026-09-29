@@ -68,6 +68,7 @@ class Employee(db.Model):
     skill_start      = db.Column(db.Date, nullable=True)
     skill_end        = db.Column(db.Date, nullable=True)
     end_date         = db.Column(db.Date, nullable=True)
+    languages        = db.Column(db.String(100), default="English")
     manually_edited  = db.Column(db.Boolean, default=False, server_default="false")
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -92,6 +93,7 @@ class Employee(db.Model):
             "Latest Skill Start": self.skill_start.isoformat() if self.skill_start else "",
             "Latest Skill End": self.skill_end.isoformat() if self.skill_end else "",
             "All Skills": self.all_skills or "",
+            "Languages": self.languages or "English",
             "End Date": self.end_date.isoformat() if self.end_date else "",
         }
 

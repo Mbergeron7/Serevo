@@ -211,6 +211,7 @@
           <th>Employee ID</th>
           <th>LOB / Skill</th>
           <th>Skill Start</th>
+          <th>Languages</th>
           <th>Flags</th>
           <th></th>
         </tr>
@@ -239,6 +240,7 @@
           <td style="color:var(--text-muted)">{{ emp['Employee ID']|default('—') }}</td>
           <td>{{ emp['Latest Skill Name']|default('—') }}</td>
           <td style="color:var(--text-muted)">{{ emp['Latest Skill Start']|default('—') }}</td>
+          <td>{{ emp['Languages']|default('English') }}</td>
           <td>
             {% if full_name in accom_map %}
               <span class="badge-accom">Accommodation</span>
@@ -311,6 +313,15 @@
         <input type="text" id="emp_skills" placeholder="e.g. Billing, Sales, Tech Support">
       </div>
 
+      <div class="form-group">
+        <label for="emp_languages">Languages</label>
+        <select id="emp_languages">
+          <option value="English">English</option>
+          <option value="English, French">English, French (Bilingual)</option>
+          <option value="French">French</option>
+        </select>
+      </div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
         <div class="form-group">
           <label for="emp_skill_start">Skill Start</label>
@@ -368,6 +379,7 @@ function openEmpModal(data) {
   document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
   document.getElementById('emp_skills').value = data ? (data.all_skills || data['All Skills'] || '') : '';
+  document.getElementById('emp_languages').value = data ? (data.languages || data['Languages'] || 'English') : 'English';
   document.getElementById('emp_skill_start').value = data ? (data.skill_start || data['Latest Skill Start'] || '') : '';
   document.getElementById('emp_skill_end').value = data ? (data.skill_end || data['Latest Skill End'] || '') : '';
   document.getElementById('emp_end_date').value = data ? (data.end_date || data['End Date'] || '') : '';
@@ -415,6 +427,7 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     status: document.getElementById('emp_status').value,
     lob: document.getElementById('emp_lob').value,
     all_skills: document.getElementById('emp_skills').value,
+    languages: document.getElementById('emp_languages').value,
     skill_start: document.getElementById('emp_skill_start').value,
     skill_end: document.getElementById('emp_skill_end').value,
     end_date: document.getElementById('emp_end_date').value,
