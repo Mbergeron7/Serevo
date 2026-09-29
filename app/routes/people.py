@@ -42,10 +42,26 @@ def roster():
 
     # Demo mode: serve fake data, no API/sheet calls
     if user and user.get("is_demo"):
-        from app.demo_data import get_demo_employees, get_demo_accommodations, get_demo_pto
+        from app.demo_data import (get_demo_employees, get_demo_accommodations,
+                                   get_demo_pto, _DEMO_ROTATION, DEMO_EMPLOYEES)
         employees, emp_err = get_demo_employees()
         accoms, _ = get_demo_accommodations()
         pto_list, _ = get_demo_pto()
+
+        # Build demo avail_map — all demo employees have availability set
+        avail_map = {}
+        for e in employees:
+            full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+            if full:
+                avail_map[full] = True
+
+        # Build demo rotation_map — employees in _DEMO_ROTATION
+        _rot_ids = set(_DEMO_ROTATION.keys())
+        rotation_map = {}
+        for e in employees:
+            if e.get("Employee ID") in _rot_ids:
+                full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+                rotation_map[full] = True
     else:
         from app.people.manager import get_employees, get_accommodations, get_pto
         sheet = _get_sheet()
@@ -66,27 +82,27 @@ def roster():
         if name:
             pto_map.setdefault(name, []).append(p)
 
-    # Build availability map — which employees have availability set
-    avail_emp_ids = set(
-        r[0] for r in db.session.query(EmployeeAvailability.employee_id).distinct().all()
-    )
-    avail_map = {}
-    for e in employees:
-        db_id = e.get("_db_id")
-        if db_id and db_id in avail_emp_ids:
-            full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
-            avail_map[full] = True
+    # Build availability & rotation maps from DB (non-demo only)
+    if not (user and user.get("is_demo")):
+        avail_emp_ids = set(
+            r[0] for r in db.session.query(EmployeeAvailability.employee_id).distinct().all()
+        )
+        avail_map = {}
+        for e in employees:
+            db_id = e.get("_db_id")
+            if db_id and db_id in avail_emp_ids:
+                full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+                avail_map[full] = True
 
-    # Build rotation map — which employees are in a rotation
-    rot_emp_ids = set(
-        r[0] for r in db.session.query(RotationAssignment.employee_id).distinct().all()
-    )
-    rotation_map = {}
-    for e in employees:
-        db_id = e.get("_db_id")
-        if db_id and db_id in rot_emp_ids:
-            full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
-            rotation_map[full] = True
+        rot_emp_ids = set(
+            r[0] for r in db.session.query(RotationAssignment.employee_id).distinct().all()
+        )
+        rotation_map = {}
+        for e in employees:
+            db_id = e.get("_db_id")
+            if db_id and db_id in rot_emp_ids:
+                full = f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip()
+                rotation_map[full] = True
 
     # Count stats
     active = [e for e in employees
