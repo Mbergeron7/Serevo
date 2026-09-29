@@ -437,6 +437,9 @@
     <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()" style="display:none">
       Export CSV
     </button>
+    <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="display:none; background:#7c3aed; color:#fff;">
+      Mass Update
+    </button>
     <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">
       Clear
     </button>
@@ -636,6 +639,82 @@
         <button class="btn-modal btn-modal-secondary" onclick="closeModal()">Cancel</button>
         <button class="btn-modal btn-modal-primary" onclick="applyShiftEdit()">Apply</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mass Update modal ─────────────────────────────────── -->
+<div class="modal-overlay" id="massOverlay">
+  <div class="modal" style="max-width:600px">
+    <h2>Mass Segment Update</h2>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:16px">
+      Add a segment to multiple employees at once. The optimizer will suggest
+      staggered placements based on coverage to minimise impact.
+    </p>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Segment Type</label>
+        <select id="massSegType">
+          <option value="break">Break</option>
+          <option value="lunch">Lunch</option>
+          <option value="meeting">Meeting</option>
+          <option value="training">Training</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Duration (min)</label>
+        <input type="number" id="massSegDuration" value="15" min="5" max="480" step="5">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Window Start</label>
+        <input type="time" id="massWinStart" value="10:00">
+      </div>
+      <div class="form-group">
+        <label>Window End</label>
+        <input type="time" id="massWinEnd" value="14:00">
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:4px">
+      <label>Notes</label>
+      <input type="text" id="massSegNotes" placeholder="Optional — applies to all segments">
+    </div>
+
+    <div style="margin:16px 0 6px; font-weight:700; font-size:.85rem; display:flex; justify-content:space-between; align-items:center">
+      <span>Employees</span>
+      <label style="font-weight:400; font-size:.8rem; cursor:pointer">
+        <input type="checkbox" id="massSelectAll" onchange="massToggleAll()" checked> Select All
+      </label>
+    </div>
+    <div id="massEmpList" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:6px 10px; margin-bottom:16px; font-size:.82rem"></div>
+
+    <!-- Suggestions area -->
+    <div id="massSuggestions" style="display:none; margin-bottom:16px">
+      <div style="font-weight:700; font-size:.85rem; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center">
+        <span>Suggested Placements</span>
+        <span id="massSugImpact" style="font-size:.75rem; font-weight:400; color:var(--text-muted)"></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="summary-table" id="massSugTable" style="font-size:.82rem">
+          <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Surplus</th><th>Include</th></tr></thead>
+          <tbody id="massSugBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">
+      <button class="btn-modal btn-modal-secondary" onclick="closeMassModal()">Cancel</button>
+      <button class="btn-modal btn-modal-primary" id="massSuggestBtn" onclick="massSuggest()" style="background:#7c3aed">
+        Generate Suggestions
+      </button>
+      <button class="btn-modal btn-modal-primary" id="massApplyBtn" onclick="massApply()" style="display:none">
+        Apply Selected
+      </button>
     </div>
   </div>
 </div>
@@ -976,6 +1055,7 @@ function clearSchedule() {
     document.getElementById('btnSave').style.display = 'none';
     document.getElementById('btnExport').style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
+    document.getElementById('btnMassUpdate').style.display = 'none';
     document.getElementById('resultsContainer').innerHTML = '';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
   }).catch(e => { hideLoading(); showToast('Clear failed: ' + e, 'error'); });
@@ -1054,6 +1134,7 @@ function showResults() {
   document.getElementById('btnSave').style.display = '';
   document.getElementById('btnExport').style.display = '';
   document.getElementById('btnClear').style.display = '';
+  document.getElementById('btnMassUpdate').style.display = '';
   // Show global warnings if any
   const gw = document.getElementById('globalWarnings');
   const warnings = (scheduleData && scheduleData.warnings) || [];
@@ -1778,5 +1859,210 @@ function avgCoverage(days) {
   const sum = withCov.reduce((s, d) => s + d.summary.avg_coverage_pct, 0);
   return Math.round(sum / withCov.length * 10) / 10;
 }
+
+// ═══════════════════════════════════════════════════════════
+// MASS SEGMENT UPDATE
+// ═══════════════════════════════════════════════════════════
+let _massSuggestions = [];
+
+function openMassModal() {
+  if (!scheduleData || !scheduleData.days.length) {
+    showToast('Load or generate a schedule first.', true);
+    return;
+  }
+  // Reset
+  document.getElementById('massSuggestions').style.display = 'none';
+  document.getElementById('massApplyBtn').style.display = 'none';
+  document.getElementById('massSuggestBtn').style.display = '';
+  document.getElementById('massSegDuration').value = 15;
+  document.getElementById('massWinStart').value = '10:00';
+  document.getElementById('massWinEnd').value = '14:00';
+  document.getElementById('massSegNotes').value = '';
+  document.getElementById('massSelectAll').checked = true;
+  _massSuggestions = [];
+
+  // Populate employee list from the currently visible day (first day with shifts, or active timeline day)
+  const dayIdx = _massGetActiveDayIdx();
+  const day = scheduleData.days[dayIdx];
+  const list = document.getElementById('massEmpList');
+  if (!day || !day.shifts.length) {
+    list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts for this day.</div>';
+  } else {
+    let html = '';
+    day.shifts.forEach((s, i) => {
+      if (s.status !== 'scheduled') return;
+      html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+        <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" data-idx="${i}" checked>
+        <span style="font-weight:600">${s.employee}</span>
+        <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
+      </label>`;
+    });
+    list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
+  }
+
+  document.getElementById('massOverlay').classList.add('open');
+}
+
+function closeMassModal() {
+  document.getElementById('massOverlay').classList.remove('open');
+}
+
+function _massGetActiveDayIdx() {
+  // Use the first day with scheduled shifts
+  if (!scheduleData) return 0;
+  for (let i = 0; i < scheduleData.days.length; i++) {
+    if (scheduleData.days[i].shifts.some(s => s.status === 'scheduled')) return i;
+  }
+  return 0;
+}
+
+function massToggleAll() {
+  const checked = document.getElementById('massSelectAll').checked;
+  document.querySelectorAll('.mass-emp-chk').forEach(c => c.checked = checked);
+}
+
+async function massSuggest() {
+  const dayIdx = _massGetActiveDayIdx();
+  const day = scheduleData.days[dayIdx];
+  if (!day) return;
+
+  // Gather selected shift IDs
+  const chks = document.querySelectorAll('.mass-emp-chk:checked');
+  const shiftIds = [...chks].map(c => parseInt(c.dataset.shiftId)).filter(id => id);
+
+  if (!shiftIds.length) {
+    showToast('Select at least one employee.', true);
+    return;
+  }
+
+  const btn = document.getElementById('massSuggestBtn');
+  btn.textContent = 'Analyzing coverage…';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('/scheduling/mass-segment/suggest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        shift_ids: shiftIds,
+        activity_type: document.getElementById('massSegType').value,
+        duration_mins: parseInt(document.getElementById('massSegDuration').value) || 15,
+        window_start: document.getElementById('massWinStart').value,
+        window_end: document.getElementById('massWinEnd').value,
+        coverage: day.coverage || [],
+      }),
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+      showToast('Error: ' + (data.error || 'Unknown'), true);
+      return;
+    }
+
+    _massSuggestions = data.suggestions || [];
+    if (!_massSuggestions.length) {
+      showToast('No valid placements found in the given window.', true);
+      return;
+    }
+
+    // Render suggestions table
+    const tbody = document.getElementById('massSugBody');
+    tbody.innerHTML = '';
+    _massSuggestions.forEach((s, i) => {
+      const surplusColor = s.coverage_impact >= 1 ? '#059669' : s.coverage_impact >= 0 ? '#d97706' : '#dc2626';
+      const surplusLabel = s.coverage_impact >= 0 ? `+${s.coverage_impact}` : `${s.coverage_impact}`;
+      tbody.innerHTML += `<tr>
+        <td style="font-weight:600">${s.employee}</td>
+        <td>${s.start}</td>
+        <td>${s.end}</td>
+        <td style="color:${surplusColor};font-weight:600">${surplusLabel}</td>
+        <td><input type="checkbox" class="mass-sug-chk" data-idx="${i}" checked></td>
+      </tr>`;
+    });
+
+    const avgImpact = _massSuggestions.reduce((s, x) => s + x.coverage_impact, 0) / _massSuggestions.length;
+    document.getElementById('massSugImpact').textContent =
+      `Avg surplus during segments: ${avgImpact >= 0 ? '+' : ''}${avgImpact.toFixed(1)}`;
+
+    document.getElementById('massSuggestions').style.display = '';
+    document.getElementById('massApplyBtn').style.display = '';
+
+  } catch (e) {
+    showToast('Suggestion failed: ' + e, true);
+  } finally {
+    btn.textContent = 'Generate Suggestions';
+    btn.disabled = false;
+  }
+}
+
+async function massApply() {
+  const selected = [...document.querySelectorAll('.mass-sug-chk:checked')].map(c => parseInt(c.dataset.idx));
+  if (!selected.length) {
+    showToast('No suggestions selected.', true);
+    return;
+  }
+
+  const actType = document.getElementById('massSegType').value;
+  const notes = document.getElementById('massSegNotes').value;
+  const segments = selected.map(i => ({
+    shift_id: _massSuggestions[i].shift_id,
+    activity_type: actType,
+    start: _massSuggestions[i].start,
+    end: _massSuggestions[i].end,
+    notes: notes,
+  }));
+
+  const btn = document.getElementById('massApplyBtn');
+  btn.textContent = 'Applying…';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('/scheduling/mass-segment/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ segments }),
+    });
+    const data = await resp.json();
+
+    if (data.success) {
+      // Also update in-memory schedule data so the timeline refreshes
+      const dayIdx = _massGetActiveDayIdx();
+      segments.forEach(seg => {
+        const day = scheduleData.days[dayIdx];
+        if (!day) return;
+        const shift = day.shifts.find(s => s.id === seg.shift_id);
+        if (!shift) return;
+        if (!shift.segments) shift.segments = [];
+        const dur = timeToMins(seg.end) - timeToMins(seg.start);
+        shift.segments.push({
+          type: seg.activity_type,
+          start: seg.start,
+          end: seg.end,
+          duration_mins: dur,
+          notes: seg.notes || '',
+          sort_order: shift.segments.length,
+        });
+        // Re-sort segments
+        shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+      });
+
+      closeMassModal();
+      renderSchedule();
+      showToast(`Applied ${data.applied || segments.length} segment(s) successfully.`);
+    } else {
+      showToast('Error: ' + (data.error || 'Unknown'), true);
+    }
+  } catch (e) {
+    showToast('Apply failed: ' + e, true);
+  } finally {
+    btn.textContent = 'Apply Selected';
+    btn.disabled = false;
+  }
+}
+
+// Close mass modal on overlay click
+document.getElementById('massOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeMassModal();
+});
 </script>
 {% endblock %}
