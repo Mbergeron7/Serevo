@@ -437,7 +437,7 @@
     <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()" style="display:none">
       Export CSV
     </button>
-    <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="display:none; background:#7c3aed; color:#fff;">
+    <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">
       Mass Update
     </button>
     <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">
@@ -645,12 +645,51 @@
 
 <!-- ── Mass Update modal ─────────────────────────────────── -->
 <div class="modal-overlay" id="massOverlay">
-  <div class="modal" style="max-width:600px">
+  <div class="modal" style="max-width:640px">
     <h2>Mass Segment Update</h2>
     <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:16px">
-      Add a segment to multiple employees at once. The optimizer will suggest
-      staggered placements based on coverage to minimise impact.
+      Add a segment to multiple employees at once — within the current LOB or across multiple LOBs.
+      The optimizer will suggest staggered placements based on coverage to minimise impact.
     </p>
+
+    <!-- Scope: current LOB or cross-LOB -->
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group" style="flex:1">
+        <label>Scope</label>
+        <select id="massScope" onchange="massToggleScope()">
+          <option value="current">Current LOB only</option>
+          <option value="cross">Across multiple LOBs</option>
+        </select>
+      </div>
+      <div class="form-group" id="massDateGroup" style="flex:1;display:none">
+        <label>Date</label>
+        <input type="date" id="massDate">
+      </div>
+    </div>
+
+    <!-- Cross-LOB selector -->
+    <div id="massLobSection" style="display:none; margin-bottom:12px">
+      <div style="font-weight:700; font-size:.85rem; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center">
+        <span>LOBs</span>
+        <label style="font-weight:400; font-size:.8rem; cursor:pointer">
+          <input type="checkbox" id="massLobSelectAll" onchange="massToggleAllLobs()" checked> All LOBs
+        </label>
+      </div>
+      <div id="massLobList" style="display:flex; flex-wrap:wrap; gap:6px 14px; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:.82rem">
+        {% for lob in lobs %}
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" class="mass-lob-chk" value="{{ lob }}" checked>
+          <span>{{ lob }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn-action" onclick="massLoadCrossLob()" style="font-size:.78rem;padding:4px 12px;background:#7c3aed;color:#fff">
+          Load Employees
+        </button>
+        <span id="massLobStatus" style="font-size:.78rem;color:var(--text-muted);margin-left:8px"></span>
+      </div>
+    </div>
 
     <div class="form-row">
       <div class="form-group">
@@ -1055,7 +1094,6 @@ function clearSchedule() {
     document.getElementById('btnSave').style.display = 'none';
     document.getElementById('btnExport').style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
-    document.getElementById('btnMassUpdate').style.display = 'none';
     document.getElementById('resultsContainer').innerHTML = '';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
   }).catch(e => { hideLoading(); showToast('Clear failed: ' + e, 'error'); });
@@ -1134,7 +1172,6 @@ function showResults() {
   document.getElementById('btnSave').style.display = '';
   document.getElementById('btnExport').style.display = '';
   document.getElementById('btnClear').style.display = '';
-  document.getElementById('btnMassUpdate').style.display = '';
   // Show global warnings if any
   const gw = document.getElementById('globalWarnings');
   const warnings = (scheduleData && scheduleData.warnings) || [];
@@ -1864,12 +1901,9 @@ function avgCoverage(days) {
 // MASS SEGMENT UPDATE
 // ═══════════════════════════════════════════════════════════
 let _massSuggestions = [];
+let _massCrossLobCoverage = [];  // coverage data when in cross-LOB mode
 
 function openMassModal() {
-  if (!scheduleData || !scheduleData.days.length) {
-    showToast('Load or generate a schedule first.', true);
-    return;
-  }
   // Reset
   document.getElementById('massSuggestions').style.display = 'none';
   document.getElementById('massApplyBtn').style.display = 'none';
@@ -1879,28 +1913,108 @@ function openMassModal() {
   document.getElementById('massWinEnd').value = '14:00';
   document.getElementById('massSegNotes').value = '';
   document.getElementById('massSelectAll').checked = true;
+  document.getElementById('massScope').value = 'current';
+  document.getElementById('massLobStatus').textContent = '';
   _massSuggestions = [];
+  _massCrossLobCoverage = [];
+  massToggleScope();
 
-  // Populate employee list from the currently visible day (first day with shifts, or active timeline day)
-  const dayIdx = _massGetActiveDayIdx();
-  const day = scheduleData.days[dayIdx];
+  // Set date to current config date
+  const cfgStart = document.getElementById('cfgStart').value;
+  if (cfgStart) document.getElementById('massDate').value = cfgStart;
+
+  // Populate employee list from the currently loaded schedule (if any)
   const list = document.getElementById('massEmpList');
-  if (!day || !day.shifts.length) {
-    list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts for this day.</div>';
+  if (scheduleData && scheduleData.days.length) {
+    const dayIdx = _massGetActiveDayIdx();
+    const day = scheduleData.days[dayIdx];
+    if (day && day.shifts.length) {
+      let html = '';
+      day.shifts.forEach((s, i) => {
+        if (s.status !== 'scheduled') return;
+        html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" data-idx="${i}" checked>
+          <span style="font-weight:600">${s.employee}</span>
+          <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
+        </label>`;
+      });
+      list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
+    } else {
+      list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts for this day.</div>';
+    }
   } else {
-    let html = '';
-    day.shifts.forEach((s, i) => {
-      if (s.status !== 'scheduled') return;
-      html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-        <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" data-idx="${i}" checked>
-        <span style="font-weight:600">${s.employee}</span>
-        <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
-      </label>`;
-    });
-    list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
+    list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">Load a schedule or switch to "Across multiple LOBs" to fetch shifts.</div>';
   }
 
   document.getElementById('massOverlay').classList.add('open');
+}
+
+function massToggleScope() {
+  const isCross = document.getElementById('massScope').value === 'cross';
+  document.getElementById('massLobSection').style.display = isCross ? '' : 'none';
+  document.getElementById('massDateGroup').style.display = isCross ? '' : 'none';
+}
+
+function massToggleAllLobs() {
+  const checked = document.getElementById('massLobSelectAll').checked;
+  document.querySelectorAll('.mass-lob-chk').forEach(c => c.checked = checked);
+}
+
+async function massLoadCrossLob() {
+  const lobs = [...document.querySelectorAll('.mass-lob-chk:checked')].map(c => c.value);
+  const date = document.getElementById('massDate').value;
+  if (!lobs.length) { showToast('Select at least one LOB.', true); return; }
+  if (!date) { showToast('Select a date.', true); return; }
+
+  document.getElementById('massLobStatus').textContent = 'Loading…';
+
+  try {
+    const resp = await fetch('/scheduling/mass-segment/cross-lob-shifts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ lobs, date }),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast('Error: ' + (data.error || 'Unknown'), true);
+      document.getElementById('massLobStatus').textContent = '';
+      return;
+    }
+
+    _massCrossLobCoverage = data.coverage || [];
+    const shifts = data.shifts || [];
+    document.getElementById('massLobStatus').textContent = `${shifts.length} shift(s) found`;
+
+    const list = document.getElementById('massEmpList');
+    if (!shifts.length) {
+      list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts found for the selected LOBs and date.</div>';
+      return;
+    }
+
+    // Group by LOB for nicer display
+    const byLob = {};
+    shifts.forEach(s => {
+      if (!byLob[s.lob]) byLob[s.lob] = [];
+      byLob[s.lob].push(s);
+    });
+
+    let html = '';
+    Object.keys(byLob).sort().forEach(lob => {
+      html += `<div style="font-weight:700;font-size:.78rem;color:var(--brand-accent);padding:6px 0 2px;border-bottom:1px solid var(--border);margin-top:4px">${lob}</div>`;
+      byLob[lob].forEach(s => {
+        html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" checked>
+          <span style="font-weight:600">${s.employee}</span>
+          <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
+        </label>`;
+      });
+    });
+    list.innerHTML = html;
+    document.getElementById('massSelectAll').checked = true;
+  } catch (e) {
+    showToast('Failed to load shifts: ' + e, true);
+    document.getElementById('massLobStatus').textContent = '';
+  }
 }
 
 function closeMassModal() {
@@ -1922,9 +2036,17 @@ function massToggleAll() {
 }
 
 async function massSuggest() {
-  const dayIdx = _massGetActiveDayIdx();
-  const day = scheduleData.days[dayIdx];
-  if (!day) return;
+  const isCrossMode = document.getElementById('massScope').value === 'cross';
+  let day = null;
+  if (!isCrossMode) {
+    if (!scheduleData || !scheduleData.days.length) {
+      showToast('Load or generate a schedule first.', true);
+      return;
+    }
+    const dayIdx = _massGetActiveDayIdx();
+    day = scheduleData.days[dayIdx];
+    if (!day) return;
+  }
 
   // Gather selected shift IDs
   const chks = document.querySelectorAll('.mass-emp-chk:checked');
@@ -1940,6 +2062,15 @@ async function massSuggest() {
   btn.disabled = true;
 
   try {
+    // Use cross-LOB coverage if in cross-LOB mode, otherwise use current day's coverage
+    const isCross = document.getElementById('massScope').value === 'cross';
+    let covData;
+    if (isCross) {
+      covData = _massCrossLobCoverage || [];
+    } else {
+      covData = day ? (day.coverage || []) : [];
+    }
+
     const resp = await fetch('/scheduling/mass-segment/suggest', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1949,7 +2080,7 @@ async function massSuggest() {
         duration_mins: parseInt(document.getElementById('massSegDuration').value) || 15,
         window_start: document.getElementById('massWinStart').value,
         window_end: document.getElementById('massWinEnd').value,
-        coverage: day.coverage || [],
+        coverage: covData,
       }),
     });
     const data = await resp.json();
@@ -2025,30 +2156,32 @@ async function massApply() {
     const data = await resp.json();
 
     if (data.success) {
-      // Also update in-memory schedule data so the timeline refreshes
-      const dayIdx = _massGetActiveDayIdx();
-      segments.forEach(seg => {
-        const day = scheduleData.days[dayIdx];
-        if (!day) return;
-        const shift = day.shifts.find(s => s.id === seg.shift_id);
-        if (!shift) return;
-        if (!shift.segments) shift.segments = [];
-        const dur = timeToMins(seg.end) - timeToMins(seg.start);
-        shift.segments.push({
-          type: seg.activity_type,
-          start: seg.start,
-          end: seg.end,
-          duration_mins: dur,
-          notes: seg.notes || '',
-          sort_order: shift.segments.length,
+      // Update in-memory schedule data if we're in current-LOB mode
+      const isCrossMode = document.getElementById('massScope').value === 'cross';
+      if (!isCrossMode && scheduleData && scheduleData.days.length) {
+        const dayIdx = _massGetActiveDayIdx();
+        segments.forEach(seg => {
+          const day = scheduleData.days[dayIdx];
+          if (!day) return;
+          const shift = day.shifts.find(s => s.id === seg.shift_id);
+          if (!shift) return;
+          if (!shift.segments) shift.segments = [];
+          const dur = timeToMins(seg.end) - timeToMins(seg.start);
+          shift.segments.push({
+            type: seg.activity_type,
+            start: seg.start,
+            end: seg.end,
+            duration_mins: dur,
+            notes: seg.notes || '',
+            sort_order: shift.segments.length,
+          });
+          shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
         });
-        // Re-sort segments
-        shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
-      });
+        renderSchedule();
+      }
 
       closeMassModal();
-      renderSchedule();
-      showToast(`Applied ${data.applied || segments.length} segment(s) successfully.`);
+      showToast(`Applied ${data.applied || segments.length} segment(s) successfully.${isCrossMode ? ' Reload schedule to see changes.' : ''}`);
     } else {
       showToast('Error: ' + (data.error || 'Unknown'), true);
     }

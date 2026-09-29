@@ -1066,3 +1066,79 @@ def mass_segment_apply():
         db.session.rollback()
         log.exception("Mass segment apply error")
         return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/mass-segment/cross-lob-shifts", methods=["POST"])
+@login_required
+def mass_segment_cross_lob_shifts():
+    """
+    Fetch shifts across multiple LOBs for a given date, for the cross-LOB mass update.
+
+    POST JSON: { lobs: [str], date: 'YYYY-MM-DD' }
+    Returns { shifts: [{id, employee, start, end, lob}], coverage: {...} }
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lobs = payload.get("lobs", [])
+        date_str = payload.get("date", "")
+        if not lobs or not date_str:
+            return jsonify({"success": False, "error": "LOBs and date are required"})
+
+        import datetime as _dt
+        target_date = _dt.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+        from app.models import PlanningUnit
+        # Get planning unit IDs for the requested LOBs
+        pu_ids = []
+        for lob_name in lobs:
+            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob_name.lower()).first()
+            if pu:
+                pu_ids.append(pu.id)
+
+        if not pu_ids:
+            return jsonify({"success": True, "shifts": []})
+
+        # Find all scheduled shifts on the target date for those planning units
+        shifts = Schedule.query.filter(
+            Schedule.schedule_date == target_date,
+            Schedule.planning_unit_id.in_(pu_ids),
+            Schedule.shift_type.in_(["scheduled", "regular"]),
+        ).all()
+
+        results = []
+        for s in shifts:
+            emp = s.employee
+            pu = PlanningUnit.query.get(s.planning_unit_id) if s.planning_unit_id else None
+            results.append({
+                "id": s.id,
+                "employee": emp.full_name if emp else f"ID {s.employee_id}",
+                "start": s.shift_start.strftime("%H:%M") if s.shift_start else "",
+                "end": s.shift_end.strftime("%H:%M") if s.shift_end else "",
+                "lob": pu.name if pu else "Unknown",
+            })
+
+        # Also build aggregated coverage data for the day across all requested LOBs
+        coverage = []
+        try:
+            from app.models import RequirementInterval
+            reqs = RequirementInterval.query.filter(
+                RequirementInterval.interval_date == target_date,
+                RequirementInterval.planning_unit_id.in_(pu_ids),
+            ).all()
+            # Aggregate by time
+            cov_map = {}
+            for r in reqs:
+                t_str = r.interval_time.strftime("%H:%M") if r.interval_time else ""
+                if t_str not in cov_map:
+                    cov_map[t_str] = {"time": t_str, "required": 0, "scheduled": 0}
+                cov_map[t_str]["required"] += r.required or 0
+                cov_map[t_str]["scheduled"] += r.scheduled or 0
+            coverage = sorted(cov_map.values(), key=lambda x: x["time"])
+        except Exception:
+            pass  # coverage data is optional
+
+        return jsonify({"success": True, "shifts": results, "coverage": coverage})
+
+    except Exception as e:
+        log.exception("Cross-LOB shifts error")
+        return jsonify({"success": False, "error": str(e)})
