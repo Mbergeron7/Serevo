@@ -351,25 +351,26 @@ def _legacy_get(session, path, **kw):
 
 
 def fetch_employees(max_workers=4):
-    """Full PeopleWare roster via the legacy API — the same fields the
-    original headcount script produced: planning unit, employment period,
-    status (from row colour), latest skill and all active skills.
+    """PeopleWare roster via the legacy API.
+
+    Uses only bulk endpoints (employees, planning_units, employment_periods,
+    skills) — NO per-employee API calls — so it finishes well within
+    Render's 30-second request timeout.
 
     Returns a list of dicts shaped like the /people output so callers
-    (write_employees_to_sheet, upsert_employees_to_db) keep working, plus
-    the extra keys: latestSkillName, latestSkillStart, latestSkillEnd,
-    personnelNumber."""
-    import time as _time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    _t0 = _time.time()
+    (write_employees_to_sheet, upsert_employees_to_db) keep working."""
     session = requests.Session()
 
+    # ── 1. Bulk fetch employees list ────────────────────────────
     base = _legacy_get(session, "employees")
     if not base:
+        log.warning("fetch_employees: /employees returned nothing")
         return []
     employees = base.get("employees", base) if isinstance(base, dict) else base
     employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+    log.info(f"fetch_employees: {len(employees)} raw employees from API")
 
+    # ── 2. Bulk fetch planning unit names ───────────────────────
     pu_names = {}
     pus = _legacy_get(session, "planning_units") or {}
     for u in pus.get("planning_units", []):
@@ -378,6 +379,7 @@ def fetch_employees(max_workers=4):
         except Exception:
             pass
 
+    # ── 3. Bulk fetch employment periods ────────────────────────
     periods = {}
     per = _legacy_get(session, "employee_employment_periods") or {}
     for p in per.get("employee_employment_periods", []):
@@ -386,6 +388,7 @@ def fetch_employees(max_workers=4):
             "end": "" if p.get("end_date") in (None, "", "4000-01-01") else p.get("end_date", ""),
         }
 
+    # ── 4. Bulk fetch skill names ───────────────────────────────
     skills = {}
     sk = _legacy_get(session, "skills") or {}
     for item in sk.get("skills", []):
@@ -394,6 +397,7 @@ def fetch_employees(max_workers=4):
         except Exception:
             pass
 
+    # ── 5. Status from row colour ───────────────────────────────
     INACTIVE_COLORS = {"3739363", "255"}
     LOA_COLOR = "16711680"
 
@@ -405,69 +409,34 @@ def fetch_employees(max_workers=4):
             return "Inactive"
         return "Active"
 
-    def _detail(emp):
-        sess = requests.Session()
-        eid = str(emp.get("employee_id"))
-        out = {"pu": "", "latest_skill": "", "latest_start": "", "latest_end": "", "all_skills": []}
-        pu = _legacy_get(sess, f"employees/{eid}/planning_units") or {}
-        rows = pu.get("data", [])
-        if rows:
-            if "assignment_date" in rows[0]:
-                rows.sort(key=lambda x: x.get("assignment_date", ""), reverse=True)
-            try:
-                out["pu"] = pu_names.get(int(rows[0].get("planning_unit_id")), "")
-            except Exception:
-                pass
-        sl = _legacy_get(sess, f"employees/{eid}/skill_levels") or {}
-        today = datetime.date.today()
-        active = []
-        for srow in sl.get("data", []):
-            end = srow.get("end_date")
-            if not end:
-                active.append(srow)
-            else:
-                try:
-                    if datetime.datetime.strptime(end, "%Y-%m-%d").date() >= today:
-                        active.append(srow)
-                except Exception:
-                    pass
-        if active:
-            active.sort(key=lambda x: x.get("start_date", ""), reverse=True)
-            top = active[0]
-            out["latest_skill"] = skills.get(top.get("skill_id"), f"Skill {top.get('skill_id')}")
-            out["latest_start"] = top.get("start_date", "") or ""
-            out["latest_end"] = top.get("end_date", "") or ""
-            out["all_skills"] = sorted({skills.get(x.get("skill_id"), f"Skill {x.get('skill_id')}") for x in active})
-        return eid, out
-
-    details = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = [ex.submit(_detail, e) for e in employees]
-        for f in as_completed(futs):
-            try:
-                eid, d = f.result()
-                details[eid] = d
-            except Exception as e:
-                log.warning(f"employee detail error: {e}")
-
+    # ── 6. Build result from bulk data only (no per-employee calls) ──
     result = []
     for e in employees:
         eid = str(e.get("employee_id"))
-        d = details.get(eid, {})
         per_ = periods.get(eid, {})
+
+        # Try to get planning unit from the employee record itself
+        pu_name = ""
+        pu_id = e.get("planning_unit_id")
+        if pu_id:
+            try:
+                pu_name = pu_names.get(int(pu_id), "")
+            except Exception:
+                pass
+
         result.append({
             "employeeId": eid,
             "firstName": e.get("first_name", ""),
             "lastName": e.get("last_name", ""),
             "email": "",
-            "planningUnit": d.get("pu", ""),
+            "planningUnit": pu_name,
             "status": _status(e.get("color")),
-            "skills": [{"name": n} for n in d.get("all_skills", [])],
+            "skills": [],
             "startDate": per_.get("start", ""),
             "endDate": per_.get("end", ""),
-            "latestSkillName": d.get("latest_skill", ""),
-            "latestSkillStart": d.get("latest_start", ""),
-            "latestSkillEnd": d.get("latest_end", ""),
+            "latestSkillName": "",
+            "latestSkillStart": "",
+            "latestSkillEnd": "",
             "personnelNumber": e.get("personnel_number", ""),
         })
     log.info(f"PeopleWare roster: {len(result)} employees")
