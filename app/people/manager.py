@@ -101,9 +101,70 @@ def _get_employees_from_db():
     try:
         from app.models import Employee
         emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        if emps:
+            # One-time back-fill: if some employees lack a planning_unit_id,
+            # try to repair from the Google Sheet's "Latest Skill Name" column.
+            missing = [e for e in emps if e.planning_unit_id is None]
+            if missing:
+                _backfill_planning_units(missing)
+                # Re-query after possible updates
+                emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
         return [e.to_legacy_dict() for e in emps], None
     except Exception as e:
         return [], str(e)
+
+
+_backfill_ran = False          # run at most once per process
+
+def _backfill_planning_units(employees_missing_pu):
+    """Try to set planning_unit_id from Google Sheet data (runs once)."""
+    global _backfill_ran
+    if _backfill_ran:
+        return
+    _backfill_ran = True
+    try:
+        sheet, err = _open_sheet()
+        if err or not sheet:
+            return
+        ws = sheet.worksheet(TAB_EMPLOYEES)
+        records = ws.get_all_records()
+        # Build lookup: employee_id → Latest Skill Name
+        sheet_lobs = {}
+        for rec in records:
+            eid = str(rec.get("Employee ID", "")).strip()
+            lob = (rec.get("Latest Skill Name") or "").strip()
+            if eid and lob:
+                sheet_lobs[eid] = lob
+        if not sheet_lobs:
+            return
+        from app.models import db, PlanningUnit
+        pu_cache = {}
+        updated = 0
+        for emp in employees_missing_pu:
+            lob_name = sheet_lobs.get(emp.employee_id)
+            if not lob_name:
+                continue
+            if lob_name not in pu_cache:
+                pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob_name.lower()).first()
+                if not pu:
+                    pu = PlanningUnit(name=lob_name)
+                    db.session.add(pu)
+                    db.session.flush()
+                pu_cache[lob_name] = pu
+            emp.planning_unit_id = pu_cache[lob_name].id
+            updated += 1
+        if updated:
+            db.session.commit()
+            import logging
+            logging.getLogger(__name__).info(f"Back-filled planning_unit_id for {updated} employees from sheet")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Planning unit back-fill skipped: {e}")
+        try:
+            from app.models import db
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def get_employees_by_lob(sheet=None):

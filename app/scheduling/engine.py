@@ -1004,7 +1004,7 @@ def get_available_lobs(sheet=None):
         from app.people.manager import get_employees
         employees, err = get_employees(sheet)
         if err:
-            return []
+            employees = []
         lobs = set()
         for emp in employees:
             status = str(emp.get("Status", "")).strip().lower()
@@ -1013,6 +1013,34 @@ def get_available_lobs(sheet=None):
             lob = (emp.get("Latest Skill Name") or "").strip()
             if lob:
                 lobs.add(lob)
+        # Fallback 1: pull directly from PlanningUnit table
+        if not lobs:
+            try:
+                from app.models import PlanningUnit
+                units = PlanningUnit.query.all()
+                for u in units:
+                    name = (u.name or "").strip()
+                    if name:
+                        lobs.add(name)
+            except Exception:
+                pass
+        # Fallback 2: try the Google Sheet directly if still no LOBs
+        if not lobs and sheet is None:
+            try:
+                from app.people.manager import _open_sheet
+                sh, sh_err = _open_sheet()
+                if sh and not sh_err:
+                    ws = sh.worksheet("EMPLOYEES")
+                    records = ws.get_all_records()
+                    for emp in records:
+                        status = str(emp.get("Status", "")).strip().lower()
+                        if status in ("inactive", "terminated", "deleted"):
+                            continue
+                        lob = (emp.get("Latest Skill Name") or "").strip()
+                        if lob:
+                            lobs.add(lob)
+            except Exception:
+                pass
         return sorted(lobs)
     except Exception:
         return []
