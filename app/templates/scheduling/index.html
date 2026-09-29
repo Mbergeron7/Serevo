@@ -339,6 +339,30 @@
   .toast-success { background: #059669; }
   .toast-error { background: #dc2626; }
 
+  /* ── Absence quick-action popup ───────────────── */
+  .absence-popup {
+    position: absolute; top: 100%; left: 0; z-index: 500;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    padding: 8px 0; min-width: 180px; white-space: nowrap;
+  }
+  .absence-popup-title {
+    padding: 4px 14px 6px; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .absence-popup button {
+    display: block; width: 100%; text-align: left;
+    padding: 7px 14px; font-size: .82rem; font-weight: 500;
+    background: none; border: none; cursor: pointer; color: var(--text);
+  }
+  .absence-popup button:hover { background: var(--brand-accent-light); color: var(--brand-accent); }
+  .absence-popup .absence-cancel {
+    border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;
+    color: var(--text-muted); font-size: .78rem;
+  }
+
   @media (max-width: 600px) {
     .config-row { flex-direction: column; }
     .stat-row { flex-direction: column; }
@@ -558,6 +582,8 @@
           <option value="scheduled">Scheduled</option>
           <option value="off">Off</option>
           <option value="pto">PTO</option>
+          <option value="sick">Sick</option>
+          <option value="personal">Personal</option>
         </select>
       </div>
     </div>
@@ -1131,6 +1157,7 @@ function renderTimelineView(container) {
           <span>${shift.employee}</span>
           <span class="emp-actions">
             <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${shiftIdx})">&#9998;</button>
+            <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${shiftIdx})" style="color:#dc2626">✕</button>
           </span>
         </div>
         <div class="tl-bar-area" style="width:${numHours * TL_PX_PER_HOUR}px">`;
@@ -1502,6 +1529,70 @@ function deleteShift() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ABSENCE QUICK-ACTION
+// ═══════════════════════════════════════════════════════════
+let _absencePopup = null;
+
+function showAbsencePopup(evt, dayIdx, shiftIdx) {
+  evt.stopPropagation();
+  closeAbsencePopup();
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const popup = document.createElement('div');
+  popup.className = 'absence-popup';
+  popup.innerHTML = `
+    <div class="absence-popup-title">Mark ${shift.employee} absent</div>
+    <button onclick="applyAbsence(${dayIdx},${shiftIdx},'off')">🚫 Day Off</button>
+    <button onclick="applyAbsence(${dayIdx},${shiftIdx},'pto')">🏖️ PTO / Vacation</button>
+    <button onclick="applyAbsence(${dayIdx},${shiftIdx},'sick')">🤒 Sick</button>
+    <button onclick="applyAbsence(${dayIdx},${shiftIdx},'personal')">👤 Personal</button>
+    <button class="absence-cancel" onclick="closeAbsencePopup()">Cancel</button>
+  `;
+  const btn = evt.currentTarget;
+  const parent = btn.closest('.tl-emp-name') || btn.closest('td');
+  parent.style.position = 'relative';
+  parent.appendChild(popup);
+  _absencePopup = popup;
+  // close on outside click
+  setTimeout(() => document.addEventListener('click', _absenceOutsideClick, {once: true}), 0);
+}
+
+function _absenceOutsideClick(e) {
+  if (_absencePopup && !_absencePopup.contains(e.target)) closeAbsencePopup();
+}
+
+function closeAbsencePopup() {
+  if (_absencePopup) { _absencePopup.remove(); _absencePopup = null; }
+}
+
+function applyAbsence(dayIdx, shiftIdx, absenceType) {
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  shift.status = absenceType;
+  // Clear segments for absent employee
+  shift.segments = [];
+
+  // Persist via API if saved
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ status: absenceType }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) showToast(shift.employee + ' marked as ' + absenceType.toUpperCase(), 'success');
+      else showToast('Update failed: ' + data.error, 'error');
+    })
+    .catch(() => showToast('Network error', 'error'));
+  } else {
+    showToast(shift.employee + ' marked as ' + absenceType.toUpperCase(), 'success');
+  }
+
+  closeAbsencePopup();
+  switchView(currentView);
+  updateStats();
+}
+
+// ═══════════════════════════════════════════════════════════
 // DAY LIST VIEW (table fallback)
 // ═══════════════════════════════════════════════════════════
 function renderDayView(container) {
@@ -1534,7 +1625,8 @@ function renderDayView(container) {
           <td style="font-weight:600">${s.employee}</td>
           <td>${s.start}</td><td>${s.end}</td>
           <td>${s.hours}</td><td>${badge}</td>
-          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${si})" title="Edit">&#9998; Edit</button></td></tr>`;
+          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${si})" title="Edit">&#9998; Edit</button>
+          <button class="emp-action-btn" onclick="showAbsencePopup(event,${idx},${si})" title="Mark absent" style="color:#dc2626;margin-left:4px">✕</button></td></tr>`;
       });
       html += '</tbody></table></div>';
     }

@@ -868,3 +868,201 @@ def shift_templates():
             for r in rows]})
     except Exception as e:
         return jsonify({"success": False, "error": str(e), "templates": []})
+
+
+# ═══════════════════════════════════════════════════════════════
+# MASS SEGMENT UPDATE
+# ═══════════════════════════════════════════════════════════════
+
+def _time_to_mins(t):
+    """Convert 'HH:MM' string to minutes since midnight."""
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _mins_to_time(m):
+    """Convert minutes since midnight to 'HH:MM'."""
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+@scheduling_bp.route("/mass-segment/suggest", methods=["POST"])
+@login_required
+def mass_segment_suggest():
+    """
+    Suggest optimal segment placements for multiple shifts based on coverage.
+
+    POST JSON: {
+        shift_ids: [int],         # shifts to place segments on
+        activity_type: str,       # e.g. 'break', 'lunch', 'meeting'
+        duration_mins: int,       # segment length in minutes
+        window_start: 'HH:MM',   # earliest allowed start
+        window_end: 'HH:MM',     # latest allowed end
+        coverage: [{time, required, scheduled, gap}]  # from current day's data
+    }
+
+    Returns {suggestions: [{shift_id, employee, start, end, coverage_impact}]}
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        shift_ids = payload.get("shift_ids", [])
+        activity = payload.get("activity_type", "break")
+        duration = int(payload.get("duration_mins", 15))
+        win_start = payload.get("window_start", "10:00")
+        win_end = payload.get("window_end", "14:00")
+        coverage = payload.get("coverage", [])
+
+        if not shift_ids:
+            return jsonify({"success": False, "error": "No shifts selected"})
+
+        win_s = _time_to_mins(win_start)
+        win_e = _time_to_mins(win_end)
+
+        if win_e - win_s < duration:
+            return jsonify({"success": False, "error": "Window too small for segment duration"})
+
+        # Build a coverage map: minute -> {required, scheduled}
+        cov_map = {}
+        for c in coverage:
+            t = c.get("time", "")
+            if len(t) >= 5:
+                m = _time_to_mins(t[:5])
+                cov_map[m] = {"req": c.get("required", 0), "sched": c.get("scheduled", 0)}
+
+        # Determine interval step (usually 15 or 30 min)
+        cov_times = sorted(cov_map.keys())
+        interval = 15
+        if len(cov_times) >= 2:
+            interval = cov_times[1] - cov_times[0]
+        if interval < 1:
+            interval = 15
+
+        # Load shift info
+        shifts = Schedule.query.filter(Schedule.id.in_(shift_ids)).all()
+        if not shifts:
+            return jsonify({"success": False, "error": "No matching shifts found"})
+
+        # For each shift, find the time slot within the window where pulling
+        # that person off-line has the LEAST coverage impact.
+        # We score each candidate slot by the MINIMUM surplus across its intervals.
+        # Higher minimum surplus = safer to remove someone there.
+        suggestions = []
+        already_placed = []  # track placements so we stagger
+
+        for shift in shifts:
+            s_start = shift.shift_start
+            s_end = shift.shift_end
+            if not s_start or not s_end:
+                continue
+            s_s = s_start.hour * 60 + s_start.minute
+            s_e = s_end.hour * 60 + s_end.minute
+
+            # Effective window: intersection of requested window and shift times
+            eff_start = max(win_s, s_s)
+            eff_end = min(win_e, s_e)
+            if eff_end - eff_start < duration:
+                continue
+
+            best_slot = None
+            best_score = -9999
+
+            # Try every possible start in interval steps
+            t = eff_start
+            while t + duration <= eff_end:
+                # Calculate worst-case surplus if we pull this person at time t
+                min_surplus = 9999
+                m = t
+                while m < t + duration:
+                    cov = cov_map.get(m)
+                    if cov:
+                        surplus = cov["sched"] - cov["req"]
+                        # Subtract anyone we've already placed in this interval
+                        for placed in already_placed:
+                            if placed[0] <= m < placed[1]:
+                                surplus -= 1
+                        min_surplus = min(min_surplus, surplus)
+                    m += interval
+
+                if min_surplus == 9999:
+                    min_surplus = 0  # no coverage data for this window
+
+                if min_surplus > best_score:
+                    best_score = min_surplus
+                    best_slot = t
+
+                t += interval
+
+            if best_slot is not None:
+                seg_end = best_slot + duration
+                already_placed.append((best_slot, seg_end))
+                emp = shift.employee
+                suggestions.append({
+                    "shift_id": shift.id,
+                    "employee": emp.full_name if emp else f"ID {shift.employee_id}",
+                    "start": _mins_to_time(best_slot),
+                    "end": _mins_to_time(seg_end),
+                    "coverage_impact": best_score,
+                })
+
+        return jsonify({"success": True, "suggestions": suggestions})
+
+    except Exception as e:
+        log.exception("Mass segment suggest error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/mass-segment/apply", methods=["POST"])
+@login_required
+def mass_segment_apply():
+    """
+    Apply segments to multiple shifts at once.
+
+    POST JSON: {
+        segments: [{shift_id, activity_type, start, end, notes?}]
+    }
+    """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "applied": 0,
+                        "message": "Demo mode — changes kept on screen only"})
+    try:
+        payload = request.get_json(silent=True) or {}
+        items = payload.get("segments", [])
+        if not items:
+            return jsonify({"success": False, "error": "No segments to apply"})
+
+        applied = 0
+        for item in items:
+            shift_id = item.get("shift_id")
+            if not shift_id:
+                continue
+            sched = Schedule.query.get(shift_id)
+            if not sched:
+                continue
+
+            start_t = _parse_time(item.get("start", ""))
+            end_t = _parse_time(item.get("end", ""))
+            if not start_t or not end_t:
+                continue
+
+            dur = (end_t.hour * 60 + end_t.minute) - (start_t.hour * 60 + start_t.minute)
+            max_order = max((s.sort_order for s in sched.segments), default=-1) + 1
+
+            seg = ShiftSegment(
+                schedule_id=sched.id,
+                activity_type=item.get("activity_type", "break"),
+                start_time=start_t,
+                end_time=end_t,
+                duration_mins=max(dur, 0),
+                sort_order=max_order,
+                notes=item.get("notes", ""),
+            )
+            db.session.add(seg)
+            applied += 1
+
+        db.session.commit()
+        return jsonify({"success": True, "applied": applied})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Mass segment apply error")
+        return jsonify({"success": False, "error": str(e)})
