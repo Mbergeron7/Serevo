@@ -68,6 +68,7 @@ class Employee(db.Model):
     skill_start      = db.Column(db.Date, nullable=True)
     skill_end        = db.Column(db.Date, nullable=True)
     end_date         = db.Column(db.Date, nullable=True)
+    manually_edited  = db.Column(db.Boolean, default=False, server_default="false")
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

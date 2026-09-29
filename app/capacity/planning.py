@@ -773,6 +773,8 @@ def upsert_employees_to_db(employees):
 
         row = Employee.query.filter_by(employee_id=ext_id).first()
         if row:
+            if row.manually_edited:
+                continue  # skip — user made manual changes
             row.first_name, row.last_name, row.status = first, last, status
             if unit:
                 row.planning_unit_id = unit.id
