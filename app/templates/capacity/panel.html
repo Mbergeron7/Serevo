@@ -307,6 +307,17 @@ async function testConnection() {
   }
 }
 
+function _dateBetween(start, end) {
+  const days = [];
+  let d = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (d <= last) {
+    days.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
 async function startRefresh(type) {
   const year = document.getElementById("pullYear").value;
   const startDate = document.getElementById("pullStart").value;
@@ -323,41 +334,101 @@ async function startRefresh(type) {
 
   document.getElementById("progressArea").classList.add("show");
   document.getElementById("progressLabel").textContent = labels[type] || "Pulling…";
-  document.getElementById("progressBar").style.width = "5%";
-  document.getElementById("progressDetail").textContent = "Starting — this may take several minutes…";
+  document.getElementById("progressBar").style.width = "2%";
+  document.getElementById("progressDetail").textContent = "Starting…";
   showToast(labels[type], "info");
 
-  try {
-    const r = await fetch("/capacity/refresh", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type, year, start_date: startDate, end_date: endDate,
-        utc_offset: utcOffset, append: appendMode === "append"
-      }),
-    });
-    const data = await r.json();
-
-    document.getElementById("progressBar").style.width = "100%";
-
-    if (data.success) {
-      document.getElementById("progressLabel").textContent = "Complete";
-      document.getElementById("progressDetail").textContent =
-        `Rows written: ${data.rows_written || 0}  |  Skipped: ${data.skipped || 0}  |  Duration: ${data.duration || ""}`;
-      showToast(`${type} pull complete — ${data.rows_written || 0} rows written.`);
-      setTimeout(() => location.reload(), 2000);
-    } else {
+  // Employees use the original single-call endpoint (fast, no day loop)
+  if (type === "employees") {
+    try {
+      const r = await fetch("/capacity/refresh", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "employees", year }),
+      });
+      const data = await r.json();
+      document.getElementById("progressBar").style.width = "100%";
+      if (data.success) {
+        document.getElementById("progressLabel").textContent = "Complete";
+        document.getElementById("progressDetail").textContent = data.message || `${data.rows_written || 0} rows`;
+        showToast(`Employee pull complete — ${data.rows_written || 0} rows.`);
+        setTimeout(() => location.reload(), 2000);
+      } else {
+        document.getElementById("progressLabel").textContent = "Error";
+        document.getElementById("progressDetail").textContent = data.error || "Unknown error";
+        showToast("Pull failed: " + (data.error || ""), "error");
+      }
+    } catch(e) {
       document.getElementById("progressLabel").textContent = "Error";
-      document.getElementById("progressDetail").textContent = data.error || "Unknown error";
-      showToast("Pull failed: " + (data.error || "Unknown error"), "error");
+      document.getElementById("progressDetail").textContent = "Request failed — check connection.";
+      showToast("Request failed", "error");
     }
-  } catch(e) {
-    document.getElementById("progressLabel").textContent = "Error";
-    document.getElementById("progressDetail").textContent =
-      "The request timed out or the server could not be reached. This can happen if the API pull takes too long. Try pulling employees first, then forecast/requirements separately.";
-    showToast("Request failed — try a smaller pull or check API connection.", "error");
+    return;
   }
+
+  // Forecast / requirements / all: loop day-by-day to avoid Render timeout
+  const days = _dateBetween(startDate, endDate);
+  const pullTypes = type === "all" ? ["forecast", "requirements"] : [type];
+  const totalSteps = days.length * pullTypes.length;
+  let step = 0;
+  let totalRows = 0;
+  let totalSkipped = 0;
+  let errors = 0;
+  const t0 = Date.now();
+
+  for (const pt of pullTypes) {
+    for (const day of days) {
+      step++;
+      const pct = Math.round((step / totalSteps) * 100);
+      document.getElementById("progressBar").style.width = pct + "%";
+      document.getElementById("progressDetail").textContent =
+        `${pt} — ${day}  (${step}/${totalSteps})  |  ${totalRows} rows so far`;
+
+      try {
+        const r = await fetch("/capacity/refresh/day", {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: pt, date: day, utc_offset: utcOffset,
+            append: appendMode === "append"
+          }),
+        });
+        const data = await r.json();
+        if (data.success) {
+          totalRows += data.rows_written || 0;
+          totalSkipped += data.skipped || 0;
+        } else {
+          errors++;
+          console.warn(`Day ${day} ${pt} error:`, data.error);
+        }
+      } catch(e) {
+        errors++;
+        console.warn(`Day ${day} ${pt} fetch error:`, e);
+      }
+    }
+  }
+
+  // If pulling all, also pull employees
+  if (type === "all") {
+    document.getElementById("progressDetail").textContent = "Pulling employees…";
+    try {
+      const r = await fetch("/capacity/refresh", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "employees", year }),
+      });
+      const data = await r.json();
+      if (data.success) totalRows += data.rows_written || 0;
+    } catch(e) { errors++; }
+  }
+
+  const dur = Math.round((Date.now() - t0) / 1000);
+  document.getElementById("progressBar").style.width = "100%";
+  document.getElementById("progressLabel").textContent = errors ? "Completed with errors" : "Complete";
+  document.getElementById("progressDetail").textContent =
+    `Rows written: ${totalRows}  |  Skipped: ${totalSkipped}  |  Errors: ${errors}  |  Duration: ${dur}s`;
+  showToast(`Pull complete — ${totalRows} rows written.` + (errors ? ` (${errors} errors)` : ""));
+  setTimeout(() => location.reload(), 2500);
 }
 </script>
 {% endblock %}

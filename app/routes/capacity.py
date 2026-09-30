@@ -299,6 +299,80 @@ def refresh():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Single-day refresh (avoids Render 30s timeout) ────────────
+@capacity_bp.route("/refresh/day", methods=["POST"])
+@login_required
+def refresh_day():
+    """Pull forecast or requirements for ONE day only.
+    The frontend loops day-by-day so each request finishes quickly."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({"success": True, "rows_written": 0, "skipped": 0})
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        pull_type = payload.get("type", "forecast")
+        day_str = payload.get("date")  # "YYYY-MM-DD"
+        utc_offset = int(payload.get("utc_offset", -4))
+        append = payload.get("append", True)
+
+        if not day_str:
+            return jsonify({"success": False, "error": "Missing 'date' parameter"})
+
+        day_date = datetime.strptime(day_str, "%Y-%m-%d").date()
+        rows_written = 0
+        skipped = 0
+
+        if pull_type == "forecast":
+            sheet = _get_sheet()
+            if not sheet:
+                return jsonify({"success": False, "error": "Could not open Google Sheet"})
+            try:
+                fc_ws = sheet.worksheet("FORECAST RAW")
+            except Exception:
+                fc_ws = sheet.add_worksheet("FORECAST RAW", rows="15000", cols="50")
+                fc_ws.update("A1", [["FORECAST RAW — Offered Calls by Workload (30-min intervals)"]])
+                fc_ws.update("B3", [["Timestamp"]])
+
+            for lob_name, wid in cp.WORKLOADS.items():
+                intervals = cp.fetch_forecast_for_day(lob_name, wid, day_date, utc_offset)
+                if intervals:
+                    written = cp.write_forecast_to_sheet(fc_ws, lob_name, intervals)
+                    rows_written += written
+                else:
+                    skipped += 1
+
+        elif pull_type == "requirements":
+            sheet = _get_sheet()
+            if not sheet:
+                return jsonify({"success": False, "error": "Could not open Google Sheet"})
+            try:
+                rq_ws = sheet.worksheet("REQUIREMENTS RAW")
+            except Exception:
+                rq_ws = sheet.add_worksheet("REQUIREMENTS RAW", rows="20000", cols="60")
+                rq_ws.update("A1", [["REQUIREMENTS RAW — Agent Requirements (30-min intervals)"]])
+                rq_ws.update("B3", [["Timestamp"]])
+
+            planning_units = cp.fetch_planning_units()
+            for pu in planning_units:
+                pu_id = pu.get("planning_unit_id") or pu.get("id", "")
+                pu_name = pu.get("name", "")
+                if not pu_id:
+                    continue
+                day_reqs = cp.fetch_requirements_for_day(pu_id, pu_name, day_date)
+                if day_reqs:
+                    written = cp.write_requirements_to_sheet(rq_ws, day_reqs)
+                    rows_written += written
+                else:
+                    skipped += 1
+
+        return jsonify({"success": True, "rows_written": rows_written, "skipped": skipped})
+
+    except Exception as e:
+        log.exception(f"Day refresh error for {payload.get('date')}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Capacity Plan View ─────────────────────────────────────────
 def _build_plan(user, year, shrinkage, occupancy, answer_rate):
     """Compute the monthly capacity plan (list of {lob, months[...]}) for a year."""
