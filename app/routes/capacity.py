@@ -226,15 +226,12 @@ def refresh():
             try:
                 fc_ws = sheet.worksheet("FORECAST RAW")
             except Exception:
-                fc_ws = sheet.add_worksheet("FORECAST RAW", rows="15000", cols="50")
-                fc_ws.update("A1", [["FORECAST RAW — Offered Calls by Workload (30-min intervals)"]])
-                fc_ws.update("B3", [["Timestamp"]])
+                fc_ws = sheet.add_worksheet("FORECAST RAW", rows="15000", cols="10")
 
             if not append:
                 try:
-                    all_vals = fc_ws.get_all_values()
-                    if len(all_vals) > 3:
-                        fc_ws.delete_rows(4, len(all_vals))
+                    fc_ws.clear()
+                    fc_ws.update("A1", [["LOB", "Date", "Timestamp", "Offered", "AHT"]])
                 except Exception:
                     pass
 
@@ -251,15 +248,12 @@ def refresh():
             try:
                 rq_ws = sheet.worksheet("REQUIREMENTS RAW")
             except Exception:
-                rq_ws = sheet.add_worksheet("REQUIREMENTS RAW", rows="20000", cols="60")
-                rq_ws.update("A1", [["REQUIREMENTS RAW — Agent Requirements (30-min intervals)"]])
-                rq_ws.update("B3", [["Timestamp"]])
+                rq_ws = sheet.add_worksheet("REQUIREMENTS RAW", rows="20000", cols="10")
 
             if not append:
                 try:
-                    all_vals = rq_ws.get_all_values()
-                    if len(all_vals) > 3:
-                        rq_ws.delete_rows(4, len(all_vals))
+                    rq_ws.clear()
+                    rq_ws.update("A1", [["LOB", "Date", "Timestamp", "Agents Required"]])
                 except Exception:
                     pass
 
@@ -330,9 +324,8 @@ def refresh_day():
             try:
                 fc_ws = sheet.worksheet("FORECAST RAW")
             except Exception:
-                fc_ws = sheet.add_worksheet("FORECAST RAW", rows="15000", cols="50")
-                fc_ws.update("A1", [["FORECAST RAW — Offered Calls by Workload (30-min intervals)"]])
-                fc_ws.update("B3", [["Timestamp"]])
+                fc_ws = sheet.add_worksheet("FORECAST RAW", rows="15000", cols="10")
+                fc_ws.update("A1", [["LOB", "Date", "Timestamp", "Offered", "AHT"]])
 
             for lob_name, wid in cp.WORKLOADS.items():
                 intervals = cp.fetch_forecast_for_day(lob_name, wid, day_date, utc_offset)
@@ -349,9 +342,8 @@ def refresh_day():
             try:
                 rq_ws = sheet.worksheet("REQUIREMENTS RAW")
             except Exception:
-                rq_ws = sheet.add_worksheet("REQUIREMENTS RAW", rows="20000", cols="60")
-                rq_ws.update("A1", [["REQUIREMENTS RAW — Agent Requirements (30-min intervals)"]])
-                rq_ws.update("B3", [["Timestamp"]])
+                rq_ws = sheet.add_worksheet("REQUIREMENTS RAW", rows="20000", cols="10")
+                rq_ws.update("A1", [["LOB", "Date", "Timestamp", "Agents Required"]])
 
             planning_units = cp.fetch_planning_units()
             for pu in planning_units:

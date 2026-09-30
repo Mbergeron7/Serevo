@@ -448,87 +448,83 @@ def fetch_employees(max_workers=4):
 # =========================================================
 
 def write_forecast_to_sheet(forecast_ws, workload_name, day_intervals):
-    """Write forecast intervals for one workload+day to the FORECAST RAW sheet."""
+    """Write forecast intervals for one workload+day to the FORECAST RAW sheet.
+    Uses flat row format: LOB | Date | Timestamp | Offered | AHT
+    """
     if not day_intervals:
         return 0
 
     all_data = forecast_ws.get_all_values()
-    headers = all_data[2] if len(all_data) > 2 else []
 
-    ts_col = 1
-    lob_col = None
-    for i, h in enumerate(headers):
-        if h.strip() == workload_name:
-            lob_col = i
+    # Ensure header row exists (row 1 = title handled by caller, row 2 = blank, row 3 or row 1 = headers)
+    HEADERS = ["LOB", "Date", "Timestamp", "Offered", "AHT"]
+    has_header = False
+    for row in all_data[:3]:
+        if any(str(c).strip().lower() == "lob" for c in row):
+            has_header = True
             break
 
-    if lob_col is None:
-        new_col = len(headers)
-        forecast_ws.update_cell(3, new_col + 1, workload_name)
-        lob_col = new_col
-        headers.append(workload_name)
+    if not has_header:
+        # Put headers in row 1 if sheet is empty, else after existing title rows
+        header_row = 1
+        if all_data and all_data[0] and "FORECAST" in str(all_data[0][0]).upper():
+            header_row = 3  # title in row 1, blank row 2, headers in row 3
+        forecast_ws.update(f"A{header_row}", [HEADERS])
 
-    ts_index = {}
-    for row_i, row in enumerate(all_data[3:], start=4):
-        if ts_col < len(row) and row[ts_col]:
-            ts_index[str(row[ts_col])[:16]] = row_i
-
-    written = 0
+    next_row = len(all_data) + 1
+    batch = []
     for (slot_dt, offered, aht) in day_intervals:
-        ts_str = slot_dt.strftime("%Y-%m-%d %H:%M")
-        row_num = ts_index.get(ts_str)
-        if row_num is None:
-            next_row = len(all_data) + 1
-            forecast_ws.update_cell(next_row, ts_col + 1, ts_str)
-            all_data.append([""] * max(len(headers), lob_col + 1))
-            ts_index[ts_str] = next_row
-            row_num = next_row
-        forecast_ws.update_cell(row_num, lob_col + 1, offered)
-        written += 1
+        batch.append([
+            workload_name,
+            slot_dt.strftime("%Y-%m-%d"),
+            slot_dt.strftime("%Y-%m-%d %H:%M"),
+            round(offered, 2),
+            round(aht, 1),
+        ])
 
-    return written
+    if batch:
+        forecast_ws.update(f"A{next_row}", batch)
+
+    return len(batch)
 
 
 def write_requirements_to_sheet(req_ws, day_requirements):
-    """Write requirements for one planning unit+day to REQUIREMENTS RAW sheet."""
+    """Write requirements for one planning unit+day to REQUIREMENTS RAW sheet.
+    Uses flat row format: LOB | Date | Timestamp | Agents Required
+    """
     if not day_requirements:
         return 0
 
     all_data = req_ws.get_all_values()
-    headers = all_data[2] if len(all_data) > 2 else []
-    ts_col = 1
 
-    ts_index = {}
-    for row_i, row in enumerate(all_data[3:], start=4):
-        if ts_col < len(row) and row[ts_col]:
-            ts_index[str(row[ts_col])[:16]] = row_i
+    HEADERS = ["LOB", "Date", "Timestamp", "Agents Required"]
+    has_header = False
+    for row in all_data[:3]:
+        if any(str(c).strip().lower() == "lob" for c in row):
+            has_header = True
+            break
 
-    written = 0
+    if not has_header:
+        header_row = 1
+        if all_data and all_data[0] and "REQUIREMENTS" in str(all_data[0][0]).upper():
+            header_row = 3
+        req_ws.update(f"A{header_row}", [HEADERS])
+
+    next_row = len(all_data) + 1
+    batch = []
     for lob_name, intervals in day_requirements.items():
-        lob_col = None
-        for i, h in enumerate(headers):
-            if h.strip() == lob_name:
-                lob_col = i
-                break
-        if lob_col is None:
-            new_col = len(headers)
-            req_ws.update_cell(3, new_col + 1, lob_name)
-            lob_col = new_col
-            headers.append(lob_name)
-
         for (slot_dt, agents) in intervals:
-            ts_str = slot_dt.strftime("%Y-%m-%d %H:%M")
-            row_num = ts_index.get(ts_str)
-            if row_num is None:
-                next_row = len(all_data) + 1
-                req_ws.update_cell(next_row, ts_col + 1, ts_str)
-                all_data.append([""] * max(len(headers), lob_col + 1))
-                ts_index[ts_str] = next_row
-                row_num = next_row
-            req_ws.update_cell(row_num, lob_col + 1, agents)
-            written += 1
+            batch.append([
+                lob_name,
+                slot_dt.strftime("%Y-%m-%d"),
+                slot_dt.strftime("%Y-%m-%d %H:%M"),
+                round(agents, 2),
+            ])
 
-    return written
+    if batch:
+        req_ws.update(f"A{next_row}", batch)
+
+    return len(batch)
 
 
 def write_employees_to_sheet(emp_ws, employees):
