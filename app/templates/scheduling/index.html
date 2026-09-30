@@ -205,6 +205,8 @@
   .tl-ctx-menu button:hover { background: var(--brand-accent-light); }
   .tl-ctx-menu .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
   .tl-seg-oncall   { background: #059669; }
+  .tl-seg-base     { z-index: 1; cursor: pointer; }
+  .tl-seg-overlay  { z-index: 3; }
   .tl-seg-break    { background: #d97706; }
   .tl-seg-lunch    { background: #2563eb; }
   .tl-seg-meeting  { background: #7c3aed; }
@@ -1362,34 +1364,32 @@ function renderTimelineView(container) {
         html += `<div class="tl-grid-line" style="left:${x}px"></div>`;
       }
 
-      // Segments
+      // Base bar: solid on-call spanning the full shift
+      const shiftSMin = timeToMins(shift.start);
+      const shiftEMin = timeToMins(shift.end);
+      const baseLeft = ((shiftSMin - minH * 60) / 60) * TL_PX_PER_HOUR;
+      const baseWidth = ((shiftEMin - shiftSMin) / 60) * TL_PX_PER_HOUR;
+      html += `<div class="tl-segment tl-seg-oncall tl-seg-base" style="left:${baseLeft}px;width:${Math.max(baseWidth,2)}px"
+        title="On-Call: ${shift.start}–${shift.end}"
+        onclick="openEditModal(${dayIdx},${shiftIdx})"></div>`;
+
+      // Overlay segments: breaks, lunch, meetings rendered ON TOP of the base bar
       const segments = shift.segments || [];
-      if (segments.length) {
-        segments.forEach((seg, segIdx) => {
-          const sMin = timeToMins(seg.start);
-          const eMin = timeToMins(seg.end);
-          const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
-          const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
-          const cls = 'tl-seg-' + baseSegType(seg.type).replace('-', '');
-          // Fix: on-call → oncall
-          const clsFix = cls.replace('tl-seg-on-call','tl-seg-oncall');
-          const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
-          html += `<div class="tl-segment ${clsFix}" style="left:${left}px;width:${Math.max(width,2)}px"
-            title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
-            data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
-            onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
-            oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})">${label}</div>`;
-        });
-      } else {
-        // No segments — show whole shift as on-call
-        const sMin = timeToMins(shift.start);
-        const eMin = timeToMins(shift.end);
+      segments.forEach((seg, segIdx) => {
+        const bt = baseSegType(seg.type);
+        if (bt === 'on-call') return; // skip on-call segments — the base bar covers them
+        const sMin = timeToMins(seg.start);
+        const eMin = timeToMins(seg.end);
         const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
         const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
-        html += `<div class="tl-segment tl-seg-oncall" style="left:${left}px;width:${Math.max(width,2)}px"
-          title="On-Call: ${shift.start}–${shift.end}"
-          onclick="openEditModal(${dayIdx},${shiftIdx})"></div>`;
-      }
+        const cls = 'tl-seg-' + bt.replace('-', '');
+        const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
+        html += `<div class="tl-segment tl-seg-overlay ${cls}" style="left:${left}px;width:${Math.max(width,2)}px"
+          title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
+          data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
+          onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
+          oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})">${label}</div>`;
+      });
 
       html += `</div></div>`; // tl-bar-area, tl-row
     });

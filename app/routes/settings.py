@@ -1000,8 +1000,44 @@ def save_skill_group():
         g = SkillGroup(name=name)
         db.session.add(g)
 
+    old_name = g.name if gid else None
     g.name = name
     g.description = (data.get("description") or "").strip()
+
+    # Cascade rename to employees assigned to this skill group
+    if old_name and old_name != name:
+        from app.models import Employee, SkillMapping, PlanningUnit
+        # Update all_skills text field for employees with this skill mapping
+        mapped_emp_ids = [m.employee_id for m in
+                         SkillMapping.query.filter_by(skill_group_id=g.id).all()]
+        if mapped_emp_ids:
+            for emp in Employee.query.filter(Employee.id.in_(mapped_emp_ids)).all():
+                if emp.all_skills:
+                    skills = [s.strip() for s in emp.all_skills.split(",")]
+                    skills = [name if s == old_name else s for s in skills]
+                    emp.all_skills = ", ".join(skills)
+                # Update planning_unit_id if it pointed at the old name
+                if emp.planning_unit and emp.planning_unit.name == old_name:
+                    new_pu = PlanningUnit.query.filter_by(name=name).first()
+                    if new_pu:
+                        emp.planning_unit_id = new_pu.id
+
+        # Rename the PlanningUnit itself if one matches the old name
+        old_pu = PlanningUnit.query.filter_by(name=old_name).first()
+        if old_pu:
+            existing_new = PlanningUnit.query.filter_by(name=name).first()
+            if not existing_new:
+                old_pu.name = name
+            else:
+                # Merge: reassign employees from old PU to existing new PU
+                Employee.query.filter_by(planning_unit_id=old_pu.id).update(
+                    {"planning_unit_id": existing_new.id})
+
+        # Update LobMapping targets that reference the old name
+        from app.models import LobMapping
+        LobMapping.query.filter_by(planning_unit_name=old_name).update(
+            {"planning_unit_name": name})
+
     db.session.commit()
     return jsonify({"success": True, "item": g.to_dict()})
 
