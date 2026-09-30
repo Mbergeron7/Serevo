@@ -753,6 +753,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 "end": end,
                 "hours": hours,
                 "type": stype,
+                "status": "scheduled",
                 "segments": [],  # filled below with stagger
             })
 
@@ -920,6 +921,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "end": e_time,
             "hours": round(length / 60, 1),
             "type": stype,
+            "status": "scheduled",
             "segments": [],  # filled below with stagger
         })
 
@@ -1024,6 +1026,7 @@ def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):
                     "end": _minutes_to_time(e_min),
                     "hours": round((e_min - s_min) / 60, 1),
                     "type": stype,
+                    "status": "scheduled",
                     "segments": _generate_segments(_minutes_to_time(s_min), _minutes_to_time(e_min),
                                                    stype, stagger_index=len(shifts),
                                                    total_employees=len(shifts) + 1),
@@ -1134,9 +1137,15 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
     all_employees_seen = set()
     all_scheduled = set()
 
+    _temp_id_counter = 0
     while d <= end_date:
         shifts, unassigned, warnings = generate_shifts(
             lob, d, shift_length_hrs, sheet, employee_ids)
+        # Assign temporary IDs so the UI can reference unsaved shifts
+        for s in shifts:
+            if "id" not in s:
+                _temp_id_counter += 1
+                s["id"] = f"tmp_{_temp_id_counter}"
         for s in shifts:
             all_scheduled.add(s["employee"])
         for u in unassigned:

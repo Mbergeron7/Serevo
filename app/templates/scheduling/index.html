@@ -2122,12 +2122,17 @@ async function massSuggest() {
 
   // Gather selected shift IDs
   const chks = document.querySelectorAll('.mass-emp-chk:checked');
-  const shiftIds = [...chks].map(c => parseInt(c.dataset.shiftId)).filter(id => id);
+  const rawIds = [...chks].map(c => c.dataset.shiftId).filter(id => id && id !== 'undefined');
 
-  if (!shiftIds.length) {
+  if (!rawIds.length) {
     showToast('Select at least one employee.', true);
     return;
   }
+  if (rawIds.some(id => String(id).startsWith('tmp_'))) {
+    showToast('Save the schedule first before using mass update.', true);
+    return;
+  }
+  const shiftIds = rawIds.map(id => parseInt(id)).filter(id => id);
 
   const btn = document.getElementById('massSuggestBtn');
   btn.textContent = 'Analyzing coverage…';
@@ -2324,11 +2329,16 @@ async function runOptimize() {
   if (!day) return;
 
   const chks = document.querySelectorAll('.opt-emp-chk:checked');
-  const shiftIds = [...chks].map(c => parseInt(c.dataset.shiftId)).filter(id => id);
-  if (!shiftIds.length) {
+  const rawIds = [...chks].map(c => c.dataset.shiftId).filter(id => id && id !== 'undefined');
+  if (!rawIds.length) {
     showToast('Select at least one employee.', true);
     return;
   }
+  if (rawIds.some(id => String(id).startsWith('tmp_'))) {
+    showToast('Save the schedule first before optimizing breaks.', true);
+    return;
+  }
+  const shiftIds = rawIds.map(id => parseInt(id)).filter(id => id);
 
   const types = [];
   if (document.getElementById('optBreaks').checked) types.push('break');
