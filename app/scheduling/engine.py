@@ -191,6 +191,7 @@ def _get_employees_for_lob(lob, sheet=None):
                 "name": f"{first} {last}".strip(),
                 "employee_id": emp.get("Employee ID", ""),
                 "lob": skill,
+                "team_lead": emp.get("Team Lead", ""),
             })
         if results:
             return results
@@ -214,6 +215,7 @@ def _get_employees_for_lob(lob, sheet=None):
                         "name": e.full_name,
                         "employee_id": e.employee_id,
                         "lob": pu.name,
+                        "team_lead": e.team_lead or "",
                     })
                 if results:
                     log.info(f"LOB '{lob}': found {len(results)} via DB join")
@@ -241,6 +243,7 @@ def _get_employees_for_lob(lob, sheet=None):
                         "name": f"{first} {last}".strip(),
                         "employee_id": rec.get("Employee ID", ""),
                         "lob": skill,
+                        "team_lead": rec.get("Team Lead", ""),
                     })
                 if results:
                     log.info(f"LOB '{lob}': found {len(results)} via sheet direct read")
@@ -287,6 +290,7 @@ def _get_employees_for_lob(lob, sheet=None):
                                 "name": e.full_name,
                                 "employee_id": e.employee_id,
                                 "lob": mapped_lob,
+                                "team_lead": e.team_lead or "",
                             })
                     if results:
                         log.info(f"LOB '{lob}': found {len(results)} via DB+sheet mapping")
@@ -674,13 +678,17 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
 
     shift_length_mins = int(shift_length_hrs * 60)
     requirements = _get_requirements_for_date(lob, date_obj, sheet)
-    employees = _get_employees_for_lob(lob, sheet)
+    all_employees = _get_employees_for_lob(lob, sheet)
+    employees = list(all_employees)
     warnings = []
+    log.info(f"generate_shifts: {lob} on {date_obj}: {len(employees)} employees found, "
+             f"{len(requirements)} requirement intervals")
 
     # Filter by selected employee IDs if provided
     if employee_ids:
         id_set = set(str(eid) for eid in employee_ids)
         employees = [e for e in employees if str(e.get("employee_id", "")) in id_set]
+        log.info(f"  Filtered to {len(employees)} by employee_ids selection")
 
     if not employees:
         warnings.append(f"No active employees found for {lob}")
@@ -754,6 +762,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 "hours": hours,
                 "type": stype,
                 "status": "scheduled",
+                "team_lead": emp.get("team_lead", ""),
                 "segments": [],  # filled below with stagger
             })
 
@@ -922,6 +931,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "hours": round(length / 60, 1),
             "type": stype,
             "status": "scheduled",
+            "team_lead": emp.get("team_lead", ""),
             "segments": [],  # filled below with stagger
         })
 
@@ -1027,6 +1037,7 @@ def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):
                     "hours": round((e_min - s_min) / 60, 1),
                     "type": stype,
                     "status": "scheduled",
+                    "team_lead": emp.team_lead or "",
                     "segments": _generate_segments(_minutes_to_time(s_min), _minutes_to_time(e_min),
                                                    stype, stagger_index=len(shifts),
                                                    total_employees=len(shifts) + 1),

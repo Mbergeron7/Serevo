@@ -1444,6 +1444,7 @@ def mass_segment_cross_lob_shifts():
                 "start": s.shift_start.strftime("%H:%M") if s.shift_start else "",
                 "end": s.shift_end.strftime("%H:%M") if s.shift_end else "",
                 "lob": pu.name if pu else "Unknown",
+                "team_lead": emp.team_lead if emp and emp.team_lead else "",
             })
 
         # Also build aggregated coverage data for the day across all requested LOBs

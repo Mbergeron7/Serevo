@@ -740,8 +740,23 @@
       <input type="text" id="massSegNotes" placeholder="Optional — applies to all segments">
     </div>
 
-    <div style="margin:16px 0 6px; font-weight:700; font-size:.85rem; display:flex; justify-content:space-between; align-items:center">
-      <span>Employees</span>
+    <div class="form-row" style="margin-top:12px">
+      <div class="form-group">
+        <label>Filter by Team Lead</label>
+        <select id="massFilterTL" onchange="massApplyFilters()" style="font-size:.82rem">
+          <option value="">All Team Leads</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Filter by LOB</label>
+        <select id="massFilterLob" onchange="massApplyFilters()" style="font-size:.82rem">
+          <option value="">All LOBs</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin:8px 0 6px; font-weight:700; font-size:.85rem; display:flex; justify-content:space-between; align-items:center">
+      <span>Employees <span id="massEmpCount" style="font-weight:400;font-size:.78rem;color:var(--text-muted)"></span></span>
       <label style="font-weight:400; font-size:.8rem; cursor:pointer">
         <input type="checkbox" id="massSelectAll" onchange="massToggleAll()" checked> Select All
       </label>
@@ -1384,24 +1399,24 @@ function renderTimelineView(container) {
     });
     html += `</div>`; // timeline-body
 
-    // Requirements overlay bar chart
+    // Requirements overlay bar chart — positioned to align with timeline
     if (day.coverage && day.coverage.length) {
-      const maxReq = Math.max(...day.coverage.map(c => c.required), 1);
+      const maxVal = Math.max(...day.coverage.map(c => Math.max(c.required, c.scheduled)), 1);
       html += `<div class="req-overlay">
         <div class="req-overlay-inner" style="width:${180 + numHours * TL_PX_PER_HOUR}px">
           <div class="tl-name-col" style="font-size:.68rem;color:var(--text-muted)">Req'd</div>
-          <div style="display:flex;flex:1;align-items:flex-end;height:100%">`;
+          <div style="position:relative;flex:1;height:100%">`;
       day.coverage.forEach(c => {
         const h = parseInt(c.time.split(':')[0]);
         const m = parseInt(c.time.split(':')[1]);
         const totalMin = h * 60 + m;
         if (totalMin < minH * 60 || totalMin >= maxH * 60) return;
-        const barH = Math.round((c.required / maxReq) * 38);
+        const left = ((totalMin - minH * 60) / 60) * TL_PX_PER_HOUR;
+        const barW = TL_PX_PER_HOUR / 2;  // 30-min intervals
+        const barH = Math.round((c.required / maxVal) * 38);
         const barColor = c.gap >= 0 ? '#059669' : (c.gap >= -2 ? '#d97706' : '#dc2626');
-        html += `<div class="req-bar-wrap" style="width:${TL_PX_PER_HOUR/2}px"
-          title="${c.time}: need ${c.required}, have ${c.scheduled} (${c.gap >= 0 ? '+' : ''}${c.gap})">
-          <div class="req-bar" style="height:${barH}px;background:color-mix(in srgb, ${barColor} 40%, transparent)"></div>
-        </div>`;
+        html += `<div style="position:absolute;left:${left}px;bottom:0;width:${barW}px;height:${barH}px;background:color-mix(in srgb, ${barColor} 40%, transparent)"
+          title="${c.time}: need ${c.required}, have ${c.scheduled} (${c.gap >= 0 ? '+' : ''}${c.gap})"></div>`;
       });
       html += `</div></div></div>`;
     }
@@ -1974,6 +1989,7 @@ function avgCoverage(days) {
 // ═══════════════════════════════════════════════════════════
 let _massSuggestions = [];
 let _massCrossLobCoverage = [];  // coverage data when in cross-LOB mode
+let _massAllShifts = [];  // all shift objects for filtering
 
 function openMassModal() {
   // Reset
@@ -1989,6 +2005,9 @@ function openMassModal() {
   document.getElementById('massLobStatus').textContent = '';
   _massSuggestions = [];
   _massCrossLobCoverage = [];
+  _massAllShifts = [];
+  document.getElementById('massFilterTL').innerHTML = '<option value="">All Team Leads</option>';
+  document.getElementById('massFilterLob').innerHTML = '<option value="">All LOBs</option>';
   massToggleScope();
 
   // Set date to current config date
@@ -2001,16 +2020,13 @@ function openMassModal() {
     const dayIdx = _massGetActiveDayIdx();
     const day = scheduleData.days[dayIdx];
     if (day && day.shifts.length) {
-      let html = '';
-      day.shifts.forEach((s, i) => {
-        if (s.status !== 'scheduled') return;
-        html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-          <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" data-idx="${i}" checked>
-          <span style="font-weight:600">${s.employee}</span>
-          <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
-        </label>`;
-      });
-      list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
+      const currentLob = document.getElementById('cfgLob')?.value || '';
+      _massAllShifts = day.shifts.filter(s => s.status === 'scheduled').map((s, i) => ({
+        id: s.id, employee: s.employee, start: s.start, end: s.end,
+        team_lead: s.team_lead || '', lob: currentLob, idx: i
+      }));
+      _massPopulateFilters();
+      _massRenderEmpList();
     } else {
       list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts for this day.</div>';
     }
@@ -2063,25 +2079,12 @@ async function massLoadCrossLob() {
       return;
     }
 
-    // Group by LOB for nicer display
-    const byLob = {};
-    shifts.forEach(s => {
-      if (!byLob[s.lob]) byLob[s.lob] = [];
-      byLob[s.lob].push(s);
-    });
-
-    let html = '';
-    Object.keys(byLob).sort().forEach(lob => {
-      html += `<div style="font-weight:700;font-size:.78rem;color:var(--brand-accent);padding:6px 0 2px;border-bottom:1px solid var(--border);margin-top:4px">${lob}</div>`;
-      byLob[lob].forEach(s => {
-        html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-          <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" checked>
-          <span style="font-weight:600">${s.employee}</span>
-          <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}</span>
-        </label>`;
-      });
-    });
-    list.innerHTML = html;
+    _massAllShifts = shifts.map(s => ({
+      id: s.id, employee: s.employee, start: s.start, end: s.end,
+      team_lead: s.team_lead || '', lob: s.lob || ''
+    }));
+    _massPopulateFilters();
+    _massRenderEmpList();
     document.getElementById('massSelectAll').checked = true;
   } catch (e) {
     showToast('Failed to load shifts: ' + e, true);
@@ -2105,6 +2108,64 @@ function _massGetActiveDayIdx() {
 function massToggleAll() {
   const checked = document.getElementById('massSelectAll').checked;
   document.querySelectorAll('.mass-emp-chk').forEach(c => c.checked = checked);
+}
+
+function _massPopulateFilters() {
+  const tls = new Set(), lobs = new Set();
+  _massAllShifts.forEach(s => {
+    if (s.team_lead) tls.add(s.team_lead);
+    if (s.lob) lobs.add(s.lob);
+  });
+  const tlSel = document.getElementById('massFilterTL');
+  tlSel.innerHTML = '<option value="">All Team Leads</option>';
+  [...tls].sort().forEach(tl => { tlSel.innerHTML += `<option value="${tl}">${tl}</option>`; });
+  const lobSel = document.getElementById('massFilterLob');
+  lobSel.innerHTML = '<option value="">All LOBs</option>';
+  [...lobs].sort().forEach(l => { lobSel.innerHTML += `<option value="${l}">${l}</option>`; });
+}
+
+function _massRenderEmpList() {
+  const filterTL = document.getElementById('massFilterTL').value;
+  const filterLob = document.getElementById('massFilterLob').value;
+  const filtered = _massAllShifts.filter(s =>
+    (!filterTL || s.team_lead === filterTL) && (!filterLob || s.lob === filterLob)
+  );
+  const list = document.getElementById('massEmpList');
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No shifts match the selected filters.</div>';
+    document.getElementById('massEmpCount').textContent = '(0)';
+    return;
+  }
+  // Group by LOB if multiple LOBs present
+  const lobs = new Set(filtered.map(s => s.lob));
+  let html = '';
+  if (lobs.size > 1) {
+    [...lobs].sort().forEach(lob => {
+      html += `<div style="font-weight:700;font-size:.78rem;color:var(--brand-accent);padding:6px 0 2px;border-bottom:1px solid var(--border);margin-top:4px">${lob}</div>`;
+      filtered.filter(s => s.lob === lob).forEach(s => {
+        html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" checked>
+          <span style="font-weight:600">${s.employee}</span>
+          <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}${s.team_lead ? ' · ' + s.team_lead : ''}</span>
+        </label>`;
+      });
+    });
+  } else {
+    filtered.forEach(s => {
+      html += `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+        <input type="checkbox" class="mass-emp-chk" data-shift-id="${s.id}" checked>
+        <span style="font-weight:600">${s.employee}</span>
+        <span style="color:var(--text-muted);font-size:.78rem">${s.start}–${s.end}${s.team_lead ? ' · ' + s.team_lead : ''}</span>
+      </label>`;
+    });
+  }
+  list.innerHTML = html;
+  document.getElementById('massEmpCount').textContent = `(${filtered.length})`;
+  document.getElementById('massSelectAll').checked = true;
+}
+
+function massApplyFilters() {
+  _massRenderEmpList();
 }
 
 async function massSuggest() {

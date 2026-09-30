@@ -305,7 +305,7 @@ def plan_demo_day(schedule_date, lob=None):
         name = f"{emp['First Name']} {emp['Last Name']}"
         base = {"id": 8000 + i + day.toordinal() % 1000, "employee": name, "employee_id": ext,
                 "date": day.isoformat(), "start": "", "end": "", "type": "full", "hours": 0,
-                "segments": [], "lob": emp_lob}
+                "segments": [], "lob": emp_lob, "team_lead": emp.get("Team Lead", "")}
 
         def off(status, reason):
             schedules.append({**base, "status": status, "reason": reason})
