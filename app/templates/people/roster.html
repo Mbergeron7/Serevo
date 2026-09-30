@@ -418,7 +418,8 @@
 
       <div id="empError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
 
-      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem; align-items:center;">
+        <button type="button" class="btn" id="empDeleteBtn" style="display:none; margin-right:auto; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-size:.8rem;" onclick="deleteEmployee()">Delete Employee</button>
         <button type="button" class="btn btn-outline" onclick="closeEmpModal()">Cancel</button>
         <button type="submit" class="btn btn-primary" id="empSaveBtn">Save Employee</button>
       </div>
@@ -520,6 +521,9 @@ function openEmpModal(data) {
   document.getElementById('emp_skill_end').value = data ? (data.skill_end || data['Latest Skill End'] || '') : '';
   document.getElementById('emp_end_date').value = data ? (data.end_date || data['End Date'] || '') : '';
   document.getElementById('empError').style.display = 'none';
+  // Show delete button only when editing an existing employee
+  const delBtn = document.getElementById('empDeleteBtn');
+  if (delBtn) delBtn.style.display = (data && (data._db_id || data.id)) ? '' : 'none';
   document.getElementById('empModal').style.display = '';
 
   // Populate LOB datalist and TL datalist
@@ -533,6 +537,36 @@ function closeEmpModal() {
 
 function editEmp(empData) {
   openEmpModal(empData);
+}
+
+async function deleteEmployee() {
+  const pk = document.getElementById('emp_pk').value;
+  if (!pk) return;
+  const name = document.getElementById('emp_first').value + ' ' + document.getElementById('emp_last').value;
+  if (!confirm(`Are you sure you want to permanently delete ${name.trim()}? This cannot be undone.`)) return;
+
+  try {
+    const resp = await fetch('/api/employees/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id: pk }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      // Remove the row from the table
+      const row = document.querySelector(`#rosterTable tbody tr[data-db-id="${pk}"]`);
+      if (row) row.remove();
+      closeEmpModal();
+    } else {
+      const errDiv = document.getElementById('empError');
+      errDiv.textContent = data.error;
+      errDiv.style.display = '';
+    }
+  } catch(err) {
+    const errDiv = document.getElementById('empError');
+    errDiv.textContent = 'Network error: ' + err.message;
+    errDiv.style.display = '';
+  }
 }
 
 async function loadLOBs() {

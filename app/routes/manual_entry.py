@@ -151,7 +151,7 @@ def save_employee():
 @manual_entry_bp.route("/employees/delete", methods=["POST"])
 @login_required
 def delete_employee():
-    """Deactivate (soft-delete) an employee."""
+    """Permanently delete an employee record (for duplicate cleanup etc.)."""
     try:
         data = request.get_json(silent=True) or {}
         pk = data.get("id")
@@ -160,7 +160,7 @@ def delete_employee():
         emp = Employee.query.get(int(pk))
         if not emp:
             return jsonify({"success": False, "error": "Employee not found."})
-        emp.status = "Inactive"
+        db.session.delete(emp)
         db.session.commit()
         return jsonify({"success": True})
     except Exception as e:
