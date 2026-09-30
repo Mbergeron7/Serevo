@@ -166,7 +166,8 @@ def _get_employees_for_lob(lob, sheet=None):
     3. Google Sheet direct read → match "Latest Skill Name" column
     4. DB all employees + sheet LOB mapping (handles NULL planning_unit_id)
     """
-    lob_lower = lob.strip().lower()
+    from app.data_source import normalize_lob
+    lob_normalized = normalize_lob(lob.strip()).lower()
 
     def _is_active(status_val):
         return str(status_val).strip().lower() not in ("inactive", "terminated", "deleted")
@@ -182,7 +183,7 @@ def _get_employees_for_lob(lob, sheet=None):
             if not _is_active(emp.get("Status", "")):
                 continue
             skill = (emp.get("Latest Skill Name") or "").strip()
-            if skill.lower() != lob_lower:
+            if normalize_lob(skill).lower() != lob_normalized:
                 continue
             first = str(emp.get("First Name", "")).strip()
             last = str(emp.get("Last Name", "")).strip()
@@ -232,7 +233,7 @@ def _get_employees_for_lob(lob, sheet=None):
                     if not _is_active(rec.get("Status", "")):
                         continue
                     skill = (rec.get("Latest Skill Name") or "").strip()
-                    if skill.lower() != lob_lower:
+                    if normalize_lob(skill).lower() != lob_normalized:
                         continue
                     first = str(rec.get("First Name", "")).strip()
                     last = str(rec.get("Last Name", "")).strip()
@@ -281,7 +282,7 @@ def _get_employees_for_lob(lob, sheet=None):
                     ).all()
                     for e in all_emps:
                         mapped_lob = sheet_lob_map.get(str(e.employee_id).strip(), "")
-                        if mapped_lob.lower() == lob_lower:
+                        if normalize_lob(mapped_lob).lower() == lob_normalized:
                             results.append({
                                 "name": e.full_name,
                                 "employee_id": e.employee_id,
