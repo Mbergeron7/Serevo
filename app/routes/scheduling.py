@@ -140,6 +140,7 @@ def generate():
             return jsonify({"success": False, "error": "Date range cannot exceed one year"})
 
         user = get_current_user()
+        emp_ids = payload.get("employee_ids") or None  # list or None
         if user and user.get("is_demo"):
             from app.demo_data import plan_demo_day, get_demo_requirements
             days = []
@@ -148,8 +149,12 @@ def generate():
             total_hours = 0.0
             cov_sum, cov_days = 0.0, 0
             never = {}
+            demo_emp_filter = set(str(e) for e in emp_ids) if emp_ids else None
             while d <= end_date:
                 all_scheds, warnings = plan_demo_day(d, lob)
+                if demo_emp_filter:
+                    all_scheds = [s for s in all_scheds
+                                  if str(s.get("employee_id", "")) in demo_emp_filter]
                 shifts_out = [s for s in all_scheds if s["status"] == "scheduled"]
                 unassigned = [s["employee"] for s in all_scheds if s["status"] != "scheduled"]
                 for s in all_scheds:
@@ -208,7 +213,6 @@ def generate():
             #       generate for employees/days that have none.
             mode = (payload.get("mode") or "overwrite").strip().lower()
             sheet = _get_sheet()
-            emp_ids = payload.get("employee_ids") or None  # list or None
 
             existing_by_day = {}
             if mode == "fill":
