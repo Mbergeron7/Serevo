@@ -199,7 +199,7 @@ def _get_employees_for_lob(lob, sheet=None):
         try:
             from app.models import db, Employee, PlanningUnit
             pu = PlanningUnit.query.filter(
-                db.func.lower(PlanningUnit.name) == lob_lower
+                db.func.lower(PlanningUnit.name) == lob_normalized
             ).first()
             if pu:
                 db_emps = Employee.query.filter_by(
