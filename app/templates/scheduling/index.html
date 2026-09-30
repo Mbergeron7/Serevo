@@ -2029,7 +2029,7 @@ function openMassModal() {
     list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">Load a schedule or switch to "Across multiple LOBs" to fetch shifts.</div>';
   }
 
-  document.getElementById('massOverlay').classList.add('open');
+  document.getElementById('massOverlay').classList.add('show');
 }
 
 function massToggleScope() {
@@ -2101,7 +2101,7 @@ async function massLoadCrossLob() {
 }
 
 function closeMassModal() {
-  document.getElementById('massOverlay').classList.remove('open');
+  document.getElementById('massOverlay').classList.remove('show');
 }
 
 function _massGetActiveDayIdx() {
@@ -2317,11 +2317,11 @@ function openOptimizeModal() {
     list.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">No scheduled shifts.</div>';
   }
 
-  document.getElementById('optimizeOverlay').classList.add('open');
+  document.getElementById('optimizeOverlay').classList.add('show');
 }
 
 function closeOptimizeModal() {
-  document.getElementById('optimizeOverlay').classList.remove('open');
+  document.getElementById('optimizeOverlay').classList.remove('show');
 }
 
 function optToggleAll() {
