@@ -720,37 +720,54 @@ def daily_summary(intervals):
 
 def _get_db_historical(lob, historical_days):
     """
-    Pull historical forecast intervals from the PostgreSQL database.
-    Returns list of {date, time, offered, aht} sorted by timestamp.
+    Pull historical forecast intervals — tries DB first, then any other
+    configured source (Google Sheets, etc.) as a fallback.
+    Returns (list of {date, time, offered, aht}, error_or_None).
     """
-    from app.models import ForecastInterval, PlanningUnit
-    from sqlalchemy import func as sa_func
-
-    unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
-    if not unit:
-        return [], f"Planning unit '{lob}' not found"
-
     today = datetime.date.today()
     hist_start = today - datetime.timedelta(days=historical_days)
 
-    rows = ForecastInterval.query.filter(
-        ForecastInterval.planning_unit_id == unit.id,
-        sa_func.date(ForecastInterval.timestamp) >= hist_start,
-        sa_func.date(ForecastInterval.timestamp) < today,
-    ).order_by(ForecastInterval.timestamp).all()
+    # --- Try PostgreSQL first ---
+    try:
+        from app.models import ForecastInterval, PlanningUnit
+        from sqlalchemy import func as sa_func
 
-    if not rows:
-        return [], f"No historical forecast data for '{lob}'"
+        unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
+        if unit:
+            rows = ForecastInterval.query.filter(
+                ForecastInterval.planning_unit_id == unit.id,
+                sa_func.date(ForecastInterval.timestamp) >= hist_start,
+                sa_func.date(ForecastInterval.timestamp) < today,
+            ).order_by(ForecastInterval.timestamp).all()
 
-    results = []
-    for r in rows:
-        results.append({
-            "date": r.timestamp.strftime("%Y-%m-%d"),
-            "time": r.timestamp.strftime("%H:%M"),
-            "offered": float(r.offered or 0),
-            "aht": float(r.aht or 0),
-        })
-    return results, None
+            if rows:
+                results = []
+                for r in rows:
+                    results.append({
+                        "date": r.timestamp.strftime("%Y-%m-%d"),
+                        "time": r.timestamp.strftime("%H:%M"),
+                        "offered": float(r.offered or 0),
+                        "aht": float(r.aht or 0),
+                    })
+                log.info(f"Found {len(results)} historical intervals in DB for '{lob}'")
+                return results, None
+    except Exception as e:
+        log.info(f"DB historical lookup failed for '{lob}': {e}")
+
+    # --- Fallback: try Google Sheets or other configured source ---
+    try:
+        historical, err = get_forecast_data(lob, hist_start,
+                                             today - datetime.timedelta(days=1))
+        if not err and historical:
+            log.info(f"Found {len(historical)} historical intervals from "
+                     f"sheets/source for '{lob}'")
+            return historical, None
+        if err:
+            log.info(f"Sheets/source fallback also failed for '{lob}': {err}")
+    except Exception as e:
+        log.info(f"Sheets/source fallback error for '{lob}': {e}")
+
+    return [], f"No historical forecast data for '{lob}' in any source"
 
 
 def _generate_from_db_history(lob, method, historical_days, forecast_days,

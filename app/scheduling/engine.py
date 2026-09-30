@@ -87,35 +87,72 @@ def _get_requirements_for_date(lob, date_obj, sheet=None):
     """
     Pull interval-level requirements for a LOB on a specific date.
     Returns list of {time: "HH:MM", agents_required: float}.
-    Uses the pluggable data source (Google Sheets or PostgreSQL).
+
+    Tries three sources in order:
+      1. Stored requirements (DB or Sheet, via get_source())
+      2. Stored forecast data → Erlang C to compute requirements on the fly
+      3. Empty list (caller falls back to default shifts)
     """
+    # --- 1. Try stored requirements ---
     try:
         from app.data_source import get_source
         src = get_source()
         intervals, err = src.get_requirements(lob, date_obj)
+        if not err and intervals:
+            results = []
+            for row in intervals:
+                ts = row.get("time", "")
+                agents = float(row.get("agents_required", 0) or 0)
+                if len(ts) > 10:
+                    time_str = ts[11:16]
+                else:
+                    time_str = ts
+                results.append({
+                    "time": time_str,
+                    "agents_required": agents,
+                })
+            if results:
+                return results
         if err:
-            log.warning(f"Requirements fetch error for {lob} {date_obj}: {err}")
-            return []
-        if not intervals:
-            return []
-        # Normalize to list of dicts
-        results = []
-        for row in intervals:
-            ts = row.get("time", "")
-            agents = float(row.get("agents_required", 0) or 0)
-            # Extract HH:MM from timestamp
-            if len(ts) > 10:
-                time_str = ts[11:16]
-            else:
-                time_str = ts
-            results.append({
-                "time": time_str,
-                "agents_required": agents,
-            })
-        return results
+            log.info(f"Requirements not available for {lob} {date_obj}: {err}")
     except Exception as e:
-        log.warning(f"Requirements load error: {e}")
-        return []
+        log.info(f"Requirements lookup error for {lob}: {e}")
+
+    # --- 2. Fall back to forecast data → Erlang C ---
+    try:
+        from app.data_source import get_source
+        src = get_source()
+        forecast, f_err = src.get_forecast(lob, date_obj)
+        if not f_err and forecast:
+            from app.forecasting.engine import erlang_c_staffing
+            results = []
+            for row in forecast:
+                ts = row.get("time", "")
+                offered = float(row.get("offered", 0) or 0)
+                aht = float(row.get("aht", 0) or 0)
+                if offered > 0 and aht > 0:
+                    ec = erlang_c_staffing(offered, aht)
+                    agents = ec["agents_with_shrinkage"]
+                else:
+                    agents = 0
+                if len(ts) > 10:
+                    time_str = ts[11:16]
+                else:
+                    time_str = ts
+                results.append({
+                    "time": time_str,
+                    "agents_required": agents,
+                })
+            if results:
+                log.info(f"Generated requirements from forecast for {lob} {date_obj} "
+                         f"({len(results)} intervals)")
+                return results
+        if f_err:
+            log.info(f"Forecast also not available for {lob} {date_obj}: {f_err}")
+    except Exception as e:
+        log.info(f"Forecast fallback error for {lob}: {e}")
+
+    return []
 
 
 def _get_employees_for_lob(lob, sheet=None):
