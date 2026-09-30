@@ -1,20 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Data Sources — {{ brand_name }}{% endblock %}
 
-{% block nav %}
-  <a href="/">Dashboard</a>
-  <a href="/people/">People</a>
-  <a href="/capacity" class="nav-link">Capacity</a>
-  <a href="/capacity/plan">Plan View</a>
-  <a href="/capacity/summary">Summary</a>
-  <a href="/capacity/sources" class="active">Data Sources</a>
-  {% if user and user.is_admin %}
-  <a href="/data/">Data Import</a>
-  <a href="/settings/">Settings</a>
-  {% endif %}
-  <span class="user-name" style="margin-left:auto;">{{ user.name }}</span>
-  <a href="/logout">Sign out</a>
-{% endblock %}
 
 {% block head %}
 <style>

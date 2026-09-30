@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Google Sheets — {{ brand_name }}{% endblock %}
 
-{% block nav %}
-  <a href="/">Dashboard</a>
-  <a href="/people/">People</a>
-  <a href="/data/">Data Import</a>
-  <a href="/settings/" class="active">Settings</a>
-  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
-  <a href="/logout">Sign out</a>
-{% endblock %}
 
 {% block head %}
 <style>

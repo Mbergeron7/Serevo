@@ -89,6 +89,9 @@ def google_sheets():
 @settings_bp.route("/google-sheets/save", methods=["POST"])
 @admin_required
 def save_google_sheets():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AppSetting
     data = request.get_json(silent=True) or {}
     sheet_key = data.get("sheet_key", "").strip()
@@ -149,6 +152,9 @@ def _friendly_sheet_error(e):
 @settings_bp.route("/google-sheets/test", methods=["POST"])
 @admin_required
 def test_google_sheets():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AppSetting
     from app.data_source import _open_capacity_sheet
 
@@ -195,6 +201,9 @@ def test_google_sheets():
 @settings_bp.route("/google-sheets/disconnect", methods=["POST"])
 @admin_required
 def disconnect_google_sheets():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, AppSetting
     AppSetting.set("google_sheet_key", "")
     AppSetting.set("google_service_account_json", "")
@@ -222,6 +231,9 @@ def api_connections():
 @settings_bp.route("/api-connections/save", methods=["POST"])
 @admin_required
 def save_connection():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
 
@@ -276,6 +288,9 @@ def _clean_token(raw):
 @admin_required
 def test_connection():
     """Test an API connection by attempting a basic request."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, APIConnection
     import urllib.request
     import urllib.error
@@ -367,6 +382,9 @@ def test_connection():
 @settings_bp.route("/api-connections/delete", methods=["POST"])
 @admin_required
 def delete_connection():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
     conn_id = data.get("id")
@@ -383,6 +401,9 @@ def delete_connection():
 @settings_bp.route("/api-connections/toggle", methods=["POST"])
 @admin_required
 def toggle_connection():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, APIConnection
     data = request.get_json(silent=True) or {}
     conn_id = data.get("id")
@@ -412,6 +433,9 @@ def users():
 @settings_bp.route("/users/save", methods=["POST"])
 @admin_required
 def save_user():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, User
     from flask_bcrypt import generate_password_hash
 
@@ -479,6 +503,9 @@ def save_user():
 @settings_bp.route("/users/toggle", methods=["POST"])
 @admin_required
 def toggle_user():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import db, User
     data = request.get_json(silent=True) or {}
     user_id = data.get("id")

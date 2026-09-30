@@ -26,7 +26,20 @@
       <span></span><span></span><span></span>
     </button>
     <div class="nav-links">
-      {% block nav %}{% endblock %}
+      {% block nav %}
+      <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
+      <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>People</a>
+      <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
+      <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
+      <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
+      <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
+      {% if current_user and current_user.is_admin %}
+      <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
+      <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
+      {% endif %}
+      <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
+      <a href="/logout">Sign out</a>
+      {% endblock %}
     </div>
   </nav>
 

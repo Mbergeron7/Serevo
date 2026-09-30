@@ -20,6 +20,15 @@ log = logging.getLogger("serevo.capacity")
 
 capacity_bp = Blueprint("capacity", __name__, url_prefix="/capacity")
 
+
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(ok=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
 TIMEZONE = cp.TIMEZONE
 
 
@@ -603,6 +612,9 @@ def sources_view():
 @login_required
 def sources_add():
     """Create a new data source."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not user or not user.get("is_admin"):
         return jsonify({"ok": False, "error": "Admin only"}), 403
@@ -636,6 +648,9 @@ def sources_add():
 @login_required
 def sources_update(source_id):
     """Update an existing data source."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not user or not user.get("is_admin"):
         return jsonify({"ok": False, "error": "Admin only"}), 403
@@ -661,6 +676,9 @@ def sources_update(source_id):
 @login_required
 def sources_delete(source_id):
     """Delete a data source (doesn't delete the ingested data)."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not user or not user.get("is_admin"):
         return jsonify({"ok": False, "error": "Admin only"}), 403
@@ -677,6 +695,9 @@ def sources_delete(source_id):
 @login_required
 def sources_sync(source_id):
     """Sync one data source now."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not user or not user.get("is_admin"):
         return jsonify({"ok": False, "error": "Admin only"}), 403
@@ -690,6 +711,9 @@ def sources_sync(source_id):
 @login_required
 def sources_sync_all():
     """Sync all active data sources."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not user or not user.get("is_admin"):
         return jsonify({"ok": False, "error": "Admin only"}), 403

@@ -15,6 +15,15 @@ log = logging.getLogger("serevo.forecasting")
 forecasting_bp = Blueprint("forecasting", __name__, url_prefix="/forecasting")
 
 
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
+
 def _get_sheet():
     try:
         from app.data_source import _open_capacity_sheet
@@ -171,7 +180,8 @@ def generate():
 
         # Save generated forecast + requirements to DB when using Postgres
         import os
-        if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+        is_demo_user = user and user.get("is_demo")
+        if not is_demo_user and os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
             try:
                 from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
                 from app.data_source import normalize_lob
@@ -391,6 +401,9 @@ def generate_from_history():
       forecast_days: int (default 90)
       window: int (default 7, for moving_average only)
     """
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.forecasting.engine import (generate_and_save_forecast,
                                          generate_all_forecasts)
     try:

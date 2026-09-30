@@ -17,6 +17,15 @@ log = logging.getLogger("serevo.manual_entry")
 manual_entry_bp = Blueprint("manual_entry", __name__, url_prefix="/api")
 
 
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
+
 # ── helpers ─────────────────────────────────────────────────────
 def _get_or_create_unit(name):
     """Find or create a PlanningUnit by name. Returns the unit."""
@@ -91,6 +100,9 @@ def list_employees():
 @login_required
 def save_employee():
     """Create or update an employee."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     try:
         data = request.get_json(silent=True) or {}
 
@@ -152,6 +164,9 @@ def save_employee():
 @login_required
 def delete_employee():
     """Permanently delete an employee record (for duplicate cleanup etc.)."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     try:
         data = request.get_json(silent=True) or {}
         pk = data.get("id")
@@ -200,6 +215,9 @@ def list_skill_groups():
 @login_required
 def save_forecast_interval():
     """Create a single forecast interval or a batch."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     try:
         data = request.get_json(silent=True) or {}
 
@@ -260,6 +278,9 @@ def save_forecast_interval():
 @login_required
 def save_requirement_interval():
     """Create a single requirement interval or a batch."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     try:
         data = request.get_json(silent=True) or {}
 
@@ -323,6 +344,9 @@ def get_availability(emp_id):
 @login_required
 def save_availability():
     """Save all 7 days of availability for an employee (bulk upsert)."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     try:
         data = request.get_json(silent=True) or {}
         emp_id = data.get("employee_id")

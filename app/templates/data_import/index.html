@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Data Import — {{ brand_name }}{% endblock %}
 
-{% block nav %}
-  <a href="/">Dashboard</a>
-  <a href="/people/">People</a>
-  <a href="/data/" class="active">Data Import</a>
-  <a href="/settings/">Settings</a>
-  <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
-  <a href="/logout">Sign out</a>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">

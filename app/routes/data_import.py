@@ -20,6 +20,15 @@ log = logging.getLogger("serevo.data_import")
 data_import_bp = Blueprint("data_import", __name__, url_prefix="/data")
 
 
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
+
 # ── Column mappings per upload type ──────────────────────────
 UPLOAD_TYPES = {
     "employees": {
@@ -84,6 +93,9 @@ def manual_entry():
 @data_import_bp.route("/upload", methods=["POST"])
 @admin_required
 def upload():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     upload_type = request.form.get("upload_type", "")
     if upload_type not in UPLOAD_TYPES:
