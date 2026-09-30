@@ -154,7 +154,29 @@ class SheetSource:
         if err:
             return None, err
         try:
-            return sheet.worksheet(tab).get_all_records(), None
+            ws = sheet.worksheet(tab)
+            # For FORECAST RAW and REQUIREMENTS RAW, the title row is in
+            # row 1 and actual headers may be in row 3.  Detect by checking
+            # whether row-1 looks like a header row (has LOB / Date columns)
+            # or a title row.  If not a header, try row 3.
+            try:
+                first_row = ws.row_values(1)
+            except Exception:
+                first_row = []
+            first_lower = [str(c).strip().lower() for c in first_row]
+            if "lob" in first_lower:
+                # Row 1 IS the header row — use default
+                return ws.get_all_records(), None
+            # Try row 3 as header
+            try:
+                row3 = ws.row_values(3)
+            except Exception:
+                row3 = []
+            row3_lower = [str(c).strip().lower() for c in row3]
+            if "lob" in row3_lower:
+                return ws.get_all_records(head=3), None
+            # Fallback — let gspread try default
+            return ws.get_all_records(), None
         except Exception as e:
             return None, f"tab '{tab}' unreadable: {e}"
 

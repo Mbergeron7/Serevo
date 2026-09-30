@@ -24,6 +24,20 @@ DEFAULT_SHRINKAGE = 0.30
 
 
 # ═══════════════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════════════
+
+def _get_val(row, *keys):
+    """Case-insensitive column lookup — try each key as-is, title-case, and lower."""
+    for k in keys:
+        for variant in (k, k.title(), k.lower(), k.upper()):
+            v = row.get(variant)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+    return ""
+
+
+# ═══════════════════════════════════════════════════════════════
 # DATA RETRIEVAL
 # ═══════════════════════════════════════════════════════════════
 
@@ -60,7 +74,7 @@ def get_available_lobs(sheet=None):
             return sorted(lobs)
         lobs = set()
         for r in rows:
-            lob = str(r.get("LOB", "")).strip()
+            lob = _get_val(r, "LOB")
             if lob:
                 lobs.add(lob)
         return sorted(lobs)
@@ -85,18 +99,29 @@ def get_forecast_data(lob, start_date, end_date, sheet=None):
         results = []
 
         for r in rows:
-            if str(r.get("LOB", "")).strip().lower() != lob.strip().lower():
+            row_lob = _get_val(r, "LOB")
+            if row_lob.lower() != lob.strip().lower():
                 continue
-            ts = str(r.get("Timestamp", ""))
-            date_part = ts[:10]
+            # Support separate Date + Timestamp columns, or combined Timestamp
+            date_col = _get_val(r, "Date")
+            ts_col = _get_val(r, "Timestamp")
+            if date_col and len(date_col) >= 10:
+                date_part = date_col[:10]
+                time_part = ts_col[:5] if ts_col else "00:00"
+            elif len(ts_col) > 10:
+                date_part = ts_col[:10]
+                time_part = ts_col[11:16]
+            else:
+                continue
             if date_part < start_str or date_part > end_str:
                 continue
-            time_part = ts[11:16] if len(ts) > 10 else ts
+            offered_raw = _get_val(r, "Offered", "offered") or "0"
+            aht_raw = _get_val(r, "AHT", "aht") or "0"
             results.append({
                 "date": date_part,
                 "time": time_part,
-                "offered": float(r.get("offered", 0) or 0),
-                "aht": float(r.get("aht", 0) or 0),
+                "offered": float(offered_raw),
+                "aht": float(aht_raw),
             })
 
         results.sort(key=lambda x: (x["date"], x["time"]))
@@ -122,17 +147,26 @@ def get_requirements_data(lob, start_date, end_date, sheet=None):
         results = []
 
         for r in rows:
-            if str(r.get("LOB", "")).strip().lower() != lob.strip().lower():
+            row_lob = _get_val(r, "LOB")
+            if row_lob.lower() != lob.strip().lower():
                 continue
-            ts = str(r.get("Timestamp", ""))
-            date_part = ts[:10]
+            date_col = _get_val(r, "Date")
+            ts_col = _get_val(r, "Timestamp")
+            if date_col and len(date_col) >= 10:
+                date_part = date_col[:10]
+                time_part = ts_col[:5] if ts_col else "00:00"
+            elif len(ts_col) > 10:
+                date_part = ts_col[:10]
+                time_part = ts_col[11:16]
+            else:
+                continue
             if date_part < start_str or date_part > end_str:
                 continue
-            time_part = ts[11:16] if len(ts) > 10 else ts
+            req_raw = _get_val(r, "Agents Required", "agents_required") or "0"
             results.append({
                 "date": date_part,
                 "time": time_part,
-                "agents_required": float(r.get("agents_required", 0) or 0),
+                "agents_required": float(req_raw),
             })
 
         results.sort(key=lambda x: (x["date"], x["time"]))
@@ -151,10 +185,14 @@ def get_available_dates(lob, sheet=None):
             return []
         dates = set()
         for r in rows:
-            if str(r.get("LOB", "")).strip().lower() != lob.strip().lower():
+            row_lob = _get_val(r, "LOB")
+            if row_lob.lower() != lob.strip().lower():
                 continue
-            ts = str(r.get("Timestamp", ""))
-            if len(ts) >= 10:
+            date_col = _get_val(r, "Date")
+            ts = _get_val(r, "Timestamp")
+            if date_col and len(date_col) >= 10:
+                dates.add(date_col[:10])
+            elif len(ts) >= 10:
                 dates.add(ts[:10])
         return sorted(dates)
     except Exception:
