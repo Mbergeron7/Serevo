@@ -14,6 +14,17 @@ depends_on = None
 
 
 def upgrade():
+    # Guard: table may already exist from db.create_all()
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_name = 'lob_mappings'"
+        )
+    )
+    if result.fetchone():
+        return  # already exists, nothing to do
+
     op.create_table(
         "lob_mappings",
         sa.Column("id", sa.Integer(), primary_key=True),
