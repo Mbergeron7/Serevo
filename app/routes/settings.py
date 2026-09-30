@@ -513,7 +513,7 @@ def customization():
     from app.models import (SegmentCode, ShiftTemplate, LOBSetting,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
-                            BrandSetting)
+                            BrandSetting, LobMapping)
 
     segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
     shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
@@ -533,6 +533,9 @@ def customization():
     alerts = [a.to_dict() for a in AlertConfig.query.order_by(AlertConfig.name).all()]
     brand = BrandSetting.query.first()
     brand_data = brand.to_dict() if brand else {}
+    lob_mappings = [{"id": m.id, "source_name": m.source_name,
+                     "planning_unit_name": m.planning_unit_name}
+                    for m in LobMapping.query.order_by(LobMapping.source_name).all()]
 
     return render_template("settings/customization.html",
         user=user,
@@ -542,6 +545,7 @@ def customization():
         sched_rules=sched_rules, holidays=holidays,
         skill_groups=skill_groups, adherence_codes=adherence_codes,
         alerts=alerts, brand_data=brand_data, current_year=cur_year,
+        lob_mappings=lob_mappings,
     )
 
 
@@ -1149,3 +1153,55 @@ def save_branding():
     brand.footer_text = (data.get("footer_text") or "").strip()
     db.session.commit()
     return jsonify({"success": True, "brand": brand.to_dict()})
+
+
+# ── LOB Mappings CRUD ──────────────────────────────────────────
+
+@settings_bp.route("/customization/lob-mappings/save", methods=["POST"])
+@admin_required
+def save_lob_mapping():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, LobMapping
+    data = request.get_json(silent=True) or {}
+    mid = data.get("id")
+    source = (data.get("source_name") or "").strip()
+    target = (data.get("planning_unit_name") or "").strip()
+    if not source or not target:
+        return jsonify({"success": False, "error": "Both source name and planning unit are required"})
+
+    if mid:
+        m = LobMapping.query.get(mid)
+        if not m:
+            return jsonify({"success": False, "error": "Not found"})
+    else:
+        existing = LobMapping.query.filter_by(source_name=source).first()
+        if existing:
+            return jsonify({"success": False, "error": f"'{source}' is already mapped"})
+        m = LobMapping(source_name=source)
+        db.session.add(m)
+
+    m.source_name = source
+    m.planning_unit_name = target
+    db.session.commit()
+    return jsonify({"success": True, "item": {
+        "id": m.id, "source_name": m.source_name,
+        "planning_unit_name": m.planning_unit_name,
+    }})
+
+
+@settings_bp.route("/customization/lob-mappings/delete", methods=["POST"])
+@admin_required
+def delete_lob_mapping():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, LobMapping
+    data = request.get_json(silent=True) or {}
+    m = LobMapping.query.get(data.get("id"))
+    if not m:
+        return jsonify({"success": False, "error": "Not found"})
+    db.session.delete(m)
+    db.session.commit()
+    return jsonify({"success": True})

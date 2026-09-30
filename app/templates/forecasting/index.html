@@ -298,7 +298,7 @@
     <div class="chart-container">
       <div class="chart-title">Daily Summary</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblDaily">
+        <table class="data-table sortable" id="tblDaily">
           <thead>
             <tr>
               <th>Date</th>
@@ -375,7 +375,7 @@
     <div class="chart-container">
       <div class="chart-title">Daily Forecast Summary</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblGenDaily">
+        <table class="data-table sortable" id="tblGenDaily">
           <thead>
             <tr>
               <th>Date</th>
@@ -430,7 +430,7 @@
     <div class="chart-container">
       <div class="chart-title">Scenario Daily Summary</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblWhatif">
+        <table class="data-table sortable" id="tblWhatif">
           <thead>
             <tr>
               <th>Date</th>
@@ -503,7 +503,7 @@
     <div class="chart-container">
       <div class="chart-title">Variance by Interval</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblAccuracy">
+        <table class="data-table sortable" id="tblAccuracy">
           <thead>
             <tr>
               <th>Date</th>
@@ -746,6 +746,7 @@ function renderViewData() {
       <td>${d.intervals}</td>
     </tr>
   `).join('');
+  if(window.initSortable) initSortable($('tblDaily'));
 }
 
 /* ══════════════════════════════════════════════════
@@ -807,6 +808,7 @@ async function generateForecast() {
         <td>${d.peak_agents_with_shrinkage}</td>
       </tr>
     `).join('');
+    if(window.initSortable) initSortable($('tblGenDaily'));
 
   } catch (e) {
     hideLoading();
@@ -894,6 +896,7 @@ async function runWhatIf() {
         <td>${d.peak_agents_with_shrinkage}</td>
       </tr>
     `).join('');
+    if(window.initSortable) initSortable($('tblWhatif'));
 
   } catch (e) {
     hideLoading();
@@ -982,6 +985,7 @@ async function loadAccuracy() {
         <td class="${cls}">${r.variance_pct >= 0 ? '+' : ''}${r.variance_pct}%</td>
       </tr>`;
     }).join('');
+    if(window.initSortable) initSortable($('tblAccuracy'));
 
   } catch (e) { /* silently skip */ }
 }

@@ -150,6 +150,8 @@
 
 <div class="filter-bar">
   <input type="text" id="filterName" placeholder="Search by name…" oninput="filterPTO()">
+  <label style="font-size:.82rem;font-weight:600;">From <input type="date" id="filterStart" onchange="filterPTO()" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;"></label>
+  <label style="font-size:.82rem;font-weight:600;">To <input type="date" id="filterEnd" onchange="filterPTO()" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;"></label>
   <select id="filterLOB" onchange="filterPTO()"
           style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
     <option value="">All LOBs</option>
@@ -163,7 +165,7 @@
   </div>
   {% if pto_list %}
   <div class="pto-table-wrap">
-    <table class="pto-table" id="ptoTable">
+    <table class="pto-table sortable" id="ptoTable">
       <thead>
         <tr>
           <th>Employee</th>
@@ -335,10 +337,19 @@ function deletePTO(rowIdx, name) {
 function filterPTO() {
   const q = (document.getElementById('filterName').value || '').toLowerCase();
   const lob = (document.getElementById('filterLOB').value || '').toLowerCase();
+  const startFilter = document.getElementById('filterStart').value;
+  const endFilter = document.getElementById('filterEnd').value;
   document.querySelectorAll('#ptoTable tbody tr').forEach(row => {
     const nameOk = !q || (row.dataset.name || '').includes(q);
     const lobOk = !lob || (row.dataset.lob || '') === lob;
-    row.style.display = (nameOk && lobOk) ? '' : 'none';
+    // Date range filter — check the Start column (index 2)
+    let dateOk = true;
+    if (startFilter || endFilter) {
+      const cellDate = (row.cells[2]?.textContent || '').trim().substring(0, 10);
+      if (startFilter && cellDate < startFilter) dateOk = false;
+      if (endFilter && cellDate > endFilter) dateOk = false;
+    }
+    row.style.display = (nameOk && lobOk && dateOk) ? '' : 'none';
   });
 }
 

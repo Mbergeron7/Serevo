@@ -118,7 +118,7 @@
 <div class="report-card">
   <h3>Capacity Summary <span class="hint">{{ rows|length }} rows · gap = actual HC − FTE required (positive = surplus)</span></h3>
   <div class="wrap">
-    <table class="rt">
+    <table class="rt sortable">
       <thead><tr>
         <th>LOB</th><th class="l">Month</th><th>Forecast calls</th><th>Answered</th><th>AHT (s)</th>
         <th>PSIH (no shrink)</th><th>PSIH ({{ shrinkage_pct }}% shrink)</th><th>FTE required</th>
@@ -161,7 +161,7 @@
 <div class="report-card">
   <h3>Headcount by LOB <span class="hint">from the employee roster</span></h3>
   <div class="wrap">
-    <table class="rt">
+    <table class="rt sortable">
       <thead><tr><th>LOB / Planning unit</th><th>Active</th><th>On leave</th><th>Inactive</th><th>Total</th><th>On leave %</th></tr></thead>
       <tbody>
         {% for h in headcount %}

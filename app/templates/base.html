@@ -39,6 +39,7 @@
     {% if brand_email %}<p><a href="mailto:{{ brand_email }}">{{ brand_email }}</a></p>{% endif %}
   </footer>
 
+  <script src="{{ url_for('static', filename='js/table-utils.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

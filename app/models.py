@@ -1051,6 +1051,21 @@ class IntervalActual(db.Model):
         }
 
 
+class LobMapping(db.Model):
+    """Maps a source LOB/workload name to a canonical planning-unit name.
+    E.g. 'SS Sales Combined' → 'SS Sales'.
+    Replaces the hard-coded _LOB_TO_PU dict for generic client support."""
+    __tablename__ = "lob_mappings"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    source_name      = db.Column(db.String(200), unique=True, nullable=False, index=True)
+    planning_unit_name = db.Column(db.String(200), nullable=False)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<LobMapping {self.source_name!r} → {self.planning_unit_name!r}>"
+
+
 class AgentStatusEvent(db.Model):
     """A period an agent spent in one ACD status (On Queue, Break, Lunch,
     Meeting, Offline, ...). Drives Agent Status, Absenteeism, Efficiency."""

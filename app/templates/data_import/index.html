@@ -60,7 +60,13 @@
 {% if recent_uploads %}
 <div class="card" style="margin-top:2rem;">
   <h2>Recent Uploads</h2>
-  <table class="data-table">
+  <div class="filter-bar">
+    <label>Type <select id="filterType" onchange="filterUploads()"><option value="">All</option>
+      {% for key, info in upload_types.items() %}<option value="{{ key }}">{{ info.label }}</option>{% endfor %}
+    </select></label>
+    <label>Status <select id="filterStatus" onchange="filterUploads()"><option value="">All</option><option value="success">Success</option><option value="partial">Partial</option><option value="error">Error</option></select></label>
+  </div>
+  <table class="data-table sortable" id="uploadsTable">
     <thead>
       <tr>
         <th>Date</th>
@@ -168,6 +174,16 @@ function downloadTemplate(type) {
   a.href = URL.createObjectURL(blob);
   a.download = `serevo_${type}_template.csv`;
   a.click();
+}
+
+function filterUploads() {
+  const type = (document.getElementById('filterType').value || '').toLowerCase();
+  const status = (document.getElementById('filterStatus').value || '').toLowerCase();
+  document.querySelectorAll('#uploadsTable tbody tr').forEach(row => {
+    const typeOk = !type || (row.cells[1]?.textContent || '').trim().toLowerCase() === type;
+    const statusOk = !status || (row.cells[5]?.textContent || '').trim().toLowerCase() === status;
+    row.style.display = (typeOk && statusOk) ? '' : 'none';
+  });
 }
 </script>
 {% endblock %}

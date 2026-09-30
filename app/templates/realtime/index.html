@@ -305,7 +305,7 @@
     <div class="chart-container">
       <div class="chart-title">Today's Shifts</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblShifts">
+        <table class="data-table sortable" id="tblShifts">
           <thead>
             <tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th></tr>
           </thead>
@@ -340,7 +340,7 @@
     <div class="chart-container">
       <div class="chart-title">Interval Detail</div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblCoverage">
+        <table class="data-table sortable" id="tblCoverage">
           <thead>
             <tr>
               <th>Time</th><th>Required</th><th>Scheduled</th><th>Gap</th>
@@ -368,7 +368,7 @@
                style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);width:200px;">
       </div>
       <div style="overflow-x:auto;">
-        <table class="data-table" id="tblAdherence">
+        <table class="data-table sortable" id="tblAdherence">
           <thead>
             <tr>
               <th>Employee</th><th>Shift</th><th>Hours</th>
@@ -656,6 +656,7 @@ function renderOverview() {
       <td>${sh.hours}</td><td>${sh.type}</td>
     </tr>
   `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No shifts scheduled</td></tr>';
+  if(window.initSortable) initSortable($('tblShifts'));
 
   // Summary
   $('summaryStats').innerHTML = `
@@ -701,6 +702,7 @@ function renderCoverage() {
       <td>${statusBadge}</td>
     </tr>`;
   }).join('');
+  if(window.initSortable) initSortable($('tblCoverage'));
 }
 
 /* ══════════════════════════════════════════════════
@@ -732,6 +734,7 @@ function renderAdherence() {
       <td><span class="adh-badge ${cls}">${ag.expected_state}</span></td>
     </tr>`;
   }).join('');
+  if(window.initSortable) initSortable($('tblAdherence'));
 }
 
 /* ══════════════════════════════════════════════════

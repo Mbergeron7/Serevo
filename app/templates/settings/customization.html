@@ -28,6 +28,7 @@
   <button class="tab-btn" onclick="switchTab('skills',this)">Skill Groups</button>
   <button class="tab-btn" onclick="switchTab('adherence',this)">Adherence Codes</button>
   <button class="tab-btn" onclick="switchTab('alerts',this)">Alerts</button>
+  <button class="tab-btn" onclick="switchTab('lobmap',this)">LOB Mappings</button>
   <button class="tab-btn" onclick="switchTab('branding',this)">Branding</button>
 </div>
 
@@ -35,49 +36,49 @@
 <div class="tab-panel" id="tab-segments">
   <div class="tab-header"><h2>Segment Codes</h2><button class="btn btn-primary" onclick="openSegmentModal()">+ Add Code</button></div>
   <p class="tab-desc">Activity codes used in scheduling — on-call, break, lunch, training, etc.</p>
-  <table class="data-table" id="segments-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Offset</th><th>Duration</th><th>Placement</th><th>Order</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="segments-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Offset</th><th>Duration</th><th>Placement</th><th>Order</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Shift Templates ═══════ -->
 <div class="tab-panel" id="tab-shifts" hidden>
   <div class="tab-header"><h2>Shift Templates</h2><button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button></div>
   <p class="tab-desc">Reusable shift definitions — assign to a LOB, day type (weekday/Saturday/Sunday/holiday), and category (opening/closing/mid).</p>
-  <table class="data-table" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: LOB Settings ═══════ -->
 <div class="tab-panel" id="tab-lob" hidden>
   <div class="tab-header"><h2>LOB Settings</h2><button class="btn btn-primary" onclick="openLOBModal()">+ Add LOB Setting</button></div>
   <p class="tab-desc">Per-LOB operational defaults — SLA, shrinkage, occupancy, interval, hours of operation.</p>
-  <table class="data-table" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Time-Off Types ═══════ -->
 <div class="tab-panel" id="tab-timeoff" hidden>
   <div class="tab-header"><h2>Time-Off Types</h2><button class="btn btn-primary" onclick="openTimeOffModal()">+ Add Type</button></div>
   <p class="tab-desc">Configurable PTO categories — vacation, sick, personal, FMLA, bereavement, etc.</p>
-  <table class="data-table" id="timeoff-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Paid</th><th>Approval</th><th>Max Days/Yr</th><th>Notice (days)</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="timeoff-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Paid</th><th>Approval</th><th>Max Days/Yr</th><th>Notice (days)</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Overtime Rules ═══════ -->
 <div class="tab-panel" id="tab-overtime" hidden>
   <div class="tab-header"><h2>Overtime Rules</h2><button class="btn btn-primary" onclick="openOTModal()">+ Add Rule</button></div>
   <p class="tab-desc">Overtime policies — max hours, approval requirements, eligibility, and pay multipliers.</p>
-  <table class="data-table" id="ot-table"><thead><tr><th>Name</th><th>Type</th><th>Max/Week</th><th>Max/Day</th><th>Approval</th><th>Pay Rate</th><th>Eligible After</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="ot-table"><thead><tr><th>Name</th><th>Type</th><th>Max/Week</th><th>Max/Day</th><th>Approval</th><th>Pay Rate</th><th>Eligible After</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Schedule Rules ═══════ -->
 <div class="tab-panel" id="tab-schedrules" hidden>
   <div class="tab-header"><h2>Schedule Rules</h2><button class="btn btn-primary" onclick="openSchedRuleModal()">+ Add Rule</button></div>
   <p class="tab-desc">Scheduling constraints — min/max hours, consecutive days, rest periods, split shift limits.</p>
-  <table class="data-table" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Holidays ═══════ -->
 <div class="tab-panel" id="tab-holidays" hidden>
   <div class="tab-header"><h2>Holiday Calendar ({{ current_year }})</h2><button class="btn btn-primary" onclick="openHolidayModal()">+ Add Holiday</button></div>
   <p class="tab-desc">Company holidays that affect scheduling and forecast volume adjustments.</p>
-  <table class="data-table" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Skill Groups ═══════ -->
@@ -91,14 +92,21 @@
 <div class="tab-panel" id="tab-adherence" hidden>
   <div class="tab-header"><h2>Adherence Exception Codes</h2><button class="btn btn-primary" onclick="openAdherenceModal()">+ Add Code</button></div>
   <p class="tab-desc">Exception reasons for adherence deviations — late arrival, early departure, approved absence, etc.</p>
-  <table class="data-table" id="adherence-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Category</th><th>Excused</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="adherence-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Category</th><th>Excused</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Alert Configuration ═══════ -->
 <div class="tab-panel" id="tab-alerts" hidden>
   <div class="tab-header"><h2>Alert Configuration</h2><button class="btn btn-primary" onclick="openAlertModal()">+ Add Alert</button></div>
   <p class="tab-desc">Set up threshold-based alerts for service level, staffing, adherence, and forecast variance.</p>
-  <table class="data-table" id="alerts-table"><thead><tr><th>Name</th><th>Type</th><th>Threshold</th><th>LOB</th><th>In-App</th><th>Email</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+  <table class="data-table sortable" id="alerts-table"><thead><tr><th>Name</th><th>Type</th><th>Threshold</th><th>LOB</th><th>In-App</th><th>Email</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- ═══════ TAB: LOB Mappings ═══════ -->
+<div class="tab-panel" id="tab-lobmap" hidden>
+  <div class="tab-header"><h2>LOB Mappings</h2><button class="btn btn-primary" onclick="openLobMapModal()">+ Add Mapping</button></div>
+  <p class="tab-desc">Map source LOB/workload names from your data feed to canonical planning-unit names. E.g. "SS Sales Combined" → "SS Sales". Data that arrives with a mapped source name will automatically be stored under the correct planning unit.</p>
+  <table class="data-table sortable" id="lobmap-table"><thead><tr><th>Source Name</th><th>→ Planning Unit</th><th></th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- ═══════ TAB: Branding ═══════ -->
@@ -308,6 +316,20 @@
     </form>
   </div>
 </div>
+<!-- LOB Mapping Modal -->
+<div class="modal-overlay" id="lobmap-modal">
+  <div class="modal" style="max-width:480px;">
+    <h3 id="lobmap-modal-title">Add LOB Mapping</h3>
+    <form onsubmit="saveLobMapping(event)">
+      <input type="hidden" id="lm-id">
+      <div class="form-row"><label>Source Name <input type="text" id="lm-source" required placeholder="e.g. SS Sales Combined"></label></div>
+      <div class="form-row"><label>Planning Unit Name <input type="text" id="lm-target" required placeholder="e.g. SS Sales"></label></div>
+      <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0;">The source name is what comes from your data feed. The planning unit is the canonical name used in scheduling and reporting.</p>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('lobmap-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -325,6 +347,7 @@ const SKILL_GROUPS = {{ skill_groups | tojson }};
 const ADHERENCE_CODES = {{ adherence_codes | tojson }};
 const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
+const LOB_MAPPINGS = {{ lob_mappings | tojson }};
 
 
 /* ── Utilities ──────────────────────────── */
@@ -361,6 +384,7 @@ function renderSegments() {
     <td><code>${s.code}</code></td><td>${s.label}</td><td>${ck(s.is_productive)}</td><td>${ck(s.is_paid)}</td><td>${s.offset_mins!=null?s.offset_mins+'m':'-'}</td><td>${s.duration_mins!=null?s.duration_mins+'m':'-'}</td><td>${s.is_flexible?'Window '+s.window_start_mins+'-'+s.window_end_mins+'m':'Fixed'}</td><td>${s.sort_order}</td>
     <td><button class="btn btn-sm" onclick="editSegment(${s.id})">Edit</button>${!s.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteSegment(${s.id})">Del</button>`:''}</td>
   </tr>`).join('') || '<tr><td colspan="10" class="empty-msg">No segment codes. Click "+ Add Code".</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('segments-table'));
 }
 function openSegmentModal(s) {
   document.getElementById('segment-modal-title').textContent = s?'Edit Segment Code':'Add Segment Code';
@@ -396,6 +420,7 @@ function renderShifts() {
   const tb = document.querySelector('#shifts-table tbody');
   tb.innerHTML = SHIFTS.map(s => `<tr><td>${s.name}</td><td>${s.lob_name||'All'}</td><td>${DAY_TYPE_LABELS[s.day_type]||s.day_type}</td><td>${CAT_LABELS[s.shift_category]||s.shift_category}</td><td>${s.start_time}</td><td>${s.end_time}</td><td>${s.hours}</td><td>${(s.segments||[]).length}</td>
     <td><button class="btn btn-sm" onclick="editShift(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Del</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty-msg">No shift templates.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('shifts-table'));
 }
 let shiftSegments=[];
 function renderShiftSegments(){
@@ -435,6 +460,7 @@ function renderLOBSettings(){
   const tb=document.querySelector('#lob-table tbody');
   tb.innerHTML=LOB_SETTINGS.map(s=>`<tr><td>${s.lob_name}</td><td>${Math.round(s.service_level_target*100)}%</td><td>${s.target_asa}s</td><td>${s.interval_minutes}m</td><td>${Math.round(s.shrinkage_pct*100)}%</td><td>${Math.round(s.occupancy_target*100)}%</td><td>${fmtHours(s)}</td>
     <td><button class="btn btn-sm" onclick="editLOBSetting(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteLOBSetting(${s.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No LOB settings. Using defaults.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('lob-table'));
 }
 function openLOBModal(s){document.getElementById('lob-modal-title').textContent=s?'Edit LOB Setting':'Add LOB Setting';document.getElementById('lob-id').value=s?s.id:'';document.getElementById('lob-pu-id').value=s?s.planning_unit_id:'';document.getElementById('lob-pu-id').disabled=!!s;document.getElementById('lob-sl').value=s?Math.round(s.service_level_target*100):80;document.getElementById('lob-asa').value=s?s.target_asa:30;document.getElementById('lob-interval').value=s?s.interval_minutes:30;document.getElementById('lob-shrinkage').value=s?Math.round(s.shrinkage_pct*100):30;document.getElementById('lob-occ').value=s?Math.round(s.occupancy_target*100):85;document.getElementById('lob-max-occ').value=s?Math.round(s.max_occupancy*100):92;document.getElementById('lob-shift-hrs').value=s?s.default_shift_hrs:8;document.getElementById('lob-op-start').value=s?s.operating_start:'08:00';document.getElementById('lob-op-end').value=s?s.operating_end:'22:00';document.getElementById('lob-sat-start').value=s?s.sat_operating_start:'';document.getElementById('lob-sat-end').value=s?s.sat_operating_end:'';document.getElementById('lob-sun-start').value=s?s.sun_operating_start:'';document.getElementById('lob-sun-end').value=s?s.sun_operating_end:'';openModal('lob-modal');}
 function editLOBSetting(id){openLOBModal(LOB_SETTINGS.find(s=>s.id===id));}
@@ -446,6 +472,7 @@ function renderTimeOffTypes(){
   const tb=document.querySelector('#timeoff-table tbody');
   tb.innerHTML=TIME_OFF_TYPES.map(t=>`<tr><td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${t.color};"></span></td><td><code>${t.code}</code></td><td>${t.label}</td><td>${ck(t.is_paid)}</td><td>${ck(t.requires_approval)}</td><td>${t.max_days_per_year||'∞'}</td><td>${t.min_notice_days}</td>
     <td><button class="btn btn-sm" onclick="editTimeOff(${t.id})">Edit</button>${!t.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteTimeOff(${t.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No time-off types.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('timeoff-table'));
 }
 function openTimeOffModal(t){document.getElementById('timeoff-modal-title').textContent=t?'Edit Time-Off Type':'Add Time-Off Type';document.getElementById('to-id').value=t?t.id:'';document.getElementById('to-code').value=t?t.code:'';document.getElementById('to-label').value=t?t.label:'';document.getElementById('to-color').value=t?t.color:'#3b82f6';document.getElementById('to-order').value=t?t.sort_order:0;document.getElementById('to-maxdays').value=t?t.max_days_per_year||'':'';document.getElementById('to-notice').value=t?t.min_notice_days:0;document.getElementById('to-paid').checked=t?t.is_paid:true;document.getElementById('to-approval').checked=t?t.requires_approval:true;openModal('timeoff-modal');}
 function editTimeOff(id){openTimeOffModal(TIME_OFF_TYPES.find(t=>t.id===id));}
@@ -457,6 +484,7 @@ function renderOTRules(){
   const tb=document.querySelector('#ot-table tbody');
   tb.innerHTML=OT_RULES.map(r=>`<tr><td>${r.name}</td><td>${r.rule_type}</td><td>${r.max_ot_hours_week}h</td><td>${r.max_ot_hours_day}h</td><td>${ck(r.requires_approval)}</td><td>${r.pay_multiplier}×</td><td>${r.eligible_after_days}d</td>
     <td><button class="btn btn-sm" onclick="editOTRule(${r.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteOTRule(${r.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No overtime rules.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('ot-table'));
 }
 function openOTModal(r){document.getElementById('ot-modal-title').textContent=r?'Edit Overtime Rule':'Add Overtime Rule';document.getElementById('ot-id').value=r?r.id:'';document.getElementById('ot-name').value=r?r.name:'';document.getElementById('ot-type').value=r?r.rule_type:'voluntary';document.getElementById('ot-pay').value=r?r.pay_multiplier:1.5;document.getElementById('ot-maxweek').value=r?r.max_ot_hours_week:10;document.getElementById('ot-maxday').value=r?r.max_ot_hours_day:4;document.getElementById('ot-notice').value=r?r.min_notice_hours:24;document.getElementById('ot-eligible').value=r?r.eligible_after_days:90;document.getElementById('ot-approval').checked=r?r.requires_approval:true;openModal('ot-modal');}
 function editOTRule(id){openOTModal(OT_RULES.find(r=>r.id===id));}
@@ -468,6 +496,7 @@ function renderSchedRules(){
   const tb=document.querySelector('#schedrules-table tbody');
   tb.innerHTML=SCHED_RULES.map(r=>`<tr><td>${r.name}</td><td>${r.min_hours_week}</td><td>${r.max_hours_week}</td><td>${r.max_hours_day}</td><td>${r.max_consecutive_days}</td><td>${r.min_rest_between_shifts_hrs}</td><td>${r.min_days_off_per_week}</td>
     <td><button class="btn btn-sm" onclick="editSchedRule(${r.id})">Edit</button>${!r.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteSchedRule(${r.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No schedule rules.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('schedrules-table'));
 }
 function openSchedRuleModal(r){document.getElementById('schedrule-modal-title').textContent=r?'Edit Schedule Rule':'Add Schedule Rule';document.getElementById('sr-id').value=r?r.id:'';document.getElementById('sr-name').value=r?r.name:'';document.getElementById('sr-minwk').value=r?r.min_hours_week:20;document.getElementById('sr-maxwk').value=r?r.max_hours_week:40;document.getElementById('sr-maxday').value=r?r.max_hours_day:10;document.getElementById('sr-consec').value=r?r.max_consecutive_days:6;document.getElementById('sr-rest').value=r?r.min_rest_between_shifts_hrs:10;document.getElementById('sr-daysoff').value=r?r.min_days_off_per_week:1;document.getElementById('sr-splits').value=r?r.max_split_shifts_week:0;document.getElementById('sr-b2b').checked=r?r.allow_back_to_back:false;openModal('schedrule-modal');}
 function editSchedRule(id){openSchedRuleModal(SCHED_RULES.find(r=>r.id===id));}
@@ -479,6 +508,7 @@ function renderHolidays(){
   const tb=document.querySelector('#holidays-table tbody');
   tb.innerHTML=HOLIDAYS.map(h=>`<tr><td>${h.date}</td><td>${h.name}</td><td>${ck(h.is_full_day)}</td><td>${ck(h.is_paid)}</td><td>${h.affects_forecast?h.volume_factor===0?'Closed':h.volume_factor+'× volume':'Normal'}</td><td>${ck(h.is_recurring)}</td>
     <td><button class="btn btn-sm" onclick="editHoliday(${h.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteHoliday(${h.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-msg">No holidays configured.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('holidays-table'));
 }
 function openHolidayModal(h){document.getElementById('holiday-modal-title').textContent=h?'Edit Holiday':'Add Holiday';document.getElementById('hol-id').value=h?h.id:'';document.getElementById('hol-name').value=h?h.name:'';document.getElementById('hol-date').value=h?h.date:'';document.getElementById('hol-fullday').checked=h?h.is_full_day:true;document.getElementById('hol-paid').checked=h?h.is_paid:true;document.getElementById('hol-recurring').checked=h?h.is_recurring:true;document.getElementById('hol-forecast').checked=h?h.affects_forecast:true;document.getElementById('hol-volume').value=h?h.volume_factor:0;openModal('holiday-modal');}
 function editHoliday(id){openHolidayModal(HOLIDAYS.find(h=>h.id===id));}
@@ -502,6 +532,7 @@ function renderAdherenceCodes(){
   const tb=document.querySelector('#adherence-table tbody');
   tb.innerHTML=ADHERENCE_CODES.map(a=>`<tr><td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${a.color};"></span></td><td><code>${a.code}</code></td><td>${a.label}</td><td>${a.category}</td><td>${ck(a.is_excused)}</td>
     <td><button class="btn btn-sm" onclick="editAdherenceCode(${a.id})">Edit</button>${!a.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteAdherenceCode(${a.id})">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-msg">No adherence exception codes.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('adherence-table'));
 }
 function openAdherenceModal(a){document.getElementById('adherence-modal-title').textContent=a?'Edit Exception Code':'Add Exception Code';document.getElementById('adh-id').value=a?a.id:'';document.getElementById('adh-code').value=a?a.code:'';document.getElementById('adh-label').value=a?a.label:'';document.getElementById('adh-color').value=a?a.color:'#ef4444';document.getElementById('adh-category').value=a?a.category:'late';document.getElementById('adh-excused').checked=a?a.is_excused:false;openModal('adherence-modal');}
 function editAdherenceCode(id){openAdherenceModal(ADHERENCE_CODES.find(a=>a.id===id));}
@@ -515,11 +546,24 @@ function renderAlerts(){
   const tb=document.querySelector('#alerts-table tbody');
   tb.innerHTML=ALERTS.map(a=>`<tr><td>${a.name}</td><td>${ALERT_LABELS[a.alert_type]||a.alert_type}</td><td>${OP_LABELS[a.threshold_operator]||''} ${a.threshold_value}</td><td>${a.lob_name}</td><td>${ck(a.notify_in_app)}</td><td>${ck(a.notify_email)}</td><td>${ck(a.is_active)}</td>
     <td><button class="btn btn-sm" onclick="editAlert(${a.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteAlert(${a.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No alerts configured.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('alerts-table'));
 }
 function openAlertModal(a){document.getElementById('alert-modal-title').textContent=a?'Edit Alert':'Add Alert';document.getElementById('alrt-id').value=a?a.id:'';document.getElementById('alrt-name').value=a?a.name:'';document.getElementById('alrt-type').value=a?a.alert_type:'sl_breach';document.getElementById('alrt-threshold').value=a?a.threshold_value:80;document.getElementById('alrt-op').value=a?a.threshold_operator:'lt';document.getElementById('alrt-lob').value=a?a.planning_unit_id||'':'';document.getElementById('alrt-cooldown').value=a?a.cooldown_minutes:30;document.getElementById('alrt-inapp').checked=a?a.notify_in_app:true;document.getElementById('alrt-email').checked=a?a.notify_email:false;document.getElementById('alrt-emails').value=a?a.email_recipients:'';openModal('alert-modal');}
 function editAlert(id){openAlertModal(ALERTS.find(a=>a.id===id));}
 async function saveAlert(e){e.preventDefault();const res=await api('/settings/customization/alerts/save',{id:document.getElementById('alrt-id').value||undefined,name:document.getElementById('alrt-name').value,alert_type:document.getElementById('alrt-type').value,threshold_value:parseFloat(document.getElementById('alrt-threshold').value),threshold_operator:document.getElementById('alrt-op').value,planning_unit_id:document.getElementById('alrt-lob').value||null,cooldown_minutes:parseInt(document.getElementById('alrt-cooldown').value),notify_in_app:document.getElementById('alrt-inapp').checked,notify_email:document.getElementById('alrt-email').checked,email_recipients:document.getElementById('alrt-emails').value,is_active:true});if(res.success){upsert(ALERTS,res.item);renderAlerts();closeModal('alert-modal');}else alert(res.error);}
 async function deleteAlert(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/alerts/delete',{id});if(res.success){removeById(ALERTS,id);renderAlerts();}else alert(res.error);}
+
+/* ═══ LOB MAPPINGS ════════════════════════ */
+function renderLobMappings(){
+  const tb=document.querySelector('#lobmap-table tbody');
+  tb.innerHTML=LOB_MAPPINGS.map(m=>`<tr><td><code>${m.source_name}</code></td><td>${m.planning_unit_name}</td>
+    <td><button class="btn btn-sm" onclick="editLobMapping(${m.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteLobMapping(${m.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="3" class="empty-msg">No LOB mappings — source names will be used as-is.</td></tr>';
+  if(window.initSortable) initSortable(document.getElementById('lobmap-table'));
+}
+function openLobMapModal(m){document.getElementById('lobmap-modal-title').textContent=m?'Edit LOB Mapping':'Add LOB Mapping';document.getElementById('lm-id').value=m?m.id:'';document.getElementById('lm-source').value=m?m.source_name:'';document.getElementById('lm-target').value=m?m.planning_unit_name:'';openModal('lobmap-modal');}
+function editLobMapping(id){openLobMapModal(LOB_MAPPINGS.find(m=>m.id===id));}
+async function saveLobMapping(e){e.preventDefault();const res=await api('/settings/customization/lob-mappings/save',{id:document.getElementById('lm-id').value||undefined,source_name:document.getElementById('lm-source').value,planning_unit_name:document.getElementById('lm-target').value});if(res.success){upsert(LOB_MAPPINGS,res.item);renderLobMappings();closeModal('lobmap-modal');}else alert(res.error);}
+async function deleteLobMapping(id){if(!confirm('Delete this mapping?'))return;const res=await api('/settings/customization/lob-mappings/delete',{id});if(res.success){removeById(LOB_MAPPINGS,id);renderLobMappings();}else alert(res.error);}
 
 /* ═══ BRANDING ════════════════════════════ */
 function loadBranding(){
@@ -541,7 +585,7 @@ async function saveBranding(e){
 /* ── Initial render ────────────────────── */
 renderSegments(); renderShifts(); renderLOBSettings();
 renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
-renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); loadBranding();
+renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); renderLobMappings(); loadBranding();
 </script>
 
 <style>

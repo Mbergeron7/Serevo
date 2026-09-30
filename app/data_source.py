@@ -114,12 +114,22 @@ def normalize_lob(name):
     """
     Normalize a LOB / workload name to its planning-unit name.
     E.g. "SS Sales Combined" → "SS Sales", "SS Sales EN" → "SS Sales".
-    Uses the mapping from capacity/planning.py if available, otherwise
-    returns the name as-is.
+    Checks the database LobMapping table first (per-client configurable),
+    falls back to the hard-coded mapping in capacity/planning.py,
+    and returns the name as-is if no mapping exists.
     """
     name = (name or "").strip()
     if not name:
         return name
+    # 1. Try DB mapping (per-client configurable)
+    try:
+        from app.models import LobMapping
+        mapping = LobMapping.query.filter_by(source_name=name).first()
+        if mapping:
+            return mapping.planning_unit_name
+    except Exception:
+        pass  # DB not available or table doesn't exist yet
+    # 2. Fall back to hard-coded mapping
     try:
         from app.capacity.planning import lob_to_planning_unit
         return lob_to_planning_unit(name)
