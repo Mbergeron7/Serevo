@@ -70,9 +70,9 @@ class Employee(db.Model):
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
     contract_type    = db.Column(db.String(20), default="Full-Time")    # Full-Time | Part-Time
-    weekly_hours     = db.Column(db.Float, default=40.0)
+    weekly_hours     = db.Column(db.Float, default=42.5)
     days_per_week    = db.Column(db.Integer, default=5)
-    hours_per_day    = db.Column(db.Float, default=8.0)
+    hours_per_day    = db.Column(db.Float, default=8.5)
     timezone         = db.Column(db.String(60), default="America/New_York")
     team_lead        = db.Column(db.String(100), default="")
     schedule_excluded = db.Column(db.Boolean, default=False, server_default="false")

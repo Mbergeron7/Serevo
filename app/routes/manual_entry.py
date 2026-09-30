@@ -131,9 +131,9 @@ def save_employee():
         emp.end_date = _parse_date(data.get("end_date"))
         emp.languages = (data.get("languages") or "English").strip()
         emp.contract_type = (data.get("contract_type") or "Full-Time").strip()
-        emp.weekly_hours = float(data.get("weekly_hours") or 40)
+        emp.weekly_hours = float(data.get("weekly_hours") or 42.5)
         emp.days_per_week = int(data.get("days_per_week") or 5)
-        emp.hours_per_day = float(data.get("hours_per_day") or 8)
+        emp.hours_per_day = float(data.get("hours_per_day") or 8.5)
         emp.timezone = (data.get("timezone") or "America/New_York").strip()
         emp.team_lead = (data.get("team_lead") or "").strip()
         emp.schedule_excluded = bool(data.get("schedule_excluded"))
@@ -177,6 +177,14 @@ def delete_employee():
 def list_planning_units():
     units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
     return jsonify({"units": [{"id": u.id, "name": u.name} for u in units]})
+
+
+@manual_entry_bp.route("/skill-groups", methods=["GET"])
+@login_required
+def list_skill_groups():
+    from app.models import SkillGroup
+    groups = SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()
+    return jsonify({"groups": [{"id": g.id, "name": g.name} for g in groups]})
 
 
 # ═══════════════════════════════════════════════════════════════
