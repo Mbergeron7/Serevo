@@ -67,6 +67,47 @@ def index():
     )
 
 
+# ── Debug: employee LOB mapping ────────────────────────────
+@scheduling_bp.route("/debug-employees", methods=["GET"])
+@login_required
+def debug_employees():
+    """Show employee → LOB mapping for troubleshooting."""
+    try:
+        from app.models import Employee, PlanningUnit
+        emps = Employee.query.order_by(Employee.last_name).all()
+        units = {u.id: u.name for u in PlanningUnit.query.all()}
+        rows = []
+        for e in emps:
+            rows.append({
+                "db_id": e.id,
+                "employee_id": e.employee_id,
+                "name": e.full_name,
+                "status": e.status,
+                "planning_unit_id": e.planning_unit_id,
+                "lob": units.get(e.planning_unit_id, "(none)"),
+            })
+        # Also show what get_employees returns
+        from app.people.manager import get_employees
+        legacy, err = get_employees()
+        legacy_sample = []
+        for emp in (legacy or [])[:5]:
+            legacy_sample.append({
+                "name": f"{emp.get('First Name','')} {emp.get('Last Name','')}",
+                "employee_id": emp.get("Employee ID",""),
+                "skill": emp.get("Latest Skill Name",""),
+                "status": emp.get("Status",""),
+            })
+        return jsonify({
+            "db_employees": len(rows),
+            "planning_units": units,
+            "employees": rows,
+            "legacy_sample": legacy_sample,
+            "legacy_error": err,
+        })
+    except Exception as ex:
+        return jsonify({"error": str(ex)})
+
+
 # ── Generate schedule (API) ─────────────────────────────────
 @scheduling_bp.route("/generate", methods=["POST"])
 @login_required
@@ -583,6 +624,102 @@ def update_segment(seg_id):
 
         db.session.commit()
         return jsonify({"success": True, "segment": seg.to_dict()})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/shift/<int:shift_id>/recalc-oncall", methods=["POST"])
+@login_required
+def recalc_oncall(shift_id):
+    """Recalculate on-call segments for a shift.
+
+    Deletes all existing on-call segments, then fills the gaps between
+    non-on-call segments (breaks, lunches, meetings, etc.) with new
+    on-call segments that span the full shift.
+    """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "segments": []})
+    try:
+        sched = Schedule.query.get(shift_id)
+        if not sched:
+            return jsonify({"success": False, "error": "Shift not found"})
+
+        shift_start = sched.shift_start.hour * 60 + sched.shift_start.minute
+        shift_end = sched.shift_end.hour * 60 + sched.shift_end.minute
+
+        # Get all segments for this shift
+        all_segs = ShiftSegment.query.filter_by(schedule_id=shift_id).order_by(
+            ShiftSegment.start_time).all()
+
+        # Separate on-call from non-on-call
+        non_oncall = [s for s in all_segs if s.activity_type != "on-call"]
+        oncall_ids = [s.id for s in all_segs if s.activity_type == "on-call"]
+
+        # Delete existing on-call segments
+        if oncall_ids:
+            ShiftSegment.query.filter(ShiftSegment.id.in_(oncall_ids)).delete(
+                synchronize_session="fetch")
+
+        # Build list of occupied intervals (non-on-call)
+        occupied = sorted(
+            [(s.start_time.hour * 60 + s.start_time.minute,
+              s.end_time.hour * 60 + s.end_time.minute) for s in non_oncall],
+            key=lambda x: x[0]
+        )
+
+        # Fill gaps with on-call segments
+        new_segs = []
+        cursor = shift_start
+        order = 0
+        for occ_start, occ_end in occupied:
+            if cursor < occ_start:
+                sh, sm = divmod(cursor, 60)
+                eh, em = divmod(occ_start, 60)
+                seg = ShiftSegment(
+                    schedule_id=shift_id,
+                    activity_type="on-call",
+                    start_time=_parse_time(f"{sh:02d}:{sm:02d}"),
+                    end_time=_parse_time(f"{eh:02d}:{em:02d}"),
+                    duration_mins=occ_start - cursor,
+                    sort_order=order,
+                )
+                db.session.add(seg)
+                new_segs.append(seg)
+                order += 1
+            cursor = max(cursor, occ_end)
+
+        # Fill from last occupied to shift end
+        if cursor < shift_end:
+            sh, sm = divmod(cursor, 60)
+            eh, em = divmod(shift_end, 60)
+            seg = ShiftSegment(
+                schedule_id=shift_id,
+                activity_type="on-call",
+                start_time=_parse_time(f"{sh:02d}:{sm:02d}"),
+                end_time=_parse_time(f"{eh:02d}:{em:02d}"),
+                duration_mins=shift_end - cursor,
+                sort_order=order,
+            )
+            db.session.add(seg)
+            new_segs.append(seg)
+
+        # Re-sort all segments
+        all_remaining = ShiftSegment.query.filter_by(schedule_id=shift_id).order_by(
+            ShiftSegment.start_time).all()
+        for i, s in enumerate(all_remaining):
+            s.sort_order = i
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "segments": [s.to_dict() for s in
+                         ShiftSegment.query.filter_by(schedule_id=shift_id).order_by(
+                             ShiftSegment.start_time).all()]
+        })
 
     except Exception as e:
         db.session.rollback()

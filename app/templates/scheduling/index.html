@@ -2557,11 +2557,32 @@ function segMouseUp(e) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({start: seg.start, end: seg.end})
     }).then(r => r.json()).then(d => {
-      if (!d.success) showToast('Move failed: ' + (d.error || ''), 'error');
+      if (!d.success) { showToast('Move failed: ' + (d.error || ''), 'error'); return; }
+      // If we moved a non-on-call segment, recalculate on-call segments
+      if (seg.type !== 'on-call' && shift.id) {
+        fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        }).then(r2 => r2.json()).then(d2 => {
+          if (d2.success && d2.segments) {
+            // Replace all segments for this shift with the server response
+            shift.segments = d2.segments.map(s => ({
+              id: s.id,
+              type: s.type,
+              start: s.start,
+              end: s.end,
+              duration: s.duration_mins,
+              notes: s.notes || ''
+            }));
+            shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+            switchView(currentView);
+          }
+        });
+      }
     });
   }
 
-  // Re-sort and re-render
+  // Re-sort and re-render immediately (optimistic)
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
   showToast(`Moved ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
