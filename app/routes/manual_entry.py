@@ -182,6 +182,11 @@ def list_planning_units():
 @manual_entry_bp.route("/skill-groups", methods=["GET"])
 @login_required
 def list_skill_groups():
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_skill_groups
+        return jsonify({"groups": get_demo_skill_groups()})
     from app.models import SkillGroup
     groups = SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()
     return jsonify({"groups": [{"id": g.id, "name": g.name} for g in groups]})
