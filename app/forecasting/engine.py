@@ -53,8 +53,19 @@ def _get_sheet():
 
 def get_available_lobs(sheet=None):
     """Return sorted list of distinct LOB names from forecast data."""
+    import os
+    # When using Postgres, pull LOBs from the PlanningUnit table
+    if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+        try:
+            from app.models import PlanningUnit
+            units = PlanningUnit.query.order_by(PlanningUnit.name).all()
+            if units:
+                return [u.name for u in units]
+        except Exception:
+            pass
+
     try:
-        from app.data_source import SheetSource
+        from app.data_source import SheetSource, normalize_lob
         src = SheetSource()
         rows, err = src._records("FORECAST RAW")
         if err or not rows:
@@ -70,13 +81,13 @@ def get_available_lobs(sheet=None):
                     continue
                 lob = (emp.get("Latest Skill Name") or "").strip()
                 if lob:
-                    lobs.add(lob)
+                    lobs.add(normalize_lob(lob))
             return sorted(lobs)
         lobs = set()
         for r in rows:
             lob = _get_val(r, "LOB")
             if lob:
-                lobs.add(lob)
+                lobs.add(normalize_lob(lob))
         return sorted(lobs)
     except Exception:
         return []
@@ -87,6 +98,37 @@ def get_forecast_data(lob, start_date, end_date, sheet=None):
     Retrieve stored forecast data for a LOB across a date range.
     Returns list of {date, time, offered, aht} sorted by timestamp.
     """
+    import os
+    # When using Postgres, read from ForecastInterval table
+    if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+        try:
+            from app.data_source import normalize_lob
+            from app.models import ForecastInterval, PlanningUnit
+            from sqlalchemy import func as sa_func
+            normalized = normalize_lob(str(lob).strip())
+            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            if not unit:
+                return [], f"No planning unit found for '{lob}'"
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
+            rows = ForecastInterval.query.filter(
+                ForecastInterval.planning_unit_id == unit.id,
+                sa_func.date(ForecastInterval.timestamp) >= start_str,
+                sa_func.date(ForecastInterval.timestamp) <= end_str,
+            ).order_by(ForecastInterval.timestamp).all()
+            results = []
+            for r in rows:
+                ts = r.timestamp
+                results.append({
+                    "date": ts.strftime("%Y-%m-%d"),
+                    "time": ts.strftime("%H:%M"),
+                    "offered": float(r.offered or 0),
+                    "aht": float(r.aht or 0),
+                })
+            return results, None
+        except Exception as e:
+            return [], str(e)
+
     try:
         from app.data_source import SheetSource
         src = SheetSource()
@@ -135,6 +177,36 @@ def get_requirements_data(lob, start_date, end_date, sheet=None):
     Retrieve stored requirements data for a LOB across a date range.
     Returns list of {date, time, agents_required} sorted by timestamp.
     """
+    import os
+    # When using Postgres, read from RequirementInterval table
+    if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+        try:
+            from app.data_source import normalize_lob
+            from app.models import RequirementInterval, PlanningUnit
+            from sqlalchemy import func as sa_func
+            normalized = normalize_lob(str(lob).strip())
+            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            if not unit:
+                return [], None  # No requirements yet, not an error
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
+            rows = RequirementInterval.query.filter(
+                RequirementInterval.planning_unit_id == unit.id,
+                sa_func.date(RequirementInterval.timestamp) >= start_str,
+                sa_func.date(RequirementInterval.timestamp) <= end_str,
+            ).order_by(RequirementInterval.timestamp).all()
+            results = []
+            for r in rows:
+                ts = r.timestamp
+                results.append({
+                    "date": ts.strftime("%Y-%m-%d"),
+                    "time": ts.strftime("%H:%M"),
+                    "agents_required": float(r.agents_required or 0),
+                })
+            return results, None
+        except Exception as e:
+            return [], str(e)
+
     try:
         from app.data_source import SheetSource
         src = SheetSource()
@@ -732,7 +804,8 @@ def _get_db_historical(lob, historical_days):
         from app.models import ForecastInterval, PlanningUnit
         from sqlalchemy import func as sa_func
 
-        unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
+        from app.data_source import normalize_lob
+        unit = PlanningUnit.query.filter_by(name=normalize_lob(str(lob).strip())).first()
         if unit:
             rows = ForecastInterval.query.filter(
                 ForecastInterval.planning_unit_id == unit.id,
