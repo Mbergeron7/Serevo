@@ -116,6 +116,36 @@
   }
   .edit-btn:hover { opacity: .7; }
 
+  /* Multi-select checkbox dropdown */
+  .multi-select { position: relative; }
+  .multi-select-toggle {
+    width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); cursor: pointer;
+    text-align: left; display: flex; justify-content: space-between; align-items: center;
+    min-height: 34px;
+  }
+  .multi-select-toggle::after { content: '▾'; font-size: .7rem; color: var(--text-muted); }
+  .multi-select-dropdown {
+    display: none; position: absolute; z-index: 100; top: 100%; left: 0; right: 0;
+    max-height: 200px; overflow-y: auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow);
+    margin-top: 2px;
+  }
+  .multi-select-dropdown.open { display: block; }
+  .multi-select-dropdown label {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    font-size: .83rem; cursor: pointer; margin: 0;
+  }
+  .multi-select-dropdown label:hover { background: var(--brand-accent-light); }
+  .multi-select-dropdown input[type=checkbox] { width: auto; margin: 0; }
+  .multi-select-pills { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; min-width: 0; }
+  .multi-select-pill {
+    display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: .7rem;
+    font-weight: 600; background: color-mix(in srgb, var(--brand-accent) 15%, transparent);
+    color: var(--brand-accent); white-space: nowrap;
+  }
+  .multi-select-placeholder { color: var(--text-muted); }
+
   @media (max-width: 600px) {
     .stat-row { flex-direction: column; }
     .filter-bar { flex-direction: column; }
@@ -330,8 +360,14 @@
       </div>
 
       <div class="form-group">
-        <label for="emp_skills">All Skills</label>
-        <input type="text" id="emp_skills" placeholder="e.g. Billing, Sales, Tech Support">
+        <label>All Skills</label>
+        <div class="multi-select" id="skillsMultiSelect">
+          <button type="button" class="multi-select-toggle" onclick="toggleSkillsDropdown()">
+            <span class="multi-select-pills" id="skillsPills"><span class="multi-select-placeholder">Select skills…</span></span>
+          </button>
+          <div class="multi-select-dropdown" id="skillsDropdown"></div>
+        </div>
+        <input type="hidden" id="emp_skills">
       </div>
 
       <div class="form-group">
@@ -509,7 +545,9 @@ function openEmpModal(data) {
   document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
   document.getElementById('emp_team_lead').value = data ? (data.team_lead || data['Team Lead'] || '') : '';
-  document.getElementById('emp_skills').value = data ? (data.all_skills || data['All Skills'] || '') : '';
+  // Skills multi-select will be set after LOBs load
+  const _skillsVal = data ? (data.all_skills || data['All Skills'] || '') : '';
+  document.getElementById('emp_skills').value = _skillsVal;
   document.getElementById('emp_languages').value = data ? (data.languages || data['Languages'] || 'English') : 'English';
   document.getElementById('emp_contract_type').value = data ? (data.contract_type || data['Contract Type'] || 'Full-Time') : 'Full-Time';
   document.getElementById('emp_weekly_hours').value = data ? (data.weekly_hours || data['Weekly Hours'] || 40) : 40;
@@ -526,8 +564,8 @@ function openEmpModal(data) {
   if (delBtn) delBtn.style.display = (data && (data._db_id || data.id)) ? '' : 'none';
   document.getElementById('empModal').style.display = '';
 
-  // Populate LOB datalist and TL datalist
-  loadLOBs();
+  // Populate LOB datalist, TL datalist, and skills checkboxes
+  loadLOBs().then(() => setSkillsFromValue(_skillsVal));
   loadTLs();
 }
 
@@ -569,18 +607,87 @@ async function deleteEmployee() {
   }
 }
 
+let _allLOBs = [];
 async function loadLOBs() {
   try {
     const resp = await fetch('/api/planning-units');
     const data = await resp.json();
+    _allLOBs = (data.units || []).map(u => u.name);
     const dl = document.getElementById('lobList');
     dl.innerHTML = '';
-    (data.units || []).forEach(u => {
+    _allLOBs.forEach(name => {
       const opt = document.createElement('option');
-      opt.value = u.name;
+      opt.value = name;
       dl.appendChild(opt);
     });
+    // Also populate skills dropdown
+    populateSkillsDropdown();
   } catch(e) {}
+}
+
+function populateSkillsDropdown() {
+  const dd = document.getElementById('skillsDropdown');
+  if (!dd) return;
+  dd.innerHTML = '';
+  _allLOBs.forEach(name => {
+    const lbl = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = name;
+    cb.onchange = updateSkillsValue;
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(name));
+    dd.appendChild(lbl);
+  });
+}
+
+function toggleSkillsDropdown() {
+  document.getElementById('skillsDropdown').classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const ms = document.getElementById('skillsMultiSelect');
+  if (ms && !ms.contains(e.target)) {
+    document.getElementById('skillsDropdown').classList.remove('open');
+  }
+});
+
+function updateSkillsValue() {
+  const checks = document.querySelectorAll('#skillsDropdown input[type=checkbox]:checked');
+  const selected = Array.from(checks).map(c => c.value);
+  document.getElementById('emp_skills').value = selected.join(', ');
+  // Update pills display
+  const pills = document.getElementById('skillsPills');
+  if (selected.length === 0) {
+    pills.innerHTML = '<span class="multi-select-placeholder">Select skills…</span>';
+  } else {
+    pills.innerHTML = selected.map(s => `<span class="multi-select-pill">${s}</span>`).join('');
+  }
+}
+
+function setSkillsFromValue(val) {
+  const current = (val || '').split(',').map(s => s.trim()).filter(Boolean);
+  // Check matching checkboxes
+  document.querySelectorAll('#skillsDropdown input[type=checkbox]').forEach(cb => {
+    cb.checked = current.includes(cb.value);
+  });
+  // Also add any skills not in the LOB list (custom ones)
+  const dd = document.getElementById('skillsDropdown');
+  current.forEach(skill => {
+    if (skill && !_allLOBs.includes(skill)) {
+      const lbl = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = skill;
+      cb.checked = true;
+      cb.onchange = updateSkillsValue;
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(skill));
+      dd.appendChild(lbl);
+    }
+  });
+  updateSkillsValue();
 }
 
 function loadTLs() {
