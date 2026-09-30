@@ -122,88 +122,187 @@ def _get_employees_for_lob(lob, sheet=None):
     """
     Return active employees assigned to a given LOB/skill.
     Each employee dict has: name, employee_id, lob.
+
+    Strategy (stop at first that returns results):
+    1. get_employees() → to_legacy_dict() → match "Latest Skill Name"
+    2. DB join: PlanningUnit by name → Employee by planning_unit_id
+    3. Google Sheet direct read → match "Latest Skill Name" column
+    4. DB all employees + sheet LOB mapping (handles NULL planning_unit_id)
     """
+    lob_lower = lob.strip().lower()
+
+    def _is_active(status_val):
+        return str(status_val).strip().lower() not in ("inactive", "terminated", "deleted")
+
     try:
+        # ── Path 1: get_employees (legacy dict format) ──
         from app.people.manager import get_employees
         employees, err = get_employees(sheet)
         if err:
             employees = []
         results = []
         for emp in employees:
-            status = str(emp.get("Status", "")).strip().lower()
-            if status in ("inactive", "terminated", "deleted"):
+            if not _is_active(emp.get("Status", "")):
                 continue
             skill = (emp.get("Latest Skill Name") or "").strip()
-            if skill.lower() != lob.strip().lower():
+            if skill.lower() != lob_lower:
                 continue
             first = str(emp.get("First Name", "")).strip()
             last = str(emp.get("Last Name", "")).strip()
-            name = f"{first} {last}".strip()
             results.append({
-                "name": name,
+                "name": f"{first} {last}".strip(),
                 "employee_id": emp.get("Employee ID", ""),
                 "lob": skill,
             })
+        if results:
+            return results
 
-        # Fallback 1: DB join — employees may have planning_unit_id set
-        # but to_legacy_dict() returned empty skill (relationship not loaded)
-        if not results:
-            try:
-                from app.models import db, Employee, PlanningUnit
-                pu = PlanningUnit.query.filter(
-                    db.func.lower(PlanningUnit.name) == lob.strip().lower()
-                ).first()
-                if pu:
-                    db_emps = Employee.query.filter_by(
-                        planning_unit_id=pu.id
-                    ).filter(
-                        db.func.lower(Employee.status).notin_(
-                            ["inactive", "terminated", "deleted"]
-                        )
-                    ).all()
-                    for e in db_emps:
-                        results.append({
-                            "name": e.full_name,
-                            "employee_id": e.employee_id,
-                            "lob": pu.name,
-                        })
-                    if results:
-                        log.info(f"LOB '{lob}': found {len(results)} employees via DB join fallback")
-            except Exception as fb_err:
-                log.warning(f"DB join fallback error: {fb_err}")
+        # ── Path 2: DB join via PlanningUnit ──
+        try:
+            from app.models import db, Employee, PlanningUnit
+            pu = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name) == lob_lower
+            ).first()
+            if pu:
+                db_emps = Employee.query.filter_by(
+                    planning_unit_id=pu.id
+                ).filter(
+                    db.func.lower(Employee.status).notin_(
+                        ["inactive", "terminated", "deleted"]
+                    )
+                ).all()
+                for e in db_emps:
+                    results.append({
+                        "name": e.full_name,
+                        "employee_id": e.employee_id,
+                        "lob": pu.name,
+                    })
+                if results:
+                    log.info(f"LOB '{lob}': found {len(results)} via DB join")
+                    return results
+        except Exception as fb_err:
+            log.warning(f"DB join fallback error: {fb_err}")
 
-        # Fallback 2: read Google Sheet directly if still empty
-        if not results and sheet is None:
+        # ── Path 3: Google Sheet direct read ──
+        sheet_records = None
+        try:
+            from app.people.manager import _open_sheet
+            sh, sh_err = _open_sheet()
+            if sh and not sh_err:
+                ws = sh.worksheet("EMPLOYEES")
+                sheet_records = ws.get_all_records()
+                for rec in sheet_records:
+                    if not _is_active(rec.get("Status", "")):
+                        continue
+                    skill = (rec.get("Latest Skill Name") or "").strip()
+                    if skill.lower() != lob_lower:
+                        continue
+                    first = str(rec.get("First Name", "")).strip()
+                    last = str(rec.get("Last Name", "")).strip()
+                    results.append({
+                        "name": f"{first} {last}".strip(),
+                        "employee_id": rec.get("Employee ID", ""),
+                        "lob": skill,
+                    })
+                if results:
+                    log.info(f"LOB '{lob}': found {len(results)} via sheet direct read")
+                    # Also repair planning_unit_id while we have the data
+                    _try_repair_pu(sheet_records)
+                    return results
+        except Exception as sh_err:
+            log.warning(f"Sheet fallback error: {sh_err}")
+
+        # ── Path 4: DB employees + sheet LOB mapping ──
+        # Handles the case where DB employees have NULL planning_unit_id
+        # but the sheet knows which LOB they belong to
+        if sheet_records is None:
             try:
                 from app.people.manager import _open_sheet
                 sh, sh_err = _open_sheet()
                 if sh and not sh_err:
                     ws = sh.worksheet("EMPLOYEES")
-                    records = ws.get_all_records()
-                    for rec in records:
-                        status = str(rec.get("Status", "")).strip().lower()
-                        if status in ("inactive", "terminated", "deleted"):
-                            continue
-                        skill = (rec.get("Latest Skill Name") or "").strip()
-                        if skill.lower() != lob.strip().lower():
-                            continue
-                        first = str(rec.get("First Name", "")).strip()
-                        last = str(rec.get("Last Name", "")).strip()
-                        name = f"{first} {last}".strip()
-                        results.append({
-                            "name": name,
-                            "employee_id": rec.get("Employee ID", ""),
-                            "lob": skill,
-                        })
-                    if results:
-                        log.info(f"LOB '{lob}': found {len(results)} employees via sheet fallback")
-            except Exception as sh_err:
-                log.warning(f"Sheet fallback error: {sh_err}")
+                    sheet_records = ws.get_all_records()
+            except Exception:
+                pass
 
+        if sheet_records:
+            # Build employee_id → LOB from sheet
+            sheet_lob_map = {}
+            for rec in sheet_records:
+                eid = str(rec.get("Employee ID", "")).strip()
+                skill = (rec.get("Latest Skill Name") or "").strip()
+                if eid and skill:
+                    sheet_lob_map[eid] = skill
+
+            if sheet_lob_map:
+                try:
+                    from app.models import Employee
+                    all_emps = Employee.query.filter(
+                        db.func.lower(Employee.status).notin_(
+                            ["inactive", "terminated", "deleted"]
+                        )
+                    ).all()
+                    for e in all_emps:
+                        mapped_lob = sheet_lob_map.get(str(e.employee_id).strip(), "")
+                        if mapped_lob.lower() == lob_lower:
+                            results.append({
+                                "name": e.full_name,
+                                "employee_id": e.employee_id,
+                                "lob": mapped_lob,
+                            })
+                    if results:
+                        log.info(f"LOB '{lob}': found {len(results)} via DB+sheet mapping")
+                        _try_repair_pu(sheet_records)
+                        return results
+                except Exception as e4:
+                    log.warning(f"DB+sheet mapping error: {e4}")
+
+        log.warning(f"LOB '{lob}': no employees found via any path")
         return results
     except Exception as e:
         log.warning(f"Employee load error: {e}")
         return []
+
+
+def _try_repair_pu(sheet_records):
+    """Best-effort: set planning_unit_id on employees missing it."""
+    try:
+        from app.models import db, Employee, PlanningUnit
+        missing = Employee.query.filter(Employee.planning_unit_id.is_(None)).all()
+        if not missing:
+            return
+        lob_map = {}
+        for rec in sheet_records:
+            eid = str(rec.get("Employee ID", "")).strip()
+            skill = (rec.get("Latest Skill Name") or "").strip()
+            if eid and skill:
+                lob_map[eid] = skill
+        pu_cache = {}
+        updated = 0
+        for emp in missing:
+            lob_name = lob_map.get(str(emp.employee_id).strip())
+            if not lob_name:
+                continue
+            if lob_name not in pu_cache:
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lob_name.lower()
+                ).first()
+                if not pu:
+                    pu = PlanningUnit(name=lob_name)
+                    db.session.add(pu)
+                    db.session.flush()
+                pu_cache[lob_name] = pu
+            emp.planning_unit_id = pu_cache[lob_name].id
+            updated += 1
+        if updated:
+            db.session.commit()
+            log.info(f"Repaired planning_unit_id for {updated} employees")
+    except Exception as e:
+        log.warning(f"PU repair error: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _get_db_availability(employee_db_id, day_of_week):
