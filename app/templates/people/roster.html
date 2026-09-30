@@ -49,6 +49,7 @@
     white-space: nowrap;
   }
   .roster-table tr:hover td { background: var(--brand-accent-light); }
+  .roster-table td:first-child:hover { text-decoration: underline; }
 
   .badge-active {
     display: inline-block; padding: 2px 10px; border-radius: 999px;
@@ -246,7 +247,7 @@
             data-lang="{{ emp['Languages']|default('English') }}"
             data-contract="{{ emp['Contract Type']|default('Full-Time') }}"
             data-db-id="{{ emp['_db_id']|default('') }}">
-          <td style="font-weight:600">{{ full_name }}</td>
+          <td style="font-weight:600;cursor:pointer;color:var(--brand-accent)" onclick='editEmp({{ emp | tojson }})' title="Click to edit">{{ full_name }}</td>
           <td>
             {% set st = emp['Status']|default('Active')|lower|trim %}
             {% if st in ('active', '') %}
@@ -732,7 +733,8 @@ function updateRowInPlace(body, savedId) {
   row.dataset.dbId = savedId || dbId || '';
 
   // Update cells
-  row.cells[0].innerHTML = `<span style="font-weight:600">${fullName}</span>`;
+  row.cells[0].innerHTML = `<span style="font-weight:600;cursor:pointer;color:var(--brand-accent)" title="Click to edit">${fullName}</span>`;
+  row.cells[0].style.cursor = 'pointer';
   // Status badge
   const st = (body.status || 'Active').toLowerCase().trim();
   const badges = {
@@ -752,28 +754,28 @@ function updateRowInPlace(body, savedId) {
   // Edit button — bind click
   const editBtn = row.cells[9].querySelector('.edit-btn');
   if (editBtn) {
-    editBtn.onclick = function() {
-      editEmp({
-        _db_id: savedId || dbId,
-        'First Name': body.first_name,
-        'Last Name': body.last_name,
-        'Employee ID': body.employee_id,
-        'Status': body.status,
-        'Latest Skill Name': body.lob,
-        'Team Lead': body.team_lead,
-        'All Skills': body.all_skills,
-        'Languages': body.languages,
-        'Contract Type': body.contract_type,
-        'Weekly Hours': body.weekly_hours,
-        'Days Per Week': body.days_per_week,
-        'Hours Per Day': body.hours_per_day,
-        'Timezone': body.timezone,
-        'Schedule Excluded': body.schedule_excluded,
-        'Latest Skill Start': body.skill_start,
-        'Latest Skill End': body.skill_end,
-        'End Date': body.end_date,
-      });
+    const empObj = {
+      _db_id: savedId || dbId,
+      'First Name': body.first_name,
+      'Last Name': body.last_name,
+      'Employee ID': body.employee_id,
+      'Status': body.status,
+      'Latest Skill Name': body.lob,
+      'Team Lead': body.team_lead,
+      'All Skills': body.all_skills,
+      'Languages': body.languages,
+      'Contract Type': body.contract_type,
+      'Weekly Hours': body.weekly_hours,
+      'Days Per Week': body.days_per_week,
+      'Hours Per Day': body.hours_per_day,
+      'Timezone': body.timezone,
+      'Schedule Excluded': body.schedule_excluded,
+      'Latest Skill Start': body.skill_start,
+      'Latest Skill End': body.skill_end,
+      'End Date': body.end_date,
     };
+    editBtn.onclick = function() { editEmp(empObj); };
+    row.cells[0].onclick = function() { editEmp(empObj); };
   }
 
   // Re-apply current filters
