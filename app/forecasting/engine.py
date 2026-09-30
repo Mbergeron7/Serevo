@@ -712,3 +712,259 @@ def daily_summary(intervals):
             "intervals": len(rows),
         })
     return summaries
+
+
+# ═══════════════════════════════════════════════════════════════
+# GENERATE & SAVE TO DATABASE
+# ═══════════════════════════════════════════════════════════════
+
+def _get_db_historical(lob, historical_days):
+    """
+    Pull historical forecast intervals from the PostgreSQL database.
+    Returns list of {date, time, offered, aht} sorted by timestamp.
+    """
+    from app.models import ForecastInterval, PlanningUnit
+    from sqlalchemy import func as sa_func
+
+    unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
+    if not unit:
+        return [], f"Planning unit '{lob}' not found"
+
+    today = datetime.date.today()
+    hist_start = today - datetime.timedelta(days=historical_days)
+
+    rows = ForecastInterval.query.filter(
+        ForecastInterval.planning_unit_id == unit.id,
+        sa_func.date(ForecastInterval.timestamp) >= hist_start,
+        sa_func.date(ForecastInterval.timestamp) < today,
+    ).order_by(ForecastInterval.timestamp).all()
+
+    if not rows:
+        return [], f"No historical forecast data for '{lob}'"
+
+    results = []
+    for r in rows:
+        results.append({
+            "date": r.timestamp.strftime("%Y-%m-%d"),
+            "time": r.timestamp.strftime("%H:%M"),
+            "offered": float(r.offered or 0),
+            "aht": float(r.aht or 0),
+        })
+    return results, None
+
+
+def _generate_from_db_history(lob, method, historical_days, forecast_days,
+                               window=7):
+    """
+    Generate forecast intervals from DB historical data.
+    Returns same shape as generate_forecast_weighted / generate_forecast_moving_avg.
+    """
+    historical, err = _get_db_historical(lob, historical_days)
+    if err or not historical:
+        return {
+            "method": method,
+            "historical": [],
+            "forecast": [],
+            "error": err or "No historical data found",
+        }
+
+    # Group by day-of-week + time
+    by_dow_time = defaultdict(list)
+    for row in historical:
+        try:
+            d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+            dow = d.weekday()
+            by_dow_time[(dow, row["time"])].append((row, d))
+        except Exception:
+            continue
+
+    today = datetime.date.today()
+
+    if method == "moving_average":
+        # Simple moving average over the last `window` entries per timeslot
+        forecast = []
+        for d_offset in range(forecast_days):
+            fc_date = today + datetime.timedelta(days=d_offset)
+            date_str = fc_date.strftime("%Y-%m-%d")
+            dow = fc_date.weekday()
+
+            time_slots = set(ts for (_, ts) in by_dow_time.keys())
+            for time_str in sorted(time_slots):
+                entries = by_dow_time.get((dow, time_str), [])
+                if not entries:
+                    for dw in range(7):
+                        entries = by_dow_time.get((dw, time_str), [])
+                        if entries:
+                            break
+                if not entries:
+                    continue
+                recent = sorted(entries, key=lambda x: x[1], reverse=True)[:window]
+                avg_offered = sum(r[0]["offered"] for r in recent) / len(recent)
+                total_w = sum(r[0]["offered"] for r in recent)
+                avg_aht = (sum(r[0]["offered"] * r[0]["aht"] for r in recent) / total_w
+                           if total_w > 0 else 0)
+                forecast.append({
+                    "date": date_str,
+                    "time": time_str,
+                    "offered": round(avg_offered, 2),
+                    "aht": round(avg_aht, 1),
+                })
+    else:
+        # Weighted trend (default) — same logic as generate_forecast_weighted
+        def calc_weight(row_date, ref_date):
+            delta = (ref_date - row_date).days
+            return 1.0 / (1.0 + 0.1 * max(delta, 0))
+
+        forecast = []
+        for d_offset in range(forecast_days):
+            fc_date = today + datetime.timedelta(days=d_offset)
+            date_str = fc_date.strftime("%Y-%m-%d")
+            dow = fc_date.weekday()
+
+            time_slots = set(ts for (_, ts) in by_dow_time.keys())
+            for time_str in sorted(time_slots):
+                entries = by_dow_time.get((dow, time_str), [])
+                if not entries:
+                    for dw in range(7):
+                        entries = by_dow_time.get((dw, time_str), [])
+                        if entries:
+                            break
+                if not entries:
+                    continue
+                total_w = 0
+                w_offered = 0
+                w_aht_num = 0
+                for row, row_date in entries:
+                    w = calc_weight(row_date, today)
+                    total_w += w
+                    w_offered += w * row["offered"]
+                    w_aht_num += w * row["offered"] * row["aht"]
+                if total_w > 0:
+                    avg_offered = w_offered / total_w
+                    avg_aht = w_aht_num / w_offered if w_offered > 0 else 0
+                else:
+                    avg_offered = 0
+                    avg_aht = 0
+                forecast.append({
+                    "date": date_str,
+                    "time": time_str,
+                    "offered": round(avg_offered, 2),
+                    "aht": round(avg_aht, 1),
+                })
+
+    return {
+        "method": method,
+        "historical_days_used": historical_days,
+        "historical": historical,
+        "forecast": forecast,
+    }
+
+
+def generate_and_save_forecast(lob, method="weighted", historical_days=90,
+                                forecast_days=90, window=7):
+    """
+    Generate a forecast from DB historical data, run Erlang C to compute
+    staffing requirements, and save both to the database.
+
+    Returns dict with ok, message, forecast_count, requirements_count.
+    """
+    from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
+
+    # Find or create the planning unit
+    unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
+    if not unit:
+        unit = PlanningUnit(name=str(lob).strip())
+        db.session.add(unit)
+        db.session.flush()
+
+    # Generate forecast from DB history
+    result = _generate_from_db_history(lob, method, historical_days,
+                                        forecast_days, window)
+    if result.get("error"):
+        return {"ok": False, "error": result["error"]}
+
+    forecast = result.get("forecast", [])
+    if not forecast:
+        return {"ok": False, "error": f"No forecast generated for '{lob}'"}
+
+    # Run Erlang C to compute requirements
+    requirements = compute_requirements_from_forecast(forecast)
+
+    # Delete existing future forecast + requirement intervals for this unit
+    today = datetime.date.today()
+    from sqlalchemy import func as sa_func
+
+    ForecastInterval.query.filter(
+        ForecastInterval.planning_unit_id == unit.id,
+        sa_func.date(ForecastInterval.timestamp) >= today,
+        ForecastInterval.source == "generated",
+    ).delete(synchronize_session=False)
+
+    RequirementInterval.query.filter(
+        RequirementInterval.planning_unit_id == unit.id,
+        sa_func.date(RequirementInterval.timestamp) >= today,
+        RequirementInterval.source == "generated",
+    ).delete(synchronize_session=False)
+
+    # Save forecast intervals
+    fc_count = 0
+    for row in forecast:
+        try:
+            ts = datetime.datetime.strptime(f"{row['date']} {row['time']}",
+                                             "%Y-%m-%d %H:%M")
+        except (ValueError, KeyError):
+            continue
+        fi = ForecastInterval(
+            planning_unit_id=unit.id,
+            timestamp=ts,
+            offered=row["offered"],
+            aht=row["aht"],
+            source="generated",
+        )
+        db.session.add(fi)
+        fc_count += 1
+
+    # Save requirement intervals
+    req_count = 0
+    for row in requirements:
+        try:
+            ts = datetime.datetime.strptime(f"{row['date']} {row['time']}",
+                                             "%Y-%m-%d %H:%M")
+        except (ValueError, KeyError):
+            continue
+        ri = RequirementInterval(
+            planning_unit_id=unit.id,
+            timestamp=ts,
+            agents_required=row["agents_required"],
+            source="generated",
+        )
+        db.session.add(ri)
+        req_count += 1
+
+    db.session.commit()
+
+    return {
+        "ok": True,
+        "lob": lob,
+        "message": f"Generated {fc_count} forecast and {req_count} requirement intervals for '{lob}'",
+        "forecast_count": fc_count,
+        "requirements_count": req_count,
+    }
+
+
+def generate_all_forecasts(method="weighted", historical_days=90,
+                            forecast_days=90, window=7):
+    """
+    Generate and save forecasts for ALL active planning units.
+    Returns list of results (one per LOB).
+    """
+    from app.models import PlanningUnit
+
+    units = PlanningUnit.query.filter_by(is_active=True).all()
+    results = []
+    for unit in units:
+        result = generate_and_save_forecast(
+            unit.name, method, historical_days, forecast_days, window
+        )
+        results.append(result)
+    return results
