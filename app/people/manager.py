@@ -114,21 +114,22 @@ def _get_employees_from_db():
         return [], str(e)
 
 
-_backfill_ran = False          # run at most once per process
+_backfill_ran = False          # track whether backfill succeeded
 
 def _backfill_planning_units(employees_missing_pu):
-    """Try to set planning_unit_id from Google Sheet data (runs once)."""
+    """Try to set planning_unit_id from Google Sheet data."""
     global _backfill_ran
     if _backfill_ran:
         return
-    _backfill_ran = True
     try:
         sheet, err = _open_sheet()
         if err or not sheet:
+            # Don't set _backfill_ran so it retries next request
             return
         ws = sheet.worksheet(TAB_EMPLOYEES)
         records = ws.get_all_records()
         # Build lookup: employee_id → Latest Skill Name
+        # Use str() on both sides to handle int vs string mismatch
         sheet_lobs = {}
         for rec in records:
             eid = str(rec.get("Employee ID", "")).strip()
@@ -136,13 +137,19 @@ def _backfill_planning_units(employees_missing_pu):
             if eid and lob:
                 sheet_lobs[eid] = lob
         if not sheet_lobs:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Back-fill: sheet returned {len(records)} records but none had Employee ID + Latest Skill Name")
             return
         from app.models import db, PlanningUnit
         pu_cache = {}
         updated = 0
+        unmatched = []
         for emp in employees_missing_pu:
-            lob_name = sheet_lobs.get(emp.employee_id)
+            # Try matching with str() to handle type differences
+            lob_name = sheet_lobs.get(str(emp.employee_id).strip())
             if not lob_name:
+                unmatched.append(emp.employee_id)
                 continue
             if lob_name not in pu_cache:
                 pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob_name.lower()).first()
@@ -155,11 +162,20 @@ def _backfill_planning_units(employees_missing_pu):
             updated += 1
         if updated:
             db.session.commit()
+            _backfill_ran = True  # only mark done on success
             import logging
-            logging.getLogger(__name__).info(f"Back-filled planning_unit_id for {updated} employees from sheet")
+            logging.getLogger(__name__).info(
+                f"Back-filled planning_unit_id for {updated} employees from sheet"
+                + (f" ({len(unmatched)} unmatched)" if unmatched else ""))
+        elif unmatched:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Back-fill: 0 matched, {len(unmatched)} unmatched. "
+                f"DB IDs sample: {unmatched[:5]}, Sheet IDs sample: {list(sheet_lobs.keys())[:5]}")
+            _backfill_ran = True  # IDs genuinely don't match; stop retrying
     except Exception as e:
         import logging
-        logging.getLogger(__name__).warning(f"Planning unit back-fill skipped: {e}")
+        logging.getLogger(__name__).warning(f"Planning unit back-fill error: {e}")
         try:
             from app.models import db
             db.session.rollback()
