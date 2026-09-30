@@ -110,6 +110,23 @@ def _date_str(day):
     return str(day)[:10]
 
 
+def normalize_lob(name):
+    """
+    Normalize a LOB / workload name to its planning-unit name.
+    E.g. "SS Sales Combined" → "SS Sales", "SS Sales EN" → "SS Sales".
+    Uses the mapping from capacity/planning.py if available, otherwise
+    returns the name as-is.
+    """
+    name = (name or "").strip()
+    if not name:
+        return name
+    try:
+        from app.capacity.planning import lob_to_planning_unit
+        return lob_to_planning_unit(name)
+    except ImportError:
+        return name
+
+
 # =====================================================================
 # PeopleWare — original behaviour, unchanged
 # =====================================================================
@@ -210,8 +227,10 @@ class SheetSource:
             return None, err
         target = _date_str(day)
         out = []
+        norm_id = normalize_lob(str(unit_id).strip())
         for r in rows:
-            if str(r.get(COL_LOB, "")).strip() != str(unit_id).strip():
+            row_lob = normalize_lob(str(r.get(COL_LOB, "")).strip())
+            if row_lob != norm_id:
                 continue
             ts = str(r.get(COL_TIMESTAMP, ""))
             if ts[:10] != target:
@@ -229,8 +248,10 @@ class SheetSource:
             return None, err
         target = _date_str(day)
         out = []
+        norm_id = normalize_lob(str(workload_id).strip())
         for r in rows:
-            if str(r.get(COL_LOB, "")).strip() != str(workload_id).strip():
+            row_lob = normalize_lob(str(r.get(COL_LOB, "")).strip())
+            if row_lob != norm_id:
                 continue
             ts = str(r.get(COL_TIMESTAMP, ""))
             if ts[:10] != target:
@@ -268,7 +289,8 @@ class PostgresSource:
     def get_requirements(self, unit_id, day):
         try:
             from app.models import RequirementInterval, PlanningUnit
-            unit = PlanningUnit.query.filter_by(name=str(unit_id).strip()).first()
+            normalized = normalize_lob(str(unit_id).strip())
+            unit = PlanningUnit.query.filter_by(name=normalized).first()
             if not unit:
                 return [], None
             target = _date_str(day)
@@ -283,7 +305,8 @@ class PostgresSource:
     def get_forecast(self, workload_id, day):
         try:
             from app.models import ForecastInterval, PlanningUnit
-            unit = PlanningUnit.query.filter_by(name=str(workload_id).strip()).first()
+            normalized = normalize_lob(str(workload_id).strip())
+            unit = PlanningUnit.query.filter_by(name=normalized).first()
             if not unit:
                 return [], None
             target = _date_str(day)

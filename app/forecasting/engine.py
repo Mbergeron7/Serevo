@@ -886,11 +886,15 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     Returns dict with ok, message, forecast_count, requirements_count.
     """
     from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
+    from app.data_source import normalize_lob
+
+    # Normalize LOB name to planning unit name
+    lob_normalized = normalize_lob(str(lob).strip())
 
     # Find or create the planning unit
-    unit = PlanningUnit.query.filter_by(name=str(lob).strip()).first()
+    unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
     if not unit:
-        unit = PlanningUnit(name=str(lob).strip())
+        unit = PlanningUnit(name=lob_normalized)
         db.session.add(unit)
         db.session.flush()
 

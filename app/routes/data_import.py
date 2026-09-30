@@ -224,9 +224,10 @@ def _import_rows(upload_type, rows, uploaded_by=""):
 
 
 def _get_or_create_unit(name):
-    """Get or create a PlanningUnit by name."""
+    """Get or create a PlanningUnit by name (LOB names are normalized)."""
     from app.models import db, PlanningUnit
-    name = name.strip()
+    from app.data_source import normalize_lob
+    name = normalize_lob(name.strip())
     if not name:
         return None
     unit = PlanningUnit.query.filter_by(name=name).first()
