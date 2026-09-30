@@ -343,17 +343,28 @@ def _build_plan(user, year, shrinkage, occupancy, answer_rate):
                         })
                     plan.append(lob_plan)
             else:
-                sheet = _get_sheet()
-                fc_ws = _get_worksheet(sheet, "FORECAST RAW")
-                rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
-                em_ws = _get_worksheet(sheet, "EMPLOYEES")
-
-                plan = []
-                if fc_ws or rq_ws:
-                    plan = cp.compute_capacity_plan(
-                        fc_ws, rq_ws, em_ws, year,
-                        shrinkage=shrinkage, occupancy=occupancy,
+                # Try DB-backed plan first (from Serevo-generated forecasts)
+                try:
+                    plan = cp.build_capacity_plan_from_db(
+                        year, shrinkage=shrinkage, occupancy=occupancy,
                         answer_rate=answer_rate)
+                except Exception as e:
+                    log.warning(f"DB capacity plan error: {e}")
+                    plan = []
+
+                # Fall back to Google Sheets if DB has no data
+                if not plan:
+                    sheet = _get_sheet()
+                    fc_ws = _get_worksheet(sheet, "FORECAST RAW")
+                    rq_ws = _get_worksheet(sheet, "REQUIREMENTS RAW")
+                    em_ws = _get_worksheet(sheet, "EMPLOYEES")
+
+                    plan = []
+                    if fc_ws or rq_ws:
+                        plan = cp.compute_capacity_plan(
+                            fc_ws, rq_ws, em_ws, year,
+                            shrinkage=shrinkage, occupancy=occupancy,
+                            answer_rate=answer_rate)
 
     return plan
 
@@ -496,3 +507,127 @@ def summary_export():
                     r["avg_agents"], r["working_days"]])
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename=capacity_summary_{year}.csv"})
+
+
+# ══════════════════════════════════════════════════════════════
+# DATA SOURCES — manage multi-source historical data ingestion
+# ══════════════════════════════════════════════════════════════
+
+@capacity_bp.route("/sources")
+@login_required
+def sources_view():
+    """List all data sources with sync status."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return redirect(url_for("capacity.panel"))
+
+    from app.models import DataSource, APIConnection
+    from app.ingestion.service import get_historical_stats
+
+    sources = DataSource.query.order_by(DataSource.created_at.desc()).all()
+    api_connections = APIConnection.query.filter_by(is_active=True).all()
+    stats = get_historical_stats()
+
+    return render_template("capacity/sources.html",
+        user=user, sources=sources,
+        api_connections=api_connections, stats=stats)
+
+
+@capacity_bp.route("/sources/add", methods=["POST"])
+@login_required
+def sources_add():
+    """Create a new data source."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return jsonify({"ok": False, "error": "Admin only"}), 403
+
+    from app.models import DataSource
+    data = request.get_json(silent=True) or {}
+
+    name = data.get("name", "").strip()
+    source_type = data.get("source_type", "google_sheet")
+    if not name:
+        return jsonify({"ok": False, "error": "Name is required"})
+
+    src = DataSource(
+        name=name,
+        source_type=source_type,
+        sheet_key=data.get("sheet_key", "").strip(),
+        tab_name=data.get("tab_name", "").strip(),
+        service_account_json=data.get("service_account_json", "").strip(),
+        api_connection_id=data.get("api_connection_id") or None,
+        api_endpoint=data.get("api_endpoint", "").strip(),
+        column_mapping=data.get("column_mapping") or {},
+        is_active=True,
+    )
+    from app.models import db
+    db.session.add(src)
+    db.session.commit()
+    return jsonify({"ok": True, "id": src.id, "message": f"Source '{name}' created"})
+
+
+@capacity_bp.route("/sources/<int:source_id>", methods=["PUT"])
+@login_required
+def sources_update(source_id):
+    """Update an existing data source."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return jsonify({"ok": False, "error": "Admin only"}), 403
+
+    from app.models import DataSource, db
+    src = DataSource.query.get_or_404(source_id)
+    data = request.get_json(silent=True) or {}
+
+    for field in ("name", "source_type", "sheet_key", "tab_name",
+                  "service_account_json", "api_endpoint", "is_active"):
+        if field in data:
+            setattr(src, field, data[field])
+    if "api_connection_id" in data:
+        src.api_connection_id = data["api_connection_id"] or None
+    if "column_mapping" in data:
+        src.column_mapping = data["column_mapping"]
+
+    db.session.commit()
+    return jsonify({"ok": True, "message": f"Source '{src.name}' updated"})
+
+
+@capacity_bp.route("/sources/<int:source_id>", methods=["DELETE"])
+@login_required
+def sources_delete(source_id):
+    """Delete a data source (doesn't delete the ingested data)."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return jsonify({"ok": False, "error": "Admin only"}), 403
+
+    from app.models import DataSource, db
+    src = DataSource.query.get_or_404(source_id)
+    name = src.name
+    db.session.delete(src)
+    db.session.commit()
+    return jsonify({"ok": True, "message": f"Source '{name}' deleted"})
+
+
+@capacity_bp.route("/sources/<int:source_id>/sync", methods=["POST"])
+@login_required
+def sources_sync(source_id):
+    """Sync one data source now."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return jsonify({"ok": False, "error": "Admin only"}), 403
+
+    from app.ingestion.service import sync_source
+    result = sync_source(source_id)
+    return jsonify(result)
+
+
+@capacity_bp.route("/sources/sync-all", methods=["POST"])
+@login_required
+def sources_sync_all():
+    """Sync all active data sources."""
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        return jsonify({"ok": False, "error": "Admin only"}), 403
+
+    from app.ingestion.service import sync_all_sources
+    results = sync_all_sources()
+    return jsonify({"ok": True, "results": results})

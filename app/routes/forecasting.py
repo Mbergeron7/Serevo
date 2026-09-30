@@ -309,3 +309,47 @@ def erlang():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+# ── Generate & Save forecast from DB historical data ─────────
+@forecasting_bp.route("/generate-from-history", methods=["POST"])
+@login_required
+def generate_from_history():
+    """
+    Generate a Serevo forecast from historical actuals in the database,
+    then run Erlang C to produce requirements. Both are saved to DB.
+
+    POST JSON:
+      lob: string or "all" (required)
+      method: "weighted" | "moving_average" (default "weighted")
+      historical_days: int (default 90)
+      forecast_days: int (default 90)
+      window: int (default 7, for moving_average only)
+    """
+    from app.forecasting.engine import (generate_and_save_forecast,
+                                         generate_all_forecasts)
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        method = payload.get("method", "weighted")
+        hist_days = int(payload.get("historical_days", 90))
+        fc_days = int(payload.get("forecast_days", 90))
+        window = int(payload.get("window", 7))
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        if lob.lower() == "all":
+            results = generate_all_forecasts(method, hist_days, fc_days, window)
+            ok_count = sum(1 for r in results if r.get("ok"))
+            return jsonify({"success": True, "results": results,
+                           "message": f"Generated forecasts for {ok_count} LOBs"})
+        else:
+            result = generate_and_save_forecast(lob, method, hist_days,
+                                                 fc_days, window)
+            result["success"] = result.get("ok", False)
+            return jsonify(result)
+
+    except Exception as e:
+        log.error(f"Generate from history error: {e}")
+        return jsonify({"success": False, "error": str(e)})

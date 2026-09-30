@@ -942,3 +942,144 @@ def upsert_pw_schedules(shifts):
         created += 1
     db.session.commit()
     return created, replaced, skipped
+
+
+# ══════════════════════════════════════════════════════════════
+# DB-backed capacity plan (replaces sheet-based version)
+# ══════════════════════════════════════════════════════════════
+
+def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rate=None):
+    """Build the monthly capacity plan from ForecastInterval + RequirementInterval + Employee tables.
+
+    Returns list of {lob, months: [{month, month_label, fc_offered, fc_answered, aht,
+    psih_raw, psih_shr, fte_req, actual_hc, gap, occupancy, shrinkage,
+    working_days, peak_agents, avg_agents}]}
+    """
+    from sqlalchemy import func as sa_func, extract
+    from app.models import (db, PlanningUnit, ForecastInterval,
+                            RequirementInterval, Employee)
+
+    shr = shrinkage if shrinkage is not None else DEFAULT_SHRINKAGE
+    occ = occupancy if occupancy is not None else DEFAULT_OCCUPANCY
+    ar = answer_rate if answer_rate is not None else 0.92
+
+    # ── Aggregate forecasts by planning_unit × month ─────────
+    fc_query = (
+        db.session.query(
+            ForecastInterval.planning_unit_id,
+            extract("month", ForecastInterval.timestamp).label("month"),
+            sa_func.sum(ForecastInterval.offered).label("total_offered"),
+            sa_func.avg(ForecastInterval.aht).label("avg_aht"),
+        )
+        .filter(extract("year", ForecastInterval.timestamp) == year)
+        .group_by(ForecastInterval.planning_unit_id,
+                  extract("month", ForecastInterval.timestamp))
+        .all()
+    )
+    # {pu_id: {month: {offered, aht}}}
+    fc_data = {}
+    for row in fc_query:
+        fc_data.setdefault(row.planning_unit_id, {})[int(row.month)] = {
+            "offered": float(row.total_offered or 0),
+            "aht": float(row.avg_aht or 0),
+        }
+
+    # ── Aggregate requirements by planning_unit × month ──────
+    rq_query = (
+        db.session.query(
+            RequirementInterval.planning_unit_id,
+            extract("month", RequirementInterval.timestamp).label("month"),
+            sa_func.sum(RequirementInterval.agents_required).label("total_agents"),
+            sa_func.max(RequirementInterval.agents_required).label("peak_agents"),
+            sa_func.avg(RequirementInterval.agents_required).label("avg_agents"),
+            sa_func.count().label("interval_count"),
+        )
+        .filter(extract("year", RequirementInterval.timestamp) == year)
+        .group_by(RequirementInterval.planning_unit_id,
+                  extract("month", RequirementInterval.timestamp))
+        .all()
+    )
+    # {pu_id: {month: {total, peak, avg, count}}}
+    rq_data = {}
+    for row in rq_query:
+        rq_data.setdefault(row.planning_unit_id, {})[int(row.month)] = {
+            "total": float(row.total_agents or 0),
+            "peak": float(row.peak_agents or 0),
+            "avg": float(row.avg_agents or 0),
+            "count": int(row.interval_count or 0),
+        }
+
+    # ── Headcount by planning_unit (active employees) ────────
+    hc_query = (
+        db.session.query(
+            Employee.planning_unit_id,
+            sa_func.count().label("hc"),
+        )
+        .filter(Employee.status.in_(["Active", "active", ""]))
+        .filter(Employee.planning_unit_id.isnot(None))
+        .group_by(Employee.planning_unit_id)
+        .all()
+    )
+    hc_by_pu = {row.planning_unit_id: row.hc for row in hc_query}
+
+    # ── Find all planning units that have forecast or requirement data ─
+    all_pu_ids = sorted(set(list(fc_data.keys()) + list(rq_data.keys())))
+    if not all_pu_ids:
+        return []
+
+    # Get planning unit names
+    pus = PlanningUnit.query.filter(PlanningUnit.id.in_(all_pu_ids)).all()
+    pu_names = {pu.id: pu.name for pu in pus}
+
+    months = list(range(1, 13))
+    plan = []
+
+    for pu_id in all_pu_ids:
+        lob_name = pu_names.get(pu_id, f"Unit {pu_id}")
+        lob_plan = {"lob": lob_name, "months": []}
+
+        for m in months:
+            wd = _working_days_in_month(year, m)
+            working_hrs = wd * 7.5
+
+            # Forecast data
+            fc_month = fc_data.get(pu_id, {}).get(m, {})
+            fc_offered = fc_month.get("offered", 0)
+            avg_aht = fc_month.get("aht", 0)
+            fc_answered = round(fc_offered * ar)
+
+            # Requirements data — psih_raw is total agent-half-hours
+            rq_month = rq_data.get(pu_id, {}).get(m, {})
+            # total is sum of agents_required across intervals;
+            # each interval is 30 min, so total × 0.5 = agent-hours = PSIH
+            psih_raw = rq_month.get("total", 0) * 0.5
+            psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
+            fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
+
+            actual_hc = hc_by_pu.get(pu_id, 0)
+            gap = round(actual_hc - fte_req, 1)
+
+            peak_agents = rq_month.get("peak", 0)
+            avg_agents = rq_month.get("avg", 0)
+
+            lob_plan["months"].append({
+                "month":        m,
+                "month_label":  datetime.date(year, m, 1).strftime("%b-%y"),
+                "fc_offered":   round(fc_offered),
+                "fc_answered":  fc_answered,
+                "aht":          round(avg_aht, 1) if avg_aht else "—",
+                "psih_raw":     round(psih_raw, 1),
+                "psih_shr":     round(psih_shr, 1),
+                "fte_req":      fte_req,
+                "actual_hc":    actual_hc,
+                "gap":          gap,
+                "occupancy":    occ,
+                "shrinkage":    shr,
+                "working_days": wd,
+                "peak_agents":  round(peak_agents, 1),
+                "avg_agents":   round(avg_agents, 1),
+            })
+
+        plan.append(lob_plan)
+
+    return plan

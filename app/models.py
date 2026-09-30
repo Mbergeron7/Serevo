@@ -351,6 +351,55 @@ class DataUpload(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# DATA SOURCES (multi-source historical data ingestion)
+# ═══════════════════════════════════════════════════════════════
+
+class DataSource(db.Model):
+    """A configured source of historical interval data.
+    Supports Google Sheets, API connections, and CSV uploads.
+    Each source maps to a tab/endpoint/file that feeds IntervalActual."""
+    __tablename__ = "data_sources"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    name              = db.Column(db.String(200), nullable=False)
+    source_type       = db.Column(db.String(50), nullable=False)  # google_sheet | api | csv_upload
+
+    # ── Google Sheets config ──
+    sheet_key         = db.Column(db.String(200), default="")
+    tab_name          = db.Column(db.String(100), default="")
+    service_account_json = db.Column(db.Text, default="")  # JSON creds (encrypted at rest)
+
+    # ── API config ──
+    api_connection_id = db.Column(db.Integer, db.ForeignKey("api_connections.id"), nullable=True)
+    api_endpoint      = db.Column(db.String(500), default="")  # e.g. /workloads/{lob}/actuals
+
+    # ── Column mapping: source column names → our fields ──
+    # JSON: {"timestamp": "Date", "offered": "Calls Offered", "aht": "AHT", "lob": "LOB", ...}
+    column_mapping    = db.Column(db.JSON, default=dict)
+
+    # ── LOB filter: which planning units this source feeds ──
+    # If empty, auto-creates planning units from the LOB column
+    planning_unit_ids = db.Column(db.JSON, default=list)  # [1, 2, 3] or []
+
+    # ── Sync status ──
+    is_active         = db.Column(db.Boolean, default=True)
+    last_sync         = db.Column(db.DateTime, nullable=True)
+    last_status       = db.Column(db.String(50), default="never_synced")  # never_synced | ok | error
+    last_error        = db.Column(db.Text, default="")
+    rows_synced       = db.Column(db.Integer, default=0)
+    sync_interval_hours = db.Column(db.Integer, default=24)
+
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at        = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    api_connection    = db.relationship("APIConnection", backref="data_sources")
+
+    def __repr__(self):
+        return f"<DataSource {self.name} ({self.source_type})>"
+
+
+# ═══════════════════════════════════════════════════════════════
 # APP SETTINGS (key-value store for runtime configuration)
 # ═══════════════════════════════════════════════════════════════
 
@@ -975,9 +1024,11 @@ class IntervalActual(db.Model):
     aht_secs         = db.Column(db.Float, nullable=True) # actual average handle time
     max_queued       = db.Column(db.Integer, nullable=True)
     source           = db.Column(db.String(30), default="upload")  # upload | sheet | api | demo
+    data_source_id   = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=True, index=True)
     uploaded_at      = db.Column(db.DateTime, default=datetime.utcnow)
 
     planning_unit = db.relationship("PlanningUnit")
+    data_source   = db.relationship("DataSource", backref="actuals")
 
     __table_args__ = (
         db.UniqueConstraint("planning_unit_id", "timestamp", name="uq_actual_unit_ts"),

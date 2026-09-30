@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Data Sources — {{ brand_name }}{% endblock %}
+
+{% block nav %}
+  <a href="/">Dashboard</a>
+  <a href="/people/">People</a>
+  <a href="/capacity" class="nav-link">Capacity</a>
+  <a href="/capacity/plan">Plan View</a>
+  <a href="/capacity/summary">Summary</a>
+  <a href="/capacity/sources" class="active">Data Sources</a>
+  {% if user and user.is_admin %}
+  <a href="/data/">Data Import</a>
+  <a href="/settings/">Settings</a>
+  {% endif %}
+  <span class="user-name" style="margin-left:auto;">{{ user.name }}</span>
+  <a href="/logout">Sign out</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 24px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .85rem; }
+
+  /* Stats cards */
+  .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px; flex: 1; min-width: 150px;
+    box-shadow: var(--shadow);
+  }
+  .stat-card .label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--text); }
+
+  /* Sources list */
+  .source-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .source-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .source-name { font-size: 1.1rem; font-weight: 600; }
+  .source-type {
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; padding: 3px 8px; border-radius: 4px;
+    background: var(--brand-accent-light); color: var(--brand-accent);
+  }
+  .source-meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: .85rem; color: var(--text-muted); }
+  .source-meta span { display: flex; align-items: center; gap: 4px; }
+  .source-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .source-actions button {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .8rem; cursor: pointer; background: var(--bg); color: var(--text);
+  }
+  .source-actions button:hover { background: var(--brand-accent-light); }
+  .source-actions .sync-btn { background: var(--brand-accent); color: #fff; border: none; }
+  .source-actions .sync-btn:hover { opacity: .9; }
+  .source-actions .del-btn { color: #d32f2f; }
+  .source-actions .del-btn:hover { background: #fde; }
+
+  .status-ok { color: #2e7d32; }
+  .status-error { color: #d32f2f; }
+  .status-never { color: var(--text-muted); }
+
+  /* Add form */
+  .add-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  .add-card h2 { font-size: 1.1rem; margin-bottom: 16px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-group label {
+    display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); box-sizing: border-box;
+  }
+  .form-group textarea { font-family: monospace; min-height: 80px; resize: vertical; }
+  .form-footer { margin-top: 16px; display: flex; gap: 8px; }
+  .form-footer button {
+    padding: 8px 20px; border: none; border-radius: 6px;
+    font-size: .85rem; cursor: pointer;
+  }
+  .btn-primary { background: var(--brand-accent); color: #fff; }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+
+  .hidden { display: none; }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+    background: #333; color: #fff; border-radius: 8px; font-size: .85rem;
+    z-index: 9999; transition: opacity .3s;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Data Sources</h1>
+  <div class="subtitle">Configure where historical interval data comes from — Google Sheets, API connections, or CSV uploads</div>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">Sources Configured</div>
+    <div class="value">{{ sources|length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Historical Rows</div>
+    <div class="value">{{ "{:,}".format(stats.total_rows) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">LOBs</div>
+    <div class="value">{{ stats.lobs }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Date Range</div>
+    <div class="value" style="font-size:1rem;">
+      {% if stats.earliest %}{{ stats.earliest }} — {{ stats.latest }}{% else %}No data{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Add New Source -->
+<div class="add-card">
+  <h2>Add Data Source</h2>
+  <div class="form-grid" id="addForm">
+    <div class="form-group">
+      <label>Source Name</label>
+      <input type="text" id="srcName" placeholder="e.g. Main Call Center Sheet">
+    </div>
+    <div class="form-group">
+      <label>Source Type</label>
+      <select id="srcType" onchange="toggleFields()">
+        <option value="google_sheet">Google Sheet</option>
+        <option value="api">API Connection</option>
+      </select>
+    </div>
+
+    <!-- Google Sheet fields -->
+    <div class="form-group sheet-field">
+      <label>Sheet Key</label>
+      <input type="text" id="srcSheetKey" placeholder="Google Sheet ID from the URL">
+    </div>
+    <div class="form-group sheet-field">
+      <label>Tab Name</label>
+      <input type="text" id="srcTabName" placeholder="e.g. ACTUALS RAW" value="ACTUALS RAW">
+    </div>
+
+    <!-- API fields -->
+    <div class="form-group api-field hidden">
+      <label>API Connection</label>
+      <select id="srcApiConn">
+        <option value="">— Select —</option>
+        {% for conn in api_connections %}
+        <option value="{{ conn.id }}">{{ conn.name }} ({{ conn.provider }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group api-field hidden">
+      <label>Endpoint Path</label>
+      <input type="text" id="srcApiEndpoint" placeholder="e.g. /v1/actuals">
+    </div>
+
+    <!-- Column mapping -->
+    <div class="form-group full">
+      <label>Column Mapping (JSON — maps our fields to your column names)</label>
+      <textarea id="srcMapping">{
+  "lob": "LOB",
+  "date": "Date",
+  "timestamp": "Timestamp",
+  "offered": "Offered",
+  "answered": "Answered",
+  "abandoned": "Abandoned",
+  "aht": "AHT"
+}</textarea>
+    </div>
+  </div>
+  <div class="form-footer">
+    <button class="btn-primary" onclick="addSource()">Add Source</button>
+  </div>
+</div>
+
+<!-- Sources List -->
+{% for src in sources %}
+<div class="source-card" id="src-{{ src.id }}">
+  <div class="source-header">
+    <div>
+      <span class="source-name">{{ src.name }}</span>
+      {% if not src.is_active %}<span style="color:#d32f2f;font-size:.8rem;margin-left:8px;">Inactive</span>{% endif %}
+    </div>
+    <span class="source-type">{{ src.source_type.replace('_', ' ') }}</span>
+  </div>
+  <div class="source-meta">
+    {% if src.source_type == 'google_sheet' %}
+      <span>Sheet: {{ src.sheet_key[:20] }}…</span>
+      <span>Tab: {{ src.tab_name or 'ACTUALS RAW' }}</span>
+    {% elif src.source_type == 'api' %}
+      <span>Endpoint: {{ src.api_endpoint }}</span>
+    {% endif %}
+    <span>
+      Status:
+      {% if src.last_status == 'ok' %}<strong class="status-ok">OK</strong>
+      {% elif src.last_status == 'error' %}<strong class="status-error">Error</strong>
+      {% else %}<strong class="status-never">Never synced</strong>{% endif %}
+    </span>
+    {% if src.last_sync %}<span>Last sync: {{ src.last_sync.strftime('%Y-%m-%d %H:%M') }}</span>{% endif %}
+    {% if src.rows_synced %}<span>Rows: {{ "{:,}".format(src.rows_synced) }}</span>{% endif %}
+  </div>
+  {% if src.last_error %}
+  <div style="margin-top:8px;font-size:.8rem;color:#d32f2f;">{{ src.last_error[:200] }}</div>
+  {% endif %}
+  <div class="source-actions">
+    <button class="sync-btn" onclick="syncSource({{ src.id }}, this)">Sync Now</button>
+    <button onclick="toggleActive({{ src.id }}, {{ 'false' if src.is_active else 'true' }})">
+      {{ 'Disable' if src.is_active else 'Enable' }}
+    </button>
+    <button class="del-btn" onclick="deleteSource({{ src.id }}, '{{ src.name }}')">Delete</button>
+  </div>
+</div>
+{% endfor %}
+
+{% if not sources %}
+<div class="source-card" style="text-align:center;color:var(--text-muted);padding:40px;">
+  No data sources configured yet. Add one above to start importing historical data.
+</div>
+{% endif %}
+
+<div id="toast" class="toast" style="display:none;"></div>
+
+<script>
+function toggleFields() {
+  const t = document.getElementById('srcType').value;
+  document.querySelectorAll('.sheet-field').forEach(el => el.classList.toggle('hidden', t !== 'google_sheet'));
+  document.querySelectorAll('.api-field').forEach(el => el.classList.toggle('hidden', t !== 'api'));
+}
+
+function toast(msg, ms) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block'; el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.style.display = 'none', 300); }, ms || 3000);
+}
+
+async function addSource() {
+  let mapping = {};
+  try { mapping = JSON.parse(document.getElementById('srcMapping').value); } catch(e) { toast('Invalid JSON in column mapping'); return; }
+
+  const body = {
+    name: document.getElementById('srcName').value,
+    source_type: document.getElementById('srcType').value,
+    sheet_key: document.getElementById('srcSheetKey').value,
+    tab_name: document.getElementById('srcTabName').value,
+    api_connection_id: document.getElementById('srcApiConn').value || null,
+    api_endpoint: document.getElementById('srcApiEndpoint').value,
+    column_mapping: mapping,
+  };
+  if (!body.name) { toast('Name is required'); return; }
+
+  const r = await fetch('/capacity/sources/add', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const j = await r.json();
+  if (j.ok) { toast(j.message); setTimeout(() => location.reload(), 1000); }
+  else toast(j.error || 'Error adding source');
+}
+
+async function syncSource(id, btn) {
+  btn.disabled = true; btn.textContent = 'Syncing…';
+  const r = await fetch(`/capacity/sources/${id}/sync`, { method: 'POST' });
+  const j = await r.json();
+  btn.disabled = false; btn.textContent = 'Sync Now';
+  if (j.ok) toast(`Synced: ${j.inserted||0} new, ${j.updated||0} updated, ${j.skipped||0} skipped`);
+  else toast(j.error || 'Sync failed');
+  setTimeout(() => location.reload(), 2000);
+}
+
+async function toggleActive(id, active) {
+  await fetch(`/capacity/sources/${id}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ is_active: active === 'true' || active === true })
+  });
+  location.reload();
+}
+
+async function deleteSource(id, name) {
+  if (!confirm(`Delete source "${name}"? The imported data will remain in the database.`)) return;
+  const r = await fetch(`/capacity/sources/${id}`, { method: 'DELETE' });
+  const j = await r.json();
+  if (j.ok) { toast(j.message); document.getElementById('src-' + id)?.remove(); }
+  else toast(j.error);
+}
+</script>
+{% endblock %}
