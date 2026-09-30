@@ -250,6 +250,7 @@ class Schedule(db.Model):
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     employee = db.relationship("Employee", backref="schedules")
+    planning_unit = db.relationship("PlanningUnit", backref="schedules")
     segments = db.relationship("ShiftSegment", backref="schedule",
                                cascade="all, delete-orphan",
                                order_by="ShiftSegment.sort_order",
@@ -261,6 +262,7 @@ class Schedule(db.Model):
 
     def to_dict(self):
         emp = self.employee
+        pu = self.planning_unit
         return {
             "id": self.id,
             "employee": emp.full_name if emp else "",
@@ -272,6 +274,8 @@ class Schedule(db.Model):
             "hours": self.hours or 0,
             "status": self.status or "scheduled",
             "segments": [seg.to_dict() for seg in self.segments],
+            "team_lead": emp.team_lead if emp and emp.team_lead else "",
+            "lob": pu.name if pu else "",
         }
 
 

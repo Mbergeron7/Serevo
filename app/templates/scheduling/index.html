@@ -1142,13 +1142,35 @@ function saveSchedule() {
   });
 
   Promise.all(promises).then(results => {
-    hideLoading();
     const totalSaved = results.reduce((s, r) => s + (r.saved || 0), 0);
     const errors = results.filter(r => !r.success);
     if (errors.length) {
+      hideLoading();
       showToast('Some days failed to save.', 'error');
     } else {
-      showToast(totalSaved + ' shifts saved to database.', 'success');
+      // Reload from DB so tmp_ IDs are replaced with real DB IDs
+      const lob = scheduleData.lob;
+      const start = document.getElementById('cfgStart').value;
+      const end = document.getElementById('cfgEnd').value;
+      fetch('/scheduling/load', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({lob, start_date: start, end_date: end}),
+      })
+      .then(r => r.json())
+      .then(data => {
+        hideLoading();
+        if (data.success && data.shifts) {
+          scheduleData = convertSavedToScheduleData(data.shifts, lob, start, end);
+          scheduleSource = 'saved';
+          showResults();
+        }
+        showToast(totalSaved + ' shifts saved to database.', 'success');
+      })
+      .catch(() => {
+        hideLoading();
+        showToast(totalSaved + ' shifts saved. Reload to update IDs.', 'success');
+      });
     }
   }).catch(e => { hideLoading(); showToast('Save failed: ' + e, 'error'); });
 }
