@@ -1287,13 +1287,19 @@ def optimize_segments():
             return jsonify({"success": True, "changes": [],
                             "message": "No break/lunch segments found to optimise"})
 
-        # Get segment rules for window constraints
+        # Get segment rules for window constraints (per shift type)
         from app.scheduling.engine import _get_segment_rules
-        rules = _get_segment_rules("full")
-        rules_by_type = {}
-        for r in rules:
-            if r["type"] not in rules_by_type:
-                rules_by_type[r["type"]] = r
+        _rules_cache = {}  # shift_type -> {seg_type -> rule}
+
+        def _rules_for(shift_type):
+            if shift_type not in _rules_cache:
+                rules = _get_segment_rules(shift_type or "full")
+                by_type = {}
+                for r in rules:
+                    if r["type"] not in by_type:
+                        by_type[r["type"]] = r
+                _rules_cache[shift_type] = by_type
+            return _rules_cache[shift_type]
 
         # Greedy placement: process each segment, find best slot
         already_placed = list(fixed_placed)
@@ -1301,6 +1307,7 @@ def optimize_segments():
 
         for shift, seg, s_s, s_e in to_reposition:
             duration = seg.duration_mins or 15
+            rules_by_type = _rules_for(shift.shift_type)
             rule = rules_by_type.get(seg.activity_type)
 
             # Determine window: use rule window relative to shift start,

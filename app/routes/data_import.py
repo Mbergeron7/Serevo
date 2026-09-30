@@ -25,7 +25,9 @@ def _demo_guard():
     from app.auth import get_current_user
     user = get_current_user()
     if user and user.get("is_demo"):
-        return jsonify(success=True, demo=True, message="Changes are not saved in demo mode.")
+        return jsonify(success=True, demo=True,
+                       message="Changes are not saved in demo mode.",
+                       imported=0, total=0, skipped=0, errors=[])
     return None
 
 
@@ -228,10 +230,21 @@ def _import_rows(upload_type, rows, uploaded_by=""):
         }
     except Exception as e:
         db.session.rollback()
-        upload.status = "error"
-        upload.error_detail = str(e)
-        db.session.add(upload)
-        db.session.commit()
+        # Re-create the upload record since rollback detached it
+        try:
+            err_upload = DataUpload(
+                upload_type=upload.upload_type,
+                filename=upload.filename,
+                uploaded_by=upload.uploaded_by,
+                rows_imported=0,
+                rows_skipped=0,
+                status="error",
+                error_detail=str(e)[:500],
+            )
+            db.session.add(err_upload)
+            db.session.commit()
+        except Exception:
+            pass  # Best effort — don't mask the original error
         return {"success": False, "error": str(e)}
 
 
