@@ -125,10 +125,13 @@ def get_forecast_data(lob, start_date, end_date, sheet=None):
                     "offered": float(r.offered or 0),
                     "aht": float(r.aht or 0),
                 })
-            return results, None
+            if results:
+                return results, None
+            # DB had the unit but no rows — fall through to sheets
         except Exception as e:
-            return [], str(e)
+            log.info(f"DB forecast lookup failed for '{lob}': {e}")
 
+    # Fallback: try Google Sheets
     try:
         from app.data_source import SheetSource
         src = SheetSource()

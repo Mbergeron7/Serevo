@@ -168,6 +168,71 @@ def generate():
         result["erlang_forecast"] = erlang_forecast
         result["daily_summary"] = daily_summary(erlang_forecast)
         result["success"] = True
+
+        # Save generated forecast + requirements to DB when using Postgres
+        import os
+        if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+            try:
+                from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
+                from app.data_source import normalize_lob
+                from sqlalchemy import func as sa_func
+
+                lob_normalized = normalize_lob(lob)
+                unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+                if not unit:
+                    unit = PlanningUnit(name=lob_normalized)
+                    db.session.add(unit)
+                    db.session.flush()
+
+                today = datetime.date.today()
+
+                # Clear existing generated future forecasts for this unit
+                ForecastInterval.query.filter(
+                    ForecastInterval.planning_unit_id == unit.id,
+                    sa_func.date(ForecastInterval.timestamp) >= today,
+                    ForecastInterval.source == "generated",
+                ).delete(synchronize_session=False)
+
+                RequirementInterval.query.filter(
+                    RequirementInterval.planning_unit_id == unit.id,
+                    sa_func.date(RequirementInterval.timestamp) >= today,
+                    RequirementInterval.source == "generated",
+                ).delete(synchronize_session=False)
+
+                # Save forecast intervals
+                for row in result.get("forecast", []):
+                    try:
+                        ts = datetime.datetime.strptime(
+                            f"{row['date']} {row['time']}", "%Y-%m-%d %H:%M")
+                    except (ValueError, KeyError):
+                        continue
+                    db.session.add(ForecastInterval(
+                        planning_unit_id=unit.id,
+                        timestamp=ts,
+                        offered=row["offered"],
+                        aht=row["aht"],
+                        source="generated",
+                    ))
+
+                # Save requirement intervals
+                for row in erlang_forecast:
+                    try:
+                        ts = datetime.datetime.strptime(
+                            f"{row['date']} {row['time']}", "%Y-%m-%d %H:%M")
+                    except (ValueError, KeyError):
+                        continue
+                    db.session.add(RequirementInterval(
+                        planning_unit_id=unit.id,
+                        timestamp=ts,
+                        agents_required=row.get("agents_required", 0),
+                        source="generated",
+                    ))
+
+                db.session.commit()
+                log.info(f"Saved forecast + requirements to DB for '{lob_normalized}'")
+            except Exception as e:
+                log.warning(f"Failed to save forecast to DB: {e}")
+
         return jsonify(result)
 
     except Exception as e:
