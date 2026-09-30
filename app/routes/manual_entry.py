@@ -135,6 +135,7 @@ def save_employee():
         emp.days_per_week = int(data.get("days_per_week") or 5)
         emp.hours_per_day = float(data.get("hours_per_day") or 8)
         emp.timezone = (data.get("timezone") or "America/New_York").strip()
+        emp.team_lead = (data.get("team_lead") or "").strip()
         emp.schedule_excluded = bool(data.get("schedule_excluded"))
         emp.manually_edited = True
 

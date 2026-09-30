@@ -49,8 +49,11 @@
     background: var(--bg); font-size: .72rem; text-align: left;
     padding: 8px 12px; border-bottom: 2px solid var(--border);
     color: var(--text-muted); font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; white-space: nowrap;
+    letter-spacing: .04em; white-space: nowrap; cursor: pointer; user-select: none;
   }
+  .roster-table th:last-child { cursor: default; }
+  .roster-table th .sort-arrow { margin-left: 3px; font-size: .65rem; opacity: .4; }
+  .roster-table th.sort-active .sort-arrow { opacity: 1; color: var(--brand-accent); }
   .roster-table td {
     padding: 7px 12px; border-bottom: 1px solid var(--border);
     white-space: nowrap;
@@ -182,6 +185,13 @@
     <option value="terminated">Terminated</option>
     <option value="inactive">Inactive</option>
   </select>
+  <select id="filterTL" onchange="filterTable()">
+    <option value="">All Team Leads</option>
+    {% set tls = employees | map(attribute='Team Lead') | unique | sort %}
+    {% for tl in tls %}
+      {% if tl %}<option value="{{ tl }}">{{ tl }}</option>{% endif %}
+    {% endfor %}
+  </select>
 </div>
 
 <div class="roster-card">
@@ -192,13 +202,14 @@
     <table class="roster-table" id="rosterTable">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Employee ID</th>
-          <th>LOB / Skill</th>
-          <th>Skill Start</th>
-          <th>Languages</th>
-          <th>Contract</th>
+          <th data-col="name" onclick="sortTable(this)">Name <span class="sort-arrow">▲</span></th>
+          <th data-col="status" onclick="sortTable(this)">Status <span class="sort-arrow">▲</span></th>
+          <th data-col="eid" onclick="sortTable(this)">Employee ID <span class="sort-arrow">▲</span></th>
+          <th data-col="lob" onclick="sortTable(this)">LOB / Skill <span class="sort-arrow">▲</span></th>
+          <th data-col="tl" onclick="sortTable(this)">Team Lead <span class="sort-arrow">▲</span></th>
+          <th data-col="skillstart" onclick="sortTable(this)">Skill Start <span class="sort-arrow">▲</span></th>
+          <th data-col="lang" onclick="sortTable(this)">Languages <span class="sort-arrow">▲</span></th>
+          <th data-col="contract" onclick="sortTable(this)">Contract <span class="sort-arrow">▲</span></th>
           <th>Flags</th>
           <th></th>
         </tr>
@@ -208,7 +219,13 @@
         {% set full_name = (emp['First Name'] ~ ' ' ~ emp['Last Name'])|trim %}
         <tr data-name="{{ full_name|lower }}"
             data-lob="{{ emp['Latest Skill Name']|default('')|lower }}"
-            data-status="{{ emp['Status']|default('active')|lower }}">
+            data-status="{{ emp['Status']|default('active')|lower }}"
+            data-tl="{{ emp['Team Lead']|default('')|lower }}"
+            data-eid="{{ emp['Employee ID']|default('') }}"
+            data-skillstart="{{ emp['Latest Skill Start']|default('') }}"
+            data-lang="{{ emp['Languages']|default('English') }}"
+            data-contract="{{ emp['Contract Type']|default('Full-Time') }}"
+            data-db-id="{{ emp['_db_id']|default('') }}">
           <td style="font-weight:600">{{ full_name }}</td>
           <td>
             {% set st = emp['Status']|default('Active')|lower|trim %}
@@ -226,6 +243,7 @@
           </td>
           <td style="color:var(--text-muted)">{{ emp['Employee ID']|default('—') }}</td>
           <td>{{ emp['Latest Skill Name']|default('—') }}</td>
+          <td>{{ emp['Team Lead']|default('—') }}</td>
           <td style="color:var(--text-muted)">{{ emp['Latest Skill Start']|default('—') }}</td>
           <td>{{ emp['Languages']|default('English') }}</td>
           <td>{{ emp['Contract Type']|default('Full-Time') }} ({{ emp['Weekly Hours']|default(40)|int }}h)</td>
@@ -298,10 +316,17 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="emp_lob">LOB / Skill</label>
-        <input type="text" id="emp_lob" placeholder="e.g. Customer Service" list="lobList">
-        <datalist id="lobList"></datalist>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label for="emp_lob">LOB / Skill</label>
+          <input type="text" id="emp_lob" placeholder="e.g. Customer Service" list="lobList">
+          <datalist id="lobList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="emp_team_lead">Team Lead</label>
+          <input type="text" id="emp_team_lead" placeholder="e.g. John Smith" list="tlList">
+          <datalist id="tlList"></datalist>
+        </div>
       </div>
 
       <div class="form-group">
@@ -422,17 +447,55 @@ function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
   const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
   const statusQ = document.getElementById('filterStatus').value.toLowerCase();
+  const tlQ     = document.getElementById('filterTL') ? document.getElementById('filterTL').value.toLowerCase() : '';
   document.querySelectorAll('#rosterTable tbody tr').forEach(row => {
     const name   = row.dataset.name || '';
     const lob    = row.dataset.lob || '';
     const status = row.dataset.status || '';
+    const tl     = row.dataset.tl || '';
     const show = (
       (!nameQ || name.includes(nameQ)) &&
       (!lobQ || lob === lobQ) &&
-      (!statusQ || status === statusQ)
+      (!statusQ || status === statusQ) &&
+      (!tlQ || tl === tlQ)
     );
     row.style.display = show ? '' : 'none';
   });
+}
+
+// ── Sortable columns ──
+let currentSort = { col: null, asc: true };
+function sortTable(th) {
+  const col = th.dataset.col;
+  if (!col) return;
+  if (currentSort.col === col) {
+    currentSort.asc = !currentSort.asc;
+  } else {
+    currentSort.col = col;
+    currentSort.asc = true;
+  }
+  // Update header styling
+  document.querySelectorAll('#rosterTable thead th').forEach(h => {
+    h.classList.remove('sort-active');
+    const arrow = h.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = '▲';
+  });
+  th.classList.add('sort-active');
+  const arrow = th.querySelector('.sort-arrow');
+  if (arrow) arrow.textContent = currentSort.asc ? '▲' : '▼';
+
+  const tbody = document.querySelector('#rosterTable tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  // Map column key to cell index
+  const colIdx = { name: 0, status: 1, eid: 2, lob: 3, tl: 4, skillstart: 5, lang: 6, contract: 7 };
+  const idx = colIdx[col] ?? 0;
+  rows.sort((a, b) => {
+    const aText = (a.cells[idx]?.textContent || '').trim().toLowerCase();
+    const bText = (b.cells[idx]?.textContent || '').trim().toLowerCase();
+    return currentSort.asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+  });
+  rows.forEach(r => tbody.appendChild(r));
+  filterTable();  // re-apply filters after sort
 }
 
 // ── Employee Modal ──
@@ -444,6 +507,7 @@ function openEmpModal(data) {
   document.getElementById('emp_eid').value = data ? (data.employee_id || data['Employee ID'] || '') : '';
   document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
+  document.getElementById('emp_team_lead').value = data ? (data.team_lead || data['Team Lead'] || '') : '';
   document.getElementById('emp_skills').value = data ? (data.all_skills || data['All Skills'] || '') : '';
   document.getElementById('emp_languages').value = data ? (data.languages || data['Languages'] || 'English') : 'English';
   document.getElementById('emp_contract_type').value = data ? (data.contract_type || data['Contract Type'] || 'Full-Time') : 'Full-Time';
@@ -458,8 +522,9 @@ function openEmpModal(data) {
   document.getElementById('empError').style.display = 'none';
   document.getElementById('empModal').style.display = '';
 
-  // Populate LOB datalist
+  // Populate LOB datalist and TL datalist
   loadLOBs();
+  loadTLs();
 }
 
 function closeEmpModal() {
@@ -484,6 +549,102 @@ async function loadLOBs() {
   } catch(e) {}
 }
 
+function loadTLs() {
+  // Build TL datalist from existing rows
+  const dl = document.getElementById('tlList');
+  if (!dl) return;
+  const tls = new Set();
+  document.querySelectorAll('#rosterTable tbody tr').forEach(row => {
+    const tl = (row.dataset.tl || '').trim();
+    if (tl) tls.add(row.cells[4]?.textContent?.trim() || '');  // original case from cell
+  });
+  dl.innerHTML = '';
+  [...tls].filter(Boolean).sort().forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    dl.appendChild(opt);
+  });
+}
+
+function updateRowInPlace(body, savedId) {
+  const fullName = (body.first_name + ' ' + body.last_name).trim();
+  const dbId = body.id || savedId;
+  // Find existing row by data-db-id or data-name match
+  let row = null;
+  if (dbId) {
+    row = document.querySelector(`#rosterTable tbody tr[data-db-id="${dbId}"]`);
+  }
+  if (!row) {
+    // New employee — add a row
+    const tbody = document.querySelector('#rosterTable tbody');
+    row = document.createElement('tr');
+    // Create 10 cells (Name, Status, EID, LOB, TL, Skill Start, Languages, Contract, Flags, Edit)
+    for (let i = 0; i < 10; i++) row.appendChild(document.createElement('td'));
+    row.cells[8].innerHTML = '<div class="flag-badges"></div>';
+    row.cells[9].innerHTML = '<button class="edit-btn">Edit</button>';
+    tbody.appendChild(row);
+  }
+
+  // Update data attributes
+  row.dataset.name = fullName.toLowerCase();
+  row.dataset.lob = (body.lob || '').toLowerCase();
+  row.dataset.status = (body.status || 'Active').toLowerCase();
+  row.dataset.tl = (body.team_lead || '').toLowerCase();
+  row.dataset.eid = body.employee_id || '';
+  row.dataset.skillstart = body.skill_start || '';
+  row.dataset.lang = body.languages || 'English';
+  row.dataset.contract = body.contract_type || 'Full-Time';
+  row.dataset.dbId = savedId || dbId || '';
+
+  // Update cells
+  row.cells[0].innerHTML = `<span style="font-weight:600">${fullName}</span>`;
+  // Status badge
+  const st = (body.status || 'Active').toLowerCase().trim();
+  const badges = {
+    'active': '<span class="badge-active">Active</span>',
+    'terminated': '<span class="badge-terminated">Terminated</span>',
+    'on leave': '<span class="badge-loa">On Leave</span>',
+    'training': '<span class="badge-training">Training</span>',
+  };
+  row.cells[1].innerHTML = badges[st] || `<span class="badge-inactive">${body.status}</span>`;
+  row.cells[2].innerHTML = `<span style="color:var(--text-muted)">${body.employee_id || '—'}</span>`;
+  row.cells[3].textContent = body.lob || '—';
+  row.cells[4].textContent = body.team_lead || '—';
+  row.cells[5].innerHTML = `<span style="color:var(--text-muted)">${body.skill_start || '—'}</span>`;
+  row.cells[6].textContent = body.languages || 'English';
+  row.cells[7].textContent = `${body.contract_type || 'Full-Time'} (${parseInt(body.weekly_hours || 40)}h)`;
+  // Flags cell (8) left as-is for existing rows
+  // Edit button — bind click
+  const editBtn = row.cells[9].querySelector('.edit-btn');
+  if (editBtn) {
+    editBtn.onclick = function() {
+      editEmp({
+        _db_id: savedId || dbId,
+        'First Name': body.first_name,
+        'Last Name': body.last_name,
+        'Employee ID': body.employee_id,
+        'Status': body.status,
+        'Latest Skill Name': body.lob,
+        'Team Lead': body.team_lead,
+        'All Skills': body.all_skills,
+        'Languages': body.languages,
+        'Contract Type': body.contract_type,
+        'Weekly Hours': body.weekly_hours,
+        'Days Per Week': body.days_per_week,
+        'Hours Per Day': body.hours_per_day,
+        'Timezone': body.timezone,
+        'Schedule Excluded': body.schedule_excluded,
+        'Latest Skill Start': body.skill_start,
+        'Latest Skill End': body.skill_end,
+        'End Date': body.end_date,
+      });
+    };
+  }
+
+  // Re-apply current filters
+  filterTable();
+}
+
 document.getElementById('empForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('empSaveBtn');
@@ -498,6 +659,7 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     last_name: document.getElementById('emp_last').value,
     status: document.getElementById('emp_status').value,
     lob: document.getElementById('emp_lob').value,
+    team_lead: document.getElementById('emp_team_lead').value,
     all_skills: document.getElementById('emp_skills').value,
     languages: document.getElementById('emp_languages').value,
     contract_type: document.getElementById('emp_contract_type').value,
@@ -519,7 +681,9 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     });
     const data = await resp.json();
     if (data.success) {
-      location.reload();
+      // Update the row in-place instead of reloading (preserves filters)
+      updateRowInPlace(body, data.id);
+      closeEmpModal();
     } else {
       errDiv.textContent = data.error;
       errDiv.style.display = '';
