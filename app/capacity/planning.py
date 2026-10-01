@@ -920,7 +920,8 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
 
         def _bulk_one(pu_id, day):
             sess = requests.Session()
-            data = _legacy_get(sess, f"planning_units/{pu_id}/schedule/{day.isoformat()}") or {}
+            data = _legacy_get(sess, f"planning_units/{pu_id}/schedule/{day.isoformat()}",
+                               params={"levels": "plan,final,wishes"}) or {}
             results = []
 
             # The API may nest schedules under different keys — try several
