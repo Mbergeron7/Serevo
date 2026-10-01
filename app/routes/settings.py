@@ -1230,3 +1230,103 @@ def delete_lob_mapping():
     db.session.delete(m)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ═══════════════════════════════════════════════════════════════
+# MASTER RESET
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/reset", methods=["POST"])
+@admin_required
+def master_reset():
+    """Wipe all operational data, API connections, and settings.
+
+    Preserves: user accounts, brand settings.
+    Blocked for demo users.
+    """
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    data = request.get_json(silent=True) or {}
+    confirm = data.get("confirm", "")
+    if confirm != "RESET":
+        return jsonify({"success": False,
+                        "error": "Type RESET to confirm."})
+
+    from app.models import (
+        db, Employee, Accommodation, PTOEntry,
+        PlanningUnit, ForecastInterval, RequirementInterval,
+        Schedule, ShiftSegment, APIConnection, DataUpload, DataSource,
+        AppSetting, SegmentCode, ShiftTemplate, RotationPattern,
+        RotationAssignment, FillInRule, LOBSetting, TimeOffType,
+        OvertimeRule, ScheduleRule, Holiday, SkillGroup, SkillMapping,
+        AdherenceException, AlertConfig, EmployeeAvailability,
+        IntervalActual, LobMapping, AgentStatusEvent,
+    )
+
+    log.info("=== MASTER RESET initiated ===")
+
+    # Order matters — delete children before parents
+    tables_to_clear = [
+        # Child tables first
+        ShiftSegment,
+        Accommodation,
+        PTOEntry,
+        RotationAssignment,
+        SkillMapping,
+        EmployeeAvailability,
+        AdherenceException,
+        AgentStatusEvent,
+        IntervalActual,
+        # Main data tables
+        Schedule,
+        ForecastInterval,
+        RequirementInterval,
+        Employee,
+        PlanningUnit,
+        # Config tables
+        APIConnection,
+        DataUpload,
+        DataSource,
+        SegmentCode,
+        ShiftTemplate,
+        RotationPattern,
+        FillInRule,
+        LOBSetting,
+        TimeOffType,
+        OvertimeRule,
+        ScheduleRule,
+        Holiday,
+        SkillGroup,
+        AlertConfig,
+        LobMapping,
+    ]
+
+    counts = {}
+    for model in tables_to_clear:
+        try:
+            n = model.query.delete()
+            counts[model.__tablename__] = n
+        except Exception as e:
+            log.warning(f"Reset: error clearing {model.__tablename__}: {e}")
+            db.session.rollback()
+
+    # Clear app settings (Google Sheet key, etc.) but keep brand
+    try:
+        AppSetting.query.delete()
+        counts["app_settings"] = "cleared"
+    except Exception as e:
+        log.warning(f"Reset: error clearing app_settings: {e}")
+        db.session.rollback()
+
+    db.session.commit()
+
+    total = sum(v for v in counts.values() if isinstance(v, int))
+    log.info(f"=== MASTER RESET complete — {total} rows deleted across {len(counts)} tables ===")
+
+    return jsonify({
+        "success": True,
+        "message": f"Reset complete. {total} records cleared across {len(counts)} tables.",
+        "details": counts,
+    })
