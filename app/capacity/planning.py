@@ -898,145 +898,51 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             "segments": segs,
         }
 
-    # ── Try bulk planning-unit approach first ─────────────────────
-    pu_data = _legacy_get(session, "planning_units") or {}
-    pu_list = pu_data.get("planning_units", []) if isinstance(pu_data, dict) else []
-    pu_ids = [str(pu.get("planning_unit_id")) for pu in pu_list
-              if pu.get("planning_unit_id") is not None]
+    # ── Per-employee schedule fetch (singular /schedule/ endpoint) ──
+    # This matches the proven working pattern from the original scripts.
+    base = _legacy_get(session, "employees") or {}
+    employees = base.get("employees", base) if isinstance(base, dict) else base
+    employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+    if wanted_eids:
+        employees = [e for e in employees if str(e.get("employee_id")) in wanted_eids]
 
     if diagnose:
-        diag["planning_units_found"] = len(pu_ids)
+        diag["mode"] = "per_employee"
+        diag["employees_count"] = len(employees)
         diag["days"] = len(days)
+        diag["total_api_calls"] = len(employees) * len(days)
+        sample_raw = []
 
     out = []
 
-    if pu_ids:
-        # ── BULK MODE: one API call per planning-unit per day ─────
-        log.info(f"WFM bulk schedule fetch: {len(pu_ids)} planning units × {len(days)} days = {len(pu_ids) * len(days)} calls")
-        if diagnose:
-            diag["mode"] = "bulk_planning_unit"
-            diag["total_api_calls"] = len(pu_ids) * len(days)
-            sample_raw = []
+    def _one(emp, day):
+        sess = requests.Session()
+        eid = str(emp.get("employee_id"))
+        # SINGULAR /schedule/ — confirmed working in original PW scripts
+        data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+        if diagnose and len(sample_raw) < 5:
+            sample_raw.append({
+                "eid": eid, "day": day.isoformat(),
+                "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                "schedule_count": len(data.get("schedules", [])) if isinstance(data, dict) else 0,
+                "preview": str(data)[:400],
+            })
+        blocks = _parse_blocks(data.get("schedules", []))
+        return _build_shift(eid, day, blocks)
 
-        def _bulk_one(pu_id, day):
-            sess = requests.Session()
-            data = _legacy_get(sess, f"planning_units/{pu_id}/schedule/{day.isoformat()}",
-                               params={"levels": "plan,final,wishes"}) or {}
-            results = []
+    actual_workers = min(max_workers, 4)
+    with ThreadPoolExecutor(max_workers=actual_workers) as ex:
+        futs = [ex.submit(_one, e, day) for e in employees for day in days]
+        for f in as_completed(futs):
+            try:
+                r = f.result()
+                if r:
+                    out.append(r)
+            except Exception as e:
+                log.warning(f"schedule fetch error: {e}")
 
-            # The API may nest schedules under different keys — try several
-            schedules = []
-            if isinstance(data, list):
-                schedules = data
-            elif isinstance(data, dict):
-                for key in ("schedules", "schedule", "data", "entries"):
-                    val = data.get(key)
-                    if isinstance(val, list) and val:
-                        schedules = val
-                        break
-                if not schedules:
-                    # Maybe each top-level key IS the schedule data
-                    # (e.g. the response is a flat dict with employee_id in it)
-                    if data.get("employee_id") or data.get("schedule_blocks"):
-                        schedules = [data]
-
-            if diagnose and len(sample_raw) < 5:
-                sample_raw.append({
-                    "pu_id": pu_id, "day": day.isoformat(),
-                    "data_keys": list(data.keys()) if isinstance(data, dict) else f"list[{len(data)}]" if isinstance(data, list) else type(data).__name__,
-                    "schedule_count": len(schedules),
-                    "preview": str(data)[:500],
-                })
-
-            # Each schedule entry should have an employee_id
-            by_employee = {}
-            for entry in schedules:
-                if not isinstance(entry, dict):
-                    continue
-                eid = str(entry.get("employee_id", ""))
-                if not eid:
-                    continue
-                if wanted_eids and eid not in wanted_eids:
-                    continue
-                by_employee.setdefault(eid, []).append(entry)
-            for eid, entries in by_employee.items():
-                blocks = _parse_blocks(entries)
-                shift = _build_shift(eid, day, blocks)
-                if shift:
-                    results.append(shift)
-            return results
-
-        actual_workers = min(max_workers, 4)
-        with ThreadPoolExecutor(max_workers=actual_workers) as ex:
-            futs = [ex.submit(_bulk_one, pu_id, day)
-                    for pu_id in pu_ids for day in days]
-            for f in as_completed(futs):
-                try:
-                    r = f.result()
-                    if r:
-                        out.extend(r)
-                except Exception as e:
-                    log.warning(f"bulk schedule fetch error: {e}")
-
-        if diagnose:
-            diag["sample_raw_responses"] = sample_raw
-        log.info(f"WFM bulk fetch complete: {len(out)} shifts from {len(pu_ids)*len(days)} API calls. Sample responses: {sample_raw[:2]}")
-
-        # Deduplicate: an employee may appear in multiple planning units
-        seen = set()
-        deduped = []
-        for shift in out:
-            key = (shift["employee_id"], shift["date"])
-            if key not in seen:
-                seen.add(key)
-                deduped.append(shift)
-        if diagnose and len(out) != len(deduped):
-            diag["duplicates_removed"] = len(out) - len(deduped)
-        out = deduped
-
-    else:
-        # ── FALLBACK: per-employee calls ──────────────────────────
-        log.info("WFM: no planning units found, falling back to per-employee schedule fetch")
-        base = _legacy_get(session, "employees") or {}
-        employees = base.get("employees", base) if isinstance(base, dict) else base
-        employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
-        if wanted_eids:
-            employees = [e for e in employees if str(e.get("employee_id")) in wanted_eids]
-
-        if diagnose:
-            diag["mode"] = "per_employee"
-            diag["employees_count"] = len(employees)
-            sample_raw = []
-            total_requests = len(employees) * len(days)
-            if total_requests > 100:
-                employees = employees[:5]
-                diag["limited_to_5_employees"] = True
-                diag["total_would_be"] = total_requests
-
-        def _one(emp, day):
-            sess = requests.Session()
-            eid = str(emp.get("employee_id"))
-            data = _legacy_get(sess, f"employees/{eid}/schedules/{day.isoformat()}") or {}
-            if diagnose and len(sample_raw) < 3 and data:
-                sample_raw.append({"eid": eid, "day": day.isoformat(),
-                                   "keys": list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__,
-                                   "preview": str(data)[:300]})
-            blocks = _parse_blocks(data.get("schedules", []))
-            return _build_shift(eid, day, blocks)
-
-        actual_workers = min(max_workers, 4)
-        with ThreadPoolExecutor(max_workers=actual_workers) as ex:
-            futs = [ex.submit(_one, e, day) for e in employees for day in days]
-            for f in as_completed(futs):
-                try:
-                    r = f.result()
-                    if r:
-                        out.append(r)
-                except Exception as e:
-                    log.warning(f"schedule fetch error: {e}")
-
-        if diagnose:
-            diag["sample_raw_responses"] = sample_raw
+    if diagnose:
+        diag["sample_raw_responses"] = sample_raw
 
     log.info(f"WFM schedules: {len(out)} shifts fetched")
 
