@@ -574,16 +574,84 @@ def write_employees_to_sheet(emp_ws, employees):
 # CAPACITY PLAN COMPUTATION
 # =========================================================
 
+def _month_aware_headcount(year):
+    """Build month-aware headcount from the DB Employee table.
+
+    Returns two dicts:
+        hc_by_pu   = {pu_name: {month: count}}          (Combined)
+        hc_by_lang = {pu_name: {"EN": {m: n}, "FR": {m: n}}}
+    An employee is counted for a month if they were active during it:
+        - skill_start (or created_at) <= last day of month
+        - end_date is NULL or >= first day of month
+        - status is not terminated/deleted
+    """
+    from app.models import db, Employee, PlanningUnit
+
+    employees = (
+        Employee.query
+        .filter(Employee.planning_unit_id.isnot(None))
+        .filter(~Employee.status.in_(["Terminated", "terminated", "Deleted", "deleted"]))
+        .all()
+    )
+    # Build PU id→name cache
+    pu_ids = {e.planning_unit_id for e in employees}
+    pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all() if pu_ids else []
+    pu_names = {pu.id: pu.name for pu in pus}
+
+    hc_by_pu = {}    # {pu_name: {month: int}}
+    hc_by_lang = {}  # {pu_name: {"EN": {m: int}, "FR": {m: int}}}
+
+    for emp in employees:
+        pu_name = pu_names.get(emp.planning_unit_id, "")
+        if not pu_name:
+            continue
+
+        # Determine active range
+        start = emp.skill_start or (emp.created_at.date() if emp.created_at else datetime.date(year, 1, 1))
+        end = emp.end_date  # None means still active
+
+        # Language classification
+        langs_raw = (emp.languages or "English").lower()
+        is_french = "french" in langs_raw or "français" in langs_raw or "francais" in langs_raw
+        is_english = "english" in langs_raw or "anglais" in langs_raw
+
+        for m in range(1, 13):
+            first_of_month = datetime.date(year, m, 1)
+            _, last_day = calendar.monthrange(year, m)
+            last_of_month = datetime.date(year, m, last_day)
+
+            # Employee must have started on or before end of month
+            if start and start > last_of_month:
+                continue
+            # Employee must not have ended before start of month
+            if end and end < first_of_month:
+                continue
+
+            hc_by_pu.setdefault(pu_name, {})
+            hc_by_pu[pu_name][m] = hc_by_pu[pu_name].get(m, 0) + 1
+
+            hc_by_lang.setdefault(pu_name, {"EN": {}, "FR": {}})
+            if is_english:
+                hc_by_lang[pu_name]["EN"][m] = hc_by_lang[pu_name]["EN"].get(m, 0) + 1
+            if is_french:
+                hc_by_lang[pu_name]["FR"][m] = hc_by_lang[pu_name]["FR"].get(m, 0) + 1
+
+    return hc_by_pu, hc_by_lang
+
+
 def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
                           shrinkage=None, occupancy=None, answer_rate=None):
-    """Read cached raw sheets and compute the monthly capacity plan."""
+    """Read cached flat-row sheets and compute the monthly capacity plan.
+
+    Sheets use flat row format:
+        FORECAST RAW:      LOB | Date | Timestamp | Offered | AHT
+        REQUIREMENTS RAW:  LOB | Date | Timestamp | Agents Required
+
+    Produces plan rows for every LOB found in the sheets (Combined, EN, FR).
+    Headcount comes from the DB with month-aware start/end date logic.
+    """
     fc_data = forecast_ws.get_all_values() if forecast_ws else []
     rq_data = req_ws.get_all_values() if req_ws else []
-    emp_data = emp_ws.get_all_values() if emp_ws else []
-
-    fc_headers = fc_data[2] if len(fc_data) > 2 else []
-    rq_headers = rq_data[2] if len(rq_data) > 2 else []
-    emp_headers = emp_data[0] if emp_data else []
 
     months = list(range(1, 13))
 
@@ -595,76 +663,102 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
         except Exception:
             return None
 
-    # Aggregate forecast by LOB by month
+    def _find_col(headers, name):
+        """Find column index by name (case-insensitive)."""
+        for i, h in enumerate(headers):
+            if h.strip().lower() == name.lower():
+                return i
+        return -1
+
+    # ── Parse flat-row forecast data ────────────────────────────
+    # Find header row (look in first 3 rows for one containing "LOB")
+    fc_headers = []
+    fc_start = 0
+    for i, row in enumerate(fc_data[:5]):
+        if any(str(c).strip().lower() == "lob" for c in row):
+            fc_headers = [str(c).strip() for c in row]
+            fc_start = i + 1
+            break
+
+    fc_lob_col = _find_col(fc_headers, "LOB")
+    fc_ts_col = _find_col(fc_headers, "Timestamp")
+    fc_offered_col = _find_col(fc_headers, "Offered")
+    fc_aht_col = _find_col(fc_headers, "AHT")
+
+    # {lob_name: {month: {"offered": float, "aht_sum": float, "aht_count": int}}}
     fc_monthly = {}
-    fc_ts_col = next((i for i, h in enumerate(fc_headers)
-                      if "timestamp" in h.lower()), 1)
-    for row in fc_data[3:]:
-        if not row or fc_ts_col >= len(row):
+    for row in fc_data[fc_start:]:
+        if not row or fc_lob_col < 0 or fc_lob_col >= len(row):
             continue
-        ts = parse_ts(row[fc_ts_col])
+        lob = str(row[fc_lob_col]).strip()
+        if not lob:
+            continue
+        ts = parse_ts(row[fc_ts_col]) if fc_ts_col >= 0 and fc_ts_col < len(row) else None
         if not ts or ts.year != year:
             continue
         m = ts.month
-        for ci, h in enumerate(fc_headers):
-            if ci <= fc_ts_col or not h:
-                continue
-            try:
-                v = float(row[ci]) if ci < len(row) and row[ci] else 0
-                if v > 0:
-                    fc_monthly.setdefault(h, {})
-                    fc_monthly[h][m] = fc_monthly[h].get(m, 0) + v
-            except Exception:
-                pass
+        try:
+            offered = float(row[fc_offered_col]) if fc_offered_col >= 0 and fc_offered_col < len(row) and row[fc_offered_col] else 0
+        except (ValueError, TypeError):
+            offered = 0
+        try:
+            aht = float(row[fc_aht_col]) if fc_aht_col >= 0 and fc_aht_col < len(row) and row[fc_aht_col] else 0
+        except (ValueError, TypeError):
+            aht = 0
 
-    # Aggregate requirements by LOB by month
+        fc_monthly.setdefault(lob, {})
+        bucket = fc_monthly[lob].setdefault(m, {"offered": 0, "aht_sum": 0, "aht_count": 0})
+        bucket["offered"] += offered
+        if aht > 0:
+            bucket["aht_sum"] += aht
+            bucket["aht_count"] += 1
+
+    # ── Parse flat-row requirements data ────────────────────────
+    rq_headers = []
+    rq_start = 0
+    for i, row in enumerate(rq_data[:5]):
+        if any(str(c).strip().lower() == "lob" for c in row):
+            rq_headers = [str(c).strip() for c in row]
+            rq_start = i + 1
+            break
+
+    rq_lob_col = _find_col(rq_headers, "LOB")
+    rq_ts_col = _find_col(rq_headers, "Timestamp")
+    rq_agents_col = _find_col(rq_headers, "Agents Required")
+
+    # {lob_name: {month: {"total": float, "peak": float, "count": int}}}
     rq_monthly = {}
-    rq_ts_col = next((i for i, h in enumerate(rq_headers)
-                      if "timestamp" in h.lower()), 1)
-    for row in rq_data[3:]:
-        if not row or rq_ts_col >= len(row):
+    for row in rq_data[rq_start:]:
+        if not row or rq_lob_col < 0 or rq_lob_col >= len(row):
             continue
-        ts = parse_ts(row[rq_ts_col])
+        lob = str(row[rq_lob_col]).strip()
+        if not lob:
+            continue
+        ts = parse_ts(row[rq_ts_col]) if rq_ts_col >= 0 and rq_ts_col < len(row) else None
         if not ts or ts.year != year:
             continue
         m = ts.month
-        for ci, h in enumerate(rq_headers):
-            if ci <= rq_ts_col or not h:
-                continue
-            try:
-                v = float(row[ci]) if ci < len(row) and row[ci] else 0
-                if v > 0:
-                    rq_monthly.setdefault(h, {})
-                    rq_monthly[h][m] = rq_monthly[h].get(m, 0) + (v * 0.5)
-            except Exception:
-                pass
+        try:
+            agents = float(row[rq_agents_col]) if rq_agents_col >= 0 and rq_agents_col < len(row) and row[rq_agents_col] else 0
+        except (ValueError, TypeError):
+            agents = 0
 
-    # Headcount by planning unit by month
-    emp_col_map = {h.strip().lower(): i for i, h in enumerate(emp_headers)}
-    pu_col = emp_col_map.get("planning unit", emp_col_map.get("planningunit", -1))
-    status_col = emp_col_map.get("status", -1)
+        rq_monthly.setdefault(lob, {})
+        bucket = rq_monthly[lob].setdefault(m, {"total": 0, "peak": 0, "count": 0})
+        bucket["total"] += agents * 0.5  # 30-min intervals → agent-hours
+        if agents > bucket["peak"]:
+            bucket["peak"] = agents
+        bucket["count"] += 1
 
-    hc_by_pu = {}
-    for row in emp_data[1:]:
-        if not row:
-            continue
-        status = (row[status_col].strip().lower()
-                  if 0 <= status_col < len(row) else "")
-        if status in ("inactive", "deleted", "terminated"):
-            continue
-        pu = row[pu_col].strip() if 0 <= pu_col < len(row) else ""
-        if not pu:
-            continue
-        for m in months:
-            hc_by_pu.setdefault(pu, {})
-            hc_by_pu[pu][m] = hc_by_pu[pu].get(m, 0) + 1
+    # ── Month-aware headcount from DB ───────────────────────────
+    hc_by_pu, hc_by_lang = _month_aware_headcount(year)
 
     # Resolve parameter defaults
     shr = shrinkage if shrinkage is not None else DEFAULT_SHRINKAGE
     occ = occupancy if occupancy is not None else DEFAULT_OCCUPANCY
     ar  = answer_rate if answer_rate is not None else 0.92
 
-    # Build plan per LOB
+    # ── Build plan per LOB ──────────────────────────────────────
     plan = []
     all_lobs = sorted(set(list(fc_monthly.keys()) + list(rq_monthly.keys())))
 
@@ -672,46 +766,45 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
         lob_plan = {"lob": lob, "months": []}
         pu_name = lob_to_planning_unit(lob)
 
+        # Determine which headcount to use for this LOB row
+        lob_lower = lob.lower()
+        if lob_lower.endswith(" en"):
+            hc_source = hc_by_lang.get(pu_name, {}).get("EN", {})
+        elif lob_lower.endswith(" fr"):
+            hc_source = hc_by_lang.get(pu_name, {}).get("FR", {})
+        else:
+            # Combined or LOBs without language split
+            hc_source = hc_by_pu.get(pu_name, {})
+
         for m in months:
             wd = _working_days_in_month(year, m)
-            fc_calls = fc_monthly.get(lob, {}).get(m, 0)
-            fc_answered = round(fc_calls * ar)
-            psih_raw = rq_monthly.get(lob, {}).get(m, 0)
-            psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
             working_hrs = wd * 7.5
+
+            fc_bucket = fc_monthly.get(lob, {}).get(m, {})
+            fc_calls = fc_bucket.get("offered", 0) if isinstance(fc_bucket, dict) else 0
+            fc_answered = round(fc_calls * ar)
+            avg_aht = 0
+            if isinstance(fc_bucket, dict) and fc_bucket.get("aht_count", 0) > 0:
+                avg_aht = fc_bucket["aht_sum"] / fc_bucket["aht_count"]
+
+            rq_bucket = rq_monthly.get(lob, {}).get(m, {})
+            psih_raw = rq_bucket.get("total", 0) if isinstance(rq_bucket, dict) else 0
+            psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
             fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
-            actual_hc = hc_by_pu.get(pu_name, {}).get(m, 0)
+
+            actual_hc = hc_source.get(m, 0)
             gap = round(actual_hc - fte_req, 1)
 
-            # Peak / avg agents from requirements data (per-interval)
-            peak_agents = 0
-            total_agent_intervals = 0
-            interval_count = 0
-            for row in rq_data[3:]:
-                if not row or rq_ts_col >= len(row):
-                    continue
-                ts = parse_ts(row[rq_ts_col])
-                if not ts or ts.year != year or ts.month != m:
-                    continue
-                for ci, h in enumerate(rq_headers):
-                    if ci <= rq_ts_col or not h or h != lob:
-                        continue
-                    try:
-                        v = float(row[ci]) if ci < len(row) and row[ci] else 0
-                        if v > 0:
-                            peak_agents = max(peak_agents, v)
-                            total_agent_intervals += v
-                            interval_count += 1
-                    except Exception:
-                        pass
-            avg_agents = round(total_agent_intervals / interval_count, 1) if interval_count > 0 else 0
+            peak_agents = rq_bucket.get("peak", 0) if isinstance(rq_bucket, dict) else 0
+            rq_count = rq_bucket.get("count", 0) if isinstance(rq_bucket, dict) else 0
+            avg_agents = round((rq_bucket.get("total", 0) / 0.5) / rq_count, 1) if rq_count > 0 else 0
 
             lob_plan["months"].append({
                 "month":        m,
                 "month_label":  datetime.date(year, m, 1).strftime("%b-%y"),
                 "fc_offered":   round(fc_calls),
                 "fc_answered":  fc_answered,
-                "aht":          "—",
+                "aht":          round(avg_aht, 1) if avg_aht else "—",
                 "psih_raw":     round(psih_raw, 1),
                 "psih_shr":     round(psih_shr, 1),
                 "fte_req":      fte_req,
@@ -1045,18 +1138,8 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
             "count": int(row.interval_count or 0),
         }
 
-    # ── Headcount by planning_unit (active employees) ────────
-    hc_query = (
-        db.session.query(
-            Employee.planning_unit_id,
-            sa_func.count().label("hc"),
-        )
-        .filter(Employee.status.in_(["Active", "active", ""]))
-        .filter(Employee.planning_unit_id.isnot(None))
-        .group_by(Employee.planning_unit_id)
-        .all()
-    )
-    hc_by_pu = {row.planning_unit_id: row.hc for row in hc_query}
+    # ── Month-aware headcount ──────────────────────────────────
+    hc_by_pu, hc_by_lang = _month_aware_headcount(year)
 
     # ── Find all planning units that have forecast or requirement data ─
     all_pu_ids = sorted(set(list(fc_data.keys()) + list(rq_data.keys())))
@@ -1067,55 +1150,81 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
     pus = PlanningUnit.query.filter(PlanningUnit.id.in_(all_pu_ids)).all()
     pu_names = {pu.id: pu.name for pu in pus}
 
+    # Build reverse map: pu_name → pu_id
+    pu_name_to_id = {pu.name: pu.id for pu in pus}
+
+    # Determine which PUs have language splits (EN/FR LOBs in _LOB_TO_PU)
+    pus_with_lang = set()
+    for lob_key, pu_val in _LOB_TO_PU.items():
+        if lob_key.lower().endswith(" en") or lob_key.lower().endswith(" fr"):
+            pus_with_lang.add(pu_val)
+
     months = list(range(1, 13))
     plan = []
 
     for pu_id in all_pu_ids:
-        lob_name = pu_names.get(pu_id, f"Unit {pu_id}")
-        lob_plan = {"lob": lob_name, "months": []}
+        pu_name = pu_names.get(pu_id, f"Unit {pu_id}")
 
-        for m in months:
-            wd = _working_days_in_month(year, m)
-            working_hrs = wd * 7.5
+        # Build rows: Combined first, then EN and FR if this PU has language splits
+        row_variants = [("Combined", pu_name)]
+        if pu_name in pus_with_lang:
+            row_variants = [
+                ("Combined", f"{pu_name} Combined"),
+                ("EN", f"{pu_name} EN"),
+                ("FR", f"{pu_name} FR"),
+            ]
 
-            # Forecast data
-            fc_month = fc_data.get(pu_id, {}).get(m, {})
-            fc_offered = fc_month.get("offered", 0)
-            avg_aht = fc_month.get("aht", 0)
-            fc_answered = round(fc_offered * ar)
+        for variant, lob_label in row_variants:
+            lob_plan = {"lob": lob_label, "months": []}
 
-            # Requirements data — psih_raw is total agent-half-hours
-            rq_month = rq_data.get(pu_id, {}).get(m, {})
-            # total is sum of agents_required across intervals;
-            # each interval is 30 min, so total × 0.5 = agent-hours = PSIH
-            psih_raw = rq_month.get("total", 0) * 0.5
-            psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
-            fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
+            # Pick headcount source
+            if variant == "EN":
+                hc_source = hc_by_lang.get(pu_name, {}).get("EN", {})
+            elif variant == "FR":
+                hc_source = hc_by_lang.get(pu_name, {}).get("FR", {})
+            else:
+                hc_source = hc_by_pu.get(pu_name, {})
 
-            actual_hc = hc_by_pu.get(pu_id, 0)
-            gap = round(actual_hc - fte_req, 1)
+            for m in months:
+                wd = _working_days_in_month(year, m)
+                working_hrs = wd * 7.5
 
-            peak_agents = rq_month.get("peak", 0)
-            avg_agents = rq_month.get("avg", 0)
+                # Forecast data (DB only has combined per PU)
+                fc_month = fc_data.get(pu_id, {}).get(m, {})
+                fc_offered = fc_month.get("offered", 0)
+                avg_aht = fc_month.get("aht", 0)
+                fc_answered = round(fc_offered * ar)
 
-            lob_plan["months"].append({
-                "month":        m,
-                "month_label":  datetime.date(year, m, 1).strftime("%b-%y"),
-                "fc_offered":   round(fc_offered),
-                "fc_answered":  fc_answered,
-                "aht":          round(avg_aht, 1) if avg_aht else "—",
-                "psih_raw":     round(psih_raw, 1),
-                "psih_shr":     round(psih_shr, 1),
-                "fte_req":      fte_req,
-                "actual_hc":    actual_hc,
-                "gap":          gap,
-                "occupancy":    occ,
-                "shrinkage":    shr,
-                "working_days": wd,
-                "peak_agents":  round(peak_agents, 1),
-                "avg_agents":   round(avg_agents, 1),
-            })
+                # Requirements data
+                rq_month = rq_data.get(pu_id, {}).get(m, {})
+                psih_raw = rq_month.get("total", 0) * 0.5
+                psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
+                fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
 
-        plan.append(lob_plan)
+                actual_hc = hc_source.get(m, 0)
+                gap = round(actual_hc - fte_req, 1)
+
+                peak_agents = rq_month.get("peak", 0)
+                avg_agents = rq_month.get("avg", 0)
+
+                lob_plan["months"].append({
+                    "month":        m,
+                    "month_label":  datetime.date(year, m, 1).strftime("%b-%y"),
+                    "fc_offered":   round(fc_offered),
+                    "fc_answered":  fc_answered,
+                    "aht":          round(avg_aht, 1) if avg_aht else "—",
+                    "psih_raw":     round(psih_raw, 1),
+                    "psih_shr":     round(psih_shr, 1),
+                    "fte_req":      fte_req,
+                    "actual_hc":    actual_hc,
+                    "gap":          gap,
+                    "occupancy":    occ,
+                    "shrinkage":    shr,
+                    "working_days": wd,
+                    "peak_agents":  round(peak_agents, 1),
+                    "avg_agents":   round(avg_agents, 1),
+                })
+
+            plan.append(lob_plan)
 
     return plan
