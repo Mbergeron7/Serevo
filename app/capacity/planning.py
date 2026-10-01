@@ -922,14 +922,36 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             sess = requests.Session()
             data = _legacy_get(sess, f"planning_units/{pu_id}/schedule/{day.isoformat()}") or {}
             results = []
-            schedules = data.get("schedules", [])
-            if diagnose and len(sample_raw) < 3 and schedules:
-                sample_raw.append({"pu_id": pu_id, "day": day.isoformat(),
-                                   "schedule_count": len(schedules),
-                                   "preview": str(data)[:400]})
+
+            # The API may nest schedules under different keys — try several
+            schedules = []
+            if isinstance(data, list):
+                schedules = data
+            elif isinstance(data, dict):
+                for key in ("schedules", "schedule", "data", "entries"):
+                    val = data.get(key)
+                    if isinstance(val, list) and val:
+                        schedules = val
+                        break
+                if not schedules:
+                    # Maybe each top-level key IS the schedule data
+                    # (e.g. the response is a flat dict with employee_id in it)
+                    if data.get("employee_id") or data.get("schedule_blocks"):
+                        schedules = [data]
+
+            if diagnose and len(sample_raw) < 5:
+                sample_raw.append({
+                    "pu_id": pu_id, "day": day.isoformat(),
+                    "data_keys": list(data.keys()) if isinstance(data, dict) else f"list[{len(data)}]" if isinstance(data, list) else type(data).__name__,
+                    "schedule_count": len(schedules),
+                    "preview": str(data)[:500],
+                })
+
             # Each schedule entry should have an employee_id
             by_employee = {}
             for entry in schedules:
+                if not isinstance(entry, dict):
+                    continue
                 eid = str(entry.get("employee_id", ""))
                 if not eid:
                     continue
@@ -957,6 +979,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
 
         if diagnose:
             diag["sample_raw_responses"] = sample_raw
+        log.info(f"WFM bulk fetch complete: {len(out)} shifts from {len(pu_ids)*len(days)} API calls. Sample responses: {sample_raw[:2]}")
 
         # Deduplicate: an employee may appear in multiple planning units
         seen = set()
