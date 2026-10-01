@@ -1316,6 +1316,10 @@ def optimize_segments():
                         fe = seg.end_time.hour * 60 + seg.end_time.minute
                         fixed.append((fs, fe))
             shift_fixed[shift.id] = fixed
+            if fixed:
+                emp = shift.employee
+                log.info(f"Optimizer: shift {shift.id} ({emp.full_name if emp else '?'}) "
+                         f"has {len(fixed)} fixed segments: {fixed}")
 
         # Greedy placement: process each segment, find best slot
         already_placed = list(fixed_placed)
@@ -1411,6 +1415,9 @@ def optimize_segments():
             })
 
         db.session.commit()
+        log.info(f"Optimizer: {len(changes)} changes made out of {len(to_reposition)} segments")
+        for c in changes:
+            log.info(f"  {c['employee']} {c['type']}: {c['old_start']}-{c['old_end']} -> {c['new_start']}-{c['new_end']}")
         return jsonify({"success": True, "changes": changes})
 
     except Exception as e:
