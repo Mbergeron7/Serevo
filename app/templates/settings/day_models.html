@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Day Models — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Day Models</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define shift structures with activity placements — start/end times and when breaks, lunches, and meetings occur within a shift.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Day Model</button>
+</div>
+
+<table class="data-table" id="main-table">
+  <thead>
+    <tr><th>Name</th><th>Start</th><th>End</th><th>Paid Hrs</th><th>Day Type</th><th>Planning Unit</th><th>Activities</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:640px;width:90vw;background:var(--surface);color:var(--text);max-height:90vh;overflow-y:auto;">
+  <h3 id="modalTitle" style="margin:0 0 16px;">Add Day Model</h3>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="f_id" value="">
+    <div style="display:grid;gap:12px;">
+      <label>Name<input id="f_name" class="form-input" required></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <label>Start Time<input id="f_start_time" type="time" class="form-input" value="08:00"></label>
+        <label>End Time<input id="f_end_time" type="time" class="form-input" value="16:30"></label>
+        <label>Paid Hours<input id="f_paid_hours" type="number" step="0.5" class="form-input" value="8"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Day Type
+          <select id="f_day_type" class="form-input">
+            <option value="any">Any</option>
+            <option value="weekday">Weekday</option>
+            <option value="saturday">Saturday</option>
+            <option value="sunday">Sunday</option>
+            <option value="holiday">Holiday</option>
+          </select>
+        </label>
+        <label>Planning Unit
+          <select id="f_planning_unit_id" class="form-input">
+            <option value="">All</option>
+            {% for pu in planning_units %}
+            <option value="{{ pu.id }}">{{ pu.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <label>Shift Template (optional)
+        <select id="f_shift_template_id" class="form-input">
+          <option value="">— None —</option>
+          {% for st in shift_templates %}
+          <option value="{{ st.id }}">{{ st.name }} ({{ st.start_time }}–{{ st.end_time }})</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong>Activity Placements</strong>
+          <button type="button" class="btn btn-sm" onclick="addActivityRow()">+ Add</button>
+        </div>
+        <div id="activityRows"></div>
+        <p id="noActivities" style="color:var(--text-muted);font-size:.85rem;text-align:center;margin:8px 0;">No activities placed yet.</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const DATA = {{ items | tojson }};
+const ACTIVITIES = {{ activities | tojson }};
+const tbody = document.querySelector('#main-table tbody');
+const dlg = document.getElementById('editModal');
+let actRows = [];
+
+function render() {
+  tbody.innerHTML = '';
+  DATA.forEach(r => {
+    const acts = r.activities || [];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td>${r.start_time}</td>
+      <td>${r.end_time}</td>
+      <td>${r.paid_hours}</td>
+      <td><span class="status-badge">${r.day_type}</span></td>
+      <td>${r.planning_unit}</td>
+      <td>${acts.length} placement${acts.length !== 1 ? 's' : ''}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">No day models yet. Click "+ Add Day Model" to create one.</td></tr>';
+}
+
+function renderActivityRows() {
+  const container = document.getElementById('activityRows');
+  const noMsg = document.getElementById('noActivities');
+  container.innerHTML = '';
+  noMsg.style.display = actRows.length ? 'none' : 'block';
+  actRows.forEach((row, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+    const actOpts = ACTIVITIES.map(a => `<option value="${a.id}" ${a.id==row.activity_id?'selected':''}>${a.name}</option>`).join('');
+    div.innerHTML = `
+      <label style="font-size:.8rem;">Activity<select class="form-input" onchange="actRows[${i}].activity_id=this.value" style="font-size:.85rem;"><option value="">—</option>${actOpts}</select></label>
+      <label style="font-size:.8rem;">Offset (min)<input type="number" class="form-input" value="${row.offset_mins||''}" onchange="actRows[${i}].offset_mins=+this.value" style="font-size:.85rem;"></label>
+      <label style="font-size:.8rem;">Duration (min)<input type="number" class="form-input" value="${row.duration_mins||''}" onchange="actRows[${i}].duration_mins=+this.value" style="font-size:.85rem;"></label>
+      <label style="font-size:.8rem;display:flex;align-items:center;gap:4px;margin-top:16px;"><input type="checkbox" ${row.is_flexible?'checked':''} onchange="actRows[${i}].is_flexible=this.checked"> Flex</label>
+      <button type="button" class="btn btn-sm btn-danger" onclick="actRows.splice(${i},1);renderActivityRows()" style="margin-bottom:2px;">×</button>`;
+    container.appendChild(div);
+  });
+}
+
+function addActivityRow() {
+  actRows.push({activity_id:'', offset_mins:0, duration_mins:15, is_flexible:false});
+  renderActivityRows();
+}
+
+function openModal(item) {
+  document.getElementById('modalTitle').textContent = item ? 'Edit Day Model' : 'Add Day Model';
+  document.getElementById('f_id').value = item ? item.id : '';
+  document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_start_time').value = item ? item.start_time : '08:00';
+  document.getElementById('f_end_time').value = item ? item.end_time : '16:30';
+  document.getElementById('f_paid_hours').value = item ? item.paid_hours : 8;
+  document.getElementById('f_day_type').value = item ? item.day_type : 'any';
+  document.getElementById('f_planning_unit_id').value = item ? (item.planning_unit_id||'') : '';
+  document.getElementById('f_shift_template_id').value = item ? (item.shift_template_id||'') : '';
+  actRows = item && item.activities ? JSON.parse(JSON.stringify(item.activities)) : [];
+  renderActivityRows();
+  dlg.showModal();
+}
+
+function editItem(item) { openModal(item); }
+
+async function saveItem() {
+  const body = {
+    id: document.getElementById('f_id').value || null,
+    name: document.getElementById('f_name').value,
+    start_time: document.getElementById('f_start_time').value,
+    end_time: document.getElementById('f_end_time').value,
+    paid_hours: +document.getElementById('f_paid_hours').value,
+    day_type: document.getElementById('f_day_type').value,
+    planning_unit_id: document.getElementById('f_planning_unit_id').value || null,
+    shift_template_id: document.getElementById('f_shift_template_id').value || null,
+    activities: actRows.filter(r => r.activity_id),
+  };
+  const res = await fetch('/settings/day-models/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this day model?')) return;
+  const res = await fetch('/settings/day-models/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+}
+
+render();
+</script>
+{% endblock %}

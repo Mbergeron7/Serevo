@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Activities — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Activities</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define schedulable activities — calls, email, breaks, training, meetings. These are the building blocks for day models.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Activity</button>
+</div>
+
+<table class="data-table" id="main-table">
+  <thead>
+    <tr><th>Color</th><th>Name</th><th>Short</th><th>Type</th><th>Paid</th><th>Productive</th><th>Duration</th><th>Segment Code</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<!-- Modal -->
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:520px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="modalTitle" style="margin:0 0 16px;">Add Activity</h3>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="f_id" value="">
+    <div style="display:grid;gap:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Name<input id="f_name" class="form-input" required></label>
+        <label>Short Name<input id="f_short_name" class="form-input" maxlength="20"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Type
+          <select id="f_activity_type" class="form-input">
+            <option value="presence">Presence (Productive)</option>
+            <option value="absence">Absence (Break/Lunch)</option>
+            <option value="meeting">Meeting</option>
+            <option value="training">Training</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Color<input id="f_color" type="color" value="#6b7280" class="form-input" style="height:38px;padding:2px;"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <label>Default Duration (min)<input id="f_duration_mins" type="number" class="form-input" min="0" placeholder="Variable"></label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:22px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:22px;"><input id="f_is_productive" type="checkbox" checked> Productive</label>
+      </div>
+      <label>Linked Segment Code
+        <select id="f_segment_code_id" class="form-input">
+          <option value="">— None —</option>
+          {% for sc in segment_codes %}
+          <option value="{{ sc.id }}">{{ sc.label }} ({{ sc.code }})</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const DATA = {{ items | tojson }};
+const tbody = document.querySelector('#main-table tbody');
+const dlg = document.getElementById('editModal');
+
+function render() {
+  tbody.innerHTML = '';
+  DATA.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${r.color};vertical-align:middle;"></span></td>
+      <td>${r.name}</td>
+      <td>${r.short_name||''}</td>
+      <td><span class="status-badge">${r.activity_type}</span></td>
+      <td>${r.is_paid ? '✓' : ''}</td>
+      <td>${r.is_productive ? '✓' : ''}</td>
+      <td>${r.duration_mins != null ? r.duration_mins + ' min' : 'Variable'}</td>
+      <td>${r.segment_code||''}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No activities yet. Click "+ Add Activity" to create one.</td></tr>';
+}
+
+function openModal(item) {
+  document.getElementById('modalTitle').textContent = item ? 'Edit Activity' : 'Add Activity';
+  document.getElementById('f_id').value = item ? item.id : '';
+  document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_short_name').value = item ? item.short_name : '';
+  document.getElementById('f_activity_type').value = item ? item.activity_type : 'presence';
+  document.getElementById('f_color').value = item ? item.color : '#6b7280';
+  document.getElementById('f_duration_mins').value = item ? (item.duration_mins != null ? item.duration_mins : '') : '';
+  document.getElementById('f_is_paid').checked = item ? item.is_paid : true;
+  document.getElementById('f_is_productive').checked = item ? item.is_productive : true;
+  document.getElementById('f_segment_code_id').value = item ? (item.segment_code_id||'') : '';
+  dlg.showModal();
+}
+
+function editItem(item) { openModal(item); }
+
+async function saveItem() {
+  const body = {
+    id: document.getElementById('f_id').value || null,
+    name: document.getElementById('f_name').value,
+    short_name: document.getElementById('f_short_name').value,
+    activity_type: document.getElementById('f_activity_type').value,
+    color: document.getElementById('f_color').value,
+    duration_mins: document.getElementById('f_duration_mins').value || null,
+    is_paid: document.getElementById('f_is_paid').checked,
+    is_productive: document.getElementById('f_is_productive').checked,
+    segment_code_id: document.getElementById('f_segment_code_id').value || null,
+  };
+  const res = await fetch('/settings/activities/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this activity?')) return;
+  const res = await fetch('/settings/activities/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+}
+
+render();
+</script>
+{% endblock %}

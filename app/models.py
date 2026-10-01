@@ -74,6 +74,7 @@ class Employee(db.Model):
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
     contract_type    = db.Column(db.String(20), default="Full-Time")    # Full-Time | Part-Time
+    contract_id      = db.Column(db.Integer, db.ForeignKey("contracts.id"), nullable=True)
     weekly_hours     = db.Column(db.Float, default=42.5)
     days_per_week    = db.Column(db.Integer, default=5)
     hours_per_day    = db.Column(db.Float, default=8.5)
@@ -84,6 +85,7 @@ class Employee(db.Model):
     created_at       = db.Column(db.DateTime, default=_utcnow)
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
+    contract       = db.relationship("Contract", backref="employees")
     accommodations = db.relationship("Accommodation", backref="employee", lazy="dynamic")
     pto_entries    = db.relationship("PTOEntry", backref="employee", lazy="dynamic")
 
@@ -1101,4 +1103,200 @@ class AgentStatusEvent(db.Model):
             "status": self.status,
             "start": self.start_ts.strftime("%Y-%m-%d %H:%M:%S"),
             "end": self.end_ts.strftime("%Y-%m-%d %H:%M:%S") if self.end_ts else None,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# ACTIVITIES — What agents do (calls, email, break, training…)
+# ═══════════════════════════════════════════════════════════════
+
+class Activity(db.Model):
+    """Schedulable activities — the building blocks of day models.
+    Maps to PeopleWare 'Activities' concept. Each activity has a type
+    (presence = on-phone/productive, absence = break/lunch, meeting, training)
+    and a linked segment code for color/labeling in the schedule view."""
+    __tablename__ = "activities"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(100), unique=True, nullable=False)
+    short_name    = db.Column(db.String(20), default="")           # abbrev for compact views
+    activity_type = db.Column(db.String(30), default="presence")   # presence | absence | meeting | training | other
+    is_paid       = db.Column(db.Boolean, default=True)
+    is_productive = db.Column(db.Boolean, default=True)            # counts toward productive time
+    duration_mins = db.Column(db.Integer, nullable=True)           # default duration (NULL = variable)
+    color         = db.Column(db.String(20), default="#6b7280")
+    segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
+    is_active     = db.Column(db.Boolean, default=True)
+    sort_order    = db.Column(db.Integer, default=0)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+
+    segment_code = db.relationship("SegmentCode", backref="activities")
+
+    def to_dict(self):
+        sc = self.segment_code
+        return {
+            "id": self.id, "name": self.name, "short_name": self.short_name,
+            "activity_type": self.activity_type, "is_paid": self.is_paid,
+            "is_productive": self.is_productive, "duration_mins": self.duration_mins,
+            "color": self.color, "segment_code_id": self.segment_code_id,
+            "segment_code": sc.label if sc else "",
+            "is_active": self.is_active, "sort_order": self.sort_order,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# CONTRACTS — Employment contract templates
+# ═══════════════════════════════════════════════════════════════
+
+class Contract(db.Model):
+    """Contract templates defining work hours, break rules, and scheduling
+    constraints. Employees reference a contract instead of having hours
+    scattered across their profile. Maps to PeopleWare 'Contracts'."""
+    __tablename__ = "contracts"
+
+    id                  = db.Column(db.Integer, primary_key=True)
+    name                = db.Column(db.String(100), unique=True, nullable=False)
+    contract_type       = db.Column(db.String(30), default="full_time")  # full_time | part_time | casual | temp
+    weekly_hours        = db.Column(db.Float, default=40.0)
+    daily_hours_min     = db.Column(db.Float, default=4.0)
+    daily_hours_max     = db.Column(db.Float, default=10.0)
+    days_per_week       = db.Column(db.Integer, default=5)
+    min_days_per_week   = db.Column(db.Integer, default=3)
+    max_days_per_week   = db.Column(db.Integer, default=6)
+    break_duration_mins = db.Column(db.Integer, default=30)       # paid/unpaid break per shift
+    break_after_hours   = db.Column(db.Float, default=4.0)        # break required after X hours
+    lunch_duration_mins = db.Column(db.Integer, default=30)
+    min_rest_hours      = db.Column(db.Float, default=10.0)       # between shifts
+    max_consecutive_days = db.Column(db.Integer, default=6)
+    overtime_eligible   = db.Column(db.Boolean, default=True)
+    schedule_rule_id    = db.Column(db.Integer, db.ForeignKey("schedule_rules.id"), nullable=True)
+    is_active           = db.Column(db.Boolean, default=True)
+    created_at          = db.Column(db.DateTime, default=_utcnow)
+
+    schedule_rule = db.relationship("ScheduleRule", backref="contracts")
+
+    def to_dict(self):
+        sr = self.schedule_rule
+        return {
+            "id": self.id, "name": self.name, "contract_type": self.contract_type,
+            "weekly_hours": self.weekly_hours,
+            "daily_hours_min": self.daily_hours_min, "daily_hours_max": self.daily_hours_max,
+            "days_per_week": self.days_per_week,
+            "min_days_per_week": self.min_days_per_week, "max_days_per_week": self.max_days_per_week,
+            "break_duration_mins": self.break_duration_mins,
+            "break_after_hours": self.break_after_hours,
+            "lunch_duration_mins": self.lunch_duration_mins,
+            "min_rest_hours": self.min_rest_hours,
+            "max_consecutive_days": self.max_consecutive_days,
+            "overtime_eligible": self.overtime_eligible,
+            "schedule_rule_id": self.schedule_rule_id,
+            "schedule_rule": sr.name if sr else "",
+            "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# DAY MODELS — Shift structures for a given day type
+# ═══════════════════════════════════════════════════════════════
+
+class DayModel(db.Model):
+    """A day model defines a specific shift shape for a day — start/end time,
+    activities placed within it. PeopleWare equivalent: 'Day models'.
+    A day model references a shift template for its time window and adds
+    activity placements (breaks, lunches, meetings) at specific offsets."""
+    __tablename__ = "day_models"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    name             = db.Column(db.String(100), unique=True, nullable=False)
+    shift_template_id = db.Column(db.Integer, db.ForeignKey("shift_templates.id"), nullable=True)
+    start_time       = db.Column(db.String(5), nullable=False, default="08:00")
+    end_time         = db.Column(db.String(5), nullable=False, default="16:30")
+    paid_hours       = db.Column(db.Float, default=8.0)
+    # JSON array: [{activity_id, offset_mins, duration_mins, is_flexible, window_start, window_end}]
+    activities_json  = db.Column(db.Text, default="[]")
+    day_type         = db.Column(db.String(20), default="any")   # weekday | saturday | sunday | holiday | any
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    is_active        = db.Column(db.Boolean, default=True)
+    sort_order       = db.Column(db.Integer, default=0)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    shift_template = db.relationship("ShiftTemplate", backref="day_models")
+    planning_unit  = db.relationship("PlanningUnit", backref="day_models")
+
+    def to_dict(self):
+        import json as _json
+        st = self.shift_template
+        pu = self.planning_unit
+        return {
+            "id": self.id, "name": self.name,
+            "shift_template_id": self.shift_template_id,
+            "shift_template": st.name if st else "",
+            "start_time": self.start_time, "end_time": self.end_time,
+            "paid_hours": self.paid_hours,
+            "activities": _json.loads(self.activities_json) if self.activities_json else [],
+            "day_type": self.day_type,
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit": pu.name if pu else "All",
+            "is_active": self.is_active, "sort_order": self.sort_order,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# WEEK TIME PATTERNS — Group day models by weekday
+# ═══════════════════════════════════════════════════════════════
+
+class WeekTimePattern(db.Model):
+    """A week time pattern assigns a day model to each day of the week.
+    PeopleWare equivalent: 'Week time patterns'. Used to define what
+    a typical work week looks like — which day model applies Mon-Sun."""
+    __tablename__ = "week_time_patterns"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), unique=True, nullable=False)
+    # JSON: {mon: day_model_id, tue: day_model_id, ..., sun: day_model_id}
+    # null for a day = day off
+    days_json   = db.Column(db.Text, nullable=False, default="{}")
+    total_hours = db.Column(db.Float, default=40.0)              # calculated weekly hours
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            "id": self.id, "name": self.name,
+            "days": _json.loads(self.days_json) if self.days_json else {},
+            "total_hours": self.total_hours, "is_active": self.is_active,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# WORK TIME PATTERN MODELS — Combine week patterns for scheduling
+# ═══════════════════════════════════════════════════════════════
+
+class WorkTimePatternModel(db.Model):
+    """Groups one or more week time patterns into a schedulable model.
+    PeopleWare equivalent: 'Work time pattern models'. Assigned to a
+    planning unit to tell the scheduler which shift shapes to use."""
+    __tablename__ = "work_time_pattern_models"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), unique=True, nullable=False)
+    # JSON array: [week_time_pattern_id, ...] — ordered list of week patterns
+    # If multiple, they cycle (week 1 uses pattern[0], week 2 uses pattern[1], etc.)
+    patterns_json = db.Column(db.Text, nullable=False, default="[]")
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref="work_time_pattern_models")
+
+    def to_dict(self):
+        import json as _json
+        pu = self.planning_unit
+        return {
+            "id": self.id, "name": self.name,
+            "patterns": _json.loads(self.patterns_json) if self.patterns_json else [],
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit": pu.name if pu else "All",
+            "is_active": self.is_active,
         }

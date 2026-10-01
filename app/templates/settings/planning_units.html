@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Planning Units — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Planning Units</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage LOBs and workload groups — the core organizational units that employees, schedules, and forecasts are grouped by.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Planning Unit</button>
+</div>
+
+<table class="data-table" id="main-table">
+  <thead>
+    <tr><th>Name</th><th>Employees</th><th>Active</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:440px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="modalTitle" style="margin:0 0 16px;">Add Planning Unit</h3>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="f_id" value="">
+    <div style="display:grid;gap:12px;">
+      <label>Name<input id="f_name" class="form-input" required></label>
+      <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const DATA = {{ items | tojson }};
+const tbody = document.querySelector('#main-table tbody');
+const dlg = document.getElementById('editModal');
+
+function render() {
+  tbody.innerHTML = '';
+  DATA.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td>${r.employee_count}</td>
+      <td>${r.is_active ? '✓' : '—'}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
+}
+
+function openModal(item) {
+  document.getElementById('modalTitle').textContent = item ? 'Edit Planning Unit' : 'Add Planning Unit';
+  document.getElementById('f_id').value = item ? item.id : '';
+  document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_is_active').checked = item ? item.is_active : true;
+  dlg.showModal();
+}
+
+function editItem(item) { openModal(item); }
+
+async function saveItem() {
+  const body = {
+    id: document.getElementById('f_id').value || null,
+    name: document.getElementById('f_name').value,
+    is_active: document.getElementById('f_is_active').checked,
+  };
+  const res = await fetch('/settings/planning-units/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this planning unit? This will NOT delete associated employees — they will become unassigned.')) return;
+  const res = await fetch('/settings/planning-units/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+}
+
+render();
+</script>
+{% endblock %}

@@ -1233,6 +1233,324 @@ def delete_lob_mapping():
 
 
 # ═══════════════════════════════════════════════════════════════
+# ACTIVITIES
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/activities")
+@admin_required
+def activities():
+    from app.models import Activity, SegmentCode
+    items = [a.to_dict() for a in Activity.query.order_by(Activity.sort_order, Activity.name).all()]
+    segment_codes = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order).all()
+    return render_template("settings/activities.html", items=items, segment_codes=segment_codes)
+
+
+@settings_bp.route("/activities/save", methods=["POST"])
+@admin_required
+def activities_save():
+    from app.models import Activity, db
+    d = request.json or {}
+    try:
+        item = Activity.query.get(int(d["id"])) if d.get("id") else Activity()
+        item.name = d["name"]
+        item.short_name = d.get("short_name", "")
+        item.activity_type = d.get("activity_type", "presence")
+        item.color = d.get("color", "#6b7280")
+        item.duration_mins = int(d["duration_mins"]) if d.get("duration_mins") else None
+        item.is_paid = bool(d.get("is_paid", True))
+        item.is_productive = bool(d.get("is_productive", True))
+        item.segment_code_id = int(d["segment_code_id"]) if d.get("segment_code_id") else None
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/activities/delete", methods=["POST"])
+@admin_required
+def activities_delete():
+    from app.models import Activity, db
+    d = request.json or {}
+    try:
+        item = Activity.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# CONTRACTS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/contracts")
+@admin_required
+def contracts():
+    from app.models import Contract, ScheduleRule
+    items = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+    schedule_rules = ScheduleRule.query.filter_by(is_active=True).order_by(ScheduleRule.name).all()
+    return render_template("settings/contracts.html", items=items, schedule_rules=schedule_rules)
+
+
+@settings_bp.route("/contracts/save", methods=["POST"])
+@admin_required
+def contracts_save():
+    from app.models import Contract, db
+    d = request.json or {}
+    try:
+        item = Contract.query.get(int(d["id"])) if d.get("id") else Contract()
+        item.name = d["name"]
+        item.contract_type = d.get("contract_type", "full_time")
+        for fld in ["weekly_hours", "daily_hours_min", "daily_hours_max", "break_after_hours",
+                     "min_rest_hours"]:
+            if d.get(fld) is not None:
+                setattr(item, fld, float(d[fld]))
+        for fld in ["days_per_week", "min_days_per_week", "max_days_per_week",
+                     "break_duration_mins", "lunch_duration_mins", "max_consecutive_days"]:
+            if d.get(fld) is not None:
+                setattr(item, fld, int(d[fld]))
+        item.overtime_eligible = bool(d.get("overtime_eligible", True))
+        item.schedule_rule_id = int(d["schedule_rule_id"]) if d.get("schedule_rule_id") else None
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/contracts/delete", methods=["POST"])
+@admin_required
+def contracts_delete():
+    from app.models import Contract, db
+    d = request.json or {}
+    try:
+        item = Contract.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# DAY MODELS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/day-models")
+@admin_required
+def day_models():
+    from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
+    items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
+    activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
+    planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+    shift_templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+    return render_template("settings/day_models.html", items=items, activities=activities,
+                           planning_units=planning_units, shift_templates=shift_templates)
+
+
+@settings_bp.route("/day-models/save", methods=["POST"])
+@admin_required
+def day_models_save():
+    from app.models import DayModel, db
+    d = request.json or {}
+    try:
+        item = DayModel.query.get(int(d["id"])) if d.get("id") else DayModel()
+        item.name = d["name"]
+        item.start_time = d.get("start_time", "08:00")
+        item.end_time = d.get("end_time", "16:30")
+        item.paid_hours = float(d.get("paid_hours", 8))
+        item.day_type = d.get("day_type", "any")
+        item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
+        item.shift_template_id = int(d["shift_template_id"]) if d.get("shift_template_id") else None
+        item.activities_json = json.dumps(d.get("activities", []))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/day-models/delete", methods=["POST"])
+@admin_required
+def day_models_delete():
+    from app.models import DayModel, db
+    d = request.json or {}
+    try:
+        item = DayModel.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# WEEK TIME PATTERNS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/week-time-patterns")
+@admin_required
+def week_time_patterns():
+    from app.models import WeekTimePattern, DayModel
+    items = [wtp.to_dict() for wtp in WeekTimePattern.query.order_by(WeekTimePattern.name).all()]
+    day_models_list = [dm.to_dict() for dm in DayModel.query.filter_by(is_active=True).order_by(DayModel.name).all()]
+    return render_template("settings/week_time_patterns.html", items=items, day_models=day_models_list)
+
+
+@settings_bp.route("/week-time-patterns/save", methods=["POST"])
+@admin_required
+def week_time_patterns_save():
+    from app.models import WeekTimePattern, db
+    d = request.json or {}
+    try:
+        item = WeekTimePattern.query.get(int(d["id"])) if d.get("id") else WeekTimePattern()
+        item.name = d["name"]
+        item.total_hours = float(d.get("total_hours", 40))
+        item.days_json = json.dumps(d.get("days", {}))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/week-time-patterns/delete", methods=["POST"])
+@admin_required
+def week_time_patterns_delete():
+    from app.models import WeekTimePattern, db
+    d = request.json or {}
+    try:
+        item = WeekTimePattern.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# WORK TIME PATTERN MODELS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/work-time-pattern-models")
+@admin_required
+def work_time_pattern_models():
+    from app.models import WorkTimePatternModel, WeekTimePattern, PlanningUnit
+    items = [w.to_dict() for w in WorkTimePatternModel.query.order_by(WorkTimePatternModel.name).all()]
+    week_patterns = [wp.to_dict() for wp in WeekTimePattern.query.filter_by(is_active=True).order_by(WeekTimePattern.name).all()]
+    planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+    return render_template("settings/work_time_pattern_models.html", items=items,
+                           week_patterns=week_patterns, planning_units=planning_units)
+
+
+@settings_bp.route("/work-time-pattern-models/save", methods=["POST"])
+@admin_required
+def work_time_pattern_models_save():
+    from app.models import WorkTimePatternModel, db
+    d = request.json or {}
+    try:
+        item = WorkTimePatternModel.query.get(int(d["id"])) if d.get("id") else WorkTimePatternModel()
+        item.name = d["name"]
+        item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
+        item.patterns_json = json.dumps(d.get("patterns", []))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/work-time-pattern-models/delete", methods=["POST"])
+@admin_required
+def work_time_pattern_models_delete():
+    from app.models import WorkTimePatternModel, db
+    d = request.json or {}
+    try:
+        item = WorkTimePatternModel.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING UNITS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/planning-units")
+@admin_required
+def planning_units_page():
+    from app.models import PlanningUnit, Employee
+    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    items = []
+    for pu in pus:
+        items.append({
+            "id": pu.id, "name": pu.name, "is_active": pu.is_active,
+            "employee_count": Employee.query.filter_by(planning_unit_id=pu.id).count(),
+        })
+    return render_template("settings/planning_units.html", items=items)
+
+
+@settings_bp.route("/planning-units/save", methods=["POST"])
+@admin_required
+def planning_units_save():
+    from app.models import PlanningUnit, db
+    d = request.json or {}
+    try:
+        item = PlanningUnit.query.get(int(d["id"])) if d.get("id") else PlanningUnit()
+        item.name = d["name"]
+        item.is_active = bool(d.get("is_active", True))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-units/delete", methods=["POST"])
+@admin_required
+def planning_units_delete():
+    from app.models import PlanningUnit, Employee, db
+    d = request.json or {}
+    try:
+        item = PlanningUnit.query.get(int(d["id"]))
+        if item:
+            # Unassign employees instead of deleting them
+            Employee.query.filter_by(planning_unit_id=item.id).update({"planning_unit_id": None})
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
 # MASTER RESET
 # ═══════════════════════════════════════════════════════════════
 
@@ -1263,6 +1581,8 @@ def master_reset():
         OvertimeRule, ScheduleRule, Holiday, SkillGroup, SkillMapping,
         AdherenceException, AlertConfig, EmployeeAvailability,
         IntervalActual, LobMapping, AgentStatusEvent,
+        Activity, Contract, DayModel, WeekTimePattern,
+        WorkTimePatternModel,
     )
 
     log.info("=== MASTER RESET initiated ===")
@@ -1301,6 +1621,12 @@ def master_reset():
         SkillGroup,
         AlertConfig,
         LobMapping,
+        # Scheduling config tables
+        WorkTimePatternModel,
+        WeekTimePattern,
+        DayModel,
+        Activity,
+        Contract,
     ]
 
     counts = {}
