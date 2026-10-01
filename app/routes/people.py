@@ -79,9 +79,13 @@ def roster():
 
     # Build availability & rotation maps from DB (non-demo only)
     if not (user and user.get("is_demo")):
-        avail_emp_ids = set(
-            r[0] for r in db.session.query(EmployeeAvailability.employee_id).distinct().all()
-        )
+        try:
+            avail_emp_ids = set(
+                r[0] for r in db.session.query(EmployeeAvailability.employee_id).distinct().all()
+            )
+        except Exception:
+            db.session.rollback()
+            avail_emp_ids = set()
         avail_map = {}
         for e in employees:
             db_id = e.get("_db_id")

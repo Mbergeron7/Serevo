@@ -43,7 +43,16 @@ def create_app():
 
     # Ensure all tables exist (fallback if migrations haven't run)
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            log.warning(f"db.create_all() error (rolling back): {e}")
+            db.session.rollback()
+            # Retry once after rollback
+            try:
+                db.create_all()
+            except Exception:
+                db.session.rollback()
         # Ensure is_demo column exists on users table
         try:
             result = db.session.execute(db.text(
