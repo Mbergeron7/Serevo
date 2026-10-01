@@ -1064,8 +1064,6 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     where gap = scheduled - required (negative = understaffed).
     """
     requirements = _get_requirements_for_date(lob, date_obj, sheet)
-    if not requirements:
-        return []
 
     # Build scheduled count per interval
     scheduled_map = defaultdict(int)
@@ -1077,19 +1075,32 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
             scheduled_map[t] += 1
 
     coverage = []
-    for r in requirements:
-        t = r["time"]
-        req = r["agents_required"]
-        sched = scheduled_map.get(t, 0)
-        gap = sched - req
-        pct = round((sched / req) * 100, 1) if req > 0 else (100.0 if sched > 0 else 0)
-        coverage.append({
-            "time": t,
-            "required": round(req, 1),
-            "scheduled": sched,
-            "gap": round(gap, 1),
-            "coverage_pct": pct,
-        })
+    if requirements:
+        # Compare scheduled vs required
+        for r in requirements:
+            t = r["time"]
+            req = r["agents_required"]
+            sched = scheduled_map.get(t, 0)
+            gap = sched - req
+            pct = round((sched / req) * 100, 1) if req > 0 else (100.0 if sched > 0 else 0)
+            coverage.append({
+                "time": t,
+                "required": round(req, 1),
+                "scheduled": sched,
+                "gap": round(gap, 1),
+                "coverage_pct": pct,
+            })
+    elif scheduled_map:
+        # No requirements data — show scheduled headcount only
+        for t in sorted(scheduled_map.keys()):
+            sched = scheduled_map[t]
+            coverage.append({
+                "time": t,
+                "required": 0,
+                "scheduled": sched,
+                "gap": sched,
+                "coverage_pct": 100.0,
+            })
 
     return coverage
 

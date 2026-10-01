@@ -1873,18 +1873,26 @@ function renderDayView(container) {
 
 function renderCoverageStrip(coverage) {
   const cols = coverage.length;
+  const hasReqs = coverage.some(c => c.required > 0);
+  const label = hasReqs ? 'Coverage by Interval' : 'Staffing by Interval (no forecast data)';
   let html = `<div class="coverage-card" style="margin:12px 16px 16px">
-    <div class="coverage-card-header"><span>Coverage by Interval</span></div>
+    <div class="coverage-card-header"><span>${label}</span></div>
     <div class="coverage-grid" style="grid-template-columns: repeat(${Math.min(cols, 16)}, 1fr)">`;
   coverage.forEach(c => {
     let cls = 'cov-zero';
-    if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
-    else if (c.coverage_pct >= 100) cls = 'cov-over';
-    else if (c.coverage_pct >= 90) cls = 'cov-met';
-    else if (c.coverage_pct >= 70) cls = 'cov-under';
-    else cls = 'cov-crit';
-    html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
-      <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}/${c.required}</div></div>`;
+    if (hasReqs) {
+      if (c.required === 0 && c.scheduled === 0) cls = 'cov-zero';
+      else if (c.coverage_pct >= 100) cls = 'cov-over';
+      else if (c.coverage_pct >= 90) cls = 'cov-met';
+      else if (c.coverage_pct >= 70) cls = 'cov-under';
+      else cls = 'cov-crit';
+      html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
+        <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}/${c.required}</div></div>`;
+    } else {
+      cls = c.scheduled > 0 ? 'cov-met' : 'cov-zero';
+      html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled} scheduled">
+        <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}</div></div>`;
+    }
   });
   html += '</div></div>';
   return html;
