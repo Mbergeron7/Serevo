@@ -14,9 +14,9 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, EmployeeAvailability, Schedule, Contract,
-                        Employee, EmployeePlanningUnit, EmployeeWorkTimePattern,
+                        Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
-                        SkillMapping, PlanningUnit, WorkTimePatternModel)
+                        SkillMapping, PlanningUnit)
 
 log = logging.getLogger("serevo.people")
 
@@ -816,8 +816,6 @@ def employee_profile(emp_id):
     selection_memberships = SelectionMember.query.filter_by(employee_id=emp.id).all()
     pu_assignments = EmployeePlanningUnit.query.filter_by(employee_id=emp.id).order_by(
         EmployeePlanningUnit.priority).all()
-    wtp_assignments = EmployeeWorkTimePattern.query.filter_by(employee_id=emp.id).all()
-
     # Build availability map keyed by day_of_week (0-6)
     avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
     avail_map = {a.day_of_week: a for a in avail_entries}
@@ -829,7 +827,6 @@ def employee_profile(emp_id):
         contract_assignments=contract_assignments,
         selection_memberships=selection_memberships,
         pu_assignments=pu_assignments,
-        wtp_assignments=wtp_assignments,
         avail_map=avail_map,
     )
 
@@ -843,13 +840,6 @@ def employee_profile(emp_id):
 def profile_contracts_list():
     items = Contract.query.filter_by(is_active=True).order_by(Contract.name).all()
     return jsonify({"items": [{"id": c.id, "name": c.name} for c in items]})
-
-
-@people_bp.route("/api/profile/wtp-list")
-@login_required
-def profile_wtp_list():
-    items = WorkTimePatternModel.query.order_by(WorkTimePatternModel.name).all()
-    return jsonify({"items": [{"id": w.id, "name": w.name} for w in items]})
 
 
 @people_bp.route("/api/profile/selections-list")
@@ -890,14 +880,6 @@ def profile_assign():
                 valid_from=valid_from, valid_to=valid_to,
             )
             db.session.add(obj)
-        elif assign_type == "work_time_pattern":
-            ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
-            obj = EmployeeWorkTimePattern(
-                employee_id=emp_id, work_time_pattern_model_id=item_id,
-                reference_date=ref_date,
-                valid_from=valid_from, valid_to=valid_to,
-            )
-            db.session.add(obj)
         elif assign_type == "selection":
             obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
             db.session.add(obj)
@@ -930,7 +912,6 @@ def profile_unassign():
     model_map = {
         "planning_unit": EmployeePlanningUnit,
         "contract": EmployeeContract,
-        "work_time_pattern": EmployeeWorkTimePattern,
         "selection": SelectionMember,
     }
     model = model_map.get(assign_type)

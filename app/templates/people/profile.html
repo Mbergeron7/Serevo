@@ -376,35 +376,6 @@
     </div>
   </div>
 
-  <!-- Rotation Models -->
-  <div class="section-card">
-    <div class="section-card-header">
-      Rotation Models
-      <button class="btn-add" onclick="openAssignModal('work_time_pattern')">+ Add</button>
-    </div>
-    <div class="section-card-body">
-      {% if wtp_assignments %}
-      <table class="assign-table">
-        <thead>
-          <tr><th>Pattern Model</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for wa in wtp_assignments %}
-          <tr>
-            <td style="font-weight:600;">{{ wa.work_time_pattern_model.name }}</td>
-            <td>{{ wa.reference_date or '—' }}</td>
-            <td>{{ wa.valid_from or '—' }}</td>
-            <td>{{ wa.valid_to or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('work_time_pattern', {{ wa.id }})">Remove</button></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p style="color:var(--text-muted); font-size:.85rem;">No work time pattern assigned.</p>
-      {% endif %}
-    </div>
-  </div>
 
 </div>
 
@@ -687,14 +658,13 @@ function openAssignModal(type) {
   const titles = {
     planning_unit: 'Add Planning Unit',
     contract: 'Add Contract',
-    work_time_pattern: 'Add Rotation Model',
     selection: 'Add to Selection',
   };
   document.getElementById('assignModalTitle').textContent = titles[type] || 'Add Assignment';
 
   // Show/hide extra fields
   priorityGrp.style.display = type === 'planning_unit' ? '' : 'none';
-  refDateGrp.style.display = type === 'work_time_pattern' ? '' : 'none';
+  refDateGrp.style.display = 'none';
   // Selection has no validity
   const hasValidity = type !== 'selection';
   fromGrp.parentElement.style.display = hasValidity ? '' : 'none';
@@ -703,7 +673,6 @@ function openAssignModal(type) {
   const endpoints = {
     planning_unit: '/api/planning-units',
     contract: '/people/api/profile/contracts-list',
-    work_time_pattern: '/people/api/profile/wtp-list',
     selection: '/people/api/profile/selections-list',
   };
   const sel = document.getElementById('assign_item_id');

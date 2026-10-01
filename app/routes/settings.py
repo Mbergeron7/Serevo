@@ -1399,104 +1399,6 @@ def day_models_delete():
 
 
 # ═══════════════════════════════════════════════════════════════
-# WEEK TIME PATTERNS
-# ═══════════════════════════════════════════════════════════════
-
-@settings_bp.route("/week-time-patterns")
-@admin_required
-def week_time_patterns():
-    from app.models import WeekTimePattern, DayModel
-    items = [wtp.to_dict() for wtp in WeekTimePattern.query.order_by(WeekTimePattern.name).all()]
-    day_models_list = [dm.to_dict() for dm in DayModel.query.filter_by(is_active=True).order_by(DayModel.name).all()]
-    return render_template("settings/week_time_patterns.html", items=items, day_models=day_models_list)
-
-
-@settings_bp.route("/week-time-patterns/save", methods=["POST"])
-@admin_required
-def week_time_patterns_save():
-    from app.models import WeekTimePattern, db
-    d = request.json or {}
-    try:
-        item = WeekTimePattern.query.get(int(d["id"])) if d.get("id") else WeekTimePattern()
-        item.name = d["name"]
-        item.total_hours = float(d.get("total_hours", 40))
-        item.days_json = json.dumps(d.get("days", {}))
-        if not d.get("id"):
-            db.session.add(item)
-        db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-@settings_bp.route("/week-time-patterns/delete", methods=["POST"])
-@admin_required
-def week_time_patterns_delete():
-    from app.models import WeekTimePattern, db
-    d = request.json or {}
-    try:
-        item = WeekTimePattern.query.get(int(d["id"]))
-        if item:
-            db.session.delete(item)
-            db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-# ═══════════════════════════════════════════════════════════════
-# WORK TIME PATTERN MODELS
-# ═══════════════════════════════════════════════════════════════
-
-@settings_bp.route("/work-time-pattern-models")
-@admin_required
-def work_time_pattern_models():
-    from app.models import WorkTimePatternModel, WeekTimePattern, PlanningUnit
-    items = [w.to_dict() for w in WorkTimePatternModel.query.order_by(WorkTimePatternModel.name).all()]
-    week_patterns = [wp.to_dict() for wp in WeekTimePattern.query.filter_by(is_active=True).order_by(WeekTimePattern.name).all()]
-    planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-    return render_template("settings/work_time_pattern_models.html", items=items,
-                           week_patterns=week_patterns, planning_units=planning_units)
-
-
-@settings_bp.route("/work-time-pattern-models/save", methods=["POST"])
-@admin_required
-def work_time_pattern_models_save():
-    from app.models import WorkTimePatternModel, db
-    d = request.json or {}
-    try:
-        item = WorkTimePatternModel.query.get(int(d["id"])) if d.get("id") else WorkTimePatternModel()
-        item.name = d["name"]
-        item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
-        item.patterns_json = json.dumps(d.get("patterns", []))
-        if not d.get("id"):
-            db.session.add(item)
-        db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-@settings_bp.route("/work-time-pattern-models/delete", methods=["POST"])
-@admin_required
-def work_time_pattern_models_delete():
-    from app.models import WorkTimePatternModel, db
-    d = request.json or {}
-    try:
-        item = WorkTimePatternModel.query.get(int(d["id"]))
-        if item:
-            db.session.delete(item)
-            db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-# ═══════════════════════════════════════════════════════════════
 # PLANNING UNITS
 # ═══════════════════════════════════════════════════════════════
 
@@ -1903,9 +1805,8 @@ def master_reset():
         OvertimeRule, ScheduleRule, Holiday, SkillGroup, SkillMapping,
         AdherenceException, AlertConfig, EmployeeAvailability,
         IntervalActual, LobMapping, AgentStatusEvent,
-        Activity, Contract, DayModel, WeekTimePattern,
-        WorkTimePatternModel,
-        EmployeePlanningUnit, EmployeeWorkTimePattern,
+        Activity, Contract, DayModel,
+        EmployeePlanningUnit,
         EmployeeContract, Selection, SelectionMember,
         ShiftSequence, ShiftSequenceRow,
         DayType, PlanningCalendar, CalendarEntry,
@@ -1923,7 +1824,6 @@ def master_reset():
         SkillMapping,
         EmployeeAvailability,
         EmployeePlanningUnit,
-        EmployeeWorkTimePattern,
         EmployeeContract,
         SelectionMember,
         AdherenceException,
@@ -1959,8 +1859,6 @@ def master_reset():
         DayType,
         ShiftSequence,
         # Scheduling config tables
-        WorkTimePatternModel,
-        WeekTimePattern,
         DayModel,
         Activity,
         Contract,
