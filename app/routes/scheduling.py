@@ -946,6 +946,49 @@ def import_wfm():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── API schedule debug (temporary) ────────────────────────
+@scheduling_bp.route("/import/wfm/debug", methods=["POST"])
+@login_required
+def import_wfm_debug():
+    """Fetch raw schedule API response for one employee + one day."""
+    try:
+        import requests as _req
+        from app.capacity.planning import _legacy_get, _wfm_headers, API_LEGACY
+        session = _req.Session()
+
+        # Get first employee
+        base = _legacy_get(session, "employees") or {}
+        employees = base.get("employees", base) if isinstance(base, dict) else base
+        employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+        if not employees:
+            return jsonify({"error": "No employees from API"})
+
+        emp = employees[0]
+        eid = str(emp.get("employee_id"))
+        emp_name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+        day = "2026-10-02"
+
+        # Raw schedule fetch
+        url = f"{API_LEGACY}/employees/{eid}/schedule/{day}"
+        resp = session.get(url, headers=_wfm_headers(), timeout=15)
+        raw = resp.text[:2000]
+        try:
+            data = resp.json()
+        except Exception:
+            data = None
+
+        return jsonify({
+            "employee": {"id": eid, "name": emp_name},
+            "url": url,
+            "status_code": resp.status_code,
+            "raw_preview": raw,
+            "parsed": data,
+            "api_legacy_base": API_LEGACY,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 # ── Helpers for manual shift entry ──────────────────────────
 @scheduling_bp.route("/segments/auto", methods=["POST"])
 @login_required
