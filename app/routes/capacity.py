@@ -538,16 +538,78 @@ def summary_view():
 
         # Totals across selected rows
         tot = {"total_calls": sum(r["total_calls"] for r in rows),
-               "fte_req": round(sum(r["fte_req"] for r in rows), 1),
-               "actual_hc": sum(r["actual_hc"] for r in rows),
-               "gap": round(sum(r["gap"] for r in rows), 1)}
+               "fte_req": round(sum(r["fte_req"] for r in rows) / max(1, len(set(r["month"] for r in rows))), 1),
+               "actual_hc": 0,
+               "gap": 0}
+
+        # Build per-LOB grouped data (metrics as rows, months as columns)
+        lob_tables = []
+        from collections import OrderedDict
+        lob_order = []
+        lob_map = OrderedDict()
+        for r in rows:
+            if r["lob"] not in lob_map:
+                lob_map[r["lob"]] = {}
+                lob_order.append(r["lob"])
+            lob_map[r["lob"]][r["month"]] = r
+
+        active_months = sorted(set(r["month"] for r in rows))
+        month_labels = {m: date(year, m, 1).strftime("%b %Y") for m in active_months}
+
+        # Compute per-LOB aggregate stats for summary
+        total_fte = 0
+        total_hc = 0
+        lobs_in_deficit = 0
+        monthly_fte = {}
+        monthly_hc = {}
+
+        for lob_name in lob_order:
+            months_data = lob_map[lob_name]
+            lob_entry = {"lob": lob_name, "months": months_data}
+            lob_tables.append(lob_entry)
+
+            # Aggregate: avg FTE, typical HC, deficit months
+            deficit_count = 0
+            for m, md in months_data.items():
+                monthly_fte[m] = monthly_fte.get(m, 0) + md.get("fte_req", 0)
+                monthly_hc[m] = monthly_hc.get(m, 0) + md.get("actual_hc", 0)
+                if md.get("gap", 0) < 0:
+                    deficit_count += 1
+            if deficit_count > 0:
+                lobs_in_deficit += 1
+
+        # Summary totals
+        if monthly_fte:
+            total_fte = round(sum(monthly_fte.values()) / len(monthly_fte), 1)
+            total_hc = round(sum(monthly_hc.values()) / len(monthly_hc))
+
+        # Monthly gap stats for trend
+        monthly_gaps = []
+        for m in active_months:
+            mg = monthly_hc.get(m, 0) - monthly_fte.get(m, 0)
+            monthly_gaps.append({"month": m, "label": month_labels[m], "gap": round(mg, 1),
+                                 "fte": round(monthly_fte.get(m, 0), 1),
+                                 "hc": monthly_hc.get(m, 0)})
+
+        avg_gap = round(sum(g["gap"] for g in monthly_gaps) / max(1, len(monthly_gaps)), 1) if monthly_gaps else 0
+        best_gap = max((g["gap"] for g in monthly_gaps), default=0)
+        worst_gap = min((g["gap"] for g in monthly_gaps), default=0)
+
+        tot["fte_req"] = total_fte
+        tot["actual_hc"] = total_hc
+        tot["gap"] = round(total_hc - total_fte, 1)
+
         return render_template("capacity/summary.html", user=user, rows=rows, totals=tot,
                                headcount=headcount, year=year, years=years,
                                all_lobs=all_lobs, sel_lobs=sel_lobs, sel_months=sel_months,
                                shrinkage_pct=int(shrinkage * 100), occupancy_pct=int(occupancy * 100),
                                answer_rate_pct=int(answer_rate * 100),
                                now=now.strftime("%Y-%m-%d %H:%M"),
-                               month_names=[(m, date(year, m, 1).strftime("%b")) for m in range(1, 13)])
+                               month_names=[(m, date(year, m, 1).strftime("%b")) for m in range(1, 13)],
+                               lob_tables=lob_tables, active_months=active_months,
+                               month_labels=month_labels, monthly_gaps=monthly_gaps,
+                               avg_gap=avg_gap, best_gap=best_gap, worst_gap=worst_gap,
+                               lobs_in_deficit=lobs_in_deficit)
     except Exception as e:
         log.exception("Capacity summary error")
         return f"Capacity summary error: {str(e)}", 500
