@@ -920,7 +920,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
 
         def _bulk_one(pu_id, day):
             sess = requests.Session()
-            data = _legacy_get(sess, f"planning_units/{pu_id}/schedules/{day.isoformat()}") or {}
+            data = _legacy_get(sess, f"planning_units/{pu_id}/schedule/{day.isoformat()}") or {}
             results = []
             schedules = data.get("schedules", [])
             if diagnose and len(sample_raw) < 3 and schedules:
@@ -957,6 +957,18 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
 
         if diagnose:
             diag["sample_raw_responses"] = sample_raw
+
+        # Deduplicate: an employee may appear in multiple planning units
+        seen = set()
+        deduped = []
+        for shift in out:
+            key = (shift["employee_id"], shift["date"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(shift)
+        if diagnose and len(out) != len(deduped):
+            diag["duplicates_removed"] = len(out) - len(deduped)
+        out = deduped
 
     else:
         # ── FALLBACK: per-employee calls ──────────────────────────
