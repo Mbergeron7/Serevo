@@ -227,7 +227,7 @@ async function testConn(id) {
   if (data.success) {
     alert('Connection test passed!');
   } else {
-    alert('Test failed: ' + data.error);
+    alert('Test failed: ' + (data.message || data.error));
   }
   location.reload();
 }

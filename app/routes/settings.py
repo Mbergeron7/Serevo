@@ -300,7 +300,7 @@ def test_connection():
 
     success, message = connector_test(conn_id)
     return jsonify({"success": success, "status": "ok" if success else "error",
-                    "message": message})
+                    "message": message, "error": message if not success else ""})
 
 
 @settings_bp.route("/api-connections/sync", methods=["POST"])
