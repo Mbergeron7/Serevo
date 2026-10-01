@@ -996,16 +996,24 @@ def import_wfm_debug():
         ]:
             results["legacy"][label] = probe(f"{API_LEGACY}/{path}")
 
-        # New API probes
+        # New API probes — try multiple base path patterns
         results["new_api"] = {}
-        for label, path in [
+        new_bases = [
+            ("bare", f"{API_NEW}"),
+            ("api_v1", f"{API_NEW}/api/v1"),
+            ("v1", f"{API_NEW}/v1"),
+        ]
+        test_paths = [
             ("scheduling_periods", "scheduling-periods"),
             ("time_logs", f"time-logs?personIds={eid}&startDate={today}&endDate={today}"),
-            ("actual_activities", f"actual-activities?personIds={eid}&startDate={today}&endDate={today}"),
-            ("person_day_models", f"person-day-models/{eid}"),
-            ("shift_sequences", f"person-shift-sequences/{eid}"),
-        ]:
-            results["new_api"][label] = probe(f"{API_NEW}/{path}")
+            ("versions", "versions"),
+        ]
+        for base_label, base_url in new_bases:
+            for path_label, path in test_paths:
+                key = f"{base_label}__{path_label}"
+                results["new_api"][key] = probe(f"{base_url}/{path}")
+        # Also check what the base URL itself returns
+        results["new_api"]["root"] = probe(API_NEW)
 
         return jsonify(results)
     except Exception as e:
