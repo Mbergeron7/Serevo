@@ -1,990 +1,698 @@
 {% extends "base.html" %}
 {% block title %}Forecasting — {{ brand_name }}{% endblock %}
 
-
 {% block head %}
 <style>
-  .page-header { margin-bottom: 28px; }
-  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
-  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+  /* ── Banner ─────────────────────────────────── */
+  .fc-banner {
+    background: var(--brand-accent, #6b21a8); color: #fff;
+    padding: 18px 24px; border-radius: var(--radius); margin-bottom: 20px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  }
+  .fc-banner h1 { font-size: 1.35rem; margin: 0 0 2px; }
+  .fc-banner .sub { font-size: .82rem; opacity: .85; }
 
-  /* ── Config panel ──────────────────────────────── */
-  .config-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 20px; margin-bottom: 24px;
+  /* ── Controls row ──────────────────────────── */
+  .fc-controls {
+    display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
   }
-  .config-row {
-    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+  .lob-picker {
+    width: 260px; flex-shrink: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; max-height: 360px; display: flex; flex-direction: column;
   }
-  .config-group { display: flex; flex-direction: column; }
-  .config-group label {
-    font-size: .72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  .lob-picker .search { width: 100%; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .82rem; margin-bottom: 8px; background: var(--bg); color: var(--text); }
+  .lob-list { flex: 1; overflow-y: auto; }
+  .lob-list label { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: .82rem; cursor: pointer; }
+  .lob-list label:hover { color: var(--brand-accent); }
+  .lob-btns { display: flex; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .lob-btns button { font-size: .72rem; padding: 3px 10px; border: 1px solid var(--border);
+    border-radius: 4px; cursor: pointer; background: var(--bg); color: var(--text); }
+  .settings-panel {
+    flex: 1; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
   }
-  .config-group select, .config-group input {
-    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: .85rem; background: var(--bg); color: var(--text);
+  .setting-group { display: flex; flex-direction: column; }
+  .setting-group label {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px;
+  }
+  .setting-group select, .setting-group input[type=number] {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); width: 120px;
   }
   .btn-action {
     background: var(--brand-accent); color: #fff; border: none;
     padding: 8px 24px; border-radius: 6px; font-weight: 700;
-    font-size: .85rem; cursor: pointer; white-space: nowrap;
+    font-size: .85rem; cursor: pointer; white-space: nowrap; align-self: flex-end;
   }
   .btn-action:disabled { opacity: .5; cursor: not-allowed; }
   .btn-secondary {
     background: var(--surface); color: var(--text); border: 1px solid var(--border);
     padding: 8px 18px; border-radius: 6px; font-weight: 600;
-    font-size: .85rem; cursor: pointer; white-space: nowrap;
+    font-size: .85rem; cursor: pointer; white-space: nowrap; align-self: flex-end;
   }
 
-  /* ── View tabs ─────────────────────────────────── */
-  .view-tabs {
-    display: flex; gap: 2px; margin-bottom: 20px;
-    background: var(--bg); border-radius: 8px; padding: 3px;
-    width: fit-content;
+  /* ── Summary cards ─────────────────────────── */
+  .summary-cards {
+    display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
   }
-  .view-tab {
-    padding: 7px 18px; border-radius: 6px; border: none;
-    background: transparent; color: var(--text-muted);
-    font-size: .82rem; font-weight: 600; cursor: pointer;
-    transition: all .15s;
-  }
-  .view-tab.active {
-    background: var(--brand-accent); color: #fff;
-  }
-
-  /* ── Stats row ─────────────────────────────────── */
-  .stats-row {
-    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px;
-  }
-  .stat-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px 18px;
-    flex: 1; min-width: 130px;
-  }
-  .stat-label {
-    font-size: .7rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
-  }
-  .stat-value { font-size: 1.35rem; font-weight: 800; }
-
-  /* ── Charts ────────────────────────────────────── */
-  .chart-container {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 20px; margin-bottom: 20px; overflow-x: auto;
-  }
-  .chart-title {
-    font-size: .85rem; font-weight: 700; margin-bottom: 14px;
-  }
-  .chart-canvas {
-    width: 100%; height: 260px; position: relative;
-  }
-  svg.chart { width: 100%; height: 100%; }
-  .chart-legend {
-    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px;
-    font-size: .75rem; color: var(--text-muted);
-  }
-  .legend-dot {
-    display: inline-block; width: 10px; height: 10px;
-    border-radius: 50%; margin-right: 4px; vertical-align: middle;
-  }
-
-  /* ── Data table ────────────────────────────────── */
-  .data-table {
-    width: 100%; border-collapse: collapse; font-size: .82rem;
-  }
-  .data-table th {
-    text-align: left; padding: 8px 10px; font-size: .72rem;
-    text-transform: uppercase; letter-spacing: .04em;
-    color: var(--text-muted); border-bottom: 2px solid var(--border);
-    font-weight: 700;
-  }
-  .data-table td {
-    padding: 7px 10px; border-bottom: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-  }
-  .data-table tr:hover td { background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
-  .positive { color: #16a34a; }
-  .negative { color: #dc2626; }
-
-  /* ── What-if panel ─────────────────────────────── */
-  .whatif-panel {
-    background: color-mix(in srgb, var(--brand-accent) 5%, var(--surface));
+  .scard {
+    flex: 1; min-width: 160px; background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 18px; margin-bottom: 20px;
+    padding: 14px 18px;
   }
-  .whatif-title {
-    font-size: .85rem; font-weight: 700; margin-bottom: 12px;
-  }
-  .slider-group {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
-  }
-  .slider-group label {
-    font-size: .78rem; font-weight: 600; min-width: 100px;
-  }
-  .slider-group input[type="range"] { flex: 1; max-width: 300px; }
-  .slider-val {
-    font-size: .82rem; font-weight: 700; min-width: 50px;
-    text-align: right; font-variant-numeric: tabular-nums;
-  }
+  .scard .label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+  .scard .value { font-size: 1.4rem; font-weight: 800; }
+  .scard .detail { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+  .scard.highlight { border-left: 4px solid var(--brand-accent); }
 
-  /* ── Erlang calculator ─────────────────────────── */
-  .erlang-card {
+  /* ── Chart sections ────────────────────────── */
+  .chart-section {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px; margin-bottom: 20px;
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
   }
-  .erlang-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px;
-  }
-  .erlang-field label {
-    display: block; font-size: .72rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .04em;
-    color: var(--text-muted); margin-bottom: 3px;
-  }
-  .erlang-field input {
-    width: 100%; padding: 7px 10px; border: 1px solid var(--border);
-    border-radius: 6px; font-size: .85rem; background: var(--bg); color: var(--text);
-    box-sizing: border-box;
-  }
-  .erlang-results {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px; margin-top: 14px;
-  }
-  .erlang-result-card {
-    background: var(--bg); border-radius: 6px; padding: 10px;
-    text-align: center;
-  }
-  .erlang-result-card .val { font-size: 1.25rem; font-weight: 800; }
-  .erlang-result-card .lbl {
-    font-size: .68rem; text-transform: uppercase; color: var(--text-muted);
-    letter-spacing: .04em; margin-top: 2px;
-  }
+  .chart-section h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .chart-section .chart-sub { font-size: .78rem; color: var(--text-muted); margin-bottom: 14px; }
+  .chart-wrap { position: relative; height: 280px; }
 
-  /* ── Accuracy ──────────────────────────────────── */
-  .accuracy-bar {
-    height: 8px; border-radius: 4px; background: var(--border);
-    overflow: hidden; margin-top: 4px;
+  /* ── Requirements heatmap ──────────────────── */
+  .heatmap-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
   }
-  .accuracy-fill {
-    height: 100%; border-radius: 4px; transition: width .3s;
-  }
+  .heatmap-section h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .heatmap-section .chart-sub { font-size: .78rem; color: var(--text-muted); margin-bottom: 14px; }
+  .heat-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .heat-table th { padding: 6px 8px; text-align: center; font-weight: 700;
+    border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0;
+    background: var(--surface); }
+  .heat-table td { padding: 5px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+  .heat-table .row-label { text-align: left; font-weight: 600; white-space: nowrap; }
+  .heat-table-wrap { max-height: 400px; overflow: auto; }
 
-  /* ── Loading ───────────────────────────────────── */
-  .loading-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.3); z-index: 999;
-    justify-content: center; align-items: center;
+  /* Heat colors */
+  .heat-low  { background: #dcfce7; color: #166534; }
+  .heat-med  { background: #fef9c3; color: #854d0e; }
+  .heat-high { background: #fecaca; color: #991b1b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .heat-low  { background: #14532d; color: #bbf7d0; }
+    :root:not([data-theme="light"]) .heat-med  { background: #713f12; color: #fef08a; }
+    :root:not([data-theme="light"]) .heat-high { background: #7f1d1d; color: #fecaca; }
   }
-  .loading-overlay.show { display: flex; }
-  .loading-box {
-    background: var(--surface); padding: 30px 40px;
-    border-radius: 12px; text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  :root[data-theme="dark"] .heat-low  { background: #14532d; color: #bbf7d0; }
+  :root[data-theme="dark"] .heat-med  { background: #713f12; color: #fef08a; }
+  :root[data-theme="dark"] .heat-high { background: #7f1d1d; color: #fecaca; }
+
+  /* ── Status / loading ──────────────────────── */
+  .fc-status { font-size: .82rem; padding: 10px; margin-bottom: 14px;
+    border-radius: 6px; display: none; }
+  .fc-status.info { background: #dbeafe; color: #1e40af; display: block; }
+  .fc-status.error { background: #fee2e2; color: #991b1b; display: block; }
+  .fc-status.success { background: #dcfce7; color: #166534; display: block; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .fc-status.info { background: #1e3a5f; color: #93c5fd; }
+    :root:not([data-theme="light"]) .fc-status.error { background: #4a1515; color: #fca5a5; }
+    :root:not([data-theme="light"]) .fc-status.success { background: #14362a; color: #86efac; }
   }
-  .spinner {
-    width: 36px; height: 36px; border: 3px solid var(--border);
-    border-top-color: var(--brand-accent);
-    border-radius: 50%; animation: spin .7s linear infinite;
-    margin: 0 auto 10px;
-  }
+  :root[data-theme="dark"] .fc-status.info { background: #1e3a5f; color: #93c5fd; }
+  :root[data-theme="dark"] .fc-status.error { background: #4a1515; color: #fca5a5; }
+  :root[data-theme="dark"] .fc-status.success { background: #14362a; color: #86efac; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
+    border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Sections ──────────────────────────────────── */
-  .section { display: none; }
-  .section.active { display: block; }
+  /* ── LOB tabs (for multi-LOB view) ─────────── */
+  .lob-tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 16px;
+    background: var(--bg); border-radius: 8px; padding: 3px; width: fit-content; }
+  .lob-tab { padding: 6px 16px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text-muted);
+    font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .lob-tab.active { background: var(--surface); color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
-  .empty-state {
-    text-align: center; padding: 60px 20px; color: var(--text-muted);
+  @media (max-width: 768px) {
+    .fc-controls { flex-direction: column; }
+    .lob-picker { width: 100%; max-height: 200px; }
   }
-  .empty-state h3 { margin-bottom: 6px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Forecasting</h1>
-  <p class="subtitle">Volume forecasting, Erlang C calculations, what-if scenarios & accuracy tracking.</p>
+
+<!-- ═══ Banner ═══ -->
+<div class="fc-banner">
+  <div>
+    <h1>📈 Forecasting</h1>
+    <div class="sub">Call volume, AHT &amp; staffing requirements • {{ year }}</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;">
+      {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+  </div>
 </div>
 
-<!-- ── Config ───────────────────────────────────── -->
-<div class="config-card">
-  <div class="config-row">
-    <div class="config-group">
-      <label>Line of Business</label>
-      <select id="selLob">
-        <option value="">— Select LOB —</option>
-        {% for lob in lobs %}
-        <option value="{{ lob }}">{{ lob }}</option>
-        {% endfor %}
+<!-- ═══ Status bar ═══ -->
+<div id="statusBar" class="fc-status"></div>
+
+<!-- ═══ Controls ═══ -->
+<div class="fc-controls">
+  <!-- LOB picker -->
+  <div class="lob-picker">
+    <input type="text" class="search" placeholder="Search LOBs…" id="lobSearch">
+    <div class="lob-list" id="lobList">
+      {% for lob in all_lobs %}
+      <label><input type="checkbox" name="lob" value="{{ lob }}" checked> {{ lob }}</label>
+      {% endfor %}
+    </div>
+    <div class="lob-btns">
+      <button onclick="toggleAllLobs(true)">All</button>
+      <button onclick="toggleAllLobs(false)">None</button>
+    </div>
+  </div>
+  <!-- Settings -->
+  <div class="settings-panel">
+    <div class="setting-group">
+      <label>Forecast Method</label>
+      <select id="methodSelect">
+        <option value="weighted">Weighted Trend</option>
+        <option value="moving_average">Moving Average</option>
       </select>
     </div>
-    <div class="config-group">
-      <label>Start Date</label>
-      <input type="date" id="inpStart">
+    <div class="setting-group">
+      <label>History Days</label>
+      <input type="number" id="histDays" value="90" min="7" max="365">
     </div>
-    <div class="config-group">
-      <label>End Date</label>
-      <input type="date" id="inpEnd">
+    <div class="setting-group">
+      <label>Forecast Days</label>
+      <input type="number" id="fcDays" value="90" min="7" max="365">
     </div>
-    <div class="config-group">
-      <label>SL Target %</label>
-      <input type="number" id="inpSL" value="80" min="1" max="100" style="width:70px;">
+    <div class="setting-group">
+      <label>Service Level</label>
+      <input type="number" id="slTarget" value="80" min="50" max="99" step="1">
     </div>
-    <div class="config-group">
+    <div class="setting-group">
       <label>ASA (sec)</label>
-      <input type="number" id="inpASA" value="30" min="1" style="width:70px;">
+      <input type="number" id="asaTarget" value="20" min="5" max="120">
     </div>
-    <div class="config-group">
+    <div class="setting-group">
       <label>Shrinkage %</label>
-      <input type="number" id="inpShrink" value="30" min="0" max="80" style="width:70px;">
+      <input type="number" id="shrinkage" value="30" min="0" max="60">
     </div>
-    <button class="btn-action" id="btnLoad" onclick="loadData()">Load Data</button>
+    <button class="btn-action" id="btnGenerate" onclick="generateForecasts()">
+      Generate Forecasts
+    </button>
+    <button class="btn-secondary" onclick="loadExistingData()">
+      Load Saved
+    </button>
   </div>
 </div>
 
-<!-- ── View tabs ────────────────────────────────── -->
-<div class="view-tabs">
-  <button class="view-tab active" onclick="switchTab('view')">View Data</button>
-  <button class="view-tab" onclick="switchTab('generate')">Generate Forecast</button>
-  <button class="view-tab" onclick="switchTab('whatif')">What-If</button>
-  <button class="view-tab" onclick="switchTab('erlang')">Erlang C</button>
-  <button class="view-tab" onclick="switchTab('accuracy')">Accuracy</button>
-</div>
-
-<!-- ═══════════ VIEW DATA SECTION ═══════════ -->
-<div class="section active" id="sec-view">
-  <div id="viewEmpty" class="empty-state">
-    <h3>Select a LOB and date range</h3>
-    <p>Choose a line of business and dates above, then click <strong>Load Data</strong>.</p>
+<!-- ═══ Summary cards ═══ -->
+<div class="summary-cards" id="summaryCards" style="display:none;">
+  <div class="scard highlight">
+    <div class="label">Total Offered (Combined)</div>
+    <div class="value" id="totalOffered">—</div>
+    <div class="detail" id="totalOfferedDetail"></div>
   </div>
-  <div id="viewContent" style="display:none;">
-    <div class="stats-row" id="viewStats"></div>
-    <div class="chart-container">
-      <div class="chart-title">Offered Volume by Interval</div>
-      <div class="chart-canvas" id="chartVolume"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#6366f1;"></span> Offered</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Average Handle Time (seconds)</div>
-      <div class="chart-canvas" id="chartAHT"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#f59e0b;"></span> AHT</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Agents Required (Erlang C)</div>
-      <div class="chart-canvas" id="chartAgents"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#10b981;"></span> Raw Agents</span>
-        <span><span class="legend-dot" style="background:#ef4444;"></span> With Shrinkage</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Daily Summary</div>
-      <div style="overflow-x:auto;">
-        <table class="data-table sortable" id="tblDaily">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Total Offered</th>
-              <th>Avg AHT</th>
-              <th>Peak Offered</th>
-              <th>Peak Agents</th>
-              <th>Peak w/ Shrinkage</th>
-              <th>Intervals</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+  <div class="scard">
+    <div class="label">Avg AHT</div>
+    <div class="value" id="avgAht">—</div>
+    <div class="detail" id="avgAhtDetail"></div>
+  </div>
+  <div class="scard">
+    <div class="label">Person-hours Σ</div>
+    <div class="value" id="personHours">—</div>
+    <div class="detail" id="personHoursDetail"></div>
+  </div>
+  <div class="scard highlight">
+    <div class="label">Service Level</div>
+    <div class="value" id="slCard">—</div>
+    <div class="detail" id="slDetail"></div>
+  </div>
+  <div class="scard">
+    <div class="label">Shrinkage</div>
+    <div class="value" id="shrinkCard">—</div>
   </div>
 </div>
 
-<!-- ═══════════ GENERATE FORECAST SECTION ═══════════ -->
-<div class="section" id="sec-generate">
-  <div class="config-card">
-    <div class="config-row">
-      <div class="config-group">
-        <label>Method</label>
-        <select id="selMethod">
-          <option value="moving_average">Moving Average</option>
-          <option value="weighted_trend">Weighted Trend</option>
-        </select>
-      </div>
-      <div class="config-group">
-        <label>History (days)</label>
-        <input type="number" id="inpHistDays" value="30" min="7" max="365" style="width:80px;">
-      </div>
-      <div class="config-group">
-        <label>Forecast (days)</label>
-        <input type="number" id="inpFcDays" value="7" min="1" max="90" style="width:80px;">
-      </div>
-      <div class="config-group" id="grpWindow">
-        <label>Window (days)</label>
-        <input type="number" id="inpWindow" value="7" min="3" max="30" style="width:70px;">
-      </div>
-      <button class="btn-action" onclick="generateForecast()">Generate</button>
-    </div>
-  </div>
+<!-- ═══ LOB tabs ═══ -->
+<div class="lob-tabs" id="lobTabs" style="display:none;"></div>
 
-  <div id="genEmpty" class="empty-state">
-    <h3>Generate a Forecast</h3>
-    <p>Select a LOB above, configure the method, and click <strong>Generate</strong>.</p>
+<!-- ═══ Offered Calls chart ═══ -->
+<div class="chart-section" id="offeredSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>Offered Calls</h2>
+      <div class="chart-sub">Daily call volume — historical (grey) vs forecast (blue)</div>
+    </div>
   </div>
-  <div id="genContent" style="display:none;">
-    <div class="stats-row" id="genStats"></div>
-    <div class="chart-container">
-      <div class="chart-title">Forecasted Volume</div>
-      <div class="chart-canvas" id="chartGenVolume"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#6366f1;"></span> Forecast Offered</span>
-      </div>
+  <div class="chart-wrap"><canvas id="offeredChart"></canvas></div>
+</div>
+
+<!-- ═══ AHT chart ═══ -->
+<div class="chart-section" id="ahtSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>AHT</h2>
+      <div class="chart-sub">Average handle time in seconds — historical vs forecast</div>
     </div>
-    <div class="chart-container">
-      <div class="chart-title">Forecasted AHT</div>
-      <div class="chart-canvas" id="chartGenAHT"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#f59e0b;"></span> Forecast AHT</span>
-      </div>
+  </div>
+  <div class="chart-wrap"><canvas id="ahtChart"></canvas></div>
+</div>
+
+<!-- ═══ Staff Requirements chart ═══ -->
+<div class="chart-section" id="reqSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>Staff Requirements <span style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:.72rem;font-weight:600;">Erlang C</span></h2>
+      <div class="chart-sub">Agents required per day based on Erlang C calculation</div>
     </div>
-    <div class="chart-container">
-      <div class="chart-title">Forecasted Agents Required</div>
-      <div class="chart-canvas" id="chartGenAgents"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#10b981;"></span> Raw</span>
-        <span><span class="legend-dot" style="background:#ef4444;"></span> w/ Shrinkage</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Daily Forecast Summary</div>
-      <div style="overflow-x:auto;">
-        <table class="data-table sortable" id="tblGenDaily">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Total Offered</th>
-              <th>Avg AHT</th>
-              <th>Peak Offered</th>
-              <th>Peak Agents</th>
-              <th>Peak w/ Shrinkage</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+  </div>
+  <div class="chart-wrap"><canvas id="reqChart"></canvas></div>
+</div>
+
+<!-- ═══ Requirements heatmap ═══ -->
+<div class="heatmap-section" id="heatmapSection" style="display:none;">
+  <h2>Coverage Heatmap</h2>
+  <div class="chart-sub">Daily agents required by LOB — <span class="heat-low" style="padding:1px 8px;border-radius:3px;">Low</span> <span class="heat-med" style="padding:1px 8px;border-radius:3px;">Medium</span> <span class="heat-high" style="padding:1px 8px;border-radius:3px;">High</span></div>
+  <div class="heat-table-wrap">
+    <table class="heat-table" id="heatTable">
+      <thead id="heatHead"></thead>
+      <tbody id="heatBody"></tbody>
+    </table>
   </div>
 </div>
 
-<!-- ═══════════ WHAT-IF SECTION ═══════════ -->
-<div class="section" id="sec-whatif">
-  <div class="whatif-panel">
-    <div class="whatif-title">Scenario Adjustments</div>
-    <div class="slider-group">
-      <label>Volume Change</label>
-      <input type="range" id="sliderVol" min="-50" max="50" value="0" oninput="updateSliderLabel('vol')">
-      <span class="slider-val" id="lblVol">0%</span>
-    </div>
-    <div class="slider-group">
-      <label>AHT Change</label>
-      <input type="range" id="sliderAHT" min="-50" max="50" value="0" oninput="updateSliderLabel('aht')">
-      <span class="slider-val" id="lblAHT">0%</span>
-    </div>
-    <div style="margin-top: 12px;">
-      <button class="btn-action" onclick="runWhatIf()">Run Scenario</button>
-      <button class="btn-secondary" onclick="resetWhatIf()" style="margin-left:8px;">Reset</button>
-    </div>
-  </div>
-  <div id="whatifEmpty" class="empty-state">
-    <h3>What-If Scenario Analysis</h3>
-    <p>Load data first, then adjust the sliders to model different scenarios.</p>
-  </div>
-  <div id="whatifContent" style="display:none;">
-    <div class="stats-row" id="whatifStats"></div>
-    <div class="chart-container">
-      <div class="chart-title">Scenario: Agents Required</div>
-      <div class="chart-canvas" id="chartWhatifAgents"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#10b981;"></span> Raw Agents</span>
-        <span><span class="legend-dot" style="background:#ef4444;"></span> With Shrinkage</span>
-        <span><span class="legend-dot" style="background:#6366f1; opacity:.3;"></span> Baseline</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Scenario Daily Summary</div>
-      <div style="overflow-x:auto;">
-        <table class="data-table sortable" id="tblWhatif">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Adj. Offered</th>
-              <th>Adj. AHT</th>
-              <th>Peak Agents</th>
-              <th>Peak w/ Shrinkage</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
+{% endblock %}
 
-<!-- ═══════════ ERLANG C CALCULATOR ═══════════ -->
-<div class="section" id="sec-erlang">
-  <div class="erlang-card">
-    <div class="chart-title">Erlang C Staffing Calculator</div>
-    <div class="erlang-grid">
-      <div class="erlang-field">
-        <label>Offered Contacts</label>
-        <input type="number" id="ecOffered" value="100" min="0">
-      </div>
-      <div class="erlang-field">
-        <label>AHT (seconds)</label>
-        <input type="number" id="ecAHT" value="300" min="1">
-      </div>
-      <div class="erlang-field">
-        <label>Interval (seconds)</label>
-        <input type="number" id="ecInterval" value="1800" min="60">
-      </div>
-      <div class="erlang-field">
-        <label>SL Target (%)</label>
-        <input type="number" id="ecSL" value="80" min="1" max="100">
-      </div>
-      <div class="erlang-field">
-        <label>Target ASA (sec)</label>
-        <input type="number" id="ecASA" value="30" min="1">
-      </div>
-      <div class="erlang-field">
-        <label>Shrinkage (%)</label>
-        <input type="number" id="ecShrink" value="30" min="0" max="80">
-      </div>
-    </div>
-    <div style="margin-top: 14px;">
-      <button class="btn-action" onclick="calcErlang()">Calculate</button>
-    </div>
-    <div class="erlang-results" id="erlangResults" style="display:none;"></div>
-  </div>
-</div>
-
-<!-- ═══════════ ACCURACY SECTION ═══════════ -->
-<div class="section" id="sec-accuracy">
-  <div id="accEmpty" class="empty-state">
-    <h3>Forecast Accuracy</h3>
-    <p>Select a LOB and date range, then click <strong>Load Data</strong> to compare forecast vs. actuals.</p>
-  </div>
-  <div id="accContent" style="display:none;">
-    <div class="stats-row" id="accStats"></div>
-    <div class="chart-container">
-      <div class="chart-title">Forecast vs. Actuals (Daily)</div>
-      <div class="chart-canvas" id="chartAccuracy"></div>
-      <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#6366f1;"></span> Forecast</span>
-        <span><span class="legend-dot" style="background:#10b981;"></span> Actual</span>
-      </div>
-    </div>
-    <div class="chart-container">
-      <div class="chart-title">Variance by Interval</div>
-      <div style="overflow-x:auto;">
-        <table class="data-table sortable" id="tblAccuracy">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Forecast Offered</th>
-              <th>Forecast AHT</th>
-              <th>Actual Agents</th>
-              <th>Variance %</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Loading overlay ──────────────────────── -->
-<div class="loading-overlay" id="loadingOverlay">
-  <div class="loading-box">
-    <div class="spinner"></div>
-    <div id="loadingMsg">Loading forecast data…</div>
-  </div>
-</div>
-
+{% block scripts %}
 <script>
-/* ══════════════════════════════════════════════════
-   STATE
-   ══════════════════════════════════════════════════ */
-let STATE = {
-  forecast: [], requirements: [], erlang: [], dailySummary: [],
-  baselineErlang: [],  // for what-if comparison
-};
+const ALL_LOBS = {{ all_lobs | tojson }};
+let chartOffered = null, chartAht = null, chartReq = null;
+let forecastData = {};  // {lob: {dates, dailyOffered, dailyAht, dailyReq, isHistoric}}
+let activeLob = null;
 
-/* ── Helpers ────────────────────────────────────── */
-function $(id) { return document.getElementById(id); }
-function showLoading(msg) { $('loadingMsg').textContent = msg || 'Loading…'; $('loadingOverlay').classList.add('show'); }
-function hideLoading() { $('loadingOverlay').classList.remove('show'); }
+// ── LOB picker ──────────────────────────────────
+document.getElementById('lobSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#lobList label').forEach(l => {
+    l.style.display = l.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+function toggleAllLobs(checked) {
+  document.querySelectorAll('#lobList input[type=checkbox]').forEach(cb => cb.checked = checked);
+}
+function getSelectedLobs() {
+  return Array.from(document.querySelectorAll('#lobList input:checked')).map(cb => cb.value);
+}
 
-function getParams() {
+// ── Status helpers ──────────────────────────────
+function showStatus(msg, type) {
+  const el = document.getElementById('statusBar');
+  el.className = 'fc-status ' + type;
+  el.innerHTML = msg;
+}
+function hideStatus() {
+  document.getElementById('statusBar').className = 'fc-status';
+}
+
+// ── Generate forecasts for all selected LOBs ────
+async function generateForecasts() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB.', 'error'); return; }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+  forecastData = {};
+
+  const method = document.getElementById('methodSelect').value;
+  const histDays = parseInt(document.getElementById('histDays').value) || 90;
+  const fcDays = parseInt(document.getElementById('fcDays').value) || 90;
+  const sl = parseInt(document.getElementById('slTarget').value) / 100;
+  const asa = parseInt(document.getElementById('asaTarget').value);
+  const shrink = parseInt(document.getElementById('shrinkage').value) / 100;
+
+  let done = 0;
+  for (const lob of lobs) {
+    showStatus(`Generating forecast for ${lob}… (${done}/${lobs.length})`, 'info');
+    try {
+      const resp = await fetch('/forecasting/generate-from-history', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          lob, method, historical_days: histDays,
+          forecast_days: fcDays, window: 7,
+        })
+      });
+      const data = await resp.json();
+      if (data.success || data.ok) {
+        // Now load the data for this LOB
+        await loadLobData(lob, sl, asa, shrink);
+      } else {
+        console.warn(`Forecast gen failed for ${lob}:`, data.error);
+      }
+    } catch (e) {
+      console.error(`Error generating ${lob}:`, e);
+    }
+    done++;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate Forecasts';
+  showStatus(`Forecasts generated for ${done} LOB(s). Data saved to database.`, 'success');
+  setTimeout(hideStatus, 5000);
+  renderDashboard();
+}
+
+// ── Load existing saved data ────────────────────
+async function loadExistingData() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB.', 'error'); return; }
+
+  forecastData = {};
+  showStatus('Loading saved forecast data…', 'info');
+
+  const sl = parseInt(document.getElementById('slTarget').value) / 100;
+  const asa = parseInt(document.getElementById('asaTarget').value);
+  const shrink = parseInt(document.getElementById('shrinkage').value) / 100;
+
+  let loaded = 0;
+  for (const lob of lobs) {
+    const ok = await loadLobData(lob, sl, asa, shrink);
+    if (ok) loaded++;
+  }
+
+  if (loaded === 0) {
+    showStatus('No saved forecast data found. Click "Generate Forecasts" to create new forecasts.', 'error');
+  } else {
+    showStatus(`Loaded data for ${loaded} LOB(s).`, 'success');
+    setTimeout(hideStatus, 3000);
+  }
+  renderDashboard();
+}
+
+// ── Load data for a single LOB from the API ─────
+async function loadLobData(lob, sl, asa, shrink) {
+  try {
+    const year = parseInt(document.getElementById('yearSelect').value);
+    const resp = await fetch('/forecasting/api/data', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        lob, year,
+        service_level: sl, target_asa: asa, shrinkage: shrink,
+      })
+    });
+    const data = await resp.json();
+    if (!data.success || !data.daily.length) return false;
+
+    forecastData[lob] = data;
+    return true;
+  } catch (e) {
+    console.error(`Error loading ${lob}:`, e);
+    return false;
+  }
+}
+
+// ── Render the full dashboard ───────────────────
+function renderDashboard() {
+  const lobs = Object.keys(forecastData);
+  if (!lobs.length) {
+    ['summaryCards','lobTabs','offeredSection','ahtSection','reqSection','heatmapSection']
+      .forEach(id => document.getElementById(id).style.display = 'none');
+    return;
+  }
+
+  // Show summary cards
+  document.getElementById('summaryCards').style.display = 'flex';
+
+  // Compute totals across all LOBs
+  let totalOff = 0, totalAht = 0, totalAhtW = 0, totalReq = 0, totalIntervals = 0;
+  for (const lob of lobs) {
+    const d = forecastData[lob];
+    totalOff += d.totals.total_offered;
+    totalAhtW += d.totals.total_offered * d.totals.avg_aht;
+    totalReq += d.totals.total_person_hours;
+    totalIntervals += d.totals.total_intervals;
+  }
+  const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
+
+  document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
+  document.getElementById('totalOfferedDetail').textContent = `${totalIntervals.toLocaleString()} intervals`;
+  document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
+  document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
+  const sl = document.getElementById('slTarget').value;
+  const asa = document.getElementById('asaTarget').value;
+  document.getElementById('slCard').textContent = sl + '% / ' + asa + ' secs';
+  document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
+
+  // LOB tabs
+  const tabsEl = document.getElementById('lobTabs');
+  if (lobs.length > 1) {
+    tabsEl.style.display = 'flex';
+    tabsEl.innerHTML = '<button class="lob-tab active" onclick="switchLob(null, this)">All Combined</button>' +
+      lobs.map(l => `<button class="lob-tab" onclick="switchLob('${l}', this)">${l}</button>`).join('');
+  } else {
+    tabsEl.style.display = 'none';
+  }
+
+  activeLob = null;
+  renderCharts();
+  renderHeatmap();
+}
+
+function switchLob(lob, btn) {
+  document.querySelectorAll('.lob-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  activeLob = lob;
+  renderCharts();
+}
+
+// ── Build combined daily data ───────────────────
+function getDailyData() {
+  const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  // Merge all dates
+  const dateMap = {};
+  for (const lob of lobs) {
+    const d = forecastData[lob];
+    if (!d || !d.daily) continue;
+    for (const row of d.daily) {
+      if (!dateMap[row.date]) dateMap[row.date] = {date: row.date, offered: 0, aht_w: 0, aht_off: 0, req: 0, is_historic: row.is_historic};
+      dateMap[row.date].offered += row.offered;
+      dateMap[row.date].aht_w += row.offered * row.aht;
+      dateMap[row.date].aht_off += row.offered;
+      dateMap[row.date].req += row.agents_required;
+    }
+  }
+  const sorted = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+  return sorted.map(d => ({
+    ...d,
+    aht: d.aht_off > 0 ? d.aht_w / d.aht_off : 0,
+  }));
+}
+
+// ── Render charts ───────────────────────────────
+function renderCharts() {
+  const daily = getDailyData();
+  if (!daily.length) return;
+
+  const labels = daily.map(d => d.date);
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Color arrays: grey for historic, blue for forecast
+  const offeredColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
+  const ahtColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(234,88,12,.7)');
+  const reqColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.5)' : 'rgba(34,197,94,.6)');
+
+  // Offered chart
+  document.getElementById('offeredSection').style.display = '';
+  if (chartOffered) chartOffered.destroy();
+  chartOffered = new Chart(document.getElementById('offeredChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Offered Calls',
+        data: daily.map(d => Math.round(d.offered)),
+        backgroundColor: offeredColors,
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: chartOpts('Calls', false),
+  });
+
+  // AHT chart
+  document.getElementById('ahtSection').style.display = '';
+  if (chartAht) chartAht.destroy();
+  chartAht = new Chart(document.getElementById('ahtChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'AHT (s)',
+        data: daily.map(d => Math.round(d.aht)),
+        borderColor: 'rgba(234,88,12,.8)',
+        backgroundColor: 'rgba(234,88,12,.1)',
+        borderWidth: 2,
+        fill: true,
+        pointRadius: 0,
+        tension: .3,
+        segment: {
+          borderColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.6)' : 'rgba(234,88,12,.8)',
+          backgroundColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.08)' : 'rgba(234,88,12,.1)',
+        }
+      }]
+    },
+    options: chartOpts('Seconds', true),
+  });
+
+  // Requirements chart
+  document.getElementById('reqSection').style.display = '';
+  if (chartReq) chartReq.destroy();
+  chartReq = new Chart(document.getElementById('reqChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Agents Required',
+        data: daily.map(d => Math.round(d.req * 10) / 10),
+        backgroundColor: reqColors,
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: chartOpts('Agents', false),
+  });
+}
+
+function chartOpts(yLabel, isLine) {
   return {
-    lob: $('selLob').value,
-    start_date: $('inpStart').value,
-    end_date: $('inpEnd').value,
-    service_level: parseFloat($('inpSL').value) / 100,
-    target_asa: parseFloat($('inpASA').value),
-    shrinkage: parseFloat($('inpShrink').value) / 100,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: arr => {
+            const d = arr[0].label;
+            const dt = new Date(d + 'T12:00:00');
+            return dt.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          maxTicksLimit: 15,
+          callback: function(val, i) {
+            const d = this.getLabelForValue(val);
+            const dt = new Date(d + 'T12:00:00');
+            return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+          }
+        }
+      },
+      y: {
+        title: { display: true, text: yLabel },
+        beginAtZero: true,
+      }
+    }
   };
 }
 
-async function api(url, body) {
-  const r = await fetch(url, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
-  });
-  return r.json();
-}
+// ── Render heatmap ──────────────────────────────
+function renderHeatmap() {
+  const lobs = Object.keys(forecastData);
+  if (!lobs.length) return;
 
-/* ── Tab switching ──────────────────────────────── */
-function switchTab(name) {
-  document.querySelectorAll('.view-tab').forEach((t, i) => {
-    const tabs = ['view','generate','whatif','erlang','accuracy'];
-    t.classList.toggle('active', tabs[i] === name);
-  });
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  $('sec-' + name).classList.add('active');
-}
-
-/* ══════════════════════════════════════════════════
-   SVG CHART RENDERER
-   ══════════════════════════════════════════════════ */
-function drawLineChart(containerId, datasets, labels, opts = {}) {
-  const el = $(containerId);
-  if (!el) return;
-  const W = el.clientWidth || 700, H = opts.height || 240;
-  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
-  const pw = W - pad.left - pad.right;
-  const ph = H - pad.top - pad.bottom;
-
-  // Find data range
-  let allVals = [];
-  datasets.forEach(ds => ds.data.forEach(v => allVals.push(v)));
-  let minV = Math.min(...allVals, 0);
-  let maxV = Math.max(...allVals, 1);
-  if (maxV === minV) maxV = minV + 1;
-  const range = maxV - minV;
-  minV -= range * 0.05;
-  maxV += range * 0.05;
-
-  function x(i) { return pad.left + (i / Math.max(labels.length - 1, 1)) * pw; }
-  function y(v) { return pad.top + (1 - (v - minV) / (maxV - minV)) * ph; }
-
-  // Y axis ticks
-  const yTicks = 5;
-  let ticksHtml = '';
-  for (let i = 0; i <= yTicks; i++) {
-    const val = minV + (i / yTicks) * (maxV - minV);
-    const yp = y(val);
-    ticksHtml += `<line x1="${pad.left}" x2="${W - pad.right}" y1="${yp}" y2="${yp}" stroke="var(--border)" stroke-width="0.5"/>`;
-    ticksHtml += `<text x="${pad.left - 8}" y="${yp + 4}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(val)}</text>`;
+  // Collect all dates across all LOBs
+  const allDates = new Set();
+  for (const lob of lobs) {
+    for (const row of forecastData[lob].daily) allDates.add(row.date);
   }
+  const dates = Array.from(allDates).sort();
 
-  // X axis labels (show ~10 max)
-  const step = Math.max(1, Math.floor(labels.length / 10));
-  let xlabels = '';
-  for (let i = 0; i < labels.length; i += step) {
-    xlabels += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
-  }
+  // Show last 14 days of data for the heatmap (keeps it readable)
+  const recentDates = dates.slice(-14);
 
-  // Lines
-  let lines = '';
-  datasets.forEach(ds => {
-    const pts = ds.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    const opacity = ds.opacity || 1;
-    lines += `<polyline points="${pts}" fill="none" stroke="${ds.color}" stroke-width="${ds.width || 2}" stroke-opacity="${opacity}"/>`;
-  });
+  document.getElementById('heatmapSection').style.display = '';
+  const thead = document.getElementById('heatHead');
+  const tbody = document.getElementById('heatBody');
 
-  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${ticksHtml}${xlabels}${lines}</svg>`;
-}
+  thead.innerHTML = '<tr><th class="row-label">LOB</th>' +
+    recentDates.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      return `<th>${dt.toLocaleDateString('en-US', {month:'short', day:'numeric'})}</th>`;
+    }).join('') + '<th>Avg</th></tr>';
 
-function drawBarChart(containerId, data, labels, color, opts = {}) {
-  const el = $(containerId);
-  if (!el) return;
-  const W = el.clientWidth || 700, H = opts.height || 240;
-  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
-  const pw = W - pad.left - pad.right;
-  const ph = H - pad.top - pad.bottom;
-
-  let maxV = Math.max(...data, 1);
-  const barW = Math.max(2, (pw / data.length) * 0.7);
-  const gap = (pw / data.length) * 0.3;
-
-  function y(v) { return pad.top + (1 - v / maxV) * ph; }
-
-  let bars = '';
-  data.forEach((v, i) => {
-    const bx = pad.left + i * (barW + gap);
-    const by = y(v);
-    const bh = pad.top + ph - by;
-    bars += `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${color}" rx="2"/>`;
-  });
-
-  // X labels
-  const step = Math.max(1, Math.floor(labels.length / 10));
-  let xlabels = '';
-  for (let i = 0; i < labels.length; i += step) {
-    const bx = pad.left + i * (barW + gap) + barW / 2;
-    xlabels += `<text x="${bx}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${labels[i]}</text>`;
-  }
-
-  // Y ticks
-  let yticks = '';
-  for (let i = 0; i <= 4; i++) {
-    const val = (i / 4) * maxV;
-    const yp = y(val);
-    yticks += `<line x1="${pad.left}" x2="${W - pad.right}" y1="${yp}" y2="${yp}" stroke="var(--border)" stroke-width="0.5"/>`;
-    yticks += `<text x="${pad.left - 8}" y="${yp + 4}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(val)}</text>`;
-  }
-
-  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${yticks}${xlabels}${bars}</svg>`;
-}
-
-/* ══════════════════════════════════════════════════
-   LOAD DATA (View tab)
-   ══════════════════════════════════════════════════ */
-async function loadData() {
-  const p = getParams();
-  if (!p.lob || !p.start_date || !p.end_date) {
-    alert('Please select a LOB and date range.'); return;
-  }
-  showLoading('Loading forecast data…');
-  try {
-    const data = await api('/forecasting/data', p);
-    hideLoading();
-    if (!data.success) { alert(data.error || 'Error loading data'); return; }
-
-    STATE.forecast = data.forecast || [];
-    STATE.requirements = data.requirements || [];
-    STATE.erlang = data.erlang || [];
-    STATE.dailySummary = data.daily_summary || [];
-    STATE.baselineErlang = data.erlang || [];
-
-    if (!STATE.forecast.length) {
-      $('viewEmpty').style.display = '';
-      $('viewContent').style.display = 'none';
-      $('viewEmpty').innerHTML = '<h3>No Data Found</h3><p>No forecast data exists for this LOB and date range.</p>';
-      return;
+  // Find global max for color scaling
+  let maxReq = 0;
+  for (const lob of lobs) {
+    for (const row of forecastData[lob].daily) {
+      if (row.agents_required > maxReq) maxReq = row.agents_required;
     }
-
-    $('viewEmpty').style.display = 'none';
-    $('viewContent').style.display = '';
-    renderViewData();
-    // Also enable accuracy
-    loadAccuracy();
-  } catch (e) {
-    hideLoading();
-    alert('Error: ' + e.message);
   }
-}
 
-function renderViewData() {
-  const fc = STATE.forecast;
-  const ec = STATE.erlang;
-  const ds = STATE.dailySummary;
-
-  // Stats
-  const totalOffered = fc.reduce((s, r) => s + r.offered, 0);
-  const avgAHT = fc.length ? fc.reduce((s, r) => s + r.aht, 0) / fc.length : 0;
-  const peakAgents = ec.length ? Math.max(...ec.map(r => r.agents_required || 0)) : 0;
-  const peakShrink = ec.length ? Math.max(...ec.map(r => r.agents_with_shrinkage || 0)) : 0;
-
-  $('viewStats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total Offered</div><div class="stat-value">${Math.round(totalOffered).toLocaleString()}</div></div>
-    <div class="stat-card"><div class="stat-label">Avg AHT</div><div class="stat-value">${Math.round(avgAHT)}s</div></div>
-    <div class="stat-card"><div class="stat-label">Peak Agents</div><div class="stat-value">${peakAgents}</div></div>
-    <div class="stat-card"><div class="stat-label">Peak w/ Shrinkage</div><div class="stat-value">${peakShrink}</div></div>
-    <div class="stat-card"><div class="stat-label">Days</div><div class="stat-value">${ds.length}</div></div>
-    <div class="stat-card"><div class="stat-label">Intervals</div><div class="stat-value">${fc.length}</div></div>
-  `;
-
-  // Charts — use daily aggregates for cleaner display
-  const dLabels = ds.map(d => d.date.slice(5));  // MM-DD
-  drawBarChart('chartVolume', ds.map(d => d.total_offered), dLabels, '#6366f1');
-  drawLineChart('chartAHT', [{ data: ds.map(d => d.avg_aht), color: '#f59e0b' }], dLabels);
-  drawLineChart('chartAgents', [
-    { data: ds.map(d => d.peak_agents_required), color: '#10b981' },
-    { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444' },
-  ], dLabels);
-
-  // Daily table
-  const tbody = $('tblDaily').querySelector('tbody');
-  tbody.innerHTML = ds.map(d => `
-    <tr>
-      <td>${d.date}</td>
-      <td>${Math.round(d.total_offered).toLocaleString()}</td>
-      <td>${Math.round(d.avg_aht)}s</td>
-      <td>${Math.round(d.peak_offered)}</td>
-      <td>${d.peak_agents_required}</td>
-      <td>${d.peak_agents_with_shrinkage}</td>
-      <td>${d.intervals}</td>
-    </tr>
-  `).join('');
-  if(window.initSortable) initSortable($('tblDaily'));
-}
-
-/* ══════════════════════════════════════════════════
-   GENERATE FORECAST
-   ══════════════════════════════════════════════════ */
-async function generateForecast() {
-  const p = getParams();
-  if (!p.lob) { alert('Please select a LOB.'); return; }
-
-  showLoading('Generating forecast…');
-  try {
-    const body = {
-      ...p,
-      method: $('selMethod').value,
-      historical_days: parseInt($('inpHistDays').value),
-      forecast_days: parseInt($('inpFcDays').value),
-      window: parseInt($('inpWindow').value),
-    };
-    const data = await api('/forecasting/generate', body);
-    hideLoading();
-    if (!data.success) { alert(data.error || 'Error'); return; }
-
-    $('genEmpty').style.display = 'none';
-    $('genContent').style.display = '';
-
-    const ec = data.erlang_forecast || [];
-    const ds = data.daily_summary || [];
-
-    // Stats
-    const totalOff = ec.reduce((s, r) => s + r.offered, 0);
-    const avgAht = ec.length ? ec.reduce((s, r) => s + r.aht, 0) / ec.length : 0;
-    const peak = ec.length ? Math.max(...ec.map(r => r.agents_with_shrinkage || 0)) : 0;
-
-    $('genStats').innerHTML = `
-      <div class="stat-card"><div class="stat-label">Method</div><div class="stat-value" style="font-size:1rem;">${data.method === 'weighted_trend' ? 'Weighted Trend' : 'Moving Avg'}</div></div>
-      <div class="stat-card"><div class="stat-label">History Used</div><div class="stat-value">${data.historical_days_used || 0}d</div></div>
-      <div class="stat-card"><div class="stat-label">Forecast Days</div><div class="stat-value">${ds.length}</div></div>
-      <div class="stat-card"><div class="stat-label">Total Offered</div><div class="stat-value">${Math.round(totalOff).toLocaleString()}</div></div>
-      <div class="stat-card"><div class="stat-label">Peak Agents</div><div class="stat-value">${peak}</div></div>
-    `;
-
-    const dLabels = ds.map(d => d.date.slice(5));
-    drawBarChart('chartGenVolume', ds.map(d => d.total_offered), dLabels, '#6366f1');
-    drawLineChart('chartGenAHT', [{ data: ds.map(d => d.avg_aht), color: '#f59e0b' }], dLabels);
-    drawLineChart('chartGenAgents', [
-      { data: ds.map(d => d.peak_agents_required), color: '#10b981' },
-      { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444' },
-    ], dLabels);
-
-    // Table
-    const tbody = $('tblGenDaily').querySelector('tbody');
-    tbody.innerHTML = ds.map(d => `
-      <tr>
-        <td>${d.date}</td>
-        <td>${Math.round(d.total_offered).toLocaleString()}</td>
-        <td>${Math.round(d.avg_aht)}s</td>
-        <td>${Math.round(d.peak_offered)}</td>
-        <td>${d.peak_agents_required}</td>
-        <td>${d.peak_agents_with_shrinkage}</td>
-      </tr>
-    `).join('');
-    if(window.initSortable) initSortable($('tblGenDaily'));
-
-  } catch (e) {
-    hideLoading();
-    alert('Error: ' + e.message);
+  let html = '';
+  for (const lob of lobs) {
+    const byDate = {};
+    for (const row of forecastData[lob].daily) byDate[row.date] = row;
+    let sum = 0, cnt = 0;
+    let cells = '';
+    for (const d of recentDates) {
+      const row = byDate[d];
+      const val = row ? Math.round(row.agents_required * 10) / 10 : 0;
+      sum += val; cnt++;
+      const cls = heatClass(val, maxReq);
+      cells += `<td class="${cls}">${val}</td>`;
+    }
+    const avg = cnt > 0 ? Math.round(sum / cnt * 10) / 10 : 0;
+    html += `<tr><td class="row-label">${lob}</td>${cells}<td style="font-weight:700;">${avg}</td></tr>`;
   }
+
+  // Sum row
+  let sumCells = '';
+  let totalSum = 0, totalCnt = 0;
+  for (const d of recentDates) {
+    let dayTotal = 0;
+    for (const lob of lobs) {
+      const byDate = {};
+      for (const row of forecastData[lob].daily) byDate[row.date] = row;
+      dayTotal += byDate[d] ? byDate[d].agents_required : 0;
+    }
+    totalSum += dayTotal; totalCnt++;
+    sumCells += `<td style="font-weight:700;">${Math.round(dayTotal * 10) / 10}</td>`;
+  }
+  const totalAvg = totalCnt > 0 ? Math.round(totalSum / totalCnt * 10) / 10 : 0;
+  html += `<tr style="border-top:2px solid var(--text);"><td class="row-label" style="font-weight:800;">TOTAL</td>${sumCells}<td style="font-weight:800;">${totalAvg}</td></tr>`;
+
+  tbody.innerHTML = html;
 }
 
-// Show/hide window field
-$('selMethod').addEventListener('change', function() {
-  $('grpWindow').style.display = this.value === 'moving_average' ? '' : 'none';
+function heatClass(val, max) {
+  if (max <= 0) return '';
+  const pct = val / max;
+  if (pct < .33) return 'heat-low';
+  if (pct < .66) return 'heat-med';
+  return 'heat-high';
+}
+
+// ── Auto-load on page ready ─────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadExistingData();
 });
 
-/* ══════════════════════════════════════════════════
-   WHAT-IF
-   ══════════════════════════════════════════════════ */
-function updateSliderLabel(which) {
-  if (which === 'vol') {
-    const v = $('sliderVol').value;
-    $('lblVol').textContent = (v >= 0 ? '+' : '') + v + '%';
-  } else {
-    const v = $('sliderAHT').value;
-    $('lblAHT').textContent = (v >= 0 ? '+' : '') + v + '%';
-  }
-}
-
-function resetWhatIf() {
-  $('sliderVol').value = 0; $('sliderAHT').value = 0;
-  updateSliderLabel('vol'); updateSliderLabel('aht');
-  $('whatifContent').style.display = 'none';
-  $('whatifEmpty').style.display = '';
-}
-
-async function runWhatIf() {
-  const p = getParams();
-  if (!p.lob || !p.start_date || !p.end_date) { alert('Load data first.'); return; }
-
-  showLoading('Running scenario…');
-  try {
-    const body = {
-      ...p,
-      volume_pct: parseFloat($('sliderVol').value),
-      aht_pct: parseFloat($('sliderAHT').value),
-    };
-    const data = await api('/forecasting/what-if', body);
-    hideLoading();
-    if (!data.success) { alert(data.error || 'Error'); return; }
-
-    $('whatifEmpty').style.display = 'none';
-    $('whatifContent').style.display = '';
-
-    const results = data.results || [];
-    const ds = data.daily_summary || [];
-    const baseline = STATE.dailySummary;
-
-    // Stats: compare with baseline
-    const peakNow = ds.length ? Math.max(...ds.map(d => d.peak_agents_with_shrinkage)) : 0;
-    const peakBase = baseline.length ? Math.max(...baseline.map(d => d.peak_agents_with_shrinkage)) : 0;
-    const diff = peakNow - peakBase;
-    const diffCls = diff > 0 ? 'negative' : diff < 0 ? 'positive' : '';
-
-    $('whatifStats').innerHTML = `
-      <div class="stat-card"><div class="stat-label">Volume Adj</div><div class="stat-value">${data.scenario.volume_pct >= 0 ? '+' : ''}${data.scenario.volume_pct}%</div></div>
-      <div class="stat-card"><div class="stat-label">AHT Adj</div><div class="stat-value">${data.scenario.aht_pct >= 0 ? '+' : ''}${data.scenario.aht_pct}%</div></div>
-      <div class="stat-card"><div class="stat-label">Peak Agents (Scenario)</div><div class="stat-value">${peakNow}</div></div>
-      <div class="stat-card"><div class="stat-label">Δ vs Baseline</div><div class="stat-value ${diffCls}">${diff >= 0 ? '+' : ''}${diff}</div></div>
-    `;
-
-    // Chart: scenario vs baseline
-    const dLabels = ds.map(d => d.date.slice(5));
-    const baseData = baseline.map(d => d.peak_agents_required);
-    drawLineChart('chartWhatifAgents', [
-      { data: ds.map(d => d.peak_agents_required), color: '#10b981', width: 2.5 },
-      { data: ds.map(d => d.peak_agents_with_shrinkage), color: '#ef4444', width: 2 },
-      { data: baseData.slice(0, dLabels.length), color: '#6366f1', width: 1.5, opacity: 0.3 },
-    ], dLabels);
-
-    // Table
-    const tbody = $('tblWhatif').querySelector('tbody');
-    tbody.innerHTML = ds.map(d => `
-      <tr>
-        <td>${d.date}</td>
-        <td>${Math.round(d.total_offered).toLocaleString()}</td>
-        <td>${Math.round(d.avg_aht)}s</td>
-        <td>${d.peak_agents_required}</td>
-        <td>${d.peak_agents_with_shrinkage}</td>
-      </tr>
-    `).join('');
-    if(window.initSortable) initSortable($('tblWhatif'));
-
-  } catch (e) {
-    hideLoading();
-    alert('Error: ' + e.message);
-  }
-}
-
-/* ══════════════════════════════════════════════════
-   ERLANG C CALCULATOR
-   ══════════════════════════════════════════════════ */
-async function calcErlang() {
-  try {
-    const data = await api('/forecasting/erlang', {
-      offered: parseFloat($('ecOffered').value),
-      aht: parseFloat($('ecAHT').value),
-      interval_seconds: parseFloat($('ecInterval').value),
-      service_level: parseFloat($('ecSL').value) / 100,
-      target_asa: parseFloat($('ecASA').value),
-      shrinkage: parseFloat($('ecShrink').value) / 100,
-    });
-    if (!data.success) { alert(data.error || 'Error'); return; }
-
-    $('erlangResults').style.display = '';
-    $('erlangResults').innerHTML = `
-      <div class="erlang-result-card"><div class="val">${data.agents_raw}</div><div class="lbl">Raw Agents</div></div>
-      <div class="erlang-result-card"><div class="val">${data.agents_with_shrinkage}</div><div class="lbl">w/ Shrinkage</div></div>
-      <div class="erlang-result-card"><div class="val">${(data.service_level * 100).toFixed(1)}%</div><div class="lbl">Service Level</div></div>
-      <div class="erlang-result-card"><div class="val">${(data.erlang_c_prob * 100).toFixed(1)}%</div><div class="lbl">P(Wait)</div></div>
-      <div class="erlang-result-card"><div class="val">${data.traffic_intensity}</div><div class="lbl">Erlangs</div></div>
-      <div class="erlang-result-card"><div class="val">${(data.occupancy * 100).toFixed(1)}%</div><div class="lbl">Occupancy</div></div>
-    `;
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-/* ══════════════════════════════════════════════════
-   ACCURACY
-   ══════════════════════════════════════════════════ */
-async function loadAccuracy() {
-  const p = getParams();
-  if (!p.lob || !p.start_date || !p.end_date) return;
-
-  try {
-    const data = await api('/forecasting/accuracy', p);
-    if (!data.success || !data.intervals || !data.intervals.length) {
-      $('accEmpty').style.display = '';
-      $('accContent').style.display = 'none';
-      return;
-    }
-
-    $('accEmpty').style.display = 'none';
-    $('accContent').style.display = '';
-
-    const s = data.summary;
-    $('accStats').innerHTML = `
-      <div class="stat-card"><div class="stat-label">MAPE</div><div class="stat-value">${s.mape}%</div></div>
-      <div class="stat-card"><div class="stat-label">WMAPE</div><div class="stat-value">${s.wmape}%</div></div>
-      <div class="stat-card"><div class="stat-label">Bias</div><div class="stat-value">${s.bias >= 0 ? '+' : ''}${s.bias}</div></div>
-      <div class="stat-card"><div class="stat-label">Matched Intervals</div><div class="stat-value">${s.matched_intervals}</div></div>
-    `;
-
-    // Aggregate daily for chart
-    const byDate = {};
-    data.intervals.forEach(r => {
-      if (!byDate[r.date]) byDate[r.date] = { fc: 0, act: 0 };
-      byDate[r.date].fc += r.forecast_offered;
-      byDate[r.date].act += r.actual_agents;
-    });
-    const dates = Object.keys(byDate).sort();
-    const dLabels = dates.map(d => d.slice(5));
-    drawLineChart('chartAccuracy', [
-      { data: dates.map(d => byDate[d].fc), color: '#6366f1' },
-      { data: dates.map(d => byDate[d].act), color: '#10b981' },
-    ], dLabels);
-
-    // Table (show first 200)
-    const tbody = $('tblAccuracy').querySelector('tbody');
-    const rows = data.intervals.slice(0, 200);
-    tbody.innerHTML = rows.map(r => {
-      const cls = r.variance_pct > 0 ? 'negative' : r.variance_pct < 0 ? 'positive' : '';
-      return `<tr>
-        <td>${r.date}</td><td>${r.time}</td>
-        <td>${r.forecast_offered}</td><td>${r.forecast_aht}s</td>
-        <td>${r.actual_agents}</td>
-        <td class="${cls}">${r.variance_pct >= 0 ? '+' : ''}${r.variance_pct}%</td>
-      </tr>`;
-    }).join('');
-    if(window.initSortable) initSortable($('tblAccuracy'));
-
-  } catch (e) { /* silently skip */ }
-}
-
-/* ── Init ────────────────────────────────────────── */
-(function init() {
-  const today = new Date();
-  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
-  $('inpStart').value = weekAgo.toISOString().slice(0, 10);
-  $('inpEnd').value = today.toISOString().slice(0, 10);
-})();
+document.getElementById('yearSelect').addEventListener('change', function() {
+  window.location.href = '/forecasting/?year=' + this.value;
+});
 </script>
 {% endblock %}

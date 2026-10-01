@@ -6,6 +6,7 @@ View forecasts, generate new ones, Erlang C, what-if, accuracy.
 
 import logging
 import datetime
+from datetime import date
 
 from flask import (Blueprint, render_template, request, jsonify)
 from app.auth import login_required, get_current_user
@@ -13,6 +14,8 @@ from app.auth import login_required, get_current_user
 log = logging.getLogger("serevo.forecasting")
 
 forecasting_bp = Blueprint("forecasting", __name__, url_prefix="/forecasting")
+
+TIMEZONE = "America/Toronto"
 
 
 def _demo_guard():
@@ -33,19 +36,30 @@ def _get_sheet():
         return None
 
 
-# ── Main view ───────────────────────────────────────────────
+# ── Main view (PeopleWare-style dashboard) ──────────────────
 @forecasting_bp.route("/")
 @login_required
 def index():
+    from datetime import datetime as dt
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+
     user = get_current_user()
+    now = dt.now(ZoneInfo(TIMEZONE))
+    year = int(request.args.get("year", now.year))
+    years = list(range(2024, now.year + 2))
+
     if user and user.get("is_demo"):
         from app.demo_data import DEMO_LOBS
-        lobs = list(DEMO_LOBS)
+        all_lobs = sorted(DEMO_LOBS)
     else:
-        from app.forecasting.engine import get_available_lobs
-        sheet = _get_sheet()
-        lobs = get_available_lobs(sheet)
-    return render_template("forecasting/index.html", user=user, lobs=lobs)
+        from app.models import PlanningUnit
+        all_lobs = sorted([pu.name for pu in PlanningUnit.query.filter_by(is_active=True).all()])
+
+    return render_template("forecasting/index.html",
+        user=user, year=year, years=years, all_lobs=all_lobs)
 
 
 # ── View existing forecast data (API) ──────────────────────
@@ -430,6 +444,214 @@ def generate_from_history():
 
     except Exception as e:
         log.error(f"Generate from history error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+# ── Daily aggregated data API (for dashboard charts) ────────
+@forecasting_bp.route("/api/data", methods=["POST"])
+@login_required
+def forecast_api_data():
+    """Return daily aggregated forecast + requirements data for a LOB.
+
+    POST JSON: {lob, year, service_level?, target_asa?, shrinkage?}
+    Returns: {success, daily: [{date, offered, aht, agents_required, is_historic}], totals: {...}}
+    """
+    from app.models import (ForecastInterval, RequirementInterval,
+                            PlanningUnit, IntervalActual)
+    from app.data_source import normalize_lob
+    from sqlalchemy import func as sa_func
+    from collections import defaultdict
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        from datetime import datetime as dt
+        year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        user = get_current_user()
+
+        # Demo mode
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_forecast, get_demo_requirements
+            import calendar
+            daily = []
+            today = date.today()
+            for m in range(1, 13):
+                for d_num in range(1, calendar.monthrange(year, m)[1] + 1):
+                    d = date(year, m, d_num)
+                    fc, _ = get_demo_forecast(lob, d)
+                    rq, _ = get_demo_requirements(lob, d)
+                    total_off = sum(r["offered"] for r in fc)
+                    avg_aht = (sum(r["offered"] * r["aht"] for r in fc) / total_off) if total_off > 0 else 0
+                    avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq)) if rq else 0
+                    daily.append({
+                        "date": d.isoformat(),
+                        "offered": round(total_off),
+                        "aht": round(avg_aht),
+                        "agents_required": round(avg_req, 1),
+                        "is_historic": d < today,
+                    })
+            total_off_all = sum(d["offered"] for d in daily)
+            avg_aht_all = (sum(d["offered"] * d["aht"] for d in daily) / total_off_all) if total_off_all > 0 else 0
+            return jsonify({
+                "success": True,
+                "daily": daily,
+                "totals": {
+                    "total_offered": total_off_all,
+                    "avg_aht": round(avg_aht_all),
+                    "total_person_hours": round(sum(d["agents_required"] * 8 for d in daily)),
+                    "total_intervals": len(daily) * 28,
+                }
+            })
+
+        lob_normalized = normalize_lob(lob)
+        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        if not unit:
+            return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
+
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        today = date.today()
+
+        # Get historical actuals (aggregated by day)
+        hist_rows = (
+            IntervalActual.query
+            .filter(
+                IntervalActual.planning_unit_id == unit.id,
+                sa_func.date(IntervalActual.timestamp) >= start,
+                sa_func.date(IntervalActual.timestamp) <= end,
+            )
+            .with_entities(
+                sa_func.date(IntervalActual.timestamp).label("dt"),
+                sa_func.sum(IntervalActual.offered).label("offered"),
+                sa_func.avg(IntervalActual.aht_secs).label("aht"),
+                sa_func.count().label("cnt"),
+            )
+            .group_by(sa_func.date(IntervalActual.timestamp))
+            .all()
+        )
+        hist_map = {}
+        for row in hist_rows:
+            d_str = str(row.dt) if row.dt else None
+            if d_str:
+                hist_map[d_str] = {
+                    "offered": int(row.offered or 0),
+                    "aht": round(float(row.aht or 0)),
+                    "intervals": int(row.cnt or 0),
+                }
+
+        # Get forecast intervals (aggregated by day)
+        fc_rows = (
+            ForecastInterval.query
+            .filter(
+                ForecastInterval.planning_unit_id == unit.id,
+                sa_func.date(ForecastInterval.timestamp) >= start,
+                sa_func.date(ForecastInterval.timestamp) <= end,
+            )
+            .with_entities(
+                sa_func.date(ForecastInterval.timestamp).label("dt"),
+                sa_func.sum(ForecastInterval.offered).label("offered"),
+                sa_func.avg(ForecastInterval.aht).label("aht"),
+                sa_func.count().label("cnt"),
+            )
+            .group_by(sa_func.date(ForecastInterval.timestamp))
+            .all()
+        )
+        fc_map = {}
+        for row in fc_rows:
+            d_str = str(row.dt) if row.dt else None
+            if d_str:
+                fc_map[d_str] = {
+                    "offered": round(float(row.offered or 0)),
+                    "aht": round(float(row.aht or 0)),
+                    "intervals": int(row.cnt or 0),
+                }
+
+        # Get requirements (aggregated by day)
+        req_rows = (
+            RequirementInterval.query
+            .filter(
+                RequirementInterval.planning_unit_id == unit.id,
+                sa_func.date(RequirementInterval.timestamp) >= start,
+                sa_func.date(RequirementInterval.timestamp) <= end,
+            )
+            .with_entities(
+                sa_func.date(RequirementInterval.timestamp).label("dt"),
+                sa_func.avg(RequirementInterval.agents_required).label("avg_req"),
+                sa_func.max(RequirementInterval.agents_required).label("peak_req"),
+            )
+            .group_by(sa_func.date(RequirementInterval.timestamp))
+            .all()
+        )
+        req_map = {}
+        for row in req_rows:
+            d_str = str(row.dt) if row.dt else None
+            if d_str:
+                req_map[d_str] = {
+                    "avg": round(float(row.avg_req or 0), 1),
+                    "peak": round(float(row.peak_req or 0), 1),
+                }
+
+        # Merge: prefer actuals for past, forecast for future
+        all_dates = sorted(set(list(hist_map.keys()) + list(fc_map.keys()) + list(req_map.keys())))
+        daily = []
+        total_offered = 0
+        total_aht_w = 0
+        total_intervals = 0
+        total_req_hours = 0
+
+        for d_str in all_dates:
+            is_historic = d_str <= today.isoformat()
+            h = hist_map.get(d_str)
+            f = fc_map.get(d_str)
+            r = req_map.get(d_str)
+
+            if is_historic and h:
+                offered = h["offered"]
+                aht = h["aht"]
+                intervals = h["intervals"]
+            elif f:
+                offered = f["offered"]
+                aht = f["aht"]
+                intervals = f["intervals"]
+            else:
+                continue
+
+            agents_req = r["avg"] if r else 0
+            daily.append({
+                "date": d_str,
+                "offered": offered,
+                "aht": aht,
+                "agents_required": agents_req,
+                "is_historic": is_historic,
+            })
+            total_offered += offered
+            total_aht_w += offered * aht
+            total_intervals += intervals
+            total_req_hours += agents_req * 8
+
+        avg_aht = round(total_aht_w / total_offered) if total_offered > 0 else 0
+
+        return jsonify({
+            "success": True,
+            "daily": daily,
+            "totals": {
+                "total_offered": total_offered,
+                "avg_aht": avg_aht,
+                "total_person_hours": round(total_req_hours),
+                "total_intervals": total_intervals,
+            }
+        })
+
+    except Exception as e:
+        log.exception("Forecast API data error")
         return jsonify({"success": False, "error": str(e)})
 
 
