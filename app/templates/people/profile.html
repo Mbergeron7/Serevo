@@ -1,0 +1,810 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.full_name }} — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .profile-header {
+    display: flex; align-items: center; gap: 20px;
+    margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .profile-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--brand-accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; font-weight: 700; flex-shrink: 0;
+  }
+  .profile-title h1 {
+    font-size: 1.3rem; font-weight: 800; margin: 0;
+  }
+  .profile-title .subtitle {
+    font-size: .82rem; color: var(--text-muted); margin-top: 2px;
+  }
+  .profile-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  }
+  .badge-active   { background: #dcfce7; color: #166534; }
+  .badge-inactive { background: #f3f4f6; color: #6b7280; }
+  .badge-loa      { background: #fef9c3; color: #854d0e; }
+  .badge-training { background: #dbeafe; color: #1e40af; }
+  .badge-terminated { background: #fee2e2; color: #991b1b; }
+
+  .profile-tabs {
+    display: flex; gap: 0; border-bottom: 2px solid var(--border);
+    margin-bottom: 24px; overflow-x: auto;
+  }
+  .profile-tabs button {
+    background: none; border: none; padding: 10px 20px;
+    font-size: .85rem; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; white-space: nowrap;
+    transition: color .15s, border-color .15s;
+  }
+  .profile-tabs button:hover { color: var(--text); }
+  .profile-tabs button.active {
+    color: var(--brand-accent); border-bottom-color: var(--brand-accent);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .section-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    margin-bottom: 20px; overflow: hidden;
+  }
+  .section-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .85rem;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .section-card-body { padding: 16px 20px; }
+
+  .info-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .info-item label {
+    display: block; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); margin-bottom: 2px;
+  }
+  .info-item .val {
+    font-size: .88rem; font-weight: 500; min-height: 1.3em;
+  }
+
+  .assign-table {
+    width: 100%; font-size: .82rem; border-collapse: collapse;
+  }
+  .assign-table th {
+    text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border);
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: .04em;
+  }
+  .assign-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+  }
+  .assign-table tr:last-child td { border-bottom: none; }
+
+  .btn-sm {
+    padding: 4px 12px; font-size: .78rem; border-radius: 6px;
+  }
+  .btn-add {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 5px 14px; border-radius: 6px; font-size: .78rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-add:hover { opacity: .9; }
+  .btn-danger-sm {
+    background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+    padding: 3px 10px; border-radius: 6px; font-size: .75rem; cursor: pointer;
+  }
+
+  /* Availability grid */
+  .avail-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+  }
+  .avail-day {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 8px; text-align: center; font-size: .8rem;
+    background: var(--surface);
+  }
+  .avail-day.unavailable { background: #fef2f2; border-color: #fecaca; }
+  .avail-day .day-label {
+    font-weight: 700; font-size: .75rem; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 4px;
+  }
+  .avail-day .day-times { font-size: .78rem; color: var(--text); }
+
+  /* Inline edit modal */
+  .mini-modal {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.35); display: flex;
+    align-items: center; justify-content: center; z-index: 999;
+  }
+  .mini-modal .modal {
+    background: var(--surface); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px; max-width: 480px; width: 90%;
+  }
+  .mini-modal h3 { font-size: .95rem; margin: 0 0 16px; }
+
+  @media (max-width: 640px) {
+    .avail-grid { grid-template-columns: repeat(2, 1fr); }
+    .info-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom: 12px;">
+  <a href="/people/" style="font-size:.82rem; color:var(--text-muted); text-decoration:none;">&larr; Back to Roster</a>
+</div>
+
+<!-- ═══ Header ═══ -->
+<div class="profile-header">
+  <div class="profile-avatar">{{ emp.first_name[0] }}{{ emp.last_name[0] }}</div>
+  <div class="profile-title">
+    <h1>{{ emp.full_name }}
+      {% set st = emp.status|lower %}
+      {% if st == 'active' %}<span class="profile-badge badge-active">Active</span>
+      {% elif st == 'terminated' %}<span class="profile-badge badge-terminated">Terminated</span>
+      {% elif st == 'on leave' %}<span class="profile-badge badge-loa">On Leave</span>
+      {% elif st == 'training' %}<span class="profile-badge badge-training">Training</span>
+      {% else %}<span class="profile-badge badge-inactive">{{ emp.status }}</span>{% endif %}
+    </h1>
+    <div class="subtitle">
+      {{ emp.employee_id }}
+      {% if emp.external_id_1 %} · {{ emp.external_id_1 }}{% endif %}
+      {% if emp.external_id_2 %} · {{ emp.external_id_2 }}{% endif %}
+      {% if emp.planning_unit %} · {{ emp.planning_unit.name }}{% endif %}
+    </div>
+  </div>
+  <div style="margin-left:auto;">
+    <button class="btn btn-outline btn-sm" onclick="openEditBasicModal()">Edit Basic Info</button>
+  </div>
+</div>
+
+<!-- ═══ Tabs ═══ -->
+<div class="profile-tabs" id="profileTabs">
+  <button class="active" onclick="switchTab('overview', this)">Overview</button>
+  <button onclick="switchTab('work-profile', this)">Work Profile</button>
+  <button onclick="switchTab('planning', this)">Planning</button>
+  <button onclick="switchTab('availability', this)">Availability</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Overview                                                  -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-overview">
+  <div class="section-card">
+    <div class="section-card-header">Basic Information</div>
+    <div class="section-card-body">
+      <div class="info-grid">
+        <div class="info-item">
+          <label>First Name</label>
+          <div class="val">{{ emp.first_name }}</div>
+        </div>
+        <div class="info-item">
+          <label>Last Name</label>
+          <div class="val">{{ emp.last_name }}</div>
+        </div>
+        <div class="info-item">
+          <label>Employee ID</label>
+          <div class="val">{{ emp.employee_id }}</div>
+        </div>
+        <div class="info-item">
+          <label>External ID 1</label>
+          <div class="val">{{ emp.external_id_1 or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <label>External ID 2</label>
+          <div class="val">{{ emp.external_id_2 or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <label>Status</label>
+          <div class="val">{{ emp.status }}</div>
+        </div>
+        <div class="info-item">
+          <label>Team Lead</label>
+          <div class="val">{{ emp.team_lead or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <label>Languages</label>
+          <div class="val">{{ emp.languages or 'English' }}</div>
+        </div>
+        <div class="info-item">
+          <label>Time Zone</label>
+          <div class="val">{{ emp.timezone or 'America/New_York' }}</div>
+        </div>
+        <div class="info-item">
+          <label>Start Date</label>
+          <div class="val">{{ emp.skill_start or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <label>End Date</label>
+          <div class="val">{{ emp.end_date or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <label>Schedule Excluded</label>
+          <div class="val">{{ 'Yes' if emp.schedule_excluded else 'No' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Skills
+      <span style="font-size:.75rem; color:var(--text-muted);">{{ skill_mappings|length }} assigned</span>
+    </div>
+    <div class="section-card-body">
+      {% if skill_mappings %}
+      <table class="assign-table">
+        <thead>
+          <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for sm in skill_mappings %}
+          <tr>
+            <td style="font-weight:600;">{{ sm.skill_group.name }}</td>
+            <td>
+              {% for i in range(5) %}
+                {% if i < sm.proficiency %}<span style="color:#f59e0b;">★</span>{% else %}<span style="color:var(--border);">★</span>{% endif %}
+              {% endfor %}
+            </td>
+            <td>{{ sm.priority }}</td>
+            <td>{% if sm.is_active %}<span style="color:#16a34a;">Active</span>{% else %}<span style="color:#9ca3af;">Inactive</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No skills assigned yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Work Profile                                              -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-work-profile">
+
+  <!-- Contracts -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Contracts
+      <button class="btn-add" onclick="openAssignModal('contract')">+ Add</button>
+    </div>
+    <div class="section-card-body">
+      {% if contract_assignments %}
+      <table class="assign-table">
+        <thead>
+          <tr><th>Contract</th><th>Type</th><th>Weekly Hours</th><th>Valid From</th><th>Valid To</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for ca in contract_assignments %}
+          <tr>
+            <td style="font-weight:600;">{{ ca.contract.name }}</td>
+            <td>{{ ca.contract.contract_type }}</td>
+            <td>{{ ca.contract.weekly_hours }}h</td>
+            <td>{{ ca.valid_from or '—' }}</td>
+            <td>{{ ca.valid_to or '—' }}</td>
+            <td><button class="btn-danger-sm" onclick="removeAssignment('contract', {{ ca.id }})">Remove</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% elif emp.contract %}
+      <p style="font-size:.85rem;">Legacy contract: <strong>{{ emp.contract.name }}</strong> ({{ emp.contract.weekly_hours }}h/wk)</p>
+      <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign contracts with validity periods.</p>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No contract assigned.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Selections -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Selections
+      <button class="btn-add" onclick="openAssignModal('selection')">+ Add</button>
+    </div>
+    <div class="section-card-body">
+      {% if selection_memberships %}
+      <table class="assign-table">
+        <thead>
+          <tr><th>Selection</th><th>Description</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for sm in selection_memberships %}
+          <tr>
+            <td style="font-weight:600;">{{ sm.selection.name }}</td>
+            <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
+            <td><button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">Remove</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">Not part of any selections.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Planning                                                  -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-planning">
+
+  <!-- Planning Units -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Planning Units
+      <button class="btn-add" onclick="openAssignModal('planning_unit')">+ Add</button>
+    </div>
+    <div class="section-card-body">
+      {% if pu_assignments %}
+      <table class="assign-table">
+        <thead>
+          <tr><th>Planning Unit</th><th>Priority</th><th>Valid From</th><th>Valid To</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for pa in pu_assignments %}
+          <tr>
+            <td style="font-weight:600;">{{ pa.planning_unit.name }}</td>
+            <td>
+              {% if pa.priority == 1 %}<span style="color:var(--brand-accent); font-weight:700;">1 (Primary)</span>
+              {% else %}{{ pa.priority }}{% endif %}
+            </td>
+            <td>{{ pa.valid_from or '—' }}</td>
+            <td>{{ pa.valid_to or '—' }}</td>
+            <td><button class="btn-danger-sm" onclick="removeAssignment('planning_unit', {{ pa.id }})">Remove</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% elif emp.planning_unit %}
+      <p style="font-size:.85rem;">Legacy assignment: <strong>{{ emp.planning_unit.name }}</strong></p>
+      <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign planning units with priority &amp; validity.</p>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No planning unit assigned.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Work Time Pattern Models -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Work Time Pattern Models
+      <button class="btn-add" onclick="openAssignModal('work_time_pattern')">+ Add</button>
+    </div>
+    <div class="section-card-body">
+      {% if wtp_assignments %}
+      <table class="assign-table">
+        <thead>
+          <tr><th>Pattern Model</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for wa in wtp_assignments %}
+          <tr>
+            <td style="font-weight:600;">{{ wa.work_time_pattern_model.name }}</td>
+            <td>{{ wa.reference_date or '—' }}</td>
+            <td>{{ wa.valid_from or '—' }}</td>
+            <td>{{ wa.valid_to or '—' }}</td>
+            <td><button class="btn-danger-sm" onclick="removeAssignment('work_time_pattern', {{ wa.id }})">Remove</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No work time pattern assigned.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Availability                                              -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-availability">
+
+  <div class="section-card">
+    <div class="section-card-header">
+      Weekly Availability
+      <button class="btn-add" onclick="openAvailModal()">Edit</button>
+    </div>
+    <div class="section-card-body">
+      <div class="avail-grid">
+        {% set day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+        {% for d in range(7) %}
+        {% set av = avail_map.get(d) %}
+        <div class="avail-day {{ '' if not av or av.is_available else 'unavailable' }}">
+          <div class="day-label">{{ day_names[d] }}</div>
+          {% if av and not av.is_available %}
+            <div class="day-times" style="color:#b91c1c;">Unavailable</div>
+          {% elif av %}
+            <div class="day-times">
+              {{ av.earliest_start.strftime('%H:%M') if av.earliest_start else '—' }}
+              –
+              {{ av.latest_end.strftime('%H:%M') if av.latest_end else '—' }}
+            </div>
+          {% else %}
+            <div class="day-times" style="color:var(--text-muted);">Any time</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- Assignment Modal (reused for PU, Contract, WTP, Selection)     -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div id="assignModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeAssignModal()">
+  <div class="modal">
+    <h3 id="assignModalTitle">Add Assignment</h3>
+    <form id="assignForm" onsubmit="return saveAssignment(event)">
+      <input type="hidden" id="assign_type">
+
+      <div class="form-group" id="assign_item_group">
+        <label id="assign_item_label">Select</label>
+        <select id="assign_item_id" required></select>
+      </div>
+
+      <div class="form-group" id="assign_priority_group" style="display:none;">
+        <label for="assign_priority">Priority</label>
+        <input type="number" id="assign_priority" min="1" max="99" value="1">
+      </div>
+
+      <div class="form-group" id="assign_ref_date_group" style="display:none;">
+        <label for="assign_ref_date">Reference Date</label>
+        <input type="date" id="assign_ref_date">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group" id="assign_from_group">
+          <label for="assign_from">Valid From</label>
+          <input type="date" id="assign_from">
+        </div>
+        <div class="form-group" id="assign_to_group">
+          <label for="assign_to">Valid To</label>
+          <input type="date" id="assign_to">
+        </div>
+      </div>
+
+      <div id="assignError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeAssignModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="assignSaveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- Availability Edit Modal                                        -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div id="availEditModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeAvailModal()">
+  <div class="modal" style="max-width:600px;">
+    <h3>Edit Weekly Availability</h3>
+    <form id="availForm" onsubmit="return saveAvailability(event)">
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
+        {% for d in range(7) %}
+        <div style="border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+            <input type="checkbox" id="avail_on_{{ d }}" checked style="width:auto;">
+            <label for="avail_on_{{ d }}" style="font-weight:700; margin:0;">{{ day_names[d] }}</label>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div>
+              <label style="font-size:.7rem; color:var(--text-muted);">Earliest Start</label>
+              <input type="time" id="avail_start_{{ d }}" value="{{ avail_map.get(d, {}).earliest_start.strftime('%H:%M') if avail_map.get(d) and avail_map.get(d).earliest_start else '' }}" style="font-size:.82rem;">
+            </div>
+            <div>
+              <label style="font-size:.7rem; color:var(--text-muted);">Latest End</label>
+              <input type="time" id="avail_end_{{ d }}" value="{{ avail_map.get(d, {}).latest_end.strftime('%H:%M') if avail_map.get(d) and avail_map.get(d).latest_end else '' }}" style="font-size:.82rem;">
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div id="availError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeAvailModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Availability</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Basic Info Modal -->
+<div id="basicModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeBasicModal()">
+  <div class="modal" style="max-width:520px;">
+    <h3>Edit Basic Information</h3>
+    <form id="basicForm" onsubmit="return saveBasicInfo(event)">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>First Name *</label>
+          <input type="text" id="basic_first" value="{{ emp.first_name }}" required>
+        </div>
+        <div class="form-group">
+          <label>Last Name *</label>
+          <input type="text" id="basic_last" value="{{ emp.last_name }}" required>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>Employee ID *</label>
+          <input type="text" id="basic_eid" value="{{ emp.employee_id }}" required>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="basic_status">
+            {% for s in ['Active', 'On Leave', 'Training', 'Terminated', 'Inactive'] %}
+            <option value="{{ s }}" {{ 'selected' if emp.status == s }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>External ID 1</label>
+          <input type="text" id="basic_ext1" value="{{ emp.external_id_1 or '' }}">
+        </div>
+        <div class="form-group">
+          <label>External ID 2</label>
+          <input type="text" id="basic_ext2" value="{{ emp.external_id_2 or '' }}">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>Team Lead</label>
+          <input type="text" id="basic_tl" value="{{ emp.team_lead or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Languages</label>
+          <select id="basic_lang">
+            {% for l in ['English', 'English, French', 'French'] %}
+            <option value="{{ l }}" {{ 'selected' if (emp.languages or 'English') == l }}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>Time Zone</label>
+          <select id="basic_tz">
+            {% for tz in ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto','America/Winnipeg','America/Edmonton','America/Vancouver','America/Halifax','America/St_Johns','Europe/London','Europe/Paris','Asia/Kolkata','Asia/Manila','UTC'] %}
+            <option value="{{ tz }}" {{ 'selected' if (emp.timezone or 'America/New_York') == tz }}>{{ tz }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="display:flex; align-items:flex-end; gap:8px; padding-bottom:6px;">
+          <input type="checkbox" id="basic_excluded" {{ 'checked' if emp.schedule_excluded }} style="width:auto;">
+          <label for="basic_excluded" style="margin:0; font-weight:500;">Exclude from scheduling</label>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:.75rem;">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" id="basic_start" value="{{ emp.skill_start or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Skill End</label>
+          <input type="date" id="basic_skill_end" value="{{ emp.skill_end or '' }}">
+        </div>
+        <div class="form-group">
+          <label>End Date</label>
+          <input type="date" id="basic_end" value="{{ emp.end_date or '' }}">
+        </div>
+      </div>
+
+      <div id="basicError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeBasicModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EMP_ID = {{ emp.id }};
+
+// ── Tab switching ──
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.profile-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Basic Info Modal ──
+function openEditBasicModal() { document.getElementById('basicModal').style.display = ''; }
+function closeBasicModal() { document.getElementById('basicModal').style.display = 'none'; }
+
+async function saveBasicInfo(e) {
+  e.preventDefault();
+  const body = {
+    id: EMP_ID,
+    employee_id: document.getElementById('basic_eid').value,
+    external_id_1: document.getElementById('basic_ext1').value,
+    external_id_2: document.getElementById('basic_ext2').value,
+    first_name: document.getElementById('basic_first').value,
+    last_name: document.getElementById('basic_last').value,
+    status: document.getElementById('basic_status').value,
+    team_lead: document.getElementById('basic_tl').value,
+    languages: document.getElementById('basic_lang').value,
+    timezone: document.getElementById('basic_tz').value,
+    schedule_excluded: document.getElementById('basic_excluded').checked,
+    skill_start: document.getElementById('basic_start').value,
+    skill_end: document.getElementById('basic_skill_end').value,
+    end_date: document.getElementById('basic_end').value,
+    // Keep existing LOB
+    lob: '{{ emp.planning_unit.name if emp.planning_unit else "" }}',
+  };
+  try {
+    const resp = await fetch('/api/employees/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.success) { location.reload(); }
+    else { showError('basicError', data.error); }
+  } catch(err) { showError('basicError', 'Network error: ' + err.message); }
+  return false;
+}
+
+// ── Assignment Modal ──
+function openAssignModal(type) {
+  document.getElementById('assign_type').value = type;
+  document.getElementById('assignError').style.display = 'none';
+  const priorityGrp = document.getElementById('assign_priority_group');
+  const refDateGrp = document.getElementById('assign_ref_date_group');
+  const fromGrp = document.getElementById('assign_from_group');
+  const toGrp = document.getElementById('assign_to_group');
+
+  // Reset
+  document.getElementById('assign_priority').value = 1;
+  document.getElementById('assign_ref_date').value = '';
+  document.getElementById('assign_from').value = '';
+  document.getElementById('assign_to').value = '';
+
+  const titles = {
+    planning_unit: 'Add Planning Unit',
+    contract: 'Add Contract',
+    work_time_pattern: 'Add Work Time Pattern',
+    selection: 'Add to Selection',
+  };
+  document.getElementById('assignModalTitle').textContent = titles[type] || 'Add Assignment';
+
+  // Show/hide extra fields
+  priorityGrp.style.display = type === 'planning_unit' ? '' : 'none';
+  refDateGrp.style.display = type === 'work_time_pattern' ? '' : 'none';
+  // Selection has no validity
+  const hasValidity = type !== 'selection';
+  fromGrp.parentElement.style.display = hasValidity ? '' : 'none';
+
+  // Populate dropdown
+  const endpoints = {
+    planning_unit: '/api/planning-units',
+    contract: '/people/api/profile/contracts-list',
+    work_time_pattern: '/people/api/profile/wtp-list',
+    selection: '/people/api/profile/selections-list',
+  };
+  const sel = document.getElementById('assign_item_id');
+  sel.innerHTML = '<option value="">Loading…</option>';
+
+  fetch(endpoints[type])
+    .then(r => r.json())
+    .then(data => {
+      const items = data.items || data.units || [];
+      sel.innerHTML = '<option value="">— Select —</option>';
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(() => { sel.innerHTML = '<option value="">Error loading</option>'; });
+
+  document.getElementById('assignModal').style.display = '';
+}
+
+function closeAssignModal() { document.getElementById('assignModal').style.display = 'none'; }
+
+async function saveAssignment(e) {
+  e.preventDefault();
+  const type = document.getElementById('assign_type').value;
+  const body = {
+    type: type,
+    employee_id: EMP_ID,
+    item_id: parseInt(document.getElementById('assign_item_id').value),
+    priority: parseInt(document.getElementById('assign_priority').value) || 1,
+    reference_date: document.getElementById('assign_ref_date').value || null,
+    valid_from: document.getElementById('assign_from').value || null,
+    valid_to: document.getElementById('assign_to').value || null,
+  };
+  if (!body.item_id) { showError('assignError', 'Please select an item.'); return false; }
+
+  try {
+    const resp = await fetch('/people/api/profile/assign', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.success) { location.reload(); }
+    else { showError('assignError', data.error); }
+  } catch(err) { showError('assignError', 'Network error: ' + err.message); }
+  return false;
+}
+
+async function removeAssignment(type, assignmentId) {
+  if (!confirm('Remove this assignment?')) return;
+  try {
+    const resp = await fetch('/people/api/profile/unassign', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: type, assignment_id: assignmentId }),
+    });
+    const data = await resp.json();
+    if (data.success) { location.reload(); }
+    else { alert(data.error || 'Error removing assignment.'); }
+  } catch(err) { alert('Network error: ' + err.message); }
+}
+
+// ── Availability Modal ──
+function openAvailModal() {
+  // Pre-fill checkboxes from current data
+  {% for d in range(7) %}
+  {% set av = avail_map.get(d) %}
+  document.getElementById('avail_on_{{ d }}').checked = {{ 'true' if not av or av.is_available else 'false' }};
+  {% endfor %}
+  document.getElementById('availEditModal').style.display = '';
+}
+function closeAvailModal() { document.getElementById('availEditModal').style.display = 'none'; }
+
+async function saveAvailability(e) {
+  e.preventDefault();
+  const days = [];
+  for (let d = 0; d < 7; d++) {
+    days.push({
+      day_of_week: d,
+      is_available: document.getElementById('avail_on_' + d).checked,
+      earliest_start: document.getElementById('avail_start_' + d).value || null,
+      latest_end: document.getElementById('avail_end_' + d).value || null,
+    });
+  }
+  try {
+    const resp = await fetch('/people/api/profile/availability', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ employee_id: EMP_ID, days: days }),
+    });
+    const data = await resp.json();
+    if (data.success) { location.reload(); }
+    else { showError('availError', data.error); }
+  } catch(err) { showError('availError', 'Network error: ' + err.message); }
+  return false;
+}
+
+function showError(elemId, msg) {
+  const el = document.getElementById(elemId);
+  el.textContent = msg;
+  el.style.display = '';
+}
+</script>
+{% endblock %}

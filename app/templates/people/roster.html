@@ -247,7 +247,9 @@
             data-lang="{{ emp['Languages']|default('English') }}"
             data-contract="{{ emp['Contract Type']|default('Full-Time') }}"
             data-db-id="{{ emp['_db_id']|default('') }}">
-          <td style="font-weight:600;cursor:pointer;color:var(--brand-accent)" onclick='editEmp({{ emp | tojson }})' title="Click to edit">{{ full_name }}</td>
+          <td style="font-weight:600;">
+            <a href="/people/{{ emp['_db_id'] }}/profile" style="color:var(--brand-accent); text-decoration:none;" title="View profile">{{ full_name }}</a>
+          </td>
           <td>
             {% set st = emp['Status']|default('Active')|lower|trim %}
             {% if st in ('active', '') %}
@@ -771,8 +773,10 @@ function updateRowInPlace(body, savedId) {
   row.dataset.dbId = savedId || dbId || '';
 
   // Update cells
-  row.cells[0].innerHTML = `<span style="font-weight:600;cursor:pointer;color:var(--brand-accent)" title="Click to edit">${fullName}</span>`;
-  row.cells[0].style.cursor = 'pointer';
+  const dbIdVal = savedId || dbId || '';
+  row.cells[0].innerHTML = dbIdVal
+    ? `<a href="/people/${dbIdVal}/profile" style="font-weight:600;color:var(--brand-accent);text-decoration:none;" title="View profile">${fullName}</a>`
+    : `<span style="font-weight:600;">${fullName}</span>`;
   // Status badge
   const st = (body.status || 'Active').toLowerCase().trim();
   const badges = {

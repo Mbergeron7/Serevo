@@ -13,7 +13,10 @@ from zoneinfo import ZoneInfo
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, EmployeeAvailability, Schedule, Contract
+from app.models import (db, EmployeeAvailability, Schedule, Contract,
+                        Employee, EmployeePlanningUnit, EmployeeWorkTimePattern,
+                        EmployeeContract, Selection, SelectionMember,
+                        SkillMapping, PlanningUnit, WorkTimePatternModel)
 
 log = logging.getLogger("serevo.people")
 
@@ -792,3 +795,191 @@ def generate_rotation_schedules():
         "warnings": warnings,
         "message": msg,
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE PROFILE PAGE
+# ═══════════════════════════════════════════════════════════════
+
+@people_bp.route("/<int:emp_id>/profile")
+@login_required
+def employee_profile(emp_id):
+    emp = Employee.query.get_or_404(emp_id)
+    user = get_current_user()
+
+    skill_mappings = SkillMapping.query.filter_by(employee_id=emp.id).all()
+    contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()
+    selection_memberships = SelectionMember.query.filter_by(employee_id=emp.id).all()
+    pu_assignments = EmployeePlanningUnit.query.filter_by(employee_id=emp.id).order_by(
+        EmployeePlanningUnit.priority).all()
+    wtp_assignments = EmployeeWorkTimePattern.query.filter_by(employee_id=emp.id).all()
+
+    # Build availability map keyed by day_of_week (0-6)
+    avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
+    avail_map = {a.day_of_week: a for a in avail_entries}
+
+    return render_template("people/profile.html",
+        user=user,
+        emp=emp,
+        skill_mappings=skill_mappings,
+        contract_assignments=contract_assignments,
+        selection_memberships=selection_memberships,
+        pu_assignments=pu_assignments,
+        wtp_assignments=wtp_assignments,
+        avail_map=avail_map,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# PROFILE API ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+@people_bp.route("/api/profile/contracts-list")
+@login_required
+def profile_contracts_list():
+    items = Contract.query.filter_by(is_active=True).order_by(Contract.name).all()
+    return jsonify({"items": [{"id": c.id, "name": c.name} for c in items]})
+
+
+@people_bp.route("/api/profile/wtp-list")
+@login_required
+def profile_wtp_list():
+    items = WorkTimePatternModel.query.order_by(WorkTimePatternModel.name).all()
+    return jsonify({"items": [{"id": w.id, "name": w.name} for w in items]})
+
+
+@people_bp.route("/api/profile/selections-list")
+@login_required
+def profile_selections_list():
+    items = Selection.query.filter_by(is_active=True).order_by(Selection.name).all()
+    return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
+
+
+@people_bp.route("/api/profile/assign", methods=["POST"])
+@login_required
+def profile_assign():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    assign_type = data.get("type")
+    emp_id = data.get("employee_id")
+    item_id = data.get("item_id")
+
+    if not emp_id or not item_id:
+        return jsonify({"success": False, "error": "Missing employee or item ID."})
+
+    valid_from = _dt.datetime.strptime(data["valid_from"], "%Y-%m-%d").date() if data.get("valid_from") else None
+    valid_to = _dt.datetime.strptime(data["valid_to"], "%Y-%m-%d").date() if data.get("valid_to") else None
+
+    try:
+        if assign_type == "planning_unit":
+            obj = EmployeePlanningUnit(
+                employee_id=emp_id, planning_unit_id=item_id,
+                priority=int(data.get("priority", 1)),
+                valid_from=valid_from, valid_to=valid_to,
+            )
+            db.session.add(obj)
+        elif assign_type == "contract":
+            obj = EmployeeContract(
+                employee_id=emp_id, contract_id=item_id,
+                valid_from=valid_from, valid_to=valid_to,
+            )
+            db.session.add(obj)
+        elif assign_type == "work_time_pattern":
+            ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
+            obj = EmployeeWorkTimePattern(
+                employee_id=emp_id, work_time_pattern_model_id=item_id,
+                reference_date=ref_date,
+                valid_from=valid_from, valid_to=valid_to,
+            )
+            db.session.add(obj)
+        elif assign_type == "selection":
+            obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
+            db.session.add(obj)
+        else:
+            return jsonify({"success": False, "error": f"Unknown assignment type: {assign_type}"})
+
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        err = str(e)
+        if "uq_emp_pu" in err or "uq_emp_wtpm" in err or "uq_sel_emp" in err:
+            return jsonify({"success": False, "error": "This assignment already exists."})
+        return jsonify({"success": False, "error": err})
+
+
+@people_bp.route("/api/profile/unassign", methods=["POST"])
+@login_required
+def profile_unassign():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    assign_type = data.get("type")
+    assign_id = data.get("assignment_id")
+
+    if not assign_id:
+        return jsonify({"success": False, "error": "Missing assignment ID."})
+
+    model_map = {
+        "planning_unit": EmployeePlanningUnit,
+        "contract": EmployeeContract,
+        "work_time_pattern": EmployeeWorkTimePattern,
+        "selection": SelectionMember,
+    }
+    model = model_map.get(assign_type)
+    if not model:
+        return jsonify({"success": False, "error": f"Unknown type: {assign_type}"})
+
+    obj = model.query.get(assign_id)
+    if not obj:
+        return jsonify({"success": False, "error": "Assignment not found."})
+
+    db.session.delete(obj)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+@people_bp.route("/api/profile/availability", methods=["POST"])
+@login_required
+def profile_availability():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    emp_id = data.get("employee_id")
+    days = data.get("days", [])
+
+    if not emp_id:
+        return jsonify({"success": False, "error": "Missing employee ID."})
+
+    try:
+        for day in days:
+            dow = day["day_of_week"]
+            existing = EmployeeAvailability.query.filter_by(
+                employee_id=emp_id, day_of_week=dow).first()
+
+            earliest = _dt.datetime.strptime(day["earliest_start"], "%H:%M").time() if day.get("earliest_start") else None
+            latest = _dt.datetime.strptime(day["latest_end"], "%H:%M").time() if day.get("latest_end") else None
+
+            if existing:
+                existing.is_available = day.get("is_available", True)
+                existing.earliest_start = earliest
+                existing.latest_end = latest
+            else:
+                obj = EmployeeAvailability(
+                    employee_id=emp_id,
+                    day_of_week=dow,
+                    is_available=day.get("is_available", True),
+                    earliest_start=earliest,
+                    latest_end=latest,
+                )
+                db.session.add(obj)
+
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)})
