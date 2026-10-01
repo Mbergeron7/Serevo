@@ -108,6 +108,7 @@ class Employee(db.Model):
             "All Skills": self.all_skills or "",
             "Languages": self.languages or "English",
             "Contract Type": self.contract_type or "Full-Time",
+            "contract_id": self.contract_id,
             "Weekly Hours": self.weekly_hours or 40.0,
             "Days Per Week": self.days_per_week or 5,
             "Hours Per Day": self.hours_per_day or 8.0,

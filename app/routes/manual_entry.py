@@ -143,6 +143,8 @@ def save_employee():
         emp.end_date = _parse_date(data.get("end_date"))
         emp.languages = (data.get("languages") or "English").strip()
         emp.contract_type = (data.get("contract_type") or "Full-Time").strip()
+        cid = data.get("contract_id")
+        emp.contract_id = int(cid) if cid else None
         emp.weekly_hours = float(data.get("weekly_hours") or 42.5)
         emp.days_per_week = int(data.get("days_per_week") or 5)
         emp.hours_per_day = float(data.get("hours_per_day") or 8.5)

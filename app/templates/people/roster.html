@@ -373,6 +373,16 @@
       <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
       <h3 style="font-size:.9rem; font-weight:700; margin-bottom:.5rem; color:var(--text-muted);">Contract &amp; Schedule</h3>
 
+      <div class="form-group">
+        <label for="emp_contract_id">Contract Template</label>
+        <select id="emp_contract_id" onchange="applyContract()">
+          <option value="">— None (manual) —</option>
+          {% for c in contracts %}
+          <option value="{{ c.id }}" data-type="{{ c.contract_type }}" data-weekly="{{ c.weekly_hours }}" data-days="{{ c.days_per_week }}" data-daily-min="{{ c.daily_hours_min }}" data-daily-max="{{ c.daily_hours_max }}">{{ c.name }} ({{ c.weekly_hours }}h/wk)</option>
+          {% endfor %}
+        </select>
+      </div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
         <div class="form-group">
           <label for="emp_contract_type">Contract Type</label>
@@ -471,6 +481,20 @@ function updateHoursDefaults() {
   }
 }
 
+function applyContract() {
+  const sel = document.getElementById('emp_contract_id');
+  const opt = sel.options[sel.selectedIndex];
+  if (!sel.value) return;
+  const typeMap = {full_time:'Full-Time', part_time:'Part-Time', casual:'Part-Time', temp:'Full-Time'};
+  const t = opt.dataset.type || 'full_time';
+  document.getElementById('emp_contract_type').value = typeMap[t] || 'Full-Time';
+  document.getElementById('emp_weekly_hours').value = opt.dataset.weekly || 40;
+  document.getElementById('emp_days_per_week').value = opt.dataset.days || 5;
+  const dMin = parseFloat(opt.dataset.dailyMin || 0);
+  const dMax = parseFloat(opt.dataset.dailyMax || 8);
+  document.getElementById('emp_hours_per_day').value = dMax || 8;
+}
+
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
   const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
@@ -540,6 +564,7 @@ function openEmpModal(data) {
   const _skillsVal = data ? (data.all_skills || data['All Skills'] || '') : '';
   document.getElementById('emp_skills').value = _skillsVal;
   document.getElementById('emp_languages').value = data ? (data.languages || data['Languages'] || 'English') : 'English';
+  document.getElementById('emp_contract_id').value = data ? (data.contract_id || '') : '';
   document.getElementById('emp_contract_type').value = data ? (data.contract_type || data['Contract Type'] || 'Full-Time') : 'Full-Time';
   document.getElementById('emp_weekly_hours').value = data ? (data.weekly_hours || data['Weekly Hours'] || 42.5) : 42.5;
   document.getElementById('emp_days_per_week').value = data ? (data.days_per_week || data['Days Per Week'] || 5) : 5;
@@ -799,6 +824,7 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     team_lead: document.getElementById('emp_team_lead').value,
     all_skills: document.getElementById('emp_skills').value,
     languages: document.getElementById('emp_languages').value,
+    contract_id: document.getElementById('emp_contract_id').value || null,
     contract_type: document.getElementById('emp_contract_type').value,
     weekly_hours: document.getElementById('emp_weekly_hours').value,
     days_per_week: document.getElementById('emp_days_per_week').value,

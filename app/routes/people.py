@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify)
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, EmployeeAvailability, Schedule
+from app.models import db, EmployeeAvailability, Schedule, Contract
 
 log = logging.getLogger("serevo.people")
 
@@ -105,6 +105,8 @@ def roster():
         if lob:
             lobs.add(lob)
 
+    contracts = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+
     return render_template("people/roster.html",
         user=user,
         employees=employees,
@@ -118,6 +120,7 @@ def roster():
         lob_count=len(lobs),
         accom_count=len(accoms),
         pto_count=len(pto_list),
+        contracts=contracts,
     )
 
 
