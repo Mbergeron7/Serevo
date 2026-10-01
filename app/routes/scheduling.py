@@ -20,6 +20,47 @@ log = logging.getLogger("serevo.scheduling")
 scheduling_bp = Blueprint("scheduling", __name__, url_prefix="/scheduling")
 
 
+@scheduling_bp.route("/debug-lob/<lob>", methods=["GET"])
+@login_required
+def debug_lob(lob):
+    """Diagnostic: show what _get_employees_for_lob finds."""
+    from app.models import PlanningUnit
+    from app.scheduling.engine import _get_employees_for_lob
+
+    # Check planning unit
+    pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+
+    # Check employees with this planning_unit_id
+    db_emps = []
+    if pu:
+        emps = Employee.query.filter_by(planning_unit_id=pu.id).all()
+        db_emps = [{"name": e.full_name, "eid": e.employee_id, "status": e.status,
+                     "pu_id": e.planning_unit_id} for e in emps]
+
+    # Check what the engine finds
+    engine_emps = _get_employees_for_lob(lob)
+
+    # Check total employees and their planning_unit_ids
+    all_emps = Employee.query.all()
+    pu_dist = {}
+    for e in all_emps:
+        key = str(e.planning_unit_id)
+        if key not in pu_dist:
+            p = PlanningUnit.query.get(e.planning_unit_id) if e.planning_unit_id else None
+            pu_dist[key] = {"name": p.name if p else "NULL", "count": 0}
+        pu_dist[key]["count"] += 1
+
+    return jsonify({
+        "lob_query": lob,
+        "planning_unit": {"id": pu.id, "name": pu.name} if pu else None,
+        "db_employees_with_pu": len(db_emps),
+        "db_employees_sample": db_emps[:5],
+        "engine_found": len(engine_emps),
+        "engine_sample": engine_emps[:5],
+        "pu_distribution": pu_dist,
+    })
+
+
 def _get_sheet():
     """Return the capacity Google Sheet object, or None."""
     try:
