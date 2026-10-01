@@ -97,7 +97,9 @@ def _get_requirements_for_date(lob, date_obj, sheet=None):
     try:
         from app.data_source import get_source
         src = get_source()
+        log.info(f"[REQ-DEBUG] Looking up requirements for lob={lob!r} date={date_obj}")
         intervals, err = src.get_requirements(lob, date_obj)
+        log.info(f"[REQ-DEBUG] Got {len(intervals) if intervals else 0} intervals, err={err}")
         if not err and intervals:
             results = []
             for row in intervals:
