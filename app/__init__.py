@@ -53,6 +53,28 @@ def create_app():
                 db.create_all()
             except Exception:
                 db.session.rollback()
+        # Auto-add missing columns to existing tables
+        _ensure_columns = [
+            ("employees", "external_id_1", "VARCHAR(50)"),
+            ("employees", "external_id_2", "VARCHAR(50)"),
+            ("employees", "contract_id", "INTEGER"),
+        ]
+        for tbl, col, col_type in _ensure_columns:
+            try:
+                r = db.session.execute(db.text(
+                    "SELECT 1 FROM information_schema.columns "
+                    f"WHERE table_name='{tbl}' AND column_name='{col}'"
+                ))
+                if not r.fetchone():
+                    db.session.execute(db.text(
+                        f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}"
+                    ))
+                    db.session.commit()
+                    log.info(f"Added column {tbl}.{col}")
+            except Exception as e:
+                db.session.rollback()
+                log.warning(f"Could not add {tbl}.{col}: {e}")
+
         # Ensure is_demo column exists on users table
         try:
             result = db.session.execute(db.text(
