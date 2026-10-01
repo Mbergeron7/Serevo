@@ -2479,7 +2479,7 @@ async function runOptimize() {
 
     // Update in-memory schedule data so the timeline refreshes
     changes.forEach(c => {
-      const shift = day.shifts.find(s => s.id === c.shift_id);
+      const shift = day.shifts.find(s => String(s.id) === String(c.shift_id));
       if (!shift || !shift.segments) return;
       const seg = shift.segments.find(sg =>
         sg.type === c.type && sg.start === c.old_start && sg.end === c.old_end

@@ -1152,6 +1152,7 @@ def mass_segment_suggest():
             while t + duration <= eff_end:
                 # Calculate worst-case surplus if we pull this person at time t
                 min_surplus = 9999
+                overlap_count = 0
                 m = t
                 while m < t + duration:
                     cov = cov_map.get(m)
@@ -1162,10 +1163,13 @@ def mass_segment_suggest():
                             if placed[0] <= m < placed[1]:
                                 surplus -= 1
                         min_surplus = min(min_surplus, surplus)
+                    for placed in already_placed:
+                        if placed[0] <= m < placed[1]:
+                            overlap_count += 1
                     m += interval
 
                 if min_surplus == 9999:
-                    min_surplus = 0  # no coverage data for this window
+                    min_surplus = -overlap_count  # stagger when no coverage data
 
                 if min_surplus > best_score:
                     best_score = min_surplus
@@ -1410,6 +1414,7 @@ def optimize_segments():
                     continue
 
                 min_surplus = 9999
+                overlap_count = 0
                 m = t
                 while m < t + duration:
                     cov = cov_map.get(m)
@@ -1419,9 +1424,14 @@ def optimize_segments():
                             if placed[0] <= m < placed[1]:
                                 surplus -= 1
                         min_surplus = min(min_surplus, surplus)
+                    # Count overlaps with already-placed segments even without coverage
+                    for placed in already_placed:
+                        if placed[0] <= m < placed[1]:
+                            overlap_count += 1
                     m += interval
                 if min_surplus == 9999:
-                    min_surplus = 0
+                    # No coverage data — use negative overlap count to spread breaks apart
+                    min_surplus = -overlap_count
                 if min_surplus > best_score:
                     best_score = min_surplus
                     best_slot = t
@@ -1435,12 +1445,16 @@ def optimize_segments():
             new_start_str = _mins_to_time(best_slot)
             new_end_str = _mins_to_time(best_slot + duration)
 
+            already_placed.append((best_slot, best_slot + duration))
+
+            # Skip no-op changes (same position)
+            if old_start == new_start_str and old_end == new_end_str:
+                continue
+
             # Update the segment in the DB
             import datetime as _dt
             seg.start_time = _dt.time(best_slot // 60, best_slot % 60)
             seg.end_time = _dt.time((best_slot + duration) // 60, (best_slot + duration) % 60)
-
-            already_placed.append((best_slot, best_slot + duration))
 
             emp = shift.employee
             changes.append({
