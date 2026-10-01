@@ -895,12 +895,13 @@ def employees_for_lob():
         return jsonify({"success": False, "error": str(e)})
 
 
-# ── Import schedules from PeopleWare ────────────────────────
-@scheduling_bp.route("/import/peopleware", methods=["POST"])
+# ── Import schedules from connected WFM system ───────────────
+@scheduling_bp.route("/import/wfm", methods=["POST"])
+@scheduling_bp.route("/import/peopleware", methods=["POST"])  # backwards compat
 @login_required
-def import_peopleware():
+def import_wfm():
     """POST JSON: {lob?, start_date, end_date}
-    Pulls schedules from the PeopleWare connection into Serevo for the range.
+    Pulls schedules from the connected WFM system into Serevo for the range.
     If lob is given, only that LOB's employees are pulled."""
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -935,7 +936,7 @@ def import_peopleware():
         return jsonify({"success": True, "created": created, "replaced": replaced,
                         "skipped": skipped, "message": msg})
     except Exception as e:
-        log.exception("PeopleWare schedule import error")
+        log.exception("WFM schedule import error")
         return jsonify({"success": False, "error": str(e)})
 
 

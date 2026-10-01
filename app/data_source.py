@@ -5,13 +5,13 @@ data_source.py  —  pluggable data layer for the WFM Portal
 Purpose
 -------
 The app originally read employees / planning units / requirements / forecast
-straight from PeopleWare. This module puts ONE seam in front of that so the same
-app can instead read the identical information from Google Sheets — which is what
-makes it deployable for any client (and safe for a demo).
+straight from an external WFM API. This module puts ONE seam in front of that so
+the same app can instead read the identical information from Google Sheets — which
+is what makes it deployable for any client (and safe for a demo).
 
 Two implementations sit behind one interface:
 
-    PeopleWareSource  -> the original behaviour (wraps capacity_planner)
+    APISource         -> reads from the connected WFM platform (wraps capacity_planner)
     SheetSource       -> reads the same shapes from the capacity Google Sheet
                          (the "EMPLOYEES", "REQUIREMENTS RAW", "FORECAST RAW"
                           tabs the app already uses as its cache)
@@ -19,7 +19,7 @@ Two implementations sit behind one interface:
 A single environment variable picks which is live:
 
     DATA_SOURCE=generic       (default)  -> SheetSource
-    DATA_SOURCE=peopleware               -> PeopleWareSource
+    DATA_SOURCE=api                      -> APISource
 
 IMPORTANT — return convention
 -----------------------------
@@ -138,9 +138,9 @@ def normalize_lob(name):
 
 
 # =====================================================================
-# PeopleWare — original behaviour, unchanged
+# API Source — reads from the connected WFM platform
 # =====================================================================
-class PeopleWareSource:
+class APISource:
     def get_employees(self):
         import capacity_planner
         return capacity_planner.fetch_employees()
@@ -362,8 +362,8 @@ def get_source():
     global _INSTANCE
     if _INSTANCE is None:
         mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
-        if mode == "peopleware":
-            _INSTANCE = PeopleWareSource()
+        if mode in ("api", "peopleware"):  # peopleware kept for backwards compat
+            _INSTANCE = APISource()
         elif mode == "postgres":
             _INSTANCE = PostgresSource()
         else:

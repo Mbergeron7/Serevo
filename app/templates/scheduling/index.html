@@ -440,7 +440,7 @@
     <button class="btn-action btn-load" onclick="loadSchedule()">
       Load Saved
     </button>
-    <button class="btn-action" id="btnImportPW" onclick="importFromPeopleWare()" title="Pull published schedules from the connected WFM system (Settings → API Connections) for this LOB and date range, then load them"
+    <button class="btn-action" id="btnImportPW" onclick="importFromWFM()" title="Pull published schedules from the connected WFM system (Settings → API Connections) for this LOB and date range, then load them"
       style="background:var(--surface); color:var(--text); border:1px solid var(--border);">
       Import from API
     </button>
@@ -997,9 +997,9 @@ function empDeselectAll() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// IMPORT FROM PEOPLEWARE
+// IMPORT FROM CONNECTED WFM SYSTEM
 // ═══════════════════════════════════════════════════════════
-function importFromPeopleWare() {
+function importFromWFM() {
   const lob = document.getElementById('cfgLOB').value;
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
@@ -1008,7 +1008,7 @@ function importFromPeopleWare() {
   const btn = document.getElementById('btnImportPW');
   btn.disabled = true;
   showLoading('Pulling schedules from the connected system… this can take a minute for a full month.');
-  fetch('/scheduling/import/peopleware', {
+  fetch('/scheduling/import/wfm', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lob, start_date: start, end_date: end}),
   }).then(r => r.json()).then(data => {

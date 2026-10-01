@@ -30,7 +30,7 @@ def _demo_guard():
 from app.routes._utils import get_sheet as _get_sheet
 
 
-# ── Main view (PeopleWare-style dashboard) ──────────────────
+# ── Main view (forecast dashboard) ───────────────────────────
 @forecasting_bp.route("/")
 @login_required
 def index():

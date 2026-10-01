@@ -155,7 +155,7 @@ def test_connection():
         return jsonify({"ok": False, "error": str(e)})
 
 
-# ── Refresh data from PeopleWare ───────────────────────────────
+# ── Refresh data from connected WFM system ─────────────────────
 @capacity_bp.route("/refresh", methods=["POST"])
 @login_required
 def refresh():

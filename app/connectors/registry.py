@@ -3,12 +3,12 @@ connectors/registry — maps provider names to connector classes
 ==============================================================
 """
 
-from app.connectors.peopleware import PeopleWareConnector
+from app.connectors.wfm_legacy import WFMLegacyConnector
 
 # Provider name (matches APIConnection.provider) → connector class
 REGISTRY = {
-    "peopleware": PeopleWareConnector,
-    "injixo": PeopleWareConnector,       # alias — same API surface
+    "wfm_legacy": WFMLegacyConnector,
+    "injixo": WFMLegacyConnector,         # backwards compat for existing connections
 }
 
 

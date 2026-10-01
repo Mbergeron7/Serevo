@@ -4,7 +4,7 @@ capacity/planning.py
 Capacity planning business logic for Serevo.
 
 Handles:
-  - PeopleWare API calls (forecast, requirements, employees)
+  - WFM platform API calls (forecast, requirements, employees)
   - Google Sheets caching (FORECAST RAW, REQUIREMENTS RAW, EMPLOYEES)
   - Capacity plan computation (monthly FTE, gap analysis)
 
@@ -23,11 +23,11 @@ from zoneinfo import ZoneInfo
 log = logging.getLogger("serevo.capacity")
 
 # ── API endpoints ────────────────────────────────────────────────
-API_NEW    = os.environ.get("PW_API_NEW",    "https://api.peopleware.com")
-API_LEGACY = os.environ.get("PW_API_LEGACY", "https://legacy-api.peopleware.com/v1")
+API_NEW    = os.environ.get("WFM_API_NEW",    os.environ.get("PW_API_NEW", "https://api.peopleware.com"))
+API_LEGACY = os.environ.get("WFM_API_LEGACY", os.environ.get("PW_API_LEGACY", "https://legacy-api.peopleware.com/v1"))
 
-PW_TOKEN      = os.environ.get("PW_API_TOKEN", "")
-PW_UTC_OFFSET = int(os.environ.get("PW_UTC_OFFSET", "-4"))
+WFM_TOKEN      = os.environ.get("WFM_API_TOKEN", os.environ.get("PW_API_TOKEN", ""))
+WFM_UTC_OFFSET = int(os.environ.get("WFM_UTC_OFFSET", os.environ.get("PW_UTC_OFFSET", "-4")))
 TIMEZONE      = os.environ.get("WFM_TZ", "America/Toronto")
 
 # ── Business hours (local) ───────────────────────────────────────
@@ -68,12 +68,15 @@ WORKLOADS = _load_workloads()
 # =========================================================
 
 def _connection_token():
-    """Token from the saved PeopleWare / Injixo API connection (Settings → API
-    Connections). Falls back to the PW_API_TOKEN environment variable."""
+    """Token from the saved WFM API connection (Settings → API Connections).
+    Falls back to the WFM_API_TOKEN environment variable."""
     try:
         import json as _json
         from app.models import APIConnection
-        conn = (APIConnection.query.filter_by(provider="injixo", is_active=True)
+        # Try wfm_legacy first, then injixo for backwards compat
+        conn = (APIConnection.query
+                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),
+                        APIConnection.is_active == True)
                 .order_by(APIConnection.updated_at.desc()).first())
         if conn and conn.credentials:
             creds = _json.loads(conn.credentials)
@@ -82,12 +85,12 @@ def _connection_token():
                 from app.routes.settings import _clean_token
                 return _clean_token(raw)
     except Exception as e:
-        log.debug(f"No saved PeopleWare connection: {e}")
+        log.debug(f"No saved WFM connection: {e}")
     return ""
 
 
-def _pw_headers():
-    token = _connection_token() or PW_TOKEN or os.environ.get("PW_API_TOKEN", "")
+def _wfm_headers():
+    token = _connection_token() or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type":  "application/json",
@@ -97,7 +100,7 @@ def _pw_headers():
 def _to_utc(local_dt, utc_offset=None):
     """Convert local datetime to UTC ISO string for API calls."""
     if utc_offset is None:
-        utc_offset = PW_UTC_OFFSET
+        utc_offset = WFM_UTC_OFFSET
     utc_dt = local_dt - datetime.timedelta(hours=utc_offset)
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -198,14 +201,14 @@ def test_connection():
     """Test both API endpoints. Returns dict with status."""
     token = _connection_token() or os.environ.get("PW_API_TOKEN", "")
     if not token:
-        return {"ok": False, "error": "No PeopleWare token — add a PeopleWare / Injixo connection in Settings → API Connections"}
+        return {"ok": False, "error": "No API token — add a WFM connection in Settings → API Connections"}
 
     results = {}
 
     # Test legacy API
     try:
         r = requests.get(f"{API_LEGACY}/employees",
-                         headers=_pw_headers(), timeout=8)
+                         headers=_wfm_headers(), timeout=8)
         results["legacy"] = {"status": r.status_code, "ok": r.status_code == 200}
     except Exception as e:
         results["legacy"] = {"status": 0, "ok": False, "error": str(e)}
@@ -218,7 +221,7 @@ def test_connection():
         wid = list(WORKLOADS.values())[0] if WORKLOADS else ""
         url = (f"{API_NEW}/workloads/{wid}/forecasts"
                f"?startTime={_to_utc(open_dt)}&endTime={_to_utc(close_dt)}")
-        r = requests.get(url, headers=_pw_headers(), timeout=8)
+        r = requests.get(url, headers=_wfm_headers(), timeout=8)
         results["new_api"] = {"status": r.status_code, "ok": r.status_code == 200}
     except Exception as e:
         results["new_api"] = {"status": 0, "ok": False, "error": str(e)}
@@ -231,7 +234,7 @@ def test_connection():
 def fetch_forecast_for_day(workload_name, workload_id, day_date, utc_offset=None):
     """Fetch forecast intervals for one workload for one day."""
     if utc_offset is None:
-        utc_offset = PW_UTC_OFFSET
+        utc_offset = WFM_UTC_OFFSET
 
     open_dt = _biz_open(day_date)
     close_dt = _biz_close(day_date)
@@ -239,7 +242,7 @@ def fetch_forecast_for_day(workload_name, workload_id, day_date, utc_offset=None
            f"?startTime={_to_utc(open_dt, utc_offset)}"
            f"&endTime={_to_utc(close_dt, utc_offset)}")
     try:
-        r = requests.get(url, headers=_pw_headers(), timeout=20)
+        r = requests.get(url, headers=_wfm_headers(), timeout=20)
         if r.status_code != 200:
             return []
         data = r.json().get("data", {})
@@ -272,7 +275,7 @@ def fetch_planning_units():
     """Fetch all planning units from legacy API."""
     try:
         r = requests.get(f"{API_LEGACY}/planning_units",
-                         headers=_pw_headers(), timeout=20)
+                         headers=_wfm_headers(), timeout=20)
         if r.status_code != 200:
             return []
         data = r.json()
@@ -287,7 +290,7 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
     date_str = day_date.strftime("%Y-%m-%d")
     url = f"{API_LEGACY}/planning_units/{planning_unit_id}/requirements/{date_str}"
     try:
-        r = requests.get(url, headers=_pw_headers(), timeout=20)
+        r = requests.get(url, headers=_wfm_headers(), timeout=20)
         if r.status_code != 200:
             return {}
         raw = r.json()
@@ -333,7 +336,7 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
 
 def _legacy_get(session, path, **kw):
     try:
-        r = session.get(f"{API_LEGACY}/{path}", headers=_pw_headers(), timeout=10, **kw)
+        r = session.get(f"{API_LEGACY}/{path}", headers=_wfm_headers(), timeout=10, **kw)
         if r.ok:
             try:
                 return r.json()
@@ -351,7 +354,7 @@ def _legacy_get(session, path, **kw):
 
 
 def fetch_employees(max_workers=4):
-    """PeopleWare roster via the legacy API.
+    """Employee roster via the legacy WFM API.
 
     Uses only bulk endpoints (employees, planning_units, employment_periods,
     skills) — NO per-employee API calls — so it finishes well within
@@ -439,7 +442,7 @@ def fetch_employees(max_workers=4):
             "latestSkillEnd": "",
             "personnelNumber": e.get("personnel_number", ""),
         })
-    log.info(f"PeopleWare roster: {len(result)} employees")
+    log.info(f"WFM roster: {len(result)} employees")
     return result
 
 
@@ -724,7 +727,7 @@ def compute_capacity_plan(forecast_ws, req_ws, emp_ws, year,
 
 
 def upsert_employees_to_db(employees):
-    """Write a PeopleWare roster into Serevo's Employee table.
+    """Write a WFM roster into Serevo's Employee table.
     Returns (created, updated)."""
     from app.models import db, Employee, PlanningUnit
     created = updated = 0
@@ -797,11 +800,11 @@ def upsert_employees_to_db(employees):
 
 
 # =========================================================
-# PEOPLEWARE SCHEDULE IMPORT
+# WFM SCHEDULE IMPORT
 # =========================================================
 
 def _segment_type_for(activity_name):
-    """Map a PeopleWare activity name onto a Serevo segment code.
+    """Map a WFM activity name onto a Serevo segment code.
     Exact/partial match against SegmentCode labels first, then keywords."""
     name = (activity_name or "").strip().lower()
     try:
@@ -823,7 +826,7 @@ def _segment_type_for(activity_name):
 
 
 def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8):
-    """Pull schedules from PeopleWare for a date range.
+    """Pull schedules from the connected WFM system for a date range.
     Returns list of {employee_id, date, start, end, hours, segments:[{type,start,end,duration_mins,notes}]}.
     Days with no schedule blocks are omitted."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -894,7 +897,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
                     out.append(r)
             except Exception as e:
                 log.warning(f"schedule fetch error: {e}")
-    log.info(f"PeopleWare schedules: {len(out)} shifts for {len(employees)} employees over {len(days)} days")
+    log.info(f"WFM schedules: {len(out)} shifts for {len(employees)} employees over {len(days)} days")
     return out
 
 

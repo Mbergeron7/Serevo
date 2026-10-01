@@ -1,20 +1,18 @@
 """
-connectors/peopleware.py — PeopleWare / Injixo API connector
+connectors/wfm_legacy.py — Legacy WFM platform API connector
 =============================================================
 
-Extracted from production Jupyter notebooks that run daily, pulling:
+Connector for WFM platforms that expose a dual-API surface:
+  - Legacy REST API (v1): employees, schedules, planning units, contracts, skills
+  - Modern REST API: forecasts (workload-based), people metadata
+
+Pulls:
   - Employee roster with planning units, contracts, skills, addresses
   - Forecast volumes (offered calls + AHT) per workload per interval
   - Schedules (shift blocks per employee per day)
   - Activity definitions
 
-PeopleWare has TWO API surfaces:
-  - Legacy API: https://legacy-api.peopleware.com/v1/...
-    Used for: employees, schedules, planning units, contracts, skills, addresses
-  - New API:   https://api.peopleware.com/...
-    Used for: forecasts (workload-based), people (title lookup)
-
-Both use the same Bearer token.
+Both API surfaces use the same Bearer token.
 """
 
 import logging
@@ -27,9 +25,10 @@ from urllib3.util.retry import Retry
 
 from app.connectors.base import BaseConnector
 
-log = logging.getLogger("serevo.connectors.peopleware")
+log = logging.getLogger("serevo.connectors.wfm_legacy")
 
 # ── Constants ────────────────────────────────────────────────────
+# Default API base URLs — overridden per-connection via base_url + credentials
 LEGACY_BASE = "https://legacy-api.peopleware.com/v1"
 NEW_BASE = "https://api.peopleware.com"
 MAX_WORKERS = 10
@@ -46,8 +45,8 @@ def _make_session():
     return session
 
 
-class PeopleWareConnector(BaseConnector):
-    display_name = "PeopleWare / Injixo"
+class WFMLegacyConnector(BaseConnector):
+    display_name = "WFM Platform (Legacy API)"
     supported_auth_types = ("bearer",)
     default_base_url = LEGACY_BASE
 
@@ -343,7 +342,7 @@ class PeopleWareConnector(BaseConnector):
 
     @staticmethod
     def _status_from_color(color):
-        """Derive employee status from PeopleWare's color coding."""
+        """Derive employee status from the platform's color coding."""
         color_str = str(color) if color is not None else ""
         if color_str == "16711680":
             return "LOA"
@@ -358,7 +357,7 @@ class PeopleWareConnector(BaseConnector):
         Fetch forecast data (offered calls + AHT) per 30-min interval
         for all configured workloads across the date range.
 
-        workload_ids: list of PeopleWare workload UUIDs.
+        workload_ids: list of workload UUIDs from the platform.
                       If None, uses workloads configured on the connection.
         """
         try:

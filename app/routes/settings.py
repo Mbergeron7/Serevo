@@ -50,8 +50,8 @@ PROVIDERS = {
         "auth_types": ["bearer", "oauth2"],
         "fields": ["base_url", "client_id", "client_secret"],
     },
-    "injixo": {
-        "label": "PeopleWare / Injixo",
+    "wfm_legacy": {
+        "label": "WFM Platform (Legacy API)",
         "auth_types": ["bearer", "api_key"],
         "fields": ["base_url", "api_key"],
     },
@@ -279,8 +279,8 @@ def save_connection():
 
 
 def _clean_token(raw):
-    """Strip whitespace/newlines from a stored token. PeopleWare tokens are
-    used exactly as issued (they look base64 but must NOT be decoded)."""
+    """Strip whitespace/newlines from a stored token. Some tokens look
+    base64-encoded but must be used as-is (not decoded)."""
     return (raw or "").strip().replace("\n", "").replace("\r", "")
 
 
