@@ -950,49 +950,67 @@ def import_wfm():
 @scheduling_bp.route("/import/wfm/debug", methods=["POST"])
 @login_required
 def import_wfm_debug():
-    """Test both the per-employee and bulk planning-unit schedule endpoints."""
+    """Probe multiple schedule-related endpoints on both legacy and new APIs."""
     try:
         import requests as _req
-        from app.capacity.planning import _wfm_headers, _legacy_get, API_LEGACY
+        from app.capacity.planning import _wfm_headers, API_LEGACY, API_NEW
         session = _req.Session()
         hdrs = _wfm_headers()
         results = {}
 
-        # 1. Check planning units
-        pu_data = _legacy_get(session, "planning_units") or {}
-        pu_list = pu_data.get("planning_units", []) if isinstance(pu_data, dict) else []
-        results["planning_units"] = [{"id": pu.get("planning_unit_id"), "name": pu.get("name")}
-                                     for pu in pu_list[:10]]
+        # Helper to probe a URL
+        def probe(url):
+            try:
+                r = session.get(url, headers=hdrs, timeout=12)
+                body = r.text[:600] if r.text and not r.text.strip().startswith("<") else f"(HTML {r.status_code})"
+                try:
+                    body = r.json()
+                except Exception:
+                    pass
+                return {"status": r.status_code, "body": body}
+            except Exception as ex:
+                return {"status": 0, "error": str(ex)}
 
-        # 2. Test bulk endpoint with first planning unit
-        if pu_list:
-            pu_id = pu_list[0].get("planning_unit_id")
-            url = f"{API_LEGACY}/planning_units/{pu_id}/schedules/2026-10-02"
-            r = session.get(url, headers=hdrs, timeout=15)
-            bulk_resp = r.json() if r.ok else r.text[:500]
-            sched_count = len(bulk_resp.get("schedules", [])) if isinstance(bulk_resp, dict) else 0
-            results["bulk_test"] = {"url": url, "status": r.status_code,
-                                    "schedules_count": sched_count,
-                                    "preview": str(bulk_resp)[:600]}
+        # Get first employee with a planning unit
+        emp_data = session.get(f"{API_LEGACY}/employees", headers=hdrs, timeout=12)
+        emps = emp_data.json().get("employees", []) if emp_data.ok else []
+        emp_with_pu = next((e for e in emps if e.get("planning_unit_id")), emps[0] if emps else {})
+        eid = str(emp_with_pu.get("employee_id", "1001"))
+        pu_id = str(emp_with_pu.get("planning_unit_id", "1002"))
+        results["test_employee"] = {"id": eid,
+            "name": f"{emp_with_pu.get('first_name','')} {emp_with_pu.get('last_name','')}".strip(),
+            "planning_unit_id": pu_id}
 
-        # 3. Test per-employee endpoint with first employee
-        base = _legacy_get(session, "employees") or {}
-        employees = base.get("employees", base) if isinstance(base, dict) else base
-        employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
-        if employees:
-            emp = employees[0]
-            eid = str(emp.get("employee_id"))
-            url2 = f"{API_LEGACY}/employees/{eid}/schedules/2026-10-02"
-            r2 = session.get(url2, headers=hdrs, timeout=15)
-            results["employee_test"] = {
-                "employee": {"id": eid, "name": f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()},
-                "url": url2, "status": r2.status_code,
-                "response": r2.json() if r2.ok else r2.text[:500],
-            }
+        today = "2026-10-01"
+
+        # Legacy API probes
+        results["legacy"] = {}
+        for label, path in [
+            ("employee_schedules_today", f"employees/{eid}/schedules/{today}"),
+            ("pu_schedules_today", f"planning_units/{pu_id}/schedules/{today}"),
+            ("plan_data_today", f"plan_data/{today}"),
+            ("plan_data_pu", f"planning_units/{pu_id}/plan_data/{today}"),
+            ("shift_sequences_emp", f"employees/{eid}/shift_sequences"),
+            ("planning_periods", "planning_periods"),
+            ("availabilities_emp", f"employees/{eid}/availabilities/{today}"),
+        ]:
+            results["legacy"][label] = probe(f"{API_LEGACY}/{path}")
+
+        # New API probes
+        results["new_api"] = {}
+        for label, path in [
+            ("scheduling_periods", "scheduling-periods"),
+            ("time_logs", f"time-logs?personIds={eid}&startDate={today}&endDate={today}"),
+            ("actual_activities", f"actual-activities?personIds={eid}&startDate={today}&endDate={today}"),
+            ("person_day_models", f"person-day-models/{eid}"),
+            ("shift_sequences", f"person-shift-sequences/{eid}"),
+        ]:
+            results["new_api"][label] = probe(f"{API_NEW}/{path}")
 
         return jsonify(results)
     except Exception as e:
-        return jsonify({"error": str(e)})
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()})
 
 
 # ── Helpers for manual shift entry ──────────────────────────
