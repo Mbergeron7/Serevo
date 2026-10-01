@@ -93,7 +93,7 @@ def _wfm_headers():
     token = _connection_token() or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
     return {
         "Authorization": f"Bearer {token}",
-        "Content-Type":  "application/json",
+        "Accept":        "application/json",
     }
 
 
@@ -343,7 +343,7 @@ def _legacy_get(session, path, **kw):
             except ValueError:
                 log.warning(f"legacy GET {path}: non-JSON response (status {r.status_code})")
                 return None
-        log.debug(f"legacy GET {path}: HTTP {r.status_code}")
+        log.warning(f"legacy GET {path}: HTTP {r.status_code}")
         return None
     except requests.exceptions.Timeout:
         log.warning(f"legacy GET {path}: timeout")
@@ -935,7 +935,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             api_empty += 1
         else:
             api_fail += 1
-        if diagnose and len(sample_raw) < 5 and schedules:
+        if diagnose and len(sample_raw) < 5:
             sample_raw.append({
                 "eid": eid, "day": day.isoformat(),
                 "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
