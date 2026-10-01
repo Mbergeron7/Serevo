@@ -50,6 +50,30 @@ def debug_lob(lob):
             pu_dist[key] = {"name": p.name if p else "NULL", "count": 0}
         pu_dist[key]["count"] += 1
 
+    # Check forecast and requirements data
+    from app.models import ForecastInterval, RequirementInterval
+    fc_count = 0
+    req_count = 0
+    fc_sample = []
+    req_sample = []
+    if pu:
+        fc_count = ForecastInterval.query.filter_by(planning_unit_id=pu.id).count()
+        req_count = RequirementInterval.query.filter_by(planning_unit_id=pu.id).count()
+        if fc_count > 0:
+            fc_rows = ForecastInterval.query.filter_by(planning_unit_id=pu.id)\
+                .order_by(ForecastInterval.timestamp.desc()).limit(5).all()
+            fc_sample = [{"ts": r.timestamp.isoformat(), "offered": r.offered,
+                          "aht": r.aht, "source": r.source} for r in fc_rows]
+        if req_count > 0:
+            req_rows = RequirementInterval.query.filter_by(planning_unit_id=pu.id)\
+                .order_by(RequirementInterval.timestamp.desc()).limit(5).all()
+            req_sample = [{"ts": r.timestamp.isoformat(), "agents": r.agents_required,
+                           "source": r.source} for r in req_rows]
+
+    # Total counts across all LOBs
+    total_fc = ForecastInterval.query.count()
+    total_req = RequirementInterval.query.count()
+
     return jsonify({
         "lob_query": lob,
         "planning_unit": {"id": pu.id, "name": pu.name} if pu else None,
@@ -58,6 +82,12 @@ def debug_lob(lob):
         "engine_found": len(engine_emps),
         "engine_sample": engine_emps[:5],
         "pu_distribution": pu_dist,
+        "forecast_intervals": fc_count,
+        "forecast_sample": fc_sample,
+        "requirement_intervals": req_count,
+        "requirement_sample": req_sample,
+        "total_forecast_all_lobs": total_fc,
+        "total_requirements_all_lobs": total_req,
     })
 
 
