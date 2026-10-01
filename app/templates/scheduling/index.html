@@ -1012,10 +1012,22 @@ function importFromWFM() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lob, start_date: start, end_date: end}),
   }).then(r => r.json()).then(data => {
+    if (!data.success && !data.poll) { btn.disabled = false; hideLoading(); showToast(data.error || 'Import failed', 'error'); return; }
+    if (data.poll) {
+      showLoading('Import running in the background — this may take a few minutes…');
+      const poll = setInterval(() => {
+        fetch('/scheduling/import/wfm/status').then(r=>r.json()).then(s => {
+          if (s.done) {
+            clearInterval(poll); btn.disabled = false; hideLoading();
+            if (s.success) { showToast(s.message, 'success'); loadSchedule(); }
+            else { showToast(s.message || 'No schedules found', 'error'); }
+          }
+        }).catch(()=>{});
+      }, 5000);
+      return;
+    }
     btn.disabled = false; hideLoading();
-    if (!data.success) { showToast(data.error || 'Import failed', 'error'); return; }
-    showToast(data.message, 'success');
-    loadSchedule();
+    showToast(data.message, 'success'); loadSchedule();
   }).catch(e => { btn.disabled = false; hideLoading(); showToast('Error: ' + e.message, 'error'); });
 }
 

@@ -916,29 +916,67 @@ def import_wfm():
             return jsonify({"success": False, "error": "Choose a range of up to 62 days"})
 
         from app.capacity import planning as cp
-        # Import ALL employees from the API regardless of LOB selection.
-        # The LOB filter applies when displaying, not when pulling data.
-        shifts, diag = cp.fetch_pw_schedules(start_date, end_date,
-                                                diagnose=True)
-        if not shifts:
-            detail = "The connected system returned no schedules."
-            if diag.get("employees_count", 0) == 0:
-                detail += " The employees endpoint returned 0 employees — check the API connection."
-            else:
-                detail += (f" Found {diag.get('employees_count', 0)} employee(s), checked "
-                           f"{diag.get('days', 0)} day(s) but no schedule blocks matched.")
-            return jsonify({"success": False, "error": detail, "diag": diag})
-        created, replaced, skipped = cp.upsert_pw_schedules(shifts)
-        msg = f"Imported {created} shift(s) from the connected system"
-        if replaced:
-            msg += f", replaced {replaced} existing"
-        if skipped:
-            msg += f", skipped {skipped} for employees not in Serevo (pull headcount first)"
-        return jsonify({"success": True, "created": created, "replaced": replaced,
-                        "skipped": skipped, "message": msg})
+        import threading
+
+        # Check if a background import is already running
+        if getattr(cp, '_import_running', False):
+            status = getattr(cp, '_import_status', {})
+            return jsonify({"success": False,
+                            "error": f"An import is already in progress. {status.get('message', '')}"})
+
+        # Run the import in a background thread to avoid Render's 30s timeout.
+        # ~450 employees × 7 days = ~3,150 API calls which takes several minutes.
+        def _bg_import(app, sd, ed):
+            with app.app_context():
+                try:
+                    cp._import_running = True
+                    cp._import_status = {"message": "Fetching schedules from API..."}
+                    shifts, diag = cp.fetch_pw_schedules(sd, ed, diagnose=True)
+                    if not shifts:
+                        cp._import_status = {
+                            "message": f"Completed — no schedules found. "
+                                       f"{diag.get('employees_count', 0)} employees, "
+                                       f"{diag.get('days', 0)} days checked.",
+                            "done": True, "success": False, "diag": diag,
+                        }
+                        return
+                    created, replaced, skipped = cp.upsert_pw_schedules(shifts)
+                    msg = f"Imported {created} shift(s)"
+                    if replaced:
+                        msg += f", replaced {replaced} existing"
+                    if skipped:
+                        msg += f", skipped {skipped} unknown employees"
+                    cp._import_status = {"message": msg, "done": True, "success": True,
+                                         "created": created, "replaced": replaced,
+                                         "skipped": skipped, "diag": diag}
+                except Exception as e:
+                    log.exception("Background WFM import failed")
+                    cp._import_status = {"message": f"Import failed: {e}",
+                                         "done": True, "success": False}
+                finally:
+                    cp._import_running = False
+
+        from flask import current_app
+        t = threading.Thread(target=_bg_import, args=(current_app._get_current_object(),
+                                                       start_date, end_date), daemon=True)
+        t.start()
+        return jsonify({"success": True,
+                        "message": "Schedule import started in the background. "
+                                   "This may take a few minutes — check back shortly.",
+                        "poll": True})
     except Exception as e:
         log.exception("WFM schedule import error")
         return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/import/wfm/status", methods=["GET"])
+@login_required
+def import_wfm_status():
+    """Poll for background import status."""
+    from app.capacity import planning as cp
+    running = getattr(cp, '_import_running', False)
+    status = getattr(cp, '_import_status', {})
+    return jsonify({"running": running, **status})
 
 
 # ── API schedule debug (temporary) ────────────────────────

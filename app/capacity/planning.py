@@ -906,6 +906,10 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
     if wanted_eids:
         employees = [e for e in employees if str(e.get("employee_id")) in wanted_eids]
 
+    # Filter to only active (non-deleted) employees with an employee_id
+    employees = [e for e in employees if e.get("employee_id") is not None]
+    log.info(f"WFM schedule fetch: {len(employees)} employees × {len(days)} days")
+
     if diagnose:
         diag["mode"] = "per_employee"
         diag["employees_count"] = len(employees)
@@ -914,23 +918,34 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
         sample_raw = []
 
     out = []
+    api_ok = 0
+    api_empty = 0
+    api_fail = 0
 
     def _one(emp, day):
+        nonlocal api_ok, api_empty, api_fail
         sess = requests.Session()
         eid = str(emp.get("employee_id"))
         # SINGULAR /schedule/ — confirmed working in original PW scripts
         data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
-        if diagnose and len(sample_raw) < 5:
+        schedules = data.get("schedules", []) if isinstance(data, dict) else []
+        if schedules:
+            api_ok += 1
+        elif data:
+            api_empty += 1
+        else:
+            api_fail += 1
+        if diagnose and len(sample_raw) < 5 and schedules:
             sample_raw.append({
                 "eid": eid, "day": day.isoformat(),
                 "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
-                "schedule_count": len(data.get("schedules", [])) if isinstance(data, dict) else 0,
+                "schedule_count": len(schedules),
                 "preview": str(data)[:400],
             })
-        blocks = _parse_blocks(data.get("schedules", []))
+        blocks = _parse_blocks(schedules)
         return _build_shift(eid, day, blocks)
 
-    actual_workers = min(max_workers, 4)
+    actual_workers = min(max_workers, 6)
     with ThreadPoolExecutor(max_workers=actual_workers) as ex:
         futs = [ex.submit(_one, e, day) for e in employees for day in days]
         for f in as_completed(futs):
@@ -940,6 +955,8 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
                     out.append(r)
             except Exception as e:
                 log.warning(f"schedule fetch error: {e}")
+
+    log.info(f"WFM schedule results: {api_ok} with data, {api_empty} empty, {api_fail} failed")
 
     if diagnose:
         diag["sample_raw_responses"] = sample_raw
