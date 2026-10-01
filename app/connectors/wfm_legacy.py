@@ -52,7 +52,11 @@ class WFMLegacyConnector(BaseConnector):
 
     def __init__(self, connection):
         super().__init__(connection)
-        self.token = self.creds.get("token", "")
+        # Token may be stored under different keys depending on how the
+        # connection was saved (bearer → "access_token"/"token", api_key → "api_key")
+        self.token = (self.creds.get("access_token")
+                      or self.creds.get("token")
+                      or self.creds.get("api_key", "")).strip()
         self._headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json",
@@ -74,8 +78,17 @@ class WFMLegacyConnector(BaseConnector):
                 params={"page[size]": 1},
             )
             if resp.ok:
-                return True, "OK"
-            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+                return True, "OK — connected to legacy API"
+            # Show a clean message, not raw HTML
+            detail = resp.text[:200] if resp.text and not resp.text.strip().startswith("<") else ""
+            msg = f"HTTP {resp.status_code}"
+            if resp.status_code == 401:
+                msg += " Unauthorized — check that the API token is correct"
+            elif resp.status_code == 403:
+                msg += " Forbidden — the token may lack permissions"
+            if detail:
+                msg += f": {detail}"
+            return False, msg
         except Exception as e:
             return False, str(e)
 
