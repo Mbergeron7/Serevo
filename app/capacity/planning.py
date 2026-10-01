@@ -926,6 +926,31 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             diag["first_5_eids"] = [str(e.get("employee_id")) for e in employees[:5]]
             # Also check if there's an 'id' field distinct from 'employee_id'
             diag["first_5_ids"] = [str(e.get("id", "N/A")) for e in employees[:5]]
+            diag["first_5_personnel"] = [str(e.get("personnel_number", "N/A")) for e in employees[:5]]
+            # Try with personnel_number instead to see if that works
+            pn = str(employees[0].get("personnel_number", ""))
+            if pn and pn != "N/A" and pn != "None":
+                pn_url = f"{API_LEGACY}/employees/{pn}/schedule/{days[0].isoformat()}"
+                try:
+                    pn_r = session.get(pn_url, headers=_wfm_headers(), timeout=25)
+                    diag["test_personnel_call"] = {
+                        "url": pn_url,
+                        "status": pn_r.status_code,
+                        "body_preview": pn_r.text[:500],
+                    }
+                except Exception as ex:
+                    diag["test_personnel_call"] = {"error": str(ex)}
+            # Also try today's date instead of tomorrow
+            today_url = f"{API_LEGACY}/employees/{test_eid}/schedule/{datetime.date.today().isoformat()}"
+            try:
+                today_r = session.get(today_url, headers=_wfm_headers(), timeout=25)
+                diag["test_today"] = {
+                    "url": today_url,
+                    "status": today_r.status_code,
+                    "body_preview": today_r.text[:500],
+                }
+            except Exception as ex:
+                diag["test_today"] = {"error": str(ex)}
         # Do one raw test call to see the actual HTTP status
         if employees and days:
             test_eid = str(employees[0].get("employee_id"))
