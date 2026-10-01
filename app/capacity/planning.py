@@ -336,7 +336,7 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
 
 def _legacy_get(session, path, **kw):
     try:
-        r = session.get(f"{API_LEGACY}/{path}", headers=_wfm_headers(), timeout=10, **kw)
+        r = session.get(f"{API_LEGACY}/{path}", headers=_wfm_headers(), timeout=25, **kw)
         if r.ok:
             try:
                 return r.json()

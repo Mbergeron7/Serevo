@@ -927,10 +927,13 @@ def import_wfm():
                                                 diagnose=True)
         if not shifts:
             detail = "The connected system returned no schedules."
-            if diag.get("employees_count", 0) == 0:
+            if diag.get("mode") == "bulk_planning_unit":
+                detail += (f" Queried {diag.get('planning_units_found', 0)} planning unit(s) × "
+                           f"{diag.get('days', 0)} day(s) ({diag.get('total_api_calls', 0)} API calls).")
+            elif diag.get("employees_count", 0) == 0:
                 detail += " The employees endpoint returned 0 employees — check the API connection."
             else:
-                detail += (f" Found {diag['employees_count']} employee(s), checked "
+                detail += (f" Found {diag.get('employees_count', 0)} employee(s), checked "
                            f"{diag.get('days', 0)} day(s) but no schedule blocks matched.")
             return jsonify({"success": False, "error": detail, "diag": diag})
         created, replaced, skipped = cp.upsert_pw_schedules(shifts)
