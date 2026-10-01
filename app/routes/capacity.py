@@ -47,7 +47,7 @@ def _get_worksheet(sheet, tab_name):
 
 
 # ── Control Panel ──────────────────────────────────────────────
-@capacity_bp.route("/")
+@capacity_bp.route("/panel")
 @login_required
 def panel():
     user = get_current_user()
@@ -504,6 +504,7 @@ def plan_view():
 
 
 # ── Capacity Summary (numeric) + Headcount ─────────────────────
+@capacity_bp.route("/")
 @capacity_bp.route("/summary")
 @login_required
 def summary_view():
