@@ -915,6 +915,27 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
         diag["employees_count"] = len(employees)
         diag["days"] = len(days)
         diag["total_api_calls"] = len(employees) * len(days)
+        # Capture token info for debugging
+        token_used = _connection_token() or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
+        diag["token_len"] = len(token_used)
+        diag["token_preview"] = f"{token_used[:4]}...{token_used[-4:]}" if len(token_used) > 8 else "(short)"
+        diag["api_base"] = API_LEGACY
+        # Do one raw test call to see the actual HTTP status
+        if employees and days:
+            test_eid = str(employees[0].get("employee_id"))
+            test_day = days[0].isoformat()
+            test_url = f"{API_LEGACY}/employees/{test_eid}/schedule/{test_day}"
+            try:
+                test_r = session.get(test_url, headers=_wfm_headers(), timeout=25)
+                diag["test_call"] = {
+                    "url": test_url,
+                    "status": test_r.status_code,
+                    "body_len": len(test_r.text),
+                    "body_preview": test_r.text[:500],
+                    "headers": dict(test_r.headers),
+                }
+            except Exception as ex:
+                diag["test_call"] = {"error": str(ex)}
         sample_raw = []
 
     out = []
