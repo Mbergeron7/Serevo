@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Planning Calendars — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Planning Calendars</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Mark holidays, special hours, and campaign days — assign calendars to planning units so scheduling accounts for them automatically.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <div style="display:flex;gap:8px;">
+    <button class="btn" onclick="openDayTypeModal()">+ Day Type</button>
+    <button class="btn btn-primary" onclick="openCalendarModal()">+ Calendar</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:280px 1fr;gap:1.5rem;align-items:start;">
+  <!-- Day Types panel -->
+  <div>
+    <h3 style="margin:0 0 8px;">Day Types</h3>
+    <p style="font-size:.85rem;color:var(--text-muted);margin:0 0 12px;">Reusable labels for special days (Holiday, Campaign, etc.)</p>
+    <table class="data-table" id="dt-table">
+      <thead><tr><th>Name</th><th>Color</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Calendars panel -->
+  <div>
+    <h3 style="margin:0 0 8px;">Calendars</h3>
+    <table class="data-table" id="cal-table">
+      <thead><tr><th>Name</th><th>Entries</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Calendar entry editor -->
+    <div id="calEditor" style="display:none;margin-top:1rem;border:1px solid var(--border);border-radius:10px;padding:16px;">
+      <h4 id="calEditorTitle" style="margin:0 0 12px;"></h4>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:end;">
+        <label style="flex:1;">Date<input id="ce_date" type="date" class="form-input"></label>
+        <label style="flex:1;">Day Type
+          <select id="ce_day_type" class="form-input"></select>
+        </label>
+        <button class="btn btn-primary" onclick="addEntry()">Add</button>
+      </div>
+      <table class="data-table" id="entry-table">
+        <thead><tr><th>Date</th><th>Day Type</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Day Type modal -->
+<dialog id="dtModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:400px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="dtModalTitle" style="margin:0 0 16px;">Add Day Type</h3>
+  <input type="hidden" id="dt_id" value="">
+  <div style="display:grid;gap:12px;">
+    <label>Name<input id="dt_name" class="form-input" required placeholder="e.g. Public Holiday, Campaign"></label>
+    <label>Color<input id="dt_color" type="color" value="#ef4444" style="height:36px;border:1px solid var(--border);border-radius:6px;"></label>
+    <label style="display:flex;align-items:center;gap:6px;"><input id="dt_is_holiday" type="checkbox"> Is a holiday (reduces target hours)</label>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <button type="button" class="btn" onclick="document.getElementById('dtModal').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" onclick="saveDayType()">Save</button>
+  </div>
+</dialog>
+
+<!-- Calendar modal -->
+<dialog id="calModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:400px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="calModalTitle" style="margin:0 0 16px;">Add Calendar</h3>
+  <input type="hidden" id="cal_id" value="">
+  <div style="display:grid;gap:12px;">
+    <label>Name<input id="cal_name" class="form-input" required placeholder="e.g. 2026 Ontario Holidays"></label>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <button type="button" class="btn" onclick="document.getElementById('calModal').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" onclick="saveCalendar()">Save</button>
+  </div>
+</dialog>
+
+<script>
+const DAY_TYPES = {{ day_types | tojson }};
+const CALENDARS = {{ calendars | tojson }};
+let activeCalId = null;
+let activeEntries = [];
+
+/* ── Day Types ── */
+function renderDayTypes() {
+  const tb = document.querySelector('#dt-table tbody');
+  tb.innerHTML = '';
+  DAY_TYPES.forEach(dt => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${dt.name}${dt.is_holiday ? ' 🏖' : ''}</td>
+      <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${dt.color};"></span></td>
+      <td><button class="btn btn-sm" onclick='editDayType(${JSON.stringify(dt)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteDayType(${dt.id})">×</button></td>`;
+    tb.appendChild(tr);
+  });
+  if (!DAY_TYPES.length) tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:1rem;">None yet</td></tr>';
+  // refresh dropdown
+  const sel = document.getElementById('ce_day_type');
+  sel.innerHTML = DAY_TYPES.map(dt => `<option value="${dt.id}">${dt.name}</option>`).join('');
+}
+
+function openDayTypeModal(dt) {
+  document.getElementById('dtModalTitle').textContent = dt ? 'Edit Day Type' : 'Add Day Type';
+  document.getElementById('dt_id').value = dt ? dt.id : '';
+  document.getElementById('dt_name').value = dt ? dt.name : '';
+  document.getElementById('dt_color').value = dt ? dt.color : '#ef4444';
+  document.getElementById('dt_is_holiday').checked = dt ? dt.is_holiday : false;
+  document.getElementById('dtModal').showModal();
+}
+function editDayType(dt) { openDayTypeModal(dt); }
+
+async function saveDayType() {
+  const body = {
+    id: document.getElementById('dt_id').value || null,
+    name: document.getElementById('dt_name').value,
+    color: document.getElementById('dt_color').value,
+    is_holiday: document.getElementById('dt_is_holiday').checked,
+  };
+  const res = await fetch('/settings/planning-calendars/day-types/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error||'Save failed');
+}
+
+async function deleteDayType(id) {
+  if (!confirm('Delete this day type?')) return;
+  const res = await fetch('/settings/planning-calendars/day-types/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error||'Delete failed');
+}
+
+/* ── Calendars ── */
+function renderCalendars() {
+  const tb = document.querySelector('#cal-table tbody');
+  tb.innerHTML = '';
+  CALENDARS.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600;cursor:pointer;color:var(--accent);" onclick="openCalEditor(${c.id})">${c.name}</td>
+      <td>${c.entry_count}</td>
+      <td><button class="btn btn-sm" onclick='editCalendar(${JSON.stringify(c)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteCalendar(${c.id})">Delete</button></td>`;
+    tb.appendChild(tr);
+  });
+  if (!CALENDARS.length) tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:1rem;">No calendars yet</td></tr>';
+}
+
+function openCalendarModal(c) {
+  document.getElementById('calModalTitle').textContent = c ? 'Edit Calendar' : 'Add Calendar';
+  document.getElementById('cal_id').value = c ? c.id : '';
+  document.getElementById('cal_name').value = c ? c.name : '';
+  document.getElementById('calModal').showModal();
+}
+function editCalendar(c) { openCalendarModal(c); }
+
+async function saveCalendar() {
+  const body = {
+    id: document.getElementById('cal_id').value || null,
+    name: document.getElementById('cal_name').value,
+  };
+  const res = await fetch('/settings/planning-calendars/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error||'Save failed');
+}
+
+async function deleteCalendar(id) {
+  if (!confirm('Delete this calendar and all its entries?')) return;
+  const res = await fetch('/settings/planning-calendars/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error||'Delete failed');
+}
+
+/* ── Calendar Entry Editor ── */
+async function openCalEditor(calId) {
+  activeCalId = calId;
+  const cal = CALENDARS.find(c => c.id === calId);
+  document.getElementById('calEditorTitle').textContent = cal.name;
+  document.getElementById('calEditor').style.display = '';
+  const res = await fetch(`/settings/planning-calendars/${calId}/entries`);
+  activeEntries = await res.json();
+  renderEntries();
+}
+
+function renderEntries() {
+  const tb = document.querySelector('#entry-table tbody');
+  tb.innerHTML = '';
+  activeEntries.forEach(e => {
+    const dt = DAY_TYPES.find(d => d.id === e.day_type_id);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${e.date}</td>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dt?dt.color:'#888'};margin-right:4px;"></span>${dt?dt.name:'?'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">×</button></td>`;
+    tb.appendChild(tr);
+  });
+  if (!activeEntries.length) tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No entries — add dates above.</td></tr>';
+}
+
+async function addEntry() {
+  const date = document.getElementById('ce_date').value;
+  const dtId = document.getElementById('ce_day_type').value;
+  if (!date || !dtId) { alert('Pick a date and day type'); return; }
+  const res = await fetch('/settings/planning-calendars/entries/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({calendar_id:activeCalId, date, day_type_id:dtId})});
+  const data = await res.json();
+  if (data.success) { openCalEditor(activeCalId); } else { alert(data.error||'Save failed'); }
+}
+
+async function removeEntry(id) {
+  const res = await fetch('/settings/planning-calendars/entries/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { openCalEditor(activeCalId); } else { alert(data.error||'Delete failed'); }
+}
+
+renderDayTypes();
+renderCalendars();
+</script>
+{% endblock %}

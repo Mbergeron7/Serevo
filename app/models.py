@@ -1474,3 +1474,123 @@ class WorkTimePatternModel(db.Model):
             "planning_unit": pu.name if pu else "All",
             "is_active": self.is_active,
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT SEQUENCES
+# ═══════════════════════════════════════════════════════════════
+
+class ShiftSequence(db.Model):
+    """A repeating pattern of day models spanning one or more weeks."""
+    __tablename__ = "shift_sequences"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(120), unique=True, nullable=False)
+    cycle_weeks = db.Column(db.Integer, default=1)
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    rows = db.relationship("ShiftSequenceRow", backref="shift_sequence",
+                           cascade="all, delete-orphan", lazy="joined",
+                           order_by="ShiftSequenceRow.position")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "cycle_weeks": self.cycle_weeks,
+            "is_active": self.is_active,
+            "row_count": len(self.rows),
+        }
+
+
+class ShiftSequenceRow(db.Model):
+    """One row within a shift sequence — a named pattern line
+    containing day-model assignments per day per week (stored as JSON)."""
+    __tablename__ = "shift_sequence_rows"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    shift_sequence_id = db.Column(db.Integer,
+                                  db.ForeignKey("shift_sequences.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    name              = db.Column(db.String(80), default="")
+    position          = db.Column(db.Integer, default=0)
+    pattern_json      = db.Column(db.Text, default="{}")
+    created_at        = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            "id": self.id,
+            "name": self.name,
+            "position": self.position,
+            "pattern": _json.loads(self.pattern_json) if self.pattern_json else {},
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING CALENDARS & DAY TYPES
+# ═══════════════════════════════════════════════════════════════
+
+class DayType(db.Model):
+    """Reusable label for special days — holidays, campaigns, etc."""
+    __tablename__ = "day_types"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(80), unique=True, nullable=False)
+    color      = db.Column(db.String(10), default="#ef4444")
+    is_holiday = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "color": self.color, "is_holiday": self.is_holiday,
+        }
+
+
+class PlanningCalendar(db.Model):
+    """A calendar of special days assigned to planning units."""
+    __tablename__ = "planning_calendars"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(120), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    entries = db.relationship("CalendarEntry", backref="calendar",
+                              cascade="all, delete-orphan", lazy="dynamic",
+                              order_by="CalendarEntry.date")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "entry_count": self.entries.count(),
+        }
+
+
+class CalendarEntry(db.Model):
+    """One date in a planning calendar marked with a day type."""
+    __tablename__ = "calendar_entries"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    calendar_id  = db.Column(db.Integer,
+                             db.ForeignKey("planning_calendars.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    day_type_id  = db.Column(db.Integer,
+                             db.ForeignKey("day_types.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    date         = db.Column(db.Date, nullable=False)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    day_type = db.relationship("DayType")
+
+    __table_args__ = (
+        db.UniqueConstraint("calendar_id", "date", name="uq_cal_date"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "calendar_id": self.calendar_id,
+            "day_type_id": self.day_type_id,
+            "date": self.date.isoformat() if self.date else "",
+        }

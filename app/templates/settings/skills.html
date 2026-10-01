@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Skills — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Skills</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define qualifications your people need — languages, product knowledge, channels. Assign skills to people and activities.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Skill</button>
+</div>
+
+<table class="data-table" id="main-table">
+  <thead>
+    <tr><th>Name</th><th>Description</th><th>Assigned People</th><th>Active</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="modalTitle" style="margin:0 0 16px;">Add Skill</h3>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="f_id" value="">
+    <div style="display:grid;gap:12px;">
+      <label>Name<input id="f_name" class="form-input" required placeholder="e.g. English, Billing, Chat"></label>
+      <label>Description<input id="f_description" class="form-input" placeholder="Optional details"></label>
+      <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const DATA = {{ items | tojson }};
+const tbody = document.querySelector('#main-table tbody');
+const dlg = document.getElementById('editModal');
+
+function render() {
+  tbody.innerHTML = '';
+  DATA.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600;">${r.name}</td>
+      <td>${r.description || '—'}</td>
+      <td>${r.mapping_count}</td>
+      <td>${r.is_active ? '✓' : '—'}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem;">No skills yet. Add one to get started.</td></tr>';
+}
+
+function openModal(item) {
+  document.getElementById('modalTitle').textContent = item ? 'Edit Skill' : 'Add Skill';
+  document.getElementById('f_id').value = item ? item.id : '';
+  document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_description').value = item ? (item.description || '') : '';
+  document.getElementById('f_is_active').checked = item ? item.is_active : true;
+  dlg.showModal();
+}
+
+function editItem(item) { openModal(item); }
+
+async function saveItem() {
+  const body = {
+    id: document.getElementById('f_id').value || null,
+    name: document.getElementById('f_name').value,
+    description: document.getElementById('f_description').value,
+    is_active: document.getElementById('f_is_active').checked,
+  };
+  const res = await fetch('/settings/skills/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this skill? People assigned to it will lose this skill mapping.')) return;
+  const res = await fetch('/settings/skills/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+}
+
+render();
+</script>
+{% endblock %}

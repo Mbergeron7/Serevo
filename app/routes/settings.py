@@ -1551,6 +1551,328 @@ def planning_units_delete():
 
 
 # ═══════════════════════════════════════════════════════════════
+# SKILLS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/skills")
+@admin_required
+def skills_page():
+    from app.models import SkillGroup, SkillMapping
+    groups = SkillGroup.query.order_by(SkillGroup.name).all()
+    items = []
+    for g in groups:
+        items.append({
+            "id": g.id, "name": g.name,
+            "description": g.description or "",
+            "is_active": g.is_active,
+            "mapping_count": SkillMapping.query.filter_by(skill_group_id=g.id).count(),
+        })
+    return render_template("settings/skills.html", items=items)
+
+
+@settings_bp.route("/skills/save", methods=["POST"])
+@admin_required
+def skills_save():
+    from app.models import SkillGroup, db
+    d = request.json or {}
+    try:
+        item = SkillGroup.query.get(int(d["id"])) if d.get("id") else SkillGroup()
+        item.name = d["name"]
+        item.description = d.get("description", "")
+        item.is_active = bool(d.get("is_active", True))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/skills/delete", methods=["POST"])
+@admin_required
+def skills_delete():
+    from app.models import SkillGroup, db
+    d = request.json or {}
+    try:
+        item = SkillGroup.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# SELECTIONS
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/selections")
+@admin_required
+def selections_page():
+    from app.models import Selection, SelectionMember
+    sels = Selection.query.order_by(Selection.name).all()
+    items = []
+    for s in sels:
+        items.append({
+            "id": s.id, "name": s.name,
+            "description": s.description or "",
+            "is_active": s.is_active,
+            "member_count": SelectionMember.query.filter_by(selection_id=s.id).count(),
+        })
+    return render_template("settings/selections.html", items=items)
+
+
+@settings_bp.route("/selections/save", methods=["POST"])
+@admin_required
+def selections_save():
+    from app.models import Selection, db
+    d = request.json or {}
+    try:
+        item = Selection.query.get(int(d["id"])) if d.get("id") else Selection()
+        item.name = d["name"]
+        item.description = d.get("description", "")
+        item.is_active = bool(d.get("is_active", True))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/selections/delete", methods=["POST"])
+@admin_required
+def selections_delete():
+    from app.models import Selection, db
+    d = request.json or {}
+    try:
+        item = Selection.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT SEQUENCES
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/shift-sequences")
+@admin_required
+def shift_sequences_page():
+    from app.models import ShiftSequence, DayModel
+    seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
+    items = [s.to_dict() for s in seqs]
+    dms = DayModel.query.filter_by(is_active=True).order_by(DayModel.name).all()
+    day_models = [{"id": dm.id, "name": dm.name} for dm in dms]
+    return render_template("settings/shift_sequences.html", items=items, day_models=day_models)
+
+
+@settings_bp.route("/shift-sequences/save", methods=["POST"])
+@admin_required
+def shift_sequences_save():
+    from app.models import ShiftSequence, db
+    d = request.json or {}
+    try:
+        item = ShiftSequence.query.get(int(d["id"])) if d.get("id") else ShiftSequence()
+        item.name = d["name"]
+        item.cycle_weeks = int(d.get("cycle_weeks", 1))
+        item.is_active = bool(d.get("is_active", True))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/shift-sequences/delete", methods=["POST"])
+@admin_required
+def shift_sequences_delete():
+    from app.models import ShiftSequence, db
+    d = request.json or {}
+    try:
+        item = ShiftSequence.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/shift-sequences/<int:seq_id>/rows")
+@admin_required
+def shift_sequence_rows(seq_id):
+    from app.models import ShiftSequenceRow
+    rows = ShiftSequenceRow.query.filter_by(shift_sequence_id=seq_id)\
+           .order_by(ShiftSequenceRow.position).all()
+    return jsonify([r.to_dict() for r in rows])
+
+
+@settings_bp.route("/shift-sequences/save-rows", methods=["POST"])
+@admin_required
+def shift_sequence_save_rows():
+    import json as _json
+    from app.models import ShiftSequenceRow, db
+    d = request.json or {}
+    seq_id = d.get("sequence_id")
+    rows_data = d.get("rows", [])
+    try:
+        # Delete existing rows and recreate
+        ShiftSequenceRow.query.filter_by(shift_sequence_id=seq_id).delete()
+        for i, rd in enumerate(rows_data):
+            row = ShiftSequenceRow(
+                shift_sequence_id=seq_id,
+                name=rd.get("name", ""),
+                position=i,
+                pattern_json=_json.dumps(rd.get("pattern", {})),
+            )
+            db.session.add(row)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING CALENDARS & DAY TYPES
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/planning-calendars")
+@admin_required
+def planning_calendars_page():
+    from app.models import DayType, PlanningCalendar
+    day_types = [dt.to_dict() for dt in DayType.query.order_by(DayType.name).all()]
+    calendars = [c.to_dict() for c in PlanningCalendar.query.order_by(PlanningCalendar.name).all()]
+    return render_template("settings/planning_calendars.html",
+                           day_types=day_types, calendars=calendars)
+
+
+@settings_bp.route("/planning-calendars/day-types/save", methods=["POST"])
+@admin_required
+def day_types_save():
+    from app.models import DayType, db
+    d = request.json or {}
+    try:
+        item = DayType.query.get(int(d["id"])) if d.get("id") else DayType()
+        item.name = d["name"]
+        item.color = d.get("color", "#ef4444")
+        item.is_holiday = bool(d.get("is_holiday", False))
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/day-types/delete", methods=["POST"])
+@admin_required
+def day_types_delete():
+    from app.models import DayType, db
+    d = request.json or {}
+    try:
+        item = DayType.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/save", methods=["POST"])
+@admin_required
+def planning_calendars_save():
+    from app.models import PlanningCalendar, db
+    d = request.json or {}
+    try:
+        item = PlanningCalendar.query.get(int(d["id"])) if d.get("id") else PlanningCalendar()
+        item.name = d["name"]
+        if not d.get("id"):
+            db.session.add(item)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/delete", methods=["POST"])
+@admin_required
+def planning_calendars_delete():
+    from app.models import PlanningCalendar, db
+    d = request.json or {}
+    try:
+        item = PlanningCalendar.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/<int:cal_id>/entries")
+@admin_required
+def calendar_entries_list(cal_id):
+    from app.models import CalendarEntry
+    entries = CalendarEntry.query.filter_by(calendar_id=cal_id)\
+              .order_by(CalendarEntry.date).all()
+    return jsonify([e.to_dict() for e in entries])
+
+
+@settings_bp.route("/planning-calendars/entries/save", methods=["POST"])
+@admin_required
+def calendar_entries_save():
+    from datetime import date as _date
+    from app.models import CalendarEntry, db
+    d = request.json or {}
+    try:
+        entry = CalendarEntry(
+            calendar_id=int(d["calendar_id"]),
+            day_type_id=int(d["day_type_id"]),
+            date=_date.fromisoformat(d["date"]),
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/entries/delete", methods=["POST"])
+@admin_required
+def calendar_entries_delete():
+    from app.models import CalendarEntry, db
+    d = request.json or {}
+    try:
+        item = CalendarEntry.query.get(int(d["id"]))
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
 # MASTER RESET
 # ═══════════════════════════════════════════════════════════════
 
@@ -1585,6 +1907,8 @@ def master_reset():
         WorkTimePatternModel,
         EmployeePlanningUnit, EmployeeWorkTimePattern,
         EmployeeContract, Selection, SelectionMember,
+        ShiftSequence, ShiftSequenceRow,
+        DayType, PlanningCalendar, CalendarEntry,
     )
 
     log.info("=== MASTER RESET initiated ===")
@@ -1628,6 +1952,12 @@ def master_reset():
         AlertConfig,
         LobMapping,
         Selection,
+        # Planning calendars & shift sequences
+        CalendarEntry,
+        ShiftSequenceRow,
+        PlanningCalendar,
+        DayType,
+        ShiftSequence,
         # Scheduling config tables
         WorkTimePatternModel,
         WeekTimePattern,

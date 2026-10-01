@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Work Time Pattern Models — {{ brand_name }}{% endblock %}
+{% block title %}Rotation Models — {{ brand_name }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>Work Time Pattern Models</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Group week time patterns for scheduling — assign to a planning unit so the scheduler knows which shifts to use.</p>
+  <h1>Rotation Models</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Combine week patterns into repeating rotation cycles — controls how shifts rotate for your people.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
@@ -35,7 +35,7 @@
       </label>
       <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <strong>Week Time Patterns</strong>
+          <strong>Week Patterns</strong>
           <button type="button" class="btn btn-sm" onclick="addPatternRow()">+ Add</button>
         </div>
         <p style="font-size:.8rem;color:var(--text-muted);margin:0 0 8px;">If multiple patterns, they cycle weekly (week 1 → pattern 1, week 2 → pattern 2, etc.)</p>

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Shift Sequences — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Shift Sequences</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define repeating shift patterns — assign day models to a weekly cycle that repeats over a set number of weeks.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Shift Sequence</button>
+</div>
+
+<table class="data-table" id="main-table">
+  <thead>
+    <tr><th>Name</th><th>Cycle Weeks</th><th>Rows</th><th>Active</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<!-- Create / Edit modal -->
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface);color:var(--text);">
+  <h3 id="modalTitle" style="margin:0 0 16px;">Add Shift Sequence</h3>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="f_id" value="">
+    <div style="display:grid;gap:12px;">
+      <label>Name<input id="f_name" class="form-input" required placeholder="e.g. 4-Week Rotation A"></label>
+      <label>Cycle Length (weeks)<input id="f_cycle_weeks" type="number" class="form-input" min="1" max="52" value="1"></label>
+      <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Row editor modal -->
+<dialog id="rowModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:700px;width:95vw;background:var(--surface);color:var(--text);">
+  <h3 id="rowModalTitle" style="margin:0 0 16px;">Edit Rows</h3>
+  <div id="rowEditor"></div>
+  <div style="margin-top:12px;">
+    <button class="btn btn-primary" onclick="addRow()">+ Add Row</button>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <button type="button" class="btn" onclick="document.getElementById('rowModal').close()">Close</button>
+    <button type="button" class="btn btn-primary" onclick="saveRows()">Save Rows</button>
+  </div>
+</dialog>
+
+<script>
+const DATA = {{ items | tojson }};
+const DAY_MODELS = {{ day_models | tojson }};
+const tbody = document.querySelector('#main-table tbody');
+const dlg = document.getElementById('editModal');
+let editingSeqId = null;
+let editingRows = [];
+
+function render() {
+  tbody.innerHTML = '';
+  DATA.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600;">${r.name}</td>
+      <td>${r.cycle_weeks}</td>
+      <td><button class="btn btn-sm" onclick="openRowEditor(${r.id})">${r.row_count} row${r.row_count!==1?'s':''}</button></td>
+      <td>${r.is_active ? '✓' : '—'}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem;">No shift sequences yet. Add one to get started.</td></tr>';
+}
+
+function openModal(item) {
+  document.getElementById('modalTitle').textContent = item ? 'Edit Shift Sequence' : 'Add Shift Sequence';
+  document.getElementById('f_id').value = item ? item.id : '';
+  document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_cycle_weeks').value = item ? item.cycle_weeks : 1;
+  document.getElementById('f_is_active').checked = item ? item.is_active : true;
+  dlg.showModal();
+}
+
+function editItem(item) { openModal(item); }
+
+async function saveItem() {
+  const body = {
+    id: document.getElementById('f_id').value || null,
+    name: document.getElementById('f_name').value,
+    cycle_weeks: parseInt(document.getElementById('f_cycle_weeks').value) || 1,
+    is_active: document.getElementById('f_is_active').checked,
+  };
+  const res = await fetch('/settings/shift-sequences/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this shift sequence?')) return;
+  const res = await fetch('/settings/shift-sequences/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+}
+
+async function openRowEditor(seqId) {
+  editingSeqId = seqId;
+  const seq = DATA.find(d => d.id === seqId);
+  document.getElementById('rowModalTitle').textContent = `Rows — ${seq.name}`;
+  const res = await fetch(`/settings/shift-sequences/${seqId}/rows`);
+  editingRows = await res.json();
+  renderRows();
+  document.getElementById('rowModal').showModal();
+}
+
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function renderRows() {
+  const el = document.getElementById('rowEditor');
+  if (!editingRows.length) { el.innerHTML = '<p style="color:var(--text-muted);">No rows yet. Add a row to define a shift pattern.</p>'; return; }
+  el.innerHTML = editingRows.map((row, ri) => {
+    const seq = DATA.find(d => d.id === editingSeqId);
+    const weeks = seq ? seq.cycle_weeks : 1;
+    let html = `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong>Row ${ri+1}: ${row.name||'Unnamed'}</strong>
+        <button class="btn btn-sm btn-danger" onclick="removeRow(${ri})">Remove</button>
+      </div>
+      <label style="margin-bottom:8px;display:block;">Row Name <input class="form-input" value="${row.name||''}" onchange="editingRows[${ri}].name=this.value" style="max-width:200px;"></label>
+      <table style="width:100%;font-size:.85rem;"><thead><tr><th>Week</th>`;
+    DAYS.forEach(d => html += `<th>${d}</th>`);
+    html += '</tr></thead><tbody>';
+    for (let w = 0; w < weeks; w++) {
+      html += `<tr><td style="font-weight:600;">W${w+1}</td>`;
+      DAYS.forEach((d, di) => {
+        const key = `w${w}_d${di}`;
+        const val = (row.pattern && row.pattern[key]) || '';
+        html += `<td><select style="width:100%;font-size:.8rem;padding:2px;" onchange="editingRows[${ri}].pattern['${key}']=this.value">
+          <option value="">—</option>`;
+        DAY_MODELS.forEach(dm => html += `<option value="${dm.id}" ${String(val)===String(dm.id)?'selected':''}>${dm.name}</option>`);
+        html += `</select></td>`;
+      });
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    return html;
+  }).join('');
+}
+
+function addRow() {
+  editingRows.push({name: '', pattern: {}});
+  renderRows();
+}
+
+function removeRow(idx) {
+  editingRows.splice(idx, 1);
+  renderRows();
+}
+
+async function saveRows() {
+  const body = { sequence_id: editingSeqId, rows: editingRows };
+  const res = await fetch('/settings/shift-sequences/save-rows', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+}
+
+render();
+</script>
+{% endblock %}
