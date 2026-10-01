@@ -950,40 +950,56 @@ def import_wfm():
 @scheduling_bp.route("/import/wfm/debug", methods=["POST"])
 @login_required
 def import_wfm_debug():
-    """Fetch raw schedule API response for one employee + one day."""
+    """Try multiple schedule API URL patterns to find the correct one."""
     try:
         import requests as _req
-        from app.capacity.planning import _legacy_get, _wfm_headers, API_LEGACY
+        from app.capacity.planning import _wfm_headers, API_LEGACY
         session = _req.Session()
+        hdrs = _wfm_headers()
 
         # Get first employee
-        base = _legacy_get(session, "employees") or {}
-        employees = base.get("employees", base) if isinstance(base, dict) else base
-        employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+        resp_emp = session.get(f"{API_LEGACY}/employees", headers=hdrs,
+                               timeout=15, params={"page[size]": 2})
+        emp_data = resp_emp.json() if resp_emp.ok else {}
+        employees = emp_data.get("employees", emp_data) if isinstance(emp_data, dict) else emp_data
+        employees = [e for e in employees if isinstance(e, dict)]
         if not employees:
-            return jsonify({"error": "No employees from API"})
+            return jsonify({"error": "No employees", "emp_status": resp_emp.status_code})
 
         emp = employees[0]
-        eid = str(emp.get("employee_id"))
+        eid = str(emp.get("employee_id") or emp.get("id", ""))
         emp_name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
-        day = "2026-10-02"
 
-        # Raw schedule fetch
-        url = f"{API_LEGACY}/employees/{eid}/schedule/{day}"
-        resp = session.get(url, headers=_wfm_headers(), timeout=15)
-        raw = resp.text[:2000]
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
+        # Try many URL patterns
+        patterns = [
+            f"employees/{eid}/schedule/2026-10-02",
+            f"employees/{eid}/schedules/2026-10-02",
+            f"employees/{eid}/schedules?date=2026-10-02",
+            f"schedules?employee_id={eid}&date=2026-10-02",
+            f"schedules?start_date=2026-10-02&end_date=2026-10-02",
+            f"schedules/{eid}/2026-10-02",
+            f"scheduling/schedules?employee_id={eid}&start=2026-10-02&end=2026-10-02",
+            "schedules",
+            "schedule",
+            "shifts",
+            f"shifts?employee_id={eid}&date=2026-10-02",
+        ]
+
+        results = []
+        for pat in patterns:
+            url = f"{API_LEGACY}/{pat}"
+            try:
+                r = session.get(url, headers=hdrs, timeout=8)
+                preview = r.text[:500] if r.status_code != 404 else "(404)"
+                results.append({"pattern": pat, "status": r.status_code,
+                                "preview": preview})
+            except Exception as ex:
+                results.append({"pattern": pat, "status": 0, "error": str(ex)})
 
         return jsonify({
-            "employee": {"id": eid, "name": emp_name},
-            "url": url,
-            "status_code": resp.status_code,
-            "raw_preview": raw,
-            "parsed": data,
+            "employee": {"id": eid, "name": emp_name, "keys": list(emp.keys())[:15]},
             "api_legacy_base": API_LEGACY,
+            "pattern_results": results,
         })
     except Exception as e:
         return jsonify({"error": str(e)})
