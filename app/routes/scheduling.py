@@ -916,14 +916,9 @@ def import_wfm():
             return jsonify({"success": False, "error": "Choose a range of up to 62 days"})
 
         from app.capacity import planning as cp
-        ids = None
-        if lob and lob != "All":
-            from app.scheduling.engine import _get_employees_for_lob
-            ids = [e["employee_id"] for e in _get_employees_for_lob(lob, _get_sheet())]
-            if not ids:
-                return jsonify({"success": False, "error": f"No employees found for {lob} — pull the headcount first"})
-
-        shifts, diag = cp.fetch_pw_schedules(start_date, end_date, employee_ext_ids=ids,
+        # Import ALL employees from the API regardless of LOB selection.
+        # The LOB filter applies when displaying, not when pulling data.
+        shifts, diag = cp.fetch_pw_schedules(start_date, end_date,
                                                 diagnose=True)
         if not shifts:
             detail = "The connected system returned no schedules."
