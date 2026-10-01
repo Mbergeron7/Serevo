@@ -1,0 +1,7 @@
+<nav style="display:flex;gap:16px;align-items:center;margin-bottom:18px;font-size:.88rem;flex-wrap:wrap;">
+  <a href="/" style="font-weight:600;">← Home</a>
+  <a href="/capacity/" style="font-weight:{% if request.path == '/capacity/' %}700{% else %}600{% endif %};">🛠 Control Panel</a>
+  <a href="/capacity/summary" style="font-weight:{% if '/summary' in request.path %}700{% else %}600{% endif %};">📊 Summary</a>
+  <a href="/capacity/plan" style="font-weight:{% if '/plan' in request.path %}700{% else %}600{% endif %};">📋 Capacity Plan</a>
+  <a href="/people/roster" style="font-weight:600;">👥 Headcount</a>
+</nav>
