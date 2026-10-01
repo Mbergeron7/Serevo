@@ -828,56 +828,41 @@ def _segment_type_for(activity_name):
 def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8,
                        diagnose=False):
     """Pull schedules from the connected WFM system for a date range.
-    Returns list of {employee_id, date, start, end, hours, segments:[{type,start,end,duration_mins,notes}]}.
+
+    Uses the bulk planning-unit endpoint when planning units are available
+    (one call per planning-unit per day) and falls back to per-employee calls
+    if no planning units are found.
+
+    Returns list of {employee_id, date, start, end, hours, segments:[…]}.
     Days with no schedule blocks are omitted.
-    If diagnose=True, returns (shifts, diag_dict) instead."""
+    If diagnose=True, returns (shifts, diag_dict) instead.
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     session = requests.Session()
     diag = {} if diagnose else None
 
+    # ── Activity name lookup ──────────────────────────────────────
     acts = _legacy_get(session, "activities") or {}
     activity_names = {}
     for a in acts.get("activities", []):
         if a.get("activity_id") is not None:
             activity_names[str(a.get("activity_id"))] = a.get("name", "")
 
-    base = _legacy_get(session, "employees") or {}
-    if diagnose:
-        diag["employees_raw_type"] = type(base).__name__
-        diag["employees_raw_keys"] = list(base.keys())[:10] if isinstance(base, dict) else f"list[{len(base)}]" if isinstance(base, list) else str(base)[:200]
-    employees = base.get("employees", base) if isinstance(base, dict) else base
-    employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
-    if diagnose:
-        diag["employees_count"] = len(employees)
-        if employees:
-            diag["sample_employee_keys"] = list(employees[0].keys())[:8]
-    if employee_ext_ids:
-        wanted = {str(i) for i in employee_ext_ids}
-        employees = [e for e in employees if str(e.get("employee_id")) in wanted]
-        if diagnose:
-            diag["employees_after_filter"] = len(employees)
-
+    # ── Date list ─────────────────────────────────────────────────
     days = []
     d = start_date
     while d <= end_date:
         days.append(d)
         d += datetime.timedelta(days=1)
-    if diagnose:
-        diag["days"] = len(days)
 
-    sample_raw = []  # capture a few raw schedule responses for diagnosis
+    # ── Employee filter set (if provided) ─────────────────────────
+    wanted_eids = {str(i) for i in employee_ext_ids} if employee_ext_ids else None
 
-    def _one(emp, day):
-        sess = requests.Session()
-        eid = str(emp.get("employee_id"))
-        data = _legacy_get(sess, f"employees/{eid}/schedules/{day.isoformat()}") or {}
-        # Capture first few raw responses for diagnosis
-        if diagnose and len(sample_raw) < 3 and data:
-            sample_raw.append({"eid": eid, "day": day.isoformat(),
-                               "keys": list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__,
-                               "preview": str(data)[:300]})
+    # ── Helper: parse schedule blocks for one employee-day ────────
+    def _parse_blocks(data_entries):
+        """Parse schedule_blocks from a list of schedule entries."""
         blocks = []
-        for entry in data.get("schedules", []):
+        for entry in data_entries:
             for blk in entry.get("schedule_blocks", []):
                 try:
                     st = datetime.datetime.fromisoformat(str(blk.get("time_start"))[:19])
@@ -886,8 +871,13 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
                     continue
                 if en <= st:
                     en += datetime.timedelta(days=1)
-                aname = activity_names.get(str(blk.get("activity_id")), str(blk.get("type") or ""))
+                aname = activity_names.get(str(blk.get("activity_id")),
+                                           str(blk.get("type") or ""))
                 blocks.append((st, en, aname))
+        return blocks
+
+    def _build_shift(eid, day, blocks):
+        """Build a shift dict from parsed blocks."""
         if not blocks:
             return None
         blocks.sort(key=lambda b: b[0])
@@ -908,30 +898,114 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             "segments": segs,
         }
 
-    out = []
-    # Limit concurrency to avoid overwhelming the API and Render timeout
-    actual_workers = min(max_workers, 4)
-    # If too many requests, limit to first 5 employees for diagnosis
-    total_requests = len(employees) * len(days)
-    if diagnose and total_requests > 100:
-        employees = employees[:5]
-        diag["limited_to_5_employees"] = True
-        diag["total_would_be"] = total_requests
+    # ── Try bulk planning-unit approach first ─────────────────────
+    pu_data = _legacy_get(session, "planning_units") or {}
+    pu_list = pu_data.get("planning_units", []) if isinstance(pu_data, dict) else []
+    pu_ids = [str(pu.get("planning_unit_id")) for pu in pu_list
+              if pu.get("planning_unit_id") is not None]
 
-    with ThreadPoolExecutor(max_workers=actual_workers) as ex:
-        futs = [ex.submit(_one, e, day) for e in employees for day in days]
-        for f in as_completed(futs):
-            try:
-                r = f.result()
-                if r:
-                    out.append(r)
-            except Exception as e:
-                log.warning(f"schedule fetch error: {e}")
-    log.info(f"WFM schedules: {len(out)} shifts for {len(employees)} employees over {len(days)} days")
+    if diagnose:
+        diag["planning_units_found"] = len(pu_ids)
+        diag["days"] = len(days)
+
+    out = []
+
+    if pu_ids:
+        # ── BULK MODE: one API call per planning-unit per day ─────
+        log.info(f"WFM bulk schedule fetch: {len(pu_ids)} planning units × {len(days)} days = {len(pu_ids) * len(days)} calls")
+        if diagnose:
+            diag["mode"] = "bulk_planning_unit"
+            diag["total_api_calls"] = len(pu_ids) * len(days)
+            sample_raw = []
+
+        def _bulk_one(pu_id, day):
+            sess = requests.Session()
+            data = _legacy_get(sess, f"planning_units/{pu_id}/schedules/{day.isoformat()}") or {}
+            results = []
+            schedules = data.get("schedules", [])
+            if diagnose and len(sample_raw) < 3 and schedules:
+                sample_raw.append({"pu_id": pu_id, "day": day.isoformat(),
+                                   "schedule_count": len(schedules),
+                                   "preview": str(data)[:400]})
+            # Each schedule entry should have an employee_id
+            by_employee = {}
+            for entry in schedules:
+                eid = str(entry.get("employee_id", ""))
+                if not eid:
+                    continue
+                if wanted_eids and eid not in wanted_eids:
+                    continue
+                by_employee.setdefault(eid, []).append(entry)
+            for eid, entries in by_employee.items():
+                blocks = _parse_blocks(entries)
+                shift = _build_shift(eid, day, blocks)
+                if shift:
+                    results.append(shift)
+            return results
+
+        actual_workers = min(max_workers, 4)
+        with ThreadPoolExecutor(max_workers=actual_workers) as ex:
+            futs = [ex.submit(_bulk_one, pu_id, day)
+                    for pu_id in pu_ids for day in days]
+            for f in as_completed(futs):
+                try:
+                    r = f.result()
+                    if r:
+                        out.extend(r)
+                except Exception as e:
+                    log.warning(f"bulk schedule fetch error: {e}")
+
+        if diagnose:
+            diag["sample_raw_responses"] = sample_raw
+
+    else:
+        # ── FALLBACK: per-employee calls ──────────────────────────
+        log.info("WFM: no planning units found, falling back to per-employee schedule fetch")
+        base = _legacy_get(session, "employees") or {}
+        employees = base.get("employees", base) if isinstance(base, dict) else base
+        employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+        if wanted_eids:
+            employees = [e for e in employees if str(e.get("employee_id")) in wanted_eids]
+
+        if diagnose:
+            diag["mode"] = "per_employee"
+            diag["employees_count"] = len(employees)
+            sample_raw = []
+            total_requests = len(employees) * len(days)
+            if total_requests > 100:
+                employees = employees[:5]
+                diag["limited_to_5_employees"] = True
+                diag["total_would_be"] = total_requests
+
+        def _one(emp, day):
+            sess = requests.Session()
+            eid = str(emp.get("employee_id"))
+            data = _legacy_get(sess, f"employees/{eid}/schedules/{day.isoformat()}") or {}
+            if diagnose and len(sample_raw) < 3 and data:
+                sample_raw.append({"eid": eid, "day": day.isoformat(),
+                                   "keys": list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__,
+                                   "preview": str(data)[:300]})
+            blocks = _parse_blocks(data.get("schedules", []))
+            return _build_shift(eid, day, blocks)
+
+        actual_workers = min(max_workers, 4)
+        with ThreadPoolExecutor(max_workers=actual_workers) as ex:
+            futs = [ex.submit(_one, e, day) for e in employees for day in days]
+            for f in as_completed(futs):
+                try:
+                    r = f.result()
+                    if r:
+                        out.append(r)
+                except Exception as e:
+                    log.warning(f"schedule fetch error: {e}")
+
+        if diagnose:
+            diag["sample_raw_responses"] = sample_raw
+
+    log.info(f"WFM schedules: {len(out)} shifts fetched")
 
     if diagnose:
         diag["shifts_found"] = len(out)
-        diag["sample_raw_responses"] = sample_raw
         return out, diag
     return out
 

@@ -950,33 +950,47 @@ def import_wfm():
 @scheduling_bp.route("/import/wfm/debug", methods=["POST"])
 @login_required
 def import_wfm_debug():
-    """Test the corrected schedule endpoint (schedules plural)."""
+    """Test both the per-employee and bulk planning-unit schedule endpoints."""
     try:
         import requests as _req
         from app.capacity.planning import _wfm_headers, _legacy_get, API_LEGACY
         session = _req.Session()
         hdrs = _wfm_headers()
+        results = {}
 
-        # Get first employee
+        # 1. Check planning units
+        pu_data = _legacy_get(session, "planning_units") or {}
+        pu_list = pu_data.get("planning_units", []) if isinstance(pu_data, dict) else []
+        results["planning_units"] = [{"id": pu.get("planning_unit_id"), "name": pu.get("name")}
+                                     for pu in pu_list[:10]]
+
+        # 2. Test bulk endpoint with first planning unit
+        if pu_list:
+            pu_id = pu_list[0].get("planning_unit_id")
+            url = f"{API_LEGACY}/planning_units/{pu_id}/schedules/2026-10-02"
+            r = session.get(url, headers=hdrs, timeout=15)
+            bulk_resp = r.json() if r.ok else r.text[:500]
+            sched_count = len(bulk_resp.get("schedules", [])) if isinstance(bulk_resp, dict) else 0
+            results["bulk_test"] = {"url": url, "status": r.status_code,
+                                    "schedules_count": sched_count,
+                                    "preview": str(bulk_resp)[:600]}
+
+        # 3. Test per-employee endpoint with first employee
         base = _legacy_get(session, "employees") or {}
         employees = base.get("employees", base) if isinstance(base, dict) else base
         employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
-        if not employees:
-            return jsonify({"error": "No employees"})
+        if employees:
+            emp = employees[0]
+            eid = str(emp.get("employee_id"))
+            url2 = f"{API_LEGACY}/employees/{eid}/schedules/2026-10-02"
+            r2 = session.get(url2, headers=hdrs, timeout=15)
+            results["employee_test"] = {
+                "employee": {"id": eid, "name": f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()},
+                "url": url2, "status": r2.status_code,
+                "response": r2.json() if r2.ok else r2.text[:500],
+            }
 
-        emp = employees[0]
-        eid = str(emp.get("employee_id"))
-        name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
-
-        # Test corrected endpoint: scheduleS (plural)
-        url = f"{API_LEGACY}/employees/{eid}/schedules/2026-10-02"
-        r = session.get(url, headers=hdrs, timeout=15)
-        return jsonify({
-            "employee": {"id": eid, "name": name},
-            "url": url,
-            "status": r.status_code,
-            "response": r.json() if r.ok else r.text[:500],
-        })
+        return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)})
 
