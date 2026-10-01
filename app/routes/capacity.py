@@ -493,10 +493,17 @@ def plan_view():
         shrinkage = float(request.args.get("shrinkage", 30)) / 100.0
         occupancy = float(request.args.get("occupancy", 85)) / 100.0
         answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
+        sel_lobs = [l for l in request.args.getlist("lobs") if l]
         plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
+        all_lobs = [p["lob"] for p in plan]
+        if sel_lobs:
+            plan = [p for p in plan if p["lob"] in sel_lobs]
         now_str = now.strftime("%Y-%m-%d %H:%M")
         return render_template("capacity/plan.html",
-            user=user, plan=plan, year=year, years=years, now=now_str)
+            user=user, plan=plan, year=year, years=years, now=now_str,
+            all_lobs=all_lobs, sel_lobs=sel_lobs,
+            shrinkage=round(shrinkage * 100), occupancy=round(occupancy * 100),
+            answer_rate=round(answer_rate * 100))
 
     except Exception as e:
         log.exception("Capacity plan view error")

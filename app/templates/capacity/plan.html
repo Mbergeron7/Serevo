@@ -216,11 +216,9 @@
             <a onclick="selectAllLobs(false)">Clear All</a>
           </div>
           <div id="lobCheckboxes">
-            {% if plan %}
-              {% for lob in plan %}
-                <label><input type="checkbox" value="{{ lob.lob }}" checked onchange="applyLobFilter()"> {{ lob.lob }}</label>
-              {% endfor %}
-            {% endif %}
+            {% for lob_name in all_lobs %}
+              <label><input type="checkbox" value="{{ lob_name }}" {{ 'checked' if not sel_lobs or lob_name in sel_lobs }} onchange="applyLobFilter()"> {{ lob_name }}</label>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -228,15 +226,15 @@
 
     <div class="ctrl-group">
       <label>Shrinkage %</label>
-      <input type="number" id="ctrlShrinkage" value="30" min="0" max="80" step="1">
+      <input type="number" id="ctrlShrinkage" value="{{ shrinkage|default(30) }}" min="0" max="80" step="1">
     </div>
     <div class="ctrl-group">
       <label>Occupancy %</label>
-      <input type="number" id="ctrlOccupancy" value="85" min="10" max="100" step="1">
+      <input type="number" id="ctrlOccupancy" value="{{ occupancy|default(85) }}" min="10" max="100" step="1">
     </div>
     <div class="ctrl-group">
       <label>Answer Rate %</label>
-      <input type="number" id="ctrlAnswerRate" value="92" min="10" max="100" step="1">
+      <input type="number" id="ctrlAnswerRate" value="{{ answer_rate|default(92) }}" min="10" max="100" step="1">
     </div>
 
     <button class="btn-apply" onclick="recalcPlan()">Apply</button>
@@ -464,6 +462,7 @@ function applyFteHeatmap() {
   });
 }
 applyFteHeatmap();
+applyLobFilter();
 
 // ── Recalc (placeholder — reloads with params) ─────
 function recalcPlan() {
@@ -471,7 +470,13 @@ function recalcPlan() {
   const shr = document.getElementById('ctrlShrinkage').value;
   const occ = document.getElementById('ctrlOccupancy').value;
   const ar = document.getElementById('ctrlAnswerRate').value;
-  location.href = `/capacity/plan?year=${year}&shrinkage=${shr}&occupancy=${occ}&answer_rate=${ar}`;
+  const checked = [...document.querySelectorAll('#lobCheckboxes input:checked')].map(cb => cb.value);
+  const all = document.querySelectorAll('#lobCheckboxes input').length;
+  let url = `/capacity/plan?year=${year}&shrinkage=${shr}&occupancy=${occ}&answer_rate=${ar}`;
+  if (checked.length < all) {
+    checked.forEach(l => url += `&lobs=${encodeURIComponent(l)}`);
+  }
+  location.href = url;
 }
 
 // ── Excel export ────────────────────────────────────
