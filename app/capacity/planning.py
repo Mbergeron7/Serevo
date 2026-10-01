@@ -910,109 +910,48 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
     employees = [e for e in employees if e.get("employee_id") is not None]
     log.info(f"WFM schedule fetch: {len(employees)} employees × {len(days)} days")
 
+    import time as _time
+
     if diagnose:
-        diag["mode"] = "per_employee"
+        diag["mode"] = "per_employee_sequential"
         diag["employees_count"] = len(employees)
         diag["days"] = len(days)
         diag["total_api_calls"] = len(employees) * len(days)
-        # Capture token info for debugging
-        token_used = _connection_token() or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
-        diag["token_len"] = len(token_used)
-        diag["token_preview"] = f"{token_used[:4]}...{token_used[-4:]}" if len(token_used) > 8 else "(short)"
-        diag["api_base"] = API_LEGACY
-        # Capture sample employee object keys and first few employee IDs
-        if employees:
-            diag["sample_emp_keys"] = list(employees[0].keys())[:20]
-            diag["first_5_eids"] = [str(e.get("employee_id")) for e in employees[:5]]
-            # Also check if there's an 'id' field distinct from 'employee_id'
-            diag["first_5_ids"] = [str(e.get("id", "N/A")) for e in employees[:5]]
-            diag["first_5_personnel"] = [str(e.get("personnel_number", "N/A")) for e in employees[:5]]
-            # Try with personnel_number instead to see if that works
-            pn = str(employees[0].get("personnel_number", ""))
-            if pn and pn != "N/A" and pn != "None":
-                pn_url = f"{API_LEGACY}/employees/{pn}/schedule/{days[0].isoformat()}"
-                try:
-                    pn_r = session.get(pn_url, headers=_wfm_headers(), timeout=25)
-                    diag["test_personnel_call"] = {
-                        "url": pn_url,
-                        "status": pn_r.status_code,
-                        "body_preview": pn_r.text[:500],
-                    }
-                except Exception as ex:
-                    diag["test_personnel_call"] = {"error": str(ex)}
-            # Try injixo domain instead of peopleware
-            eid0 = str(employees[0].get('employee_id'))
-            day0 = days[0].isoformat()
-            for alt_base in [
-                "https://legacy-api.injixo.com/v1",
-                "https://api.injixo.com/v1",
-            ]:
-                alt_url = f"{alt_base}/employees/{eid0}/schedule/{day0}"
-                try:
-                    alt_r = session.get(alt_url, headers=_wfm_headers(), timeout=25)
-                    diag[f"test_{alt_base.split('//')[1].split('/')[0]}"] = {
-                        "url": alt_url,
-                        "status": alt_r.status_code,
-                        "body_preview": alt_r.text[:500],
-                    }
-                except Exception as ex:
-                    diag[f"test_{alt_base.split('//')[1].split('/')[0]}"] = {"error": str(ex)}
-        # Do one raw test call to see the actual HTTP status
-        if employees and days:
-            test_eid = str(employees[0].get("employee_id"))
-            test_day = days[0].isoformat()
-            test_url = f"{API_LEGACY}/employees/{test_eid}/schedule/{test_day}"
-            try:
-                test_r = session.get(test_url, headers=_wfm_headers(), timeout=25)
-                diag["test_call"] = {
-                    "url": test_url,
-                    "status": test_r.status_code,
-                    "body_len": len(test_r.text),
-                    "body_preview": test_r.text[:500],
-                    "headers": dict(test_r.headers),
-                }
-            except Exception as ex:
-                diag["test_call"] = {"error": str(ex)}
         sample_raw = []
 
     out = []
     api_ok = 0
     api_empty = 0
     api_fail = 0
+    call_count = 0
 
-    def _one(emp, day):
-        nonlocal api_ok, api_empty, api_fail
-        sess = requests.Session()
+    # Use a SINGLE session (connection reuse) and sequential calls
+    # to avoid rate-limiting / 401 errors from the API.
+    # The original working notebooks use the same sequential approach.
+    for emp in employees:
         eid = str(emp.get("employee_id"))
-        # SINGULAR /schedule/ — confirmed working in original PW scripts
-        data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
-        schedules = data.get("schedules", []) if isinstance(data, dict) else []
-        if schedules:
-            api_ok += 1
-        elif data:
-            api_empty += 1
-        else:
-            api_fail += 1
-        if diagnose and len(sample_raw) < 5:
-            sample_raw.append({
-                "eid": eid, "day": day.isoformat(),
-                "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
-                "schedule_count": len(schedules),
-                "preview": str(data)[:400],
-            })
-        blocks = _parse_blocks(schedules)
-        return _build_shift(eid, day, blocks)
-
-    actual_workers = min(max_workers, 6)
-    with ThreadPoolExecutor(max_workers=actual_workers) as ex:
-        futs = [ex.submit(_one, e, day) for e in employees for day in days]
-        for f in as_completed(futs):
-            try:
-                r = f.result()
-                if r:
-                    out.append(r)
-            except Exception as e:
-                log.warning(f"schedule fetch error: {e}")
+        for day in days:
+            data = _legacy_get(session, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+            schedules = data.get("schedules", []) if isinstance(data, dict) else []
+            if schedules:
+                api_ok += 1
+            else:
+                api_fail += 1
+            call_count += 1
+            if diagnose and len(sample_raw) < 5 and call_count <= 10:
+                sample_raw.append({
+                    "eid": eid, "day": day.isoformat(),
+                    "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                    "schedule_count": len(schedules),
+                    "preview": str(data)[:400],
+                })
+            blocks = _parse_blocks(schedules)
+            shift = _build_shift(eid, day, blocks)
+            if shift:
+                out.append(shift)
+            # Small delay every 50 calls to stay under rate limits
+            if call_count % 50 == 0:
+                _time.sleep(0.5)
 
     log.info(f"WFM schedule results: {api_ok} with data, {api_empty} empty, {api_fail} failed")
 
