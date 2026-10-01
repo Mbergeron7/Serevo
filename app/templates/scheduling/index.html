@@ -2337,7 +2337,7 @@ async function massApply() {
           });
           shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
         });
-        renderSchedule();
+        showResults();
       }
 
       closeMassModal();
@@ -2494,7 +2494,7 @@ async function runOptimize() {
     day.shifts.forEach(s => {
       if (s.segments) s.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
     });
-    renderSchedule();
+    showResults();
     showToast(`Optimized ${changes.length} segment(s).`);
 
   } catch (e) {
