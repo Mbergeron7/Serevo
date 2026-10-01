@@ -1040,7 +1040,7 @@ class EmployeePlanningUnit(db.Model):
     created_at       = db.Column(db.DateTime, default=_utcnow)
 
     employee      = db.relationship("Employee", backref="planning_unit_assignments")
-    planning_unit = db.relationship("PlanningUnit", backref="employee_assignments")
+    planning_unit = db.relationship("PlanningUnit", backref="employee_pu_assignments")
 
     __table_args__ = (
         db.UniqueConstraint("employee_id", "planning_unit_id", name="uq_emp_pu"),
@@ -1079,7 +1079,7 @@ class EmployeeWorkTimePattern(db.Model):
     created_at               = db.Column(db.DateTime, default=_utcnow)
 
     employee               = db.relationship("Employee", backref="work_time_pattern_assignments")
-    work_time_pattern_model = db.relationship("WorkTimePatternModel", backref="employee_assignments")
+    work_time_pattern_model = db.relationship("WorkTimePatternModel", backref="employee_wtp_assignments")
 
     __table_args__ = (
         db.UniqueConstraint("employee_id", "work_time_pattern_model_id", name="uq_emp_wtpm"),
@@ -1117,7 +1117,7 @@ class EmployeeContract(db.Model):
     created_at   = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="contract_assignments")
-    contract = db.relationship("Contract", backref="employee_assignments")
+    contract = db.relationship("Contract", backref="employee_contract_assignments")
 
     def to_dict(self):
         c = self.contract
