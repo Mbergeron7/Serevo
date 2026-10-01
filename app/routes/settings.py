@@ -1583,6 +1583,8 @@ def master_reset():
         IntervalActual, LobMapping, AgentStatusEvent,
         Activity, Contract, DayModel, WeekTimePattern,
         WorkTimePatternModel,
+        EmployeePlanningUnit, EmployeeWorkTimePattern,
+        EmployeeContract, Selection, SelectionMember,
     )
 
     log.info("=== MASTER RESET initiated ===")
@@ -1596,6 +1598,10 @@ def master_reset():
         RotationAssignment,
         SkillMapping,
         EmployeeAvailability,
+        EmployeePlanningUnit,
+        EmployeeWorkTimePattern,
+        EmployeeContract,
+        SelectionMember,
         AdherenceException,
         AgentStatusEvent,
         IntervalActual,
@@ -1621,6 +1627,7 @@ def master_reset():
         SkillGroup,
         AlertConfig,
         LobMapping,
+        Selection,
         # Scheduling config tables
         WorkTimePatternModel,
         WeekTimePattern,

@@ -1020,6 +1020,175 @@ class EmployeeAvailability(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# EMPLOYEE ↔ PLANNING UNIT (many-to-many with priority & validity)
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeePlanningUnit(db.Model):
+    """Assigns an employee to a planning unit with a priority and
+    optional validity period. Priority 1 = primary unit used by
+    schedule optimization. Lower-priority units allow manual scheduling."""
+    __tablename__ = "employee_planning_units"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                                 nullable=False, index=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id", ondelete="CASCADE"),
+                                 nullable=False, index=True)
+    priority         = db.Column(db.Integer, default=1)          # 1 = primary
+    valid_from       = db.Column(db.Date, nullable=True)
+    valid_to         = db.Column(db.Date, nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    employee      = db.relationship("Employee", backref="planning_unit_assignments")
+    planning_unit = db.relationship("PlanningUnit", backref="employee_assignments")
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "planning_unit_id", name="uq_emp_pu"),
+    )
+
+    def to_dict(self):
+        pu = self.planning_unit
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit_name": pu.name if pu else "",
+            "priority": self.priority,
+            "valid_from": self.valid_from.isoformat() if self.valid_from else "",
+            "valid_to": self.valid_to.isoformat() if self.valid_to else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE ↔ WORK TIME PATTERN MODEL (with reference date)
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeeWorkTimePattern(db.Model):
+    """Assigns a work time pattern model to an employee with a reference
+    date (when the rotation cycle starts) and optional validity period."""
+    __tablename__ = "employee_work_time_patterns"
+
+    id                       = db.Column(db.Integer, primary_key=True)
+    employee_id              = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                                         nullable=False, index=True)
+    work_time_pattern_model_id = db.Column(db.Integer, db.ForeignKey("work_time_pattern_models.id", ondelete="CASCADE"),
+                                            nullable=False, index=True)
+    reference_date           = db.Column(db.Date, nullable=True)     # cycle start date
+    valid_from               = db.Column(db.Date, nullable=True)
+    valid_to                 = db.Column(db.Date, nullable=True)
+    created_at               = db.Column(db.DateTime, default=_utcnow)
+
+    employee               = db.relationship("Employee", backref="work_time_pattern_assignments")
+    work_time_pattern_model = db.relationship("WorkTimePatternModel", backref="employee_assignments")
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "work_time_pattern_model_id", name="uq_emp_wtpm"),
+    )
+
+    def to_dict(self):
+        wtp = self.work_time_pattern_model
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "work_time_pattern_model_id": self.work_time_pattern_model_id,
+            "work_time_pattern_model_name": wtp.name if wtp else "",
+            "reference_date": self.reference_date.isoformat() if self.reference_date else "",
+            "valid_from": self.valid_from.isoformat() if self.valid_from else "",
+            "valid_to": self.valid_to.isoformat() if self.valid_to else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE ↔ CONTRACT (with validity — replaces single FK)
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeeContract(db.Model):
+    """Assigns a contract to an employee with validity period.
+    Allows tracking contract history (past, current, future)."""
+    __tablename__ = "employee_contracts"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    contract_id  = db.Column(db.Integer, db.ForeignKey("contracts.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    valid_from   = db.Column(db.Date, nullable=True)
+    valid_to     = db.Column(db.Date, nullable=True)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    employee = db.relationship("Employee", backref="contract_assignments")
+    contract = db.relationship("Contract", backref="employee_assignments")
+
+    def to_dict(self):
+        c = self.contract
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "contract_id": self.contract_id,
+            "contract_name": c.name if c else "",
+            "contract_type": c.contract_type if c else "",
+            "weekly_hours": c.weekly_hours if c else None,
+            "valid_from": self.valid_from.isoformat() if self.valid_from else "",
+            "valid_to": self.valid_to.isoformat() if self.valid_to else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SELECTIONS — Custom grouping of employees
+# ═══════════════════════════════════════════════════════════════
+
+class Selection(db.Model):
+    """Named group of employees for filtering/reporting purposes.
+    E.g. 'New Hires Q4', 'Night Shift Team', 'Training Group A'."""
+    __tablename__ = "selections"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(255), default="")
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    members = db.relationship("SelectionMember", backref="selection",
+                               cascade="all, delete-orphan", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "description": self.description,
+            "is_active": self.is_active,
+            "member_count": len(self.members),
+        }
+
+
+class SelectionMember(db.Model):
+    """Links an employee to a selection."""
+    __tablename__ = "selection_members"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    selection_id = db.Column(db.Integer, db.ForeignKey("selections.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    employee = db.relationship("Employee", backref="selection_memberships")
+
+    __table_args__ = (
+        db.UniqueConstraint("selection_id", "employee_id", name="uq_sel_emp"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id,
+            "selection_id": self.selection_id,
+            "employee_id": self.employee_id,
+            "employee_name": emp.full_name if emp else "",
+            "employee_eid": emp.employee_id if emp else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
 # REAL-TIME ACTUALS (ACD interval stats + agent status events)
 # ═══════════════════════════════════════════════════════════════
 
