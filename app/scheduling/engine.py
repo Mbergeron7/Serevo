@@ -17,7 +17,7 @@ from collections import defaultdict
 log = logging.getLogger("serevo.scheduling")
 
 # ── Shift defaults ──────────────────────────────────────────
-DEFAULT_SHIFT_LENGTH_HRS = 8.0
+DEFAULT_SHIFT_LENGTH_HRS = 5.0
 DEFAULT_INTERVAL_MINS = 30
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
