@@ -941,7 +941,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
                 except Exception as ex:
                     diag["test_personnel_call"] = {"error": str(ex)}
             # Also try today's date instead of tomorrow
-            today_url = f"{API_LEGACY}/employees/{test_eid}/schedule/{datetime.date.today().isoformat()}"
+            today_url = f"{API_LEGACY}/employees/{str(employees[0].get('employee_id'))}/schedule/{datetime.date.today().isoformat()}"
             try:
                 today_r = session.get(today_url, headers=_wfm_headers(), timeout=25)
                 diag["test_today"] = {
