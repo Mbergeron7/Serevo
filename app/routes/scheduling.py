@@ -1305,6 +1305,18 @@ def optimize_segments():
                 _rules_cache[shift_type] = by_type
             return _rules_cache[shift_type]
 
+        # Build per-shift fixed segments (meetings, training, etc.) that must not overlap
+        shift_fixed = {}  # shift.id -> [(start_min, end_min)]
+        for shift in shifts:
+            fixed = []
+            for seg in shift.segments:
+                if seg.activity_type not in types_to_opt and seg.activity_type != "on-call":
+                    if seg.start_time and seg.end_time:
+                        fs = seg.start_time.hour * 60 + seg.start_time.minute
+                        fe = seg.end_time.hour * 60 + seg.end_time.minute
+                        fixed.append((fs, fe))
+            shift_fixed[shift.id] = fixed
+
         # Greedy placement: process each segment, find best slot
         already_placed = list(fixed_placed)
         changes = []
@@ -1342,6 +1354,16 @@ def optimize_segments():
 
             t = win_s
             while t + duration <= win_e:
+                # Skip slots that overlap fixed segments on this shift
+                overlaps_fixed = False
+                for fs, fe in shift_fixed.get(shift.id, []):
+                    if t < fe and t + duration > fs:
+                        overlaps_fixed = True
+                        break
+                if overlaps_fixed:
+                    t += interval
+                    continue
+
                 min_surplus = 9999
                 m = t
                 while m < t + duration:
