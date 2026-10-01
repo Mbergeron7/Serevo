@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+{% block title %}Forecasting — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  /* ── Banner ─────────────────────────────────── */
+  .fc-banner {
+    background: var(--brand-accent, #6b21a8); color: #fff;
+    padding: 18px 24px; border-radius: var(--radius); margin-bottom: 20px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  }
+  .fc-banner h1 { font-size: 1.35rem; margin: 0 0 2px; }
+  .fc-banner .sub { font-size: .82rem; opacity: .85; }
+
+  /* ── Controls row ──────────────────────────── */
+  .fc-controls {
+    display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .lob-picker {
+    width: 260px; flex-shrink: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; max-height: 360px; display: flex; flex-direction: column;
+  }
+  .lob-picker .search { width: 100%; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .82rem; margin-bottom: 8px; background: var(--bg); color: var(--text); }
+  .lob-list { flex: 1; overflow-y: auto; }
+  .lob-list label { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: .82rem; cursor: pointer; }
+  .lob-list label:hover { color: var(--brand-accent); }
+  .lob-btns { display: flex; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .lob-btns button { font-size: .72rem; padding: 3px 10px; border: 1px solid var(--border);
+    border-radius: 4px; cursor: pointer; background: var(--bg); color: var(--text); }
+  .settings-panel {
+    flex: 1; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
+  }
+  .setting-group { display: flex; flex-direction: column; }
+  .setting-group label {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px;
+  }
+  .setting-group select, .setting-group input[type=number] {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); width: 120px;
+  }
+  .btn-action {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 24px; border-radius: 6px; font-weight: 700;
+    font-size: .85rem; cursor: pointer; white-space: nowrap; align-self: flex-end;
+  }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 18px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer; white-space: nowrap; align-self: flex-end;
+  }
+
+  /* ── Summary cards ─────────────────────────── */
+  .summary-cards {
+    display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .scard {
+    flex: 1; min-width: 160px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px;
+  }
+  .scard .label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+  .scard .value { font-size: 1.4rem; font-weight: 800; }
+  .scard .detail { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+  .scard.highlight { border-left: 4px solid var(--brand-accent); }
+
+  /* ── Chart sections ────────────────────────── */
+  .chart-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+  }
+  .chart-section h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .chart-section .chart-sub { font-size: .78rem; color: var(--text-muted); margin-bottom: 14px; }
+  .chart-wrap { position: relative; height: 280px; }
+
+  /* ── Requirements heatmap ──────────────────── */
+  .heatmap-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+  }
+  .heatmap-section h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .heatmap-section .chart-sub { font-size: .78rem; color: var(--text-muted); margin-bottom: 14px; }
+  .heat-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .heat-table th { padding: 6px 8px; text-align: center; font-weight: 700;
+    border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0;
+    background: var(--surface); }
+  .heat-table td { padding: 5px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+  .heat-table .row-label { text-align: left; font-weight: 600; white-space: nowrap; }
+  .heat-table-wrap { max-height: 400px; overflow: auto; }
+
+  /* Heat colors */
+  .heat-low  { background: #dcfce7; color: #166534; }
+  .heat-med  { background: #fef9c3; color: #854d0e; }
+  .heat-high { background: #fecaca; color: #991b1b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .heat-low  { background: #14532d; color: #bbf7d0; }
+    :root:not([data-theme="light"]) .heat-med  { background: #713f12; color: #fef08a; }
+    :root:not([data-theme="light"]) .heat-high { background: #7f1d1d; color: #fecaca; }
+  }
+  :root[data-theme="dark"] .heat-low  { background: #14532d; color: #bbf7d0; }
+  :root[data-theme="dark"] .heat-med  { background: #713f12; color: #fef08a; }
+  :root[data-theme="dark"] .heat-high { background: #7f1d1d; color: #fecaca; }
+
+  /* ── Status / loading ──────────────────────── */
+  .fc-status { font-size: .82rem; padding: 10px; margin-bottom: 14px;
+    border-radius: 6px; display: none; }
+  .fc-status.info { background: #dbeafe; color: #1e40af; display: block; }
+  .fc-status.error { background: #fee2e2; color: #991b1b; display: block; }
+  .fc-status.success { background: #dcfce7; color: #166534; display: block; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .fc-status.info { background: #1e3a5f; color: #93c5fd; }
+    :root:not([data-theme="light"]) .fc-status.error { background: #4a1515; color: #fca5a5; }
+    :root:not([data-theme="light"]) .fc-status.success { background: #14362a; color: #86efac; }
+  }
+  :root[data-theme="dark"] .fc-status.info { background: #1e3a5f; color: #93c5fd; }
+  :root[data-theme="dark"] .fc-status.error { background: #4a1515; color: #fca5a5; }
+  :root[data-theme="dark"] .fc-status.success { background: #14362a; color: #86efac; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
+    border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── LOB tabs (for multi-LOB view) ─────────── */
+  .lob-tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 16px;
+    background: var(--bg); border-radius: 8px; padding: 3px; width: fit-content; }
+  .lob-tab { padding: 6px 16px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text-muted);
+    font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .lob-tab.active { background: var(--surface); color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  @media (max-width: 768px) {
+    .fc-controls { flex-direction: column; }
+    .lob-picker { width: 100%; max-height: 200px; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+{% include "capacity/_subnav.html" %}
+
+<!-- ═══ Banner ═══ -->
+<div class="fc-banner">
+  <div>
+    <h1>📈 Forecasting</h1>
+    <div class="sub">Call volume, AHT &amp; staffing requirements • {{ year }}</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;">
+      {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- ═══ Status bar ═══ -->
+<div id="statusBar" class="fc-status"></div>
+
+<!-- ═══ Controls ═══ -->
+<div class="fc-controls">
+  <!-- LOB picker -->
+  <div class="lob-picker">
+    <input type="text" class="search" placeholder="Search LOBs…" id="lobSearch">
+    <div class="lob-list" id="lobList">
+      {% for lob in all_lobs %}
+      <label><input type="checkbox" name="lob" value="{{ lob }}" checked> {{ lob }}</label>
+      {% endfor %}
+    </div>
+    <div class="lob-btns">
+      <button onclick="toggleAllLobs(true)">All</button>
+      <button onclick="toggleAllLobs(false)">None</button>
+    </div>
+  </div>
+  <!-- Settings -->
+  <div class="settings-panel">
+    <div class="setting-group">
+      <label>Forecast Method</label>
+      <select id="methodSelect">
+        <option value="weighted">Weighted Trend</option>
+        <option value="moving_average">Moving Average</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>History Days</label>
+      <input type="number" id="histDays" value="90" min="7" max="365">
+    </div>
+    <div class="setting-group">
+      <label>Forecast Days</label>
+      <input type="number" id="fcDays" value="90" min="7" max="365">
+    </div>
+    <div class="setting-group">
+      <label>Service Level</label>
+      <input type="number" id="slTarget" value="80" min="50" max="99" step="1">
+    </div>
+    <div class="setting-group">
+      <label>ASA (sec)</label>
+      <input type="number" id="asaTarget" value="20" min="5" max="120">
+    </div>
+    <div class="setting-group">
+      <label>Shrinkage %</label>
+      <input type="number" id="shrinkage" value="30" min="0" max="60">
+    </div>
+    <button class="btn-action" id="btnGenerate" onclick="generateForecasts()">
+      Generate Forecasts
+    </button>
+    <button class="btn-secondary" onclick="loadExistingData()">
+      Load Saved
+    </button>
+  </div>
+</div>
+
+<!-- ═══ Summary cards ═══ -->
+<div class="summary-cards" id="summaryCards" style="display:none;">
+  <div class="scard highlight">
+    <div class="label">Total Offered (Combined)</div>
+    <div class="value" id="totalOffered">—</div>
+    <div class="detail" id="totalOfferedDetail"></div>
+  </div>
+  <div class="scard">
+    <div class="label">Avg AHT</div>
+    <div class="value" id="avgAht">—</div>
+    <div class="detail" id="avgAhtDetail"></div>
+  </div>
+  <div class="scard">
+    <div class="label">Person-hours Σ</div>
+    <div class="value" id="personHours">—</div>
+    <div class="detail" id="personHoursDetail"></div>
+  </div>
+  <div class="scard highlight">
+    <div class="label">Service Level</div>
+    <div class="value" id="slCard">—</div>
+    <div class="detail" id="slDetail"></div>
+  </div>
+  <div class="scard">
+    <div class="label">Shrinkage</div>
+    <div class="value" id="shrinkCard">—</div>
+  </div>
+</div>
+
+<!-- ═══ LOB tabs ═══ -->
+<div class="lob-tabs" id="lobTabs" style="display:none;"></div>
+
+<!-- ═══ Offered Calls chart ═══ -->
+<div class="chart-section" id="offeredSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>Offered Calls</h2>
+      <div class="chart-sub">Daily call volume — historical (grey) vs forecast (blue)</div>
+    </div>
+  </div>
+  <div class="chart-wrap"><canvas id="offeredChart"></canvas></div>
+</div>
+
+<!-- ═══ AHT chart ═══ -->
+<div class="chart-section" id="ahtSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>AHT</h2>
+      <div class="chart-sub">Average handle time in seconds — historical vs forecast</div>
+    </div>
+  </div>
+  <div class="chart-wrap"><canvas id="ahtChart"></canvas></div>
+</div>
+
+<!-- ═══ Staff Requirements chart ═══ -->
+<div class="chart-section" id="reqSection" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2>Staff Requirements <span style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:.72rem;font-weight:600;">Erlang C</span></h2>
+      <div class="chart-sub">Agents required per day based on Erlang C calculation</div>
+    </div>
+  </div>
+  <div class="chart-wrap"><canvas id="reqChart"></canvas></div>
+</div>
+
+<!-- ═══ Requirements heatmap ═══ -->
+<div class="heatmap-section" id="heatmapSection" style="display:none;">
+  <h2>Coverage Heatmap</h2>
+  <div class="chart-sub">Daily agents required by LOB — <span class="heat-low" style="padding:1px 8px;border-radius:3px;">Low</span> <span class="heat-med" style="padding:1px 8px;border-radius:3px;">Medium</span> <span class="heat-high" style="padding:1px 8px;border-radius:3px;">High</span></div>
+  <div class="heat-table-wrap">
+    <table class="heat-table" id="heatTable">
+      <thead id="heatHead"></thead>
+      <tbody id="heatBody"></tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ALL_LOBS = {{ all_lobs | tojson }};
+let chartOffered = null, chartAht = null, chartReq = null;
+let forecastData = {};  // {lob: {dates, dailyOffered, dailyAht, dailyReq, isHistoric}}
+let activeLob = null;
+
+// ── LOB picker ──────────────────────────────────
+document.getElementById('lobSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#lobList label').forEach(l => {
+    l.style.display = l.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+function toggleAllLobs(checked) {
+  document.querySelectorAll('#lobList input[type=checkbox]').forEach(cb => cb.checked = checked);
+}
+function getSelectedLobs() {
+  return Array.from(document.querySelectorAll('#lobList input:checked')).map(cb => cb.value);
+}
+
+// ── Status helpers ──────────────────────────────
+function showStatus(msg, type) {
+  const el = document.getElementById('statusBar');
+  el.className = 'fc-status ' + type;
+  el.innerHTML = msg;
+}
+function hideStatus() {
+  document.getElementById('statusBar').className = 'fc-status';
+}
+
+// ── Generate forecasts for all selected LOBs ────
+async function generateForecasts() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB.', 'error'); return; }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+  forecastData = {};
+
+  const method = document.getElementById('methodSelect').value;
+  const histDays = parseInt(document.getElementById('histDays').value) || 90;
+  const fcDays = parseInt(document.getElementById('fcDays').value) || 90;
+  const sl = parseInt(document.getElementById('slTarget').value) / 100;
+  const asa = parseInt(document.getElementById('asaTarget').value);
+  const shrink = parseInt(document.getElementById('shrinkage').value) / 100;
+
+  let done = 0;
+  for (const lob of lobs) {
+    showStatus(`Generating forecast for ${lob}… (${done}/${lobs.length})`, 'info');
+    try {
+      const resp = await fetch('/forecasting/generate-from-history', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          lob, method, historical_days: histDays,
+          forecast_days: fcDays, window: 7,
+        })
+      });
+      const data = await resp.json();
+      if (data.success || data.ok) {
+        // Now load the data for this LOB
+        await loadLobData(lob, sl, asa, shrink);
+      } else {
+        console.warn(`Forecast gen failed for ${lob}:`, data.error);
+      }
+    } catch (e) {
+      console.error(`Error generating ${lob}:`, e);
+    }
+    done++;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate Forecasts';
+  showStatus(`Forecasts generated for ${done} LOB(s). Data saved to database.`, 'success');
+  setTimeout(hideStatus, 5000);
+  renderDashboard();
+}
+
+// ── Load existing saved data ────────────────────
+async function loadExistingData() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB.', 'error'); return; }
+
+  forecastData = {};
+  showStatus('Loading saved forecast data…', 'info');
+
+  const sl = parseInt(document.getElementById('slTarget').value) / 100;
+  const asa = parseInt(document.getElementById('asaTarget').value);
+  const shrink = parseInt(document.getElementById('shrinkage').value) / 100;
+
+  let loaded = 0;
+  for (const lob of lobs) {
+    const ok = await loadLobData(lob, sl, asa, shrink);
+    if (ok) loaded++;
+  }
+
+  if (loaded === 0) {
+    showStatus('No saved forecast data found. Click "Generate Forecasts" to create new forecasts.', 'error');
+  } else {
+    showStatus(`Loaded data for ${loaded} LOB(s).`, 'success');
+    setTimeout(hideStatus, 3000);
+  }
+  renderDashboard();
+}
+
+// ── Load data for a single LOB from the API ─────
+async function loadLobData(lob, sl, asa, shrink) {
+  try {
+    const year = parseInt(document.getElementById('yearSelect').value);
+    const resp = await fetch('/capacity/forecast/api/data', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        lob, year,
+        service_level: sl, target_asa: asa, shrinkage: shrink,
+      })
+    });
+    const data = await resp.json();
+    if (!data.success || !data.daily.length) return false;
+
+    forecastData[lob] = data;
+    return true;
+  } catch (e) {
+    console.error(`Error loading ${lob}:`, e);
+    return false;
+  }
+}
+
+// ── Render the full dashboard ───────────────────
+function renderDashboard() {
+  const lobs = Object.keys(forecastData);
+  if (!lobs.length) {
+    ['summaryCards','lobTabs','offeredSection','ahtSection','reqSection','heatmapSection']
+      .forEach(id => document.getElementById(id).style.display = 'none');
+    return;
+  }
+
+  // Show summary cards
+  document.getElementById('summaryCards').style.display = 'flex';
+
+  // Compute totals across all LOBs
+  let totalOff = 0, totalAht = 0, totalAhtW = 0, totalReq = 0, totalIntervals = 0;
+  for (const lob of lobs) {
+    const d = forecastData[lob];
+    totalOff += d.totals.total_offered;
+    totalAhtW += d.totals.total_offered * d.totals.avg_aht;
+    totalReq += d.totals.total_person_hours;
+    totalIntervals += d.totals.total_intervals;
+  }
+  const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
+
+  document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
+  document.getElementById('totalOfferedDetail').textContent = `${totalIntervals.toLocaleString()} intervals`;
+  document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
+  document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
+  const sl = document.getElementById('slTarget').value;
+  const asa = document.getElementById('asaTarget').value;
+  document.getElementById('slCard').textContent = sl + '% / ' + asa + ' secs';
+  document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
+
+  // LOB tabs
+  const tabsEl = document.getElementById('lobTabs');
+  if (lobs.length > 1) {
+    tabsEl.style.display = 'flex';
+    tabsEl.innerHTML = '<button class="lob-tab active" onclick="switchLob(null, this)">All Combined</button>' +
+      lobs.map(l => `<button class="lob-tab" onclick="switchLob('${l}', this)">${l}</button>`).join('');
+  } else {
+    tabsEl.style.display = 'none';
+  }
+
+  activeLob = null;
+  renderCharts();
+  renderHeatmap();
+}
+
+function switchLob(lob, btn) {
+  document.querySelectorAll('.lob-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  activeLob = lob;
+  renderCharts();
+}
+
+// ── Build combined daily data ───────────────────
+function getDailyData() {
+  const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  // Merge all dates
+  const dateMap = {};
+  for (const lob of lobs) {
+    const d = forecastData[lob];
+    if (!d || !d.daily) continue;
+    for (const row of d.daily) {
+      if (!dateMap[row.date]) dateMap[row.date] = {date: row.date, offered: 0, aht_w: 0, aht_off: 0, req: 0, is_historic: row.is_historic};
+      dateMap[row.date].offered += row.offered;
+      dateMap[row.date].aht_w += row.offered * row.aht;
+      dateMap[row.date].aht_off += row.offered;
+      dateMap[row.date].req += row.agents_required;
+    }
+  }
+  const sorted = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+  return sorted.map(d => ({
+    ...d,
+    aht: d.aht_off > 0 ? d.aht_w / d.aht_off : 0,
+  }));
+}
+
+// ── Render charts ───────────────────────────────
+function renderCharts() {
+  const daily = getDailyData();
+  if (!daily.length) return;
+
+  const labels = daily.map(d => d.date);
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Color arrays: grey for historic, blue for forecast
+  const offeredColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
+  const ahtColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(234,88,12,.7)');
+  const reqColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.5)' : 'rgba(34,197,94,.6)');
+
+  // Offered chart
+  document.getElementById('offeredSection').style.display = '';
+  if (chartOffered) chartOffered.destroy();
+  chartOffered = new Chart(document.getElementById('offeredChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Offered Calls',
+        data: daily.map(d => Math.round(d.offered)),
+        backgroundColor: offeredColors,
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: chartOpts('Calls', false),
+  });
+
+  // AHT chart
+  document.getElementById('ahtSection').style.display = '';
+  if (chartAht) chartAht.destroy();
+  chartAht = new Chart(document.getElementById('ahtChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'AHT (s)',
+        data: daily.map(d => Math.round(d.aht)),
+        borderColor: 'rgba(234,88,12,.8)',
+        backgroundColor: 'rgba(234,88,12,.1)',
+        borderWidth: 2,
+        fill: true,
+        pointRadius: 0,
+        tension: .3,
+        segment: {
+          borderColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.6)' : 'rgba(234,88,12,.8)',
+          backgroundColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.08)' : 'rgba(234,88,12,.1)',
+        }
+      }]
+    },
+    options: chartOpts('Seconds', true),
+  });
+
+  // Requirements chart
+  document.getElementById('reqSection').style.display = '';
+  if (chartReq) chartReq.destroy();
+  chartReq = new Chart(document.getElementById('reqChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Agents Required',
+        data: daily.map(d => Math.round(d.req * 10) / 10),
+        backgroundColor: reqColors,
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: chartOpts('Agents', false),
+  });
+}
+
+function chartOpts(yLabel, isLine) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: arr => {
+            const d = arr[0].label;
+            const dt = new Date(d + 'T12:00:00');
+            return dt.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          maxTicksLimit: 15,
+          callback: function(val, i) {
+            const d = this.getLabelForValue(val);
+            const dt = new Date(d + 'T12:00:00');
+            return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+          }
+        }
+      },
+      y: {
+        title: { display: true, text: yLabel },
+        beginAtZero: true,
+      }
+    }
+  };
+}
+
+// ── Render heatmap ──────────────────────────────
+function renderHeatmap() {
+  const lobs = Object.keys(forecastData);
+  if (!lobs.length) return;
+
+  // Collect all dates across all LOBs
+  const allDates = new Set();
+  for (const lob of lobs) {
+    for (const row of forecastData[lob].daily) allDates.add(row.date);
+  }
+  const dates = Array.from(allDates).sort();
+
+  // Show last 14 days of data for the heatmap (keeps it readable)
+  const recentDates = dates.slice(-14);
+
+  document.getElementById('heatmapSection').style.display = '';
+  const thead = document.getElementById('heatHead');
+  const tbody = document.getElementById('heatBody');
+
+  thead.innerHTML = '<tr><th class="row-label">LOB</th>' +
+    recentDates.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      return `<th>${dt.toLocaleDateString('en-US', {month:'short', day:'numeric'})}</th>`;
+    }).join('') + '<th>Avg</th></tr>';
+
+  // Find global max for color scaling
+  let maxReq = 0;
+  for (const lob of lobs) {
+    for (const row of forecastData[lob].daily) {
+      if (row.agents_required > maxReq) maxReq = row.agents_required;
+    }
+  }
+
+  let html = '';
+  for (const lob of lobs) {
+    const byDate = {};
+    for (const row of forecastData[lob].daily) byDate[row.date] = row;
+    let sum = 0, cnt = 0;
+    let cells = '';
+    for (const d of recentDates) {
+      const row = byDate[d];
+      const val = row ? Math.round(row.agents_required * 10) / 10 : 0;
+      sum += val; cnt++;
+      const cls = heatClass(val, maxReq);
+      cells += `<td class="${cls}">${val}</td>`;
+    }
+    const avg = cnt > 0 ? Math.round(sum / cnt * 10) / 10 : 0;
+    html += `<tr><td class="row-label">${lob}</td>${cells}<td style="font-weight:700;">${avg}</td></tr>`;
+  }
+
+  // Sum row
+  let sumCells = '';
+  let totalSum = 0, totalCnt = 0;
+  for (const d of recentDates) {
+    let dayTotal = 0;
+    for (const lob of lobs) {
+      const byDate = {};
+      for (const row of forecastData[lob].daily) byDate[row.date] = row;
+      dayTotal += byDate[d] ? byDate[d].agents_required : 0;
+    }
+    totalSum += dayTotal; totalCnt++;
+    sumCells += `<td style="font-weight:700;">${Math.round(dayTotal * 10) / 10}</td>`;
+  }
+  const totalAvg = totalCnt > 0 ? Math.round(totalSum / totalCnt * 10) / 10 : 0;
+  html += `<tr style="border-top:2px solid var(--text);"><td class="row-label" style="font-weight:800;">TOTAL</td>${sumCells}<td style="font-weight:800;">${totalAvg}</td></tr>`;
+
+  tbody.innerHTML = html;
+}
+
+function heatClass(val, max) {
+  if (max <= 0) return '';
+  const pct = val / max;
+  if (pct < .33) return 'heat-low';
+  if (pct < .66) return 'heat-med';
+  return 'heat-high';
+}
+
+// ── Auto-load on page ready ─────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadExistingData();
+});
+
+document.getElementById('yearSelect').addEventListener('change', function() {
+  window.location.href = '/capacity/forecast?year=' + this.value;
+});
+</script>
+{% endblock %}
