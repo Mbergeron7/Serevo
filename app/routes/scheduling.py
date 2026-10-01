@@ -356,6 +356,38 @@ def generate():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Debug: check forecast/requirements DB state ──────────
+@scheduling_bp.route("/debug-db-state", methods=["GET"])
+@login_required
+def debug_db_state():
+    """Show what's in the DB for forecast/requirements."""
+    try:
+        from app.models import PlanningUnit, ForecastInterval, RequirementInterval
+        from sqlalchemy import func as sa_func
+        units = PlanningUnit.query.all()
+        result = {"planning_units": []}
+        for u in units:
+            fc_count = ForecastInterval.query.filter_by(planning_unit_id=u.id).count()
+            req_count = RequirementInterval.query.filter_by(planning_unit_id=u.id).count()
+            fc_min = fc_max = req_min = req_max = None
+            if fc_count:
+                fc_min = str(ForecastInterval.query.filter_by(planning_unit_id=u.id).order_by(ForecastInterval.timestamp).first().timestamp)[:10]
+                fc_max = str(ForecastInterval.query.filter_by(planning_unit_id=u.id).order_by(ForecastInterval.timestamp.desc()).first().timestamp)[:10]
+            if req_count:
+                req_min = str(RequirementInterval.query.filter_by(planning_unit_id=u.id).order_by(RequirementInterval.timestamp).first().timestamp)[:10]
+                req_max = str(RequirementInterval.query.filter_by(planning_unit_id=u.id).order_by(RequirementInterval.timestamp.desc()).first().timestamp)[:10]
+            result["planning_units"].append({
+                "id": u.id, "name": u.name,
+                "forecast_count": fc_count, "forecast_range": f"{fc_min} to {fc_max}" if fc_count else None,
+                "requirement_count": req_count, "requirement_range": f"{req_min} to {req_max}" if req_count else None,
+            })
+        result["total_forecast"] = ForecastInterval.query.count()
+        result["total_requirements"] = RequirementInterval.query.count()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 # ── Coverage data (API) ────────────────────────────────────
 @scheduling_bp.route("/coverage", methods=["POST"])
 @login_required
