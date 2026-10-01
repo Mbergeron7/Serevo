@@ -442,6 +442,9 @@ def fetch_employees(max_workers=4):
             "latestSkillEnd": "",
             "personnelNumber": e.get("personnel_number", ""),
         })
+    no_pu = sum(1 for r in result if not r["planningUnit"])
+    if no_pu:
+        log.warning(f"WFM roster: {no_pu}/{len(result)} employees have no planning unit in the API")
     log.info(f"WFM roster: {len(result)} employees")
     return result
 
@@ -768,15 +771,14 @@ def upsert_employees_to_db(employees):
                   "terminated": "Inactive", "deleted": "Inactive"}.get(status_raw.lower(), status_raw or "Active")
         skills = emp.get("skills")
         skills_txt = ", ".join(s.get("name", "") for s in skills if isinstance(s, dict)) if isinstance(skills, list) else ""
-        unit = _unit(lob_name)
+        unit = _unit(lob_name) or _unit("Unassigned")
 
         row = Employee.query.filter_by(employee_id=ext_id).first()
         if row:
             if row.manually_edited:
                 continue  # skip — user made manual changes
             row.first_name, row.last_name, row.status = first, last, status
-            if unit:
-                row.planning_unit_id = unit.id
+            row.planning_unit_id = unit.id
             if skills_txt:
                 row.all_skills = skills_txt
             ed = _date(emp.get("endDate") or emp.get("end_date"))
@@ -789,7 +791,7 @@ def upsert_employees_to_db(employees):
         else:
             db.session.add(Employee(
                 employee_id=ext_id, first_name=first, last_name=last, status=status,
-                planning_unit_id=unit.id if unit else None, all_skills=skills_txt,
+                planning_unit_id=unit.id, all_skills=skills_txt,
                 skill_start=_date(emp.get("latestSkillStart")) or _date(emp.get("startDate") or emp.get("start_date")),
                 skill_end=_date(emp.get("latestSkillEnd")),
                 end_date=_date(emp.get("endDate") or emp.get("end_date")),
@@ -825,21 +827,16 @@ def _segment_type_for(activity_name):
     return "on-call"
 
 
-def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8,
-                       diagnose=False):
+def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
     """Pull schedules from the connected WFM system for a date range.
 
-    Uses the bulk planning-unit endpoint when planning units are available
-    (one call per planning-unit per day) and falls back to per-employee calls
-    if no planning units are found.
+    Uses sequential per-employee calls to the legacy API (the API
+    rate-limits concurrent requests).
 
     Returns list of {employee_id, date, start, end, hours, segments:[…]}.
     Days with no schedule blocks are omitted.
-    If diagnose=True, returns (shifts, diag_dict) instead.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     session = requests.Session()
-    diag = {} if diagnose else None
 
     # ── Activity name lookup ──────────────────────────────────────
     acts = _legacy_get(session, "activities") or {}
@@ -912,22 +909,13 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
 
     import time as _time
 
-    if diagnose:
-        diag["mode"] = "per_employee_sequential"
-        diag["employees_count"] = len(employees)
-        diag["days"] = len(days)
-        diag["total_api_calls"] = len(employees) * len(days)
-        sample_raw = []
-
     out = []
     api_ok = 0
-    api_empty = 0
     api_fail = 0
     call_count = 0
 
-    # Use a SINGLE session (connection reuse) and sequential calls
-    # to avoid rate-limiting / 401 errors from the API.
-    # The original working notebooks use the same sequential approach.
+    # Sequential calls with a single reused session to avoid
+    # rate-limiting / 401 errors from the API.
     for emp in employees:
         eid = str(emp.get("employee_id"))
         for day in days:
@@ -938,13 +926,6 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             else:
                 api_fail += 1
             call_count += 1
-            if diagnose and len(sample_raw) < 5 and call_count <= 10:
-                sample_raw.append({
-                    "eid": eid, "day": day.isoformat(),
-                    "data_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
-                    "schedule_count": len(schedules),
-                    "preview": str(data)[:400],
-                })
             blocks = _parse_blocks(schedules)
             shift = _build_shift(eid, day, blocks)
             if shift:
@@ -953,16 +934,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             if call_count % 50 == 0:
                 _time.sleep(0.5)
 
-    log.info(f"WFM schedule results: {api_ok} with data, {api_empty} empty, {api_fail} failed")
-
-    if diagnose:
-        diag["sample_raw_responses"] = sample_raw
-
-    log.info(f"WFM schedules: {len(out)} shifts fetched")
-
-    if diagnose:
-        diag["shifts_found"] = len(out)
-        return out, diag
+    log.info(f"WFM schedule results: {api_ok} with data, {api_fail} no data, {len(out)} shifts built")
     return out
 
 

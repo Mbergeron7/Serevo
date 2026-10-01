@@ -931,13 +931,11 @@ def import_wfm():
                 try:
                     cp._import_running = True
                     cp._import_status = {"message": "Fetching schedules from API..."}
-                    shifts, diag = cp.fetch_pw_schedules(sd, ed, diagnose=True)
+                    shifts = cp.fetch_pw_schedules(sd, ed)
                     if not shifts:
                         cp._import_status = {
-                            "message": f"Completed — no schedules found. "
-                                       f"{diag.get('employees_count', 0)} employees, "
-                                       f"{diag.get('days', 0)} days checked.",
-                            "done": True, "success": False, "diag": diag,
+                            "message": "Completed — no schedules found for the selected date range.",
+                            "done": True, "success": False,
                         }
                         return
                     created, replaced, skipped = cp.upsert_pw_schedules(shifts)
@@ -948,7 +946,7 @@ def import_wfm():
                         msg += f", skipped {skipped} unknown employees"
                     cp._import_status = {"message": msg, "done": True, "success": True,
                                          "created": created, "replaced": replaced,
-                                         "skipped": skipped, "diag": diag}
+                                         "skipped": skipped}
                 except Exception as e:
                     log.exception("Background WFM import failed")
                     cp._import_status = {"message": f"Import failed: {e}",
@@ -977,79 +975,6 @@ def import_wfm_status():
     running = getattr(cp, '_import_running', False)
     status = getattr(cp, '_import_status', {})
     return jsonify({"running": running, **status})
-
-
-# ── API schedule debug (temporary) ────────────────────────
-@scheduling_bp.route("/import/wfm/debug", methods=["POST"])
-@login_required
-def import_wfm_debug():
-    """Probe multiple schedule-related endpoints on both legacy and new APIs."""
-    try:
-        import requests as _req
-        from app.capacity.planning import _wfm_headers, API_LEGACY, API_NEW
-        session = _req.Session()
-        hdrs = _wfm_headers()
-        results = {}
-
-        # Helper to probe a URL
-        def probe(url):
-            try:
-                r = session.get(url, headers=hdrs, timeout=12)
-                body = r.text[:600] if r.text and not r.text.strip().startswith("<") else f"(HTML {r.status_code})"
-                try:
-                    body = r.json()
-                except Exception:
-                    pass
-                return {"status": r.status_code, "body": body}
-            except Exception as ex:
-                return {"status": 0, "error": str(ex)}
-
-        # Get first employee with a planning unit
-        emp_data = session.get(f"{API_LEGACY}/employees", headers=hdrs, timeout=12)
-        emps = emp_data.json().get("employees", []) if emp_data.ok else []
-        emp_with_pu = next((e for e in emps if e.get("planning_unit_id")), emps[0] if emps else {})
-        eid = str(emp_with_pu.get("employee_id", "1001"))
-        pu_id = str(emp_with_pu.get("planning_unit_id", "1002"))
-        results["test_employee"] = {"id": eid,
-            "name": f"{emp_with_pu.get('first_name','')} {emp_with_pu.get('last_name','')}".strip(),
-            "planning_unit_id": pu_id}
-
-        today = "2026-10-01"
-
-        # Legacy API probes — singular vs plural schedule paths
-        results["legacy"] = {}
-        for label, path in [
-            ("pu_schedule_singular", f"planning_units/{pu_id}/schedule/{today}"),
-            ("pu_schedules_plural", f"planning_units/{pu_id}/schedules/{today}"),
-            ("emp_schedules_plural", f"employees/{eid}/schedules/{today}"),
-            ("emp_schedule_singular", f"employees/{eid}/schedule/{today}"),
-            ("pu_schedule_with_level", f"planning_units/{pu_id}/schedule/{today}?levels=plan,final"),
-        ]:
-            results["legacy"][label] = probe(f"{API_LEGACY}/{path}")
-
-        # New API probes — try multiple base path patterns
-        results["new_api"] = {}
-        new_bases = [
-            ("bare", f"{API_NEW}"),
-            ("api_v1", f"{API_NEW}/api/v1"),
-            ("v1", f"{API_NEW}/v1"),
-        ]
-        test_paths = [
-            ("scheduling_periods", "scheduling-periods"),
-            ("time_logs", f"time-logs?personIds={eid}&startDate={today}&endDate={today}"),
-            ("versions", "versions"),
-        ]
-        for base_label, base_url in new_bases:
-            for path_label, path in test_paths:
-                key = f"{base_label}__{path_label}"
-                results["new_api"][key] = probe(f"{base_url}/{path}")
-        # Also check what the base URL itself returns
-        results["new_api"]["root"] = probe(API_NEW)
-
-        return jsonify(results)
-    except Exception as e:
-        import traceback
-        return jsonify({"error": str(e), "trace": traceback.format_exc()})
 
 
 # ── Helpers for manual shift entry ──────────────────────────
