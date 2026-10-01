@@ -940,17 +940,23 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
                     }
                 except Exception as ex:
                     diag["test_personnel_call"] = {"error": str(ex)}
-            # Also try today's date instead of tomorrow
-            today_url = f"{API_LEGACY}/employees/{str(employees[0].get('employee_id'))}/schedule/{datetime.date.today().isoformat()}"
-            try:
-                today_r = session.get(today_url, headers=_wfm_headers(), timeout=25)
-                diag["test_today"] = {
-                    "url": today_url,
-                    "status": today_r.status_code,
-                    "body_preview": today_r.text[:500],
-                }
-            except Exception as ex:
-                diag["test_today"] = {"error": str(ex)}
+            # Try injixo domain instead of peopleware
+            eid0 = str(employees[0].get('employee_id'))
+            day0 = days[0].isoformat()
+            for alt_base in [
+                "https://legacy-api.injixo.com/v1",
+                "https://api.injixo.com/v1",
+            ]:
+                alt_url = f"{alt_base}/employees/{eid0}/schedule/{day0}"
+                try:
+                    alt_r = session.get(alt_url, headers=_wfm_headers(), timeout=25)
+                    diag[f"test_{alt_base.split('//')[1].split('/')[0]}"] = {
+                        "url": alt_url,
+                        "status": alt_r.status_code,
+                        "body_preview": alt_r.text[:500],
+                    }
+                except Exception as ex:
+                    diag[f"test_{alt_base.split('//')[1].split('/')[0]}"] = {"error": str(ex)}
         # Do one raw test call to see the actual HTTP status
         if employees and days:
             test_eid = str(employees[0].get("employee_id"))
