@@ -22,18 +22,7 @@ people_bp = Blueprint("people", __name__, url_prefix="/people")
 TIMEZONE = "America/Toronto"
 
 
-def _get_sheet():
-    """Return the capacity Google Sheet object, or None."""
-    try:
-        from app.data_source import _open_capacity_sheet
-        sheet, err = _open_capacity_sheet()
-        if err:
-            log.warning(f"Sheet open error: {err}")
-            return None
-        return sheet
-    except Exception as e:
-        log.warning(f"Sheet import error: {e}")
-        return None
+from app.routes._utils import get_sheet as _get_sheet
 
 
 # ── Roster View ──────────────────────────────────────────────

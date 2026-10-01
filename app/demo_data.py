@@ -25,28 +25,28 @@ DEMO_WORKLOADS = {
 # ── Employees ─────────────────────────────────────────────────
 DEMO_EMPLOYEES = [
     # Sales Support (7 agents) — Team Lead: Lisa Tran
-    {"Status": "Active", "First Name": "Alex",    "Last Name": "Morgan",    "Employee ID": "E1001", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-01-15", "Latest Skill End": "", "All Skills": "Sales Support, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Jordan",  "Last Name": "Rivera",    "Employee ID": "E1002", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-03-01", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Casey",   "Last Name": "Chen",      "Employee ID": "E1003", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-02-10", "Latest Skill End": "", "All Skills": "Sales Support, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "32", "Days Per Week": "4", "Hours Per Day": "8", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Mandarin", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Taylor",  "Last Name": "Brooks",    "Employee ID": "E1004", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2024-11-01", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Sam",     "Last Name": "Patel",     "Employee ID": "E1005", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-06-15", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": "24", "Days Per Week": "3", "Hours Per Day": "8", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Hindi", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Riley",   "Last Name": "Kim",       "Employee ID": "E1006", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-04-01", "Latest Skill End": "", "All Skills": "Sales Support, Admin Trainer", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Vancouver", "Schedule Excluded": "", "Languages": "English, Korean", "Team Lead": "Lisa Tran"},
-    {"Status": "Active", "First Name": "Morgan",  "Last Name": "Lee",       "Employee ID": "E1007", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-05-20", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "Yes", "Languages": "English", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Alex",    "Last Name": "Morgan",    "Employee ID": "E1001", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-01-15", "Latest Skill End": "", "All Skills": "Sales Support, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Jordan",  "Last Name": "Rivera",    "Employee ID": "E1002", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-03-01", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Casey",   "Last Name": "Chen",      "Employee ID": "E1003", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-02-10", "Latest Skill End": "", "All Skills": "Sales Support, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 32.0, "Days Per Week": 4, "Hours Per Day": 8.0, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Mandarin", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Taylor",  "Last Name": "Brooks",    "Employee ID": "E1004", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2024-11-01", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Sam",     "Last Name": "Patel",     "Employee ID": "E1005", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-06-15", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": 24.0, "Days Per Week": 3, "Hours Per Day": 8.0, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Hindi", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Riley",   "Last Name": "Kim",       "Employee ID": "E1006", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-04-01", "Latest Skill End": "", "All Skills": "Sales Support, Admin Trainer", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Vancouver", "Schedule Excluded": "", "Languages": "English, Korean", "Team Lead": "Lisa Tran"},
+    {"Status": "Active", "First Name": "Morgan",  "Last Name": "Lee",       "Employee ID": "E1007", "Latest Skill Name": "Sales Support",   "Latest Skill Start": "2025-05-20", "Latest Skill End": "", "All Skills": "Sales Support", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "Yes", "Languages": "English", "Team Lead": "Lisa Tran"},
     # Tech Help Desk (7 agents) — Team Lead: Marco Ruiz
-    {"Status": "Active", "First Name": "Jamie",   "Last Name": "Torres",    "Employee ID": "E2001", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-01-10", "Latest Skill End": "", "All Skills": "Tech Help Desk, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Avery",   "Last Name": "Nguyen",    "Employee ID": "E2002", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-02-15", "Latest Skill End": "", "All Skills": "Tech Help Desk, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Vietnamese", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Drew",    "Last Name": "Campbell",  "Employee ID": "E2003", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2024-09-01", "Latest Skill End": "", "All Skills": "Tech Help Desk, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Quinn",   "Last Name": "Dubois",    "Employee ID": "E2004", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-03-20", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": "20", "Days Per Week": "5", "Hours Per Day": "4", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Reese",   "Last Name": "Martin",    "Employee ID": "E2005", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-07-01", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Dakota",  "Last Name": "Singh",     "Employee ID": "E2006", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-04-10", "Latest Skill End": "", "All Skills": "Tech Help Desk, Admin Recruiting", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Punjabi", "Team Lead": "Marco Ruiz"},
-    {"Status": "Active", "First Name": "Skyler",  "Last Name": "O'Brien",   "Employee ID": "E2007", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-06-01", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "Yes", "Languages": "English", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Jamie",   "Last Name": "Torres",    "Employee ID": "E2001", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-01-10", "Latest Skill End": "", "All Skills": "Tech Help Desk, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Avery",   "Last Name": "Nguyen",    "Employee ID": "E2002", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-02-15", "Latest Skill End": "", "All Skills": "Tech Help Desk, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Vietnamese", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Drew",    "Last Name": "Campbell",  "Employee ID": "E2003", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2024-09-01", "Latest Skill End": "", "All Skills": "Tech Help Desk, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Quinn",   "Last Name": "Dubois",    "Employee ID": "E2004", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-03-20", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": 20.0, "Days Per Week": 5, "Hours Per Day": 4.0, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Reese",   "Last Name": "Martin",    "Employee ID": "E2005", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-07-01", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Dakota",  "Last Name": "Singh",     "Employee ID": "E2006", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-04-10", "Latest Skill End": "", "All Skills": "Tech Help Desk, Admin Recruiting", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Punjabi", "Team Lead": "Marco Ruiz"},
+    {"Status": "Active", "First Name": "Skyler",  "Last Name": "O'Brien",   "Employee ID": "E2007", "Latest Skill Name": "Tech Help Desk",  "Latest Skill Start": "2025-06-01", "Latest Skill End": "", "All Skills": "Tech Help Desk", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "Yes", "Languages": "English", "Team Lead": "Marco Ruiz"},
     # Billing (6 agents) — Team Lead: Priya Sharma
-    {"Status": "Active", "First Name": "Harper",  "Last Name": "Wilson",    "Employee ID": "E3001", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-01-05", "Latest Skill End": "", "All Skills": "Billing, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
-    {"Status": "Active", "First Name": "Rowan",   "Last Name": "Garcia",    "Employee ID": "E3002", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-02-20", "Latest Skill End": "", "All Skills": "Billing, Admin Store Liaison", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Priya Sharma"},
-    {"Status": "Active", "First Name": "Emery",   "Last Name": "Davis",     "Employee ID": "E3003", "Latest Skill Name": "Billing",         "Latest Skill Start": "2024-12-01", "Latest Skill End": "", "All Skills": "Billing", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": "24", "Days Per Week": "4", "Hours Per Day": "6", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
-    {"Status": "Active", "First Name": "Finley",  "Last Name": "Johnson",   "Employee ID": "E3004", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-05-01", "Latest Skill End": "", "All Skills": "Billing, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Halifax", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Priya Sharma"},
-    {"Status": "Active", "First Name": "Blair",   "Last Name": "Thompson",  "Employee ID": "E3005", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-03-15", "Latest Skill End": "", "All Skills": "Billing", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
-    {"Status": "Active", "First Name": "Sage",    "Last Name": "Anderson",  "Employee ID": "E3006", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-08-01", "Latest Skill End": "", "All Skills": "Billing, Admin Trainer", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": "42.5", "Days Per Week": "5", "Hours Per Day": "8.5", "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Harper",  "Last Name": "Wilson",    "Employee ID": "E3001", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-01-05", "Latest Skill End": "", "All Skills": "Billing, Escalations", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Rowan",   "Last Name": "Garcia",    "Employee ID": "E3002", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-02-20", "Latest Skill End": "", "All Skills": "Billing, Admin Store Liaison", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English, Spanish", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Emery",   "Last Name": "Davis",     "Employee ID": "E3003", "Latest Skill Name": "Billing",         "Latest Skill Start": "2024-12-01", "Latest Skill End": "", "All Skills": "Billing", "End Date": "", "Contract Type": "Part-Time", "Weekly Hours": 24.0, "Days Per Week": 4, "Hours Per Day": 6.0, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Finley",  "Last Name": "Johnson",   "Employee ID": "E3004", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-05-01", "Latest Skill End": "", "All Skills": "Billing, Admin QA", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Halifax", "Schedule Excluded": "", "Languages": "English, French", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Blair",   "Last Name": "Thompson",  "Employee ID": "E3005", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-03-15", "Latest Skill End": "", "All Skills": "Billing", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
+    {"Status": "Active", "First Name": "Sage",    "Last Name": "Anderson",  "Employee ID": "E3006", "Latest Skill Name": "Billing",         "Latest Skill Start": "2025-08-01", "Latest Skill End": "", "All Skills": "Billing, Admin Trainer", "End Date": "", "Contract Type": "Full-Time", "Weekly Hours": 42.5, "Days Per Week": 5, "Hours Per Day": 8.5, "Timezone": "America/Toronto", "Schedule Excluded": "", "Languages": "English", "Team Lead": "Priya Sharma"},
 ]
 
 # ── Accommodations (a few sample entries) ─────────────────────
@@ -286,6 +286,15 @@ def _mm(m):
     return f"{m // 60:02d}:{m % 60:02d}"
 
 
+def _demo_holiday_for_date(day):
+    """Return the holiday dict if *day* falls on a demo holiday, else None."""
+    settings = get_demo_settings_data()
+    for h in settings.get("holidays", []):
+        if h["date"] == day.isoformat():
+            return h
+    return None
+
+
 def plan_demo_day(schedule_date, lob=None):
     """Apply the demo rules for one date. Returns (schedules, warnings).
     schedules: full list (status scheduled | off | pto), each with a 'reason' for non-working days."""
@@ -293,6 +302,30 @@ def plan_demo_day(schedule_date, lob=None):
         schedule_date = datetime.datetime.strptime(schedule_date[:10], "%Y-%m-%d").date()
     day = schedule_date
     wd = day.weekday()
+
+    # ── Holiday check ────────────────────────────────────────
+    holiday = _demo_holiday_for_date(day)
+    if holiday and holiday.get("volume_factor", 1.0) == 0:
+        # Fully closed — everyone is off
+        schedules = []
+        for i, emp in enumerate(DEMO_EMPLOYEES):
+            emp_lob = emp["Latest Skill Name"]
+            if lob and emp_lob != lob:
+                continue
+            name = f"{emp['First Name']} {emp['Last Name']}"
+            schedules.append({
+                "id": 8000 + i + day.toordinal() % 1000,
+                "employee": name,
+                "employee_id": emp["Employee ID"],
+                "date": day.isoformat(),
+                "start": "", "end": "", "type": "full", "hours": 0,
+                "segments": [],
+                "team_lead": emp.get("Team Lead", ""),
+                "status": "off",
+                "reason": holiday["name"],
+            })
+        return schedules, [f"Holiday: {holiday['name']} — centre closed"]
+
     pto_names = _demo_pto_set(day)
     schedules, warnings, skipped = [], [], []
     scheduled_by_lob = {}
@@ -339,6 +372,26 @@ def plan_demo_day(schedule_date, lob=None):
         schedules.append({**base, "start": start_str, "end": end_str, "hours": hours,
                           "status": "scheduled", "reason": "",
                           "segments": _build_demo_segments(start_str, end_str, idx, 7)})
+
+    # ── Partial-holiday reduction ────────────────────────────────
+    if holiday and 0 < holiday.get("volume_factor", 1.0) < 1.0:
+        vf = holiday["volume_factor"]
+        # Group scheduled employees by LOB, keep only ceil(count * vf) per LOB
+        from collections import defaultdict
+        by_lob = defaultdict(list)
+        for s in schedules:
+            if s["status"] == "scheduled":
+                by_lob[s.get("lob", s.get("_lob", ""))].append(s)
+        for lob_name, sched_list in by_lob.items():
+            keep = max(1, math.ceil(len(sched_list) * vf))
+            for s in sched_list[keep:]:
+                s["status"] = "off"
+                s["reason"] = holiday["name"]
+                s["start"] = ""
+                s["end"] = ""
+                s["hours"] = 0
+                s["segments"] = []
+        warnings.append(f"Holiday: {holiday['name']} — staffing reduced to {vf:.0%}")
 
     # Fill-in pass: closing shift must be covered on weekdays for each LOB with a rule
     if wd < 5:

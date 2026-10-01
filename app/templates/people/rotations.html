@@ -267,21 +267,21 @@ function renderRotWeeks(){
 function addRotationWeek(){rotWeeks.push({label:'',shifts:{mon:null,tue:null,wed:null,thu:null,fri:null,sat:null,sun:null}});renderRotWeeks();}
 function openRotationModal(r){document.getElementById('rotation-modal-title').textContent=r?'Edit Rotation':'Add Rotation Pattern';document.getElementById('rot-id').value=r?r.id:'';document.getElementById('rot-name').value=r?r.name:'';rotWeeks=r?JSON.parse(JSON.stringify(r.weeks||[])):[];if(!rotWeeks.length)addRotationWeek();renderRotWeeks();openModal('rotation-modal');}
 function editRotation(id){openRotationModal(ROTATIONS.find(r=>r.id===id));}
-async function saveRotation(e){e.preventDefault();const res=await api('/people/rotations/save',{id:document.getElementById('rot-id').value||undefined,name:document.getElementById('rot-name').value,weeks:rotWeeks});if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();closeModal('rotation-modal');}else alert(res.error);}
-async function deleteRotation(id){if(!confirm('Delete rotation and all assignments?'))return;const res=await api('/people/rotations/delete',{id});if(res.success){removeById(ROTATIONS,id);renderRotations();}else alert(res.error);}
+async function saveRotation(e){e.preventDefault();const res=await api('/people/rotations/save',{id:document.getElementById('rot-id').value||undefined,name:document.getElementById('rot-name').value,weeks:rotWeeks});if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();closeModal('rotation-modal');}else showToast(res.error || 'Something went wrong', 'error');}
+async function deleteRotation(id){if(!confirm('Delete rotation and all assignments?'))return;const res=await api('/people/rotations/delete',{id});if(res.success){removeById(ROTATIONS,id);renderRotations();}else showToast(res.error || 'Something went wrong', 'error');}
 
 async function assignRotation(rotId){
   const empId=document.getElementById('assign-emp-'+rotId).value;
   const wk=document.getElementById('assign-wk-'+rotId).value;
   const dt=document.getElementById('assign-date-'+rotId).value;
-  if(!empId){alert('Select an employee');return;}
+  if(!empId){showToast('Select an employee', 'warning');return;}
   const res=await api('/people/rotations/assign',{rotation_id:rotId,employee_id:parseInt(empId),current_week:parseInt(wk),start_date:dt||null});
-  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else showToast(res.error || 'Something went wrong', 'error');
 }
 async function unassignRotation(assignId){
   if(!confirm('Remove this assignment?'))return;
   const res=await api('/people/rotations/unassign',{id:assignId});
-  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else alert(res.error);
+  if(res.success){upsert(ROTATIONS,res.rotation);renderRotations();}else showToast(res.error || 'Something went wrong', 'error');
 }
 
 /* ═══ FILL-IN RULES ══════════════════════ */
@@ -328,13 +328,13 @@ async function saveFillInRule(e){
     priority:parseInt(document.getElementById('fillin-priority').value)||0,
     fallback_template_id:document.getElementById('fillin-template').value||null,
   };
-  if(!data.employee_id){alert('Select an employee');return;}
+  if(!data.employee_id){showToast('Select an employee', 'warning');return;}
   const res=await api('/people/rotations/fill-in-rules/save',data);
   if(res.success){
     const listRes=await api('/people/rotations/fill-in-rules/list',{});
     if(listRes.success)FILL_IN_RULES=listRes.rules;
     renderFillInRules();closeModal('fillin-modal');
-  }else alert(res.error);
+  }else showToast(res.error || 'Something went wrong', 'error');
 }
 async function deleteFillInRule(id){
   if(!confirm('Delete this fill-in rule?'))return;
@@ -342,7 +342,7 @@ async function deleteFillInRule(id){
   if(res.success){
     FILL_IN_RULES=FILL_IN_RULES.filter(r=>r.id!==id);
     renderFillInRules();
-  }else alert(res.error);
+  }else showToast(res.error || 'Something went wrong', 'error');
 }
 
 /* ── Initial render ────────────────────── */

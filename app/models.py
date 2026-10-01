@@ -4,7 +4,11 @@ Serevo — SQLAlchemy models
 All database tables for the production platform.
 """
 
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -24,8 +28,8 @@ class User(db.Model):
     role          = db.Column(db.String(20), nullable=False, default="viewer")  # viewer | admin
     is_demo       = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+    updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<User {self.email}>"
@@ -41,7 +45,7 @@ class PlanningUnit(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(120), unique=True, nullable=False)
     is_active  = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
 
     employees    = db.relationship("Employee", backref="planning_unit", lazy="dynamic")
     requirements = db.relationship("RequirementInterval", backref="planning_unit", lazy="dynamic")
@@ -77,8 +81,8 @@ class Employee(db.Model):
     team_lead        = db.Column(db.String(100), default="")
     schedule_excluded = db.Column(db.Boolean, default=False, server_default="false")
     manually_edited  = db.Column(db.Boolean, default=False, server_default="false")
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     accommodations = db.relationship("Accommodation", backref="employee", lazy="dynamic")
     pto_entries    = db.relationship("PTOEntry", backref="employee", lazy="dynamic")
@@ -134,7 +138,7 @@ class Accommodation(db.Model):
     shift_start = db.Column(db.String(10), default="")
     shift_end   = db.Column(db.String(10), default="")
     notes       = db.Column(db.Text, default="")
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def to_legacy_dict(self):
         emp = self.employee
@@ -161,11 +165,11 @@ class PTOEntry(db.Model):
 
     id          = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
-    start_date  = db.Column(db.Date, nullable=False)
-    end_date    = db.Column(db.Date, nullable=False)
+    start_date  = db.Column(db.Date, nullable=False, index=True)
+    end_date    = db.Column(db.Date, nullable=False, index=True)
     pto_type    = db.Column(db.String(20), default="full")   # full | partial
     note        = db.Column(db.Text, default="")
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def to_legacy_dict(self):
         emp = self.employee
@@ -195,7 +199,7 @@ class ForecastInterval(db.Model):
     offered          = db.Column(db.Float, default=0)
     aht              = db.Column(db.Float, default=0)
     source           = db.Column(db.String(30), default="upload")  # upload | api | manual
-    uploaded_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at      = db.Column(db.DateTime, default=_utcnow)
 
     __table_args__ = (
         db.Index("ix_forecast_unit_ts", "planning_unit_id", "timestamp"),
@@ -217,7 +221,7 @@ class RequirementInterval(db.Model):
     timestamp        = db.Column(db.DateTime, nullable=False, index=True)
     agents_required  = db.Column(db.Float, default=0)
     source           = db.Column(db.String(30), default="upload")
-    uploaded_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at      = db.Column(db.DateTime, default=_utcnow)
 
     __table_args__ = (
         db.Index("ix_req_unit_ts", "planning_unit_id", "timestamp"),
@@ -240,14 +244,14 @@ class Schedule(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
-    schedule_date    = db.Column(db.Date, nullable=False)
+    schedule_date    = db.Column(db.Date, nullable=False, index=True)
     shift_start      = db.Column(db.Time, nullable=True)
     shift_end        = db.Column(db.Time, nullable=True)
     shift_type       = db.Column(db.String(10), default="full")      # full | half
     hours            = db.Column(db.Float, default=0)
     status           = db.Column(db.String(20), default="scheduled")  # scheduled | off | pto
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     employee = db.relationship("Employee", backref="schedules")
     planning_unit = db.relationship("PlanningUnit", backref="schedules")
@@ -292,7 +296,7 @@ class ShiftSegment(db.Model):
     duration_mins = db.Column(db.Integer, default=0)
     sort_order    = db.Column(db.Integer, default=0)
     notes         = db.Column(db.String(255), default="")
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
 
     __table_args__ = (
         db.Index("ix_seg_schedule", "schedule_id", "sort_order"),
@@ -327,8 +331,8 @@ class APIConnection(db.Model):
     last_tested   = db.Column(db.DateTime, nullable=True)
     last_status   = db.Column(db.String(20), default="untested") # untested | ok | error
     last_error    = db.Column(db.Text, default="")
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+    updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<APIConnection {self.name} ({self.provider})>"
@@ -350,7 +354,7 @@ class DataUpload(db.Model):
     status       = db.Column(db.String(20), default="pending")  # pending | processing | complete | error
     error_detail = db.Column(db.Text, default="")
     uploaded_by  = db.Column(db.String(255), default="")
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
     def __repr__(self):
         return f"<DataUpload {self.filename} ({self.upload_type})>"
@@ -395,8 +399,8 @@ class DataSource(db.Model):
     rows_synced       = db.Column(db.Integer, default=0)
     sync_interval_hours = db.Column(db.Integer, default=24)
 
-    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at        = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at        = db.Column(db.DateTime, default=_utcnow)
+    updated_at        = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     # Relationships
     api_connection    = db.relationship("APIConnection", backref="data_sources")
@@ -460,7 +464,7 @@ class SegmentCode(db.Model):
     is_flexible       = db.Column(db.Boolean, default=False)    # True = stagger within window; False = fixed placement
     window_start_mins = db.Column(db.Integer, nullable=True)    # earliest offset from shift start (flexible only)
     window_end_mins   = db.Column(db.Integer, nullable=True)    # latest offset from shift start (flexible only)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -502,7 +506,7 @@ class ShiftTemplate(db.Model):
     shift_category = db.Column(db.String(20), default="any")         # opening | closing | mid | any
     is_active   = db.Column(db.Boolean, default=True)
     sort_order  = db.Column(db.Integer, default=0)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
 
     planning_unit = db.relationship("PlanningUnit", backref="shift_templates", foreign_keys=[planning_unit_id])
 
@@ -532,7 +536,7 @@ class RotationPattern(db.Model):
     # Each week: {label, shifts: {mon: template_id|null, tue: ..., sun: ...}}
     cycle_weeks = db.Column(db.Integer, default=1)                   # total weeks in cycle
     is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
 
     assignments = db.relationship("RotationAssignment", backref="pattern",
                                   cascade="all, delete-orphan", lazy="joined")
@@ -557,7 +561,7 @@ class RotationAssignment(db.Model):
     employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
     current_week = db.Column(db.Integer, default=0)       # 0-indexed week in the cycle
     start_date   = db.Column(db.Date, nullable=True)      # when this assignment starts
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="rotation_assignments")
 
@@ -591,7 +595,7 @@ class FillInRule(db.Model):
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
     fallback_template_id = db.Column(db.Integer, db.ForeignKey("shift_templates.id"), nullable=True)
     is_active        = db.Column(db.Boolean, default=True)
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="fill_in_rules")
     fallback_template = db.relationship("ShiftTemplate", foreign_keys=[fallback_template_id])
@@ -647,7 +651,7 @@ class LOBSetting(db.Model):
     # Sunday operating hours (NULL = same as weekday)
     sun_operating_start   = db.Column(db.String(5), nullable=True)
     sun_operating_end     = db.Column(db.String(5), nullable=True)
-    updated_at            = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at            = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     planning_unit = db.relationship("PlanningUnit", backref=db.backref("lob_setting", uselist=False))
 
@@ -700,7 +704,7 @@ class TimeOffType(db.Model):
     is_default    = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
     sort_order    = db.Column(db.Integer, default=0)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -733,7 +737,7 @@ class OvertimeRule(db.Model):
     eligible_after_days = db.Column(db.Integer, default=90)             # days of employment before eligible
     pay_multiplier    = db.Column(db.Float, default=1.5)                # time-and-a-half, double, etc.
     is_active         = db.Column(db.Boolean, default=True)
-    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at        = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         import json
@@ -770,7 +774,7 @@ class ScheduleRule(db.Model):
     allow_back_to_back    = db.Column(db.Boolean, default=False)        # close then open
     is_default            = db.Column(db.Boolean, default=False)
     is_active             = db.Column(db.Boolean, default=True)
-    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at            = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -797,7 +801,7 @@ class Holiday(db.Model):
 
     id            = db.Column(db.Integer, primary_key=True)
     name          = db.Column(db.String(100), nullable=False)
-    date          = db.Column(db.Date, nullable=False)
+    date          = db.Column(db.Date, nullable=False, index=True)
     is_full_day   = db.Column(db.Boolean, default=True)
     start_time    = db.Column(db.String(5), nullable=True)       # for partial-day holidays
     end_time      = db.Column(db.String(5), nullable=True)
@@ -806,7 +810,7 @@ class Holiday(db.Model):
     volume_factor = db.Column(db.Float, default=0.0)             # 0 = closed, 0.5 = half volume
     year          = db.Column(db.Integer, nullable=False)
     is_recurring  = db.Column(db.Boolean, default=True)          # auto-create for next year
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -832,7 +836,7 @@ class SkillGroup(db.Model):
     name        = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.String(255), default="")
     is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
 
     mappings = db.relationship("SkillMapping", backref="skill_group",
                                cascade="all, delete-orphan", lazy="joined")
@@ -856,7 +860,7 @@ class SkillMapping(db.Model):
     proficiency   = db.Column(db.Integer, default=3)          # 1-5 scale
     priority      = db.Column(db.Integer, default=1)          # routing priority (1 = primary)
     is_active     = db.Column(db.Boolean, default=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="skill_mappings")
 
@@ -892,7 +896,7 @@ class AdherenceException(db.Model):
     is_default   = db.Column(db.Boolean, default=False)
     is_active    = db.Column(db.Boolean, default=True)
     sort_order   = db.Column(db.Integer, default=0)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -922,7 +926,7 @@ class AlertConfig(db.Model):
     email_recipients  = db.Column(db.Text, default="")                  # comma-separated emails
     cooldown_minutes  = db.Column(db.Integer, default=30)               # min time between alerts
     is_active         = db.Column(db.Boolean, default=True)
-    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at        = db.Column(db.DateTime, default=_utcnow)
 
     planning_unit = db.relationship("PlanningUnit", backref="alert_configs")
 
@@ -956,7 +960,7 @@ class BrandSetting(db.Model):
     logo_url      = db.Column(db.String(500), default="")              # URL or data-URI
     favicon_url   = db.Column(db.String(500), default="")
     footer_text   = db.Column(db.String(255), default="")
-    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def to_dict(self):
         return {
@@ -985,7 +989,7 @@ class EmployeeAvailability(db.Model):
     latest_start   = db.Column(db.Time, nullable=True)       # e.g. 10:00
     latest_end     = db.Column(db.Time, nullable=True)       # e.g. 22:00
     notes          = db.Column(db.String(255), default="")
-    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at     = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     employee = db.relationship("Employee", backref="availability_entries")
 
@@ -1031,7 +1035,7 @@ class IntervalActual(db.Model):
     max_queued       = db.Column(db.Integer, nullable=True)
     source           = db.Column(db.String(30), default="upload")  # upload | sheet | api | demo
     data_source_id   = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=True, index=True)
-    uploaded_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at      = db.Column(db.DateTime, default=_utcnow)
 
     planning_unit = db.relationship("PlanningUnit")
     data_source   = db.relationship("DataSource", backref="actuals")
@@ -1064,7 +1068,7 @@ class LobMapping(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     source_name      = db.Column(db.String(200), unique=True, nullable=False, index=True)
     planning_unit_name = db.Column(db.String(200), nullable=False)
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
 
     def __repr__(self):
         return f"<LobMapping {self.source_name!r} → {self.planning_unit_name!r}>"
@@ -1081,7 +1085,7 @@ class AgentStatusEvent(db.Model):
     start_ts     = db.Column(db.DateTime, nullable=False, index=True)
     end_ts       = db.Column(db.DateTime, nullable=True)              # null = still in this status
     source       = db.Column(db.String(30), default="upload")
-    uploaded_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at  = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref=db.backref("status_events", lazy="dynamic"))
 

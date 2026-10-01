@@ -33,18 +33,7 @@ TIMEZONE = cp.TIMEZONE
 
 
 # ── helpers to get Google Sheet worksheets ─────────────────────
-def _get_sheet():
-    """Return the main capacity Google Sheet object, or None."""
-    try:
-        from app.data_source import _open_capacity_sheet
-        sheet, err = _open_capacity_sheet()
-        if err:
-            log.warning(f"Sheet open error: {err}")
-            return None
-        return sheet
-    except Exception as e:
-        log.warning(f"Sheet import error: {e}")
-        return None
+from app.routes._utils import get_sheet as _get_sheet
 
 
 def _get_worksheet(sheet, tab_name):

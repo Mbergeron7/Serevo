@@ -215,27 +215,6 @@ def admin_setup():
     """
 
 
-@auth_bp.route("/debug-users")
-def debug_users():
-    """Temporary debug route — shows user flags. Protected by secret key."""
-    secret = request.args.get("key", "")
-    if not secret or secret != cfg.SECRET_KEY:
-        return "Not found", 404
-    from app.models import User
-    users = User.query.all()
-    lines = []
-    for u in users:
-        demo_val = getattr(u, 'is_demo', 'MISSING')
-        lines.append(
-            f"<tr><td>{u.email}</td><td>{u.role}</td>"
-            f"<td>{u.is_active}</td><td>{demo_val}</td></tr>"
-        )
-    return f"""<html><body><h2>Users Debug</h2>
-    <table border=1 cellpadding=6>
-    <tr><th>Email</th><th>Role</th><th>Active</th><th>is_demo</th></tr>
-    {''.join(lines)}
-    </table></body></html>"""
-
 
 @auth_bp.route("/logout")
 def logout():

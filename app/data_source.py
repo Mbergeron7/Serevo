@@ -389,3 +389,9 @@ def get_source():
 def is_demo_source():
     """Check if the current data source is the demo provider."""
     return isinstance(get_source(), DemoSource)
+
+
+def reset_source():
+    """Reset the cached data source so the next call to get_source() re-evaluates config."""
+    global _INSTANCE
+    _INSTANCE = None

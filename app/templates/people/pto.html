@@ -283,10 +283,10 @@ function closeModal() { overlay.classList.remove('open'); }
 
 function savePTO() {
   const emp = document.getElementById('fEmployee').value;
-  if (!emp) { alert('Please select an employee.'); return; }
+  if (!emp) { showToast('Please select an employee.', 'warning'); return; }
   const start = document.getElementById('fStart').value;
   const end = document.getElementById('fEnd').value;
-  if (!start || !end) { alert('Please set start and end dates.'); return; }
+  if (!start || !end) { showToast('Please set start and end dates.', 'warning'); return; }
   const body = {
     Employee: emp,
     Group: document.getElementById('fGroup').value,
@@ -304,9 +304,9 @@ function savePTO() {
   .then(r => r.json())
   .then(d => {
     if (d.success) location.reload();
-    else alert('Error: ' + (d.error || 'Unknown'));
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   })
-  .catch(e => alert('Save failed: ' + e));
+  .catch(e => showToast('Save failed: ' + e, 'error'));
 }
 
 function deletePTO(rowIdx, name) {
@@ -319,9 +319,9 @@ function deletePTO(rowIdx, name) {
   .then(r => r.json())
   .then(d => {
     if (d.success) location.reload();
-    else alert('Error: ' + (d.error || 'Unknown'));
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   })
-  .catch(e => alert('Delete failed: ' + e));
+  .catch(e => showToast('Delete failed: ' + e, 'error'));
 }
 
 function filterPTO() {

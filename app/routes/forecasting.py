@@ -27,13 +27,7 @@ def _demo_guard():
     return None
 
 
-def _get_sheet():
-    try:
-        from app.data_source import _open_capacity_sheet
-        sheet, err = _open_capacity_sheet()
-        return None if err else sheet
-    except Exception:
-        return None
+from app.routes._utils import get_sheet as _get_sheet
 
 
 # ── Main view (PeopleWare-style dashboard) ──────────────────
@@ -655,70 +649,3 @@ def forecast_api_data():
         return jsonify({"success": False, "error": str(e)})
 
 
-@forecasting_bp.route("/debug-sheet-data", methods=["GET"])
-@login_required
-def debug_sheet_data():
-    """Diagnostic: dump what the FORECAST RAW sheet actually contains."""
-    try:
-        from app.data_source import SheetSource
-        src = SheetSource()
-        rows, err = src._records("FORECAST RAW")
-        if err:
-            return jsonify({"success": False, "error": err})
-        if not rows:
-            return jsonify({"success": True, "total_rows": 0, "message": "Sheet is empty"})
-
-        # Summarize what's in the sheet
-        columns = list(rows[0].keys()) if rows else []
-        lobs = {}
-        date_range = {"min": None, "max": None}
-        sample_rows = []
-
-        for i, r in enumerate(rows):
-            lob = str(r.get("LOB", r.get("lob", r.get("Lob", "")))).strip()
-            if lob:
-                if lob not in lobs:
-                    lobs[lob] = {"count": 0, "dates": set()}
-                lobs[lob]["count"] += 1
-
-            # Try to find a date
-            date_col = str(r.get("Date", r.get("date", ""))).strip()
-            ts_col = str(r.get("Timestamp", r.get("timestamp", ""))).strip()
-            date_part = ""
-            if date_col and len(date_col) >= 10:
-                date_part = date_col[:10]
-            elif ts_col and len(ts_col) > 10:
-                date_part = ts_col[:10]
-
-            if date_part:
-                if lob in lobs:
-                    lobs[lob]["dates"].add(date_part)
-                if not date_range["min"] or date_part < date_range["min"]:
-                    date_range["min"] = date_part
-                if not date_range["max"] or date_part > date_range["max"]:
-                    date_range["max"] = date_part
-
-            if i < 5:
-                sample_rows.append(dict(r))
-
-        # Convert sets to counts for JSON
-        lob_summary = {}
-        for lob, info in lobs.items():
-            lob_summary[lob] = {
-                "rows": info["count"],
-                "unique_dates": len(info["dates"]),
-                "date_range": [min(info["dates"]) if info["dates"] else None,
-                               max(info["dates"]) if info["dates"] else None],
-            }
-
-        return jsonify({
-            "success": True,
-            "total_rows": len(rows),
-            "columns": columns,
-            "lobs": lob_summary,
-            "date_range": date_range,
-            "sample_rows": sample_rows,
-        })
-    except Exception as e:
-        log.error(f"Debug sheet data error: {e}")
-        return jsonify({"success": False, "error": str(e)})

@@ -158,7 +158,7 @@
 </div>
 
 <!-- ═══ Status bar ═══ -->
-<div id="statusBar" class="fc-status"></div>
+<div id="statusBar" class="fc-status" style="display:none"></div>
 
 <!-- ═══ Controls ═══ -->
 <div class="fc-controls">
@@ -314,12 +314,10 @@ function getSelectedLobs() {
 
 // ── Status helpers ──────────────────────────────
 function showStatus(msg, type) {
-  const el = document.getElementById('statusBar');
-  el.className = 'fc-status ' + type;
-  el.innerHTML = msg;
+  showToast(msg, type || 'info');
 }
 function hideStatus() {
-  document.getElementById('statusBar').className = 'fc-status';
+  // no-op: toasts auto-dismiss
 }
 
 // ── Generate forecasts for all selected LOBs ────

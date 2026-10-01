@@ -318,7 +318,7 @@ function editAccom(a) {
 
 function saveAccom() {
   const emp = document.getElementById('fEmployee').value;
-  if (!emp) { alert('Please select an employee.'); return; }
+  if (!emp) { showToast('Please select an employee.', 'warning'); return; }
   const body = {
     Employee: emp,
     Group: document.getElementById('fGroup').value,
@@ -338,9 +338,9 @@ function saveAccom() {
   .then(r => r.json())
   .then(d => {
     if (d.success) location.reload();
-    else alert('Error: ' + (d.error || 'Unknown'));
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   })
-  .catch(e => alert('Save failed: ' + e));
+  .catch(e => showToast('Save failed: ' + e, 'error'));
 }
 
 function deleteAccom(name) {
@@ -353,9 +353,9 @@ function deleteAccom(name) {
   .then(r => r.json())
   .then(d => {
     if (d.success) location.reload();
-    else alert('Error: ' + (d.error || 'Unknown'));
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   })
-  .catch(e => alert('Delete failed: ' + e));
+  .catch(e => showToast('Delete failed: ' + e, 'error'));
 }
 
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });

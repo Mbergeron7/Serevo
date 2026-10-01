@@ -20,87 +20,8 @@ log = logging.getLogger("serevo.scheduling")
 scheduling_bp = Blueprint("scheduling", __name__, url_prefix="/scheduling")
 
 
-@scheduling_bp.route("/debug-lob/<lob>", methods=["GET"])
-@login_required
-def debug_lob(lob):
-    """Diagnostic: show what _get_employees_for_lob finds."""
-    from app.models import PlanningUnit
-    from app.scheduling.engine import _get_employees_for_lob
 
-    # Check planning unit
-    pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
-
-    # Check employees with this planning_unit_id
-    db_emps = []
-    if pu:
-        emps = Employee.query.filter_by(planning_unit_id=pu.id).all()
-        db_emps = [{"name": e.full_name, "eid": e.employee_id, "status": e.status,
-                     "pu_id": e.planning_unit_id} for e in emps]
-
-    # Check what the engine finds
-    engine_emps = _get_employees_for_lob(lob)
-
-    # Check total employees and their planning_unit_ids
-    all_emps = Employee.query.all()
-    pu_dist = {}
-    for e in all_emps:
-        key = str(e.planning_unit_id)
-        if key not in pu_dist:
-            p = PlanningUnit.query.get(e.planning_unit_id) if e.planning_unit_id else None
-            pu_dist[key] = {"name": p.name if p else "NULL", "count": 0}
-        pu_dist[key]["count"] += 1
-
-    # Check forecast and requirements data
-    from app.models import ForecastInterval, RequirementInterval
-    fc_count = 0
-    req_count = 0
-    fc_sample = []
-    req_sample = []
-    if pu:
-        fc_count = ForecastInterval.query.filter_by(planning_unit_id=pu.id).count()
-        req_count = RequirementInterval.query.filter_by(planning_unit_id=pu.id).count()
-        if fc_count > 0:
-            fc_rows = ForecastInterval.query.filter_by(planning_unit_id=pu.id)\
-                .order_by(ForecastInterval.timestamp.desc()).limit(5).all()
-            fc_sample = [{"ts": r.timestamp.isoformat(), "offered": r.offered,
-                          "aht": r.aht, "source": r.source} for r in fc_rows]
-        if req_count > 0:
-            req_rows = RequirementInterval.query.filter_by(planning_unit_id=pu.id)\
-                .order_by(RequirementInterval.timestamp.desc()).limit(5).all()
-            req_sample = [{"ts": r.timestamp.isoformat(), "agents": r.agents_required,
-                           "source": r.source} for r in req_rows]
-
-    # Total counts across all LOBs
-    total_fc = ForecastInterval.query.count()
-    total_req = RequirementInterval.query.count()
-
-    return jsonify({
-        "lob_query": lob,
-        "planning_unit": {"id": pu.id, "name": pu.name} if pu else None,
-        "db_employees_with_pu": len(db_emps),
-        "db_employees_sample": db_emps[:5],
-        "engine_found": len(engine_emps),
-        "engine_sample": engine_emps[:5],
-        "pu_distribution": pu_dist,
-        "forecast_intervals": fc_count,
-        "forecast_sample": fc_sample,
-        "requirement_intervals": req_count,
-        "requirement_sample": req_sample,
-        "total_forecast_all_lobs": total_fc,
-        "total_requirements_all_lobs": total_req,
-    })
-
-
-def _get_sheet():
-    """Return the capacity Google Sheet object, or None."""
-    try:
-        from app.data_source import _open_capacity_sheet
-        sheet, err = _open_capacity_sheet()
-        if err:
-            return None
-        return sheet
-    except Exception:
-        return None
+from app.routes._utils import get_sheet as _get_sheet
 
 
 def _parse_time(t):
@@ -137,46 +58,6 @@ def index():
         lobs=lobs,
     )
 
-
-# ── Debug: employee LOB mapping ────────────────────────────
-@scheduling_bp.route("/debug-employees", methods=["GET"])
-@login_required
-def debug_employees():
-    """Show employee → LOB mapping for troubleshooting."""
-    try:
-        from app.models import Employee, PlanningUnit
-        emps = Employee.query.order_by(Employee.last_name).all()
-        units = {u.id: u.name for u in PlanningUnit.query.all()}
-        rows = []
-        for e in emps:
-            rows.append({
-                "db_id": e.id,
-                "employee_id": e.employee_id,
-                "name": e.full_name,
-                "status": e.status,
-                "planning_unit_id": e.planning_unit_id,
-                "lob": units.get(e.planning_unit_id, "(none)"),
-            })
-        # Also show what get_employees returns
-        from app.people.manager import get_employees
-        legacy, err = get_employees()
-        legacy_sample = []
-        for emp in (legacy or [])[:5]:
-            legacy_sample.append({
-                "name": f"{emp.get('First Name','')} {emp.get('Last Name','')}",
-                "employee_id": emp.get("Employee ID",""),
-                "skill": emp.get("Latest Skill Name",""),
-                "status": emp.get("Status",""),
-            })
-        return jsonify({
-            "db_employees": len(rows),
-            "planning_units": units,
-            "employees": rows,
-            "legacy_sample": legacy_sample,
-            "legacy_error": err,
-        })
-    except Exception as ex:
-        return jsonify({"error": str(ex)})
 
 
 # ── Generate schedule (API) ─────────────────────────────────
@@ -356,37 +237,6 @@ def generate():
         return jsonify({"success": False, "error": str(e)})
 
 
-# ── Debug: check forecast/requirements DB state ──────────
-@scheduling_bp.route("/debug-db-state", methods=["GET"])
-@login_required
-def debug_db_state():
-    """Show what's in the DB for forecast/requirements."""
-    try:
-        from app.models import PlanningUnit, ForecastInterval, RequirementInterval
-        from sqlalchemy import func as sa_func
-        units = PlanningUnit.query.all()
-        result = {"planning_units": []}
-        for u in units:
-            fc_count = ForecastInterval.query.filter_by(planning_unit_id=u.id).count()
-            req_count = RequirementInterval.query.filter_by(planning_unit_id=u.id).count()
-            fc_min = fc_max = req_min = req_max = None
-            if fc_count:
-                fc_min = str(ForecastInterval.query.filter_by(planning_unit_id=u.id).order_by(ForecastInterval.timestamp).first().timestamp)[:10]
-                fc_max = str(ForecastInterval.query.filter_by(planning_unit_id=u.id).order_by(ForecastInterval.timestamp.desc()).first().timestamp)[:10]
-            if req_count:
-                req_min = str(RequirementInterval.query.filter_by(planning_unit_id=u.id).order_by(RequirementInterval.timestamp).first().timestamp)[:10]
-                req_max = str(RequirementInterval.query.filter_by(planning_unit_id=u.id).order_by(RequirementInterval.timestamp.desc()).first().timestamp)[:10]
-            result["planning_units"].append({
-                "id": u.id, "name": u.name,
-                "forecast_count": fc_count, "forecast_range": f"{fc_min} to {fc_max}" if fc_count else None,
-                "requirement_count": req_count, "requirement_range": f"{req_min} to {req_max}" if req_count else None,
-            })
-        result["total_forecast"] = ForecastInterval.query.count()
-        result["total_requirements"] = RequirementInterval.query.count()
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
 
 # ── Coverage data (API) ────────────────────────────────────
 @scheduling_bp.route("/coverage", methods=["POST"])
@@ -496,12 +346,17 @@ def save_schedule():
         ).first()
         pu_id = pu.id if pu else None
 
-        # Delete existing schedules for this LOB+date
-        existing = Schedule.query.filter_by(
+        # Delete existing schedules for this LOB+date (bulk)
+        Schedule.query.filter_by(
             schedule_date=sched_date, planning_unit_id=pu_id
-        ).all()
-        for s in existing:
-            db.session.delete(s)
+        ).delete(synchronize_session=False)
+
+        # Prefetch all employees by external ID for this batch
+        ext_ids = [str(s.get("employee_id", "")).strip() for s in shifts if s.get("employee_id")]
+        emp_lookup = {}
+        if ext_ids:
+            for emp in Employee.query.filter(Employee.employee_id.in_(ext_ids)).all():
+                emp_lookup[emp.employee_id] = emp
 
         saved = 0
         for shift in shifts:
@@ -509,7 +364,7 @@ def save_schedule():
             if not emp_ext_id:
                 continue
 
-            emp = Employee.query.filter_by(employee_id=emp_ext_id).first()
+            emp = emp_lookup.get(emp_ext_id)
             if not emp:
                 continue
 
@@ -974,14 +829,11 @@ def clear_schedule():
         if not pu:
             return jsonify({"success": True, "deleted": 0})
 
-        existing = Schedule.query.filter(
+        count = Schedule.query.filter(
             Schedule.planning_unit_id == pu.id,
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
-        ).all()
-        count = len(existing)
-        for s in existing:
-            db.session.delete(s)
+        ).delete(synchronize_session=False)
         db.session.commit()
 
         return jsonify({"success": True, "deleted": count})

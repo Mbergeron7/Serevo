@@ -43,6 +43,9 @@
     </div>
   </nav>
 
+  <!-- Global toast container -->
+  <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:400px;"></div>
+
   <main>
     {% block content %}{% endblock %}
   </main>
@@ -53,6 +56,29 @@
   </footer>
 
   <script src="{{ url_for('static', filename='js/table-utils.js') }}"></script>
+  <script>
+  /* ── Global Toast Notification System ── */
+  function showToast(msg, type, duration) {
+    type = type || 'info';
+    duration = duration || (type === 'error' ? 6000 : 3500);
+    var container = document.getElementById('toastContainer');
+    if (!container) return;
+    var colors = {success:'#16a34a', error:'#dc2626', info:'#2563eb', warning:'#d97706'};
+    var icons = {success:'✓', error:'✕', info:'ℹ', warning:'⚠'};
+    var toast = document.createElement('div');
+    toast.style.cssText = 'display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:8px;color:#fff;font-size:.9rem;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:toastIn .25s ease;background:' + (colors[type]||colors.info);
+    toast.innerHTML = '<span style="font-size:1.1rem">' + (icons[type]||'') + '</span><span>' + msg + '</span>';
+    container.appendChild(toast);
+    setTimeout(function() {
+      toast.style.animation = 'toastOut .25s ease forwards';
+      setTimeout(function() { toast.remove(); }, 250);
+    }, duration);
+  }
+  </script>
+  <style>
+  @keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes toastOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(40px); } }
+  </style>
   {% block scripts %}{% endblock %}
 </body>
 </html>

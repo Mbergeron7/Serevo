@@ -25,13 +25,7 @@ def _all_lobs(user):
     return get_available_lobs(sheet)
 
 
-def _get_sheet():
-    try:
-        from app.data_source import _open_capacity_sheet
-        sheet, err = _open_capacity_sheet()
-        return None if err else sheet
-    except Exception:
-        return None
+from app.routes._utils import get_sheet as _get_sheet
 
 
 # ── "All LOBs" aggregation helpers ─────────────────────────
