@@ -870,7 +870,7 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
     def _one(emp, day):
         sess = requests.Session()
         eid = str(emp.get("employee_id"))
-        data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+        data = _legacy_get(sess, f"employees/{eid}/schedules/{day.isoformat()}") or {}
         # Capture first few raw responses for diagnosis
         if diagnose and len(sample_raw) < 3 and data:
             sample_raw.append({"eid": eid, "day": day.isoformat(),
