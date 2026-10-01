@@ -371,41 +371,99 @@ def _build_plan(user, year, shrinkage, occupancy, answer_rate):
             if user and user.get("is_demo"):
                 from app.demo_data import DEMO_LOBS, get_demo_forecast, get_demo_requirements, DEMO_EMPLOYEES
                 import calendar, datetime as _dt
+
+                # ── Which LOBs have language splits in the demo ─────
+                # Check if any employee in that LOB speaks French
+                demo_lang_lobs = set()
+                for lob_name in DEMO_LOBS:
+                    lob_emps = [e for e in DEMO_EMPLOYEES
+                                if e.get("Latest Skill Name") == lob_name
+                                and str(e.get("Status", "Active")).strip().lower() in ("active", "")]
+                    for e in lob_emps:
+                        langs = (e.get("Languages") or "English").lower()
+                        if "french" in langs or "français" in langs:
+                            demo_lang_lobs.add(lob_name)
+                            break
+
+                def _parse_demo_date(s):
+                    s = str(s or "").strip()[:10]
+                    if not s:
+                        return None
+                    try:
+                        return _dt.datetime.strptime(s, "%Y-%m-%d").date()
+                    except Exception:
+                        return None
+
+                def _demo_hc_for_month(lob_name, month_num, lang_filter=None):
+                    """Count demo employees active in a given month, optionally by language."""
+                    first_of_month = _dt.date(year, month_num, 1)
+                    _, last_day = calendar.monthrange(year, month_num)
+                    last_of_month = _dt.date(year, month_num, last_day)
+                    count = 0
+                    for e in DEMO_EMPLOYEES:
+                        if e.get("Latest Skill Name") != lob_name:
+                            continue
+                        if str(e.get("Status", "Active")).strip().lower() not in ("active", ""):
+                            continue
+                        start = _parse_demo_date(e.get("Latest Skill Start"))
+                        end = _parse_demo_date(e.get("End Date"))
+                        if start and start > last_of_month:
+                            continue
+                        if end and end < first_of_month:
+                            continue
+                        if lang_filter:
+                            langs = (e.get("Languages") or "English").lower()
+                            if lang_filter == "EN" and "english" not in langs:
+                                continue
+                            if lang_filter == "FR" and "french" not in langs and "français" not in langs:
+                                continue
+                        count += 1
+                    return count
+
                 plan = []
                 for lob_name in DEMO_LOBS:
-                    lob_plan = {"lob": lob_name, "months": []}
-                    emp_count = sum(1 for e in DEMO_EMPLOYEES
-                                    if e.get("Latest Skill Name") == lob_name
-                                    and str(e.get("Status", "Active")).strip().lower() in ("active", ""))
-                    for month_num in range(1, 13):
-                        sample_day = date(year, month_num, 15)
-                        fc, _ = get_demo_forecast(lob_name, sample_day)
-                        rq, _ = get_demo_requirements(lob_name, sample_day)
-                        avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
-                        avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
-                        peak_agents = max((r["agents_required"] for r in rq), default=0)
-                        fte_req = round(avg_req / (1 - shrinkage), 1)
-                        gap = round(emp_count - fte_req, 1)
-                        wd = sum(1 for d in range(1, calendar.monthrange(year, month_num)[1] + 1)
-                                 if _dt.date(year, month_num, d).weekday() < 5)
-                        lob_plan["months"].append({
-                            "month":        month_num,
-                            "month_label":  _dt.date(year, month_num, 1).strftime("%b-%y"),
-                            "fc_offered":   round(avg_vol * len(fc)),
-                            "fc_answered":  round(avg_vol * len(fc) * answer_rate),
-                            "aht":          "—",
-                            "psih_raw":     round(avg_req, 1),
-                            "psih_shr":     round(avg_req / (1 - shrinkage), 1),
-                            "fte_req":      fte_req,
-                            "actual_hc":    emp_count,
-                            "gap":          gap,
-                            "occupancy":    occupancy,
-                            "shrinkage":    shrinkage,
-                            "working_days": wd,
-                            "peak_agents":  round(peak_agents, 1),
-                            "avg_agents":   round(avg_req, 1),
-                        })
-                    plan.append(lob_plan)
+                    # Determine variants: Combined + EN + FR if language split exists
+                    if lob_name in demo_lang_lobs:
+                        variants = [
+                            (f"{lob_name} Combined", None),
+                            (f"{lob_name} EN", "EN"),
+                            (f"{lob_name} FR", "FR"),
+                        ]
+                    else:
+                        variants = [(lob_name, None)]
+
+                    for label, lang in variants:
+                        lob_plan = {"lob": label, "months": []}
+                        for month_num in range(1, 13):
+                            sample_day = date(year, month_num, 15)
+                            fc, _ = get_demo_forecast(lob_name, sample_day)
+                            rq, _ = get_demo_requirements(lob_name, sample_day)
+                            avg_vol = sum(r["offered"] for r in fc) / max(1, len(fc))
+                            avg_req = sum(r["agents_required"] for r in rq) / max(1, len(rq))
+                            peak_agents = max((r["agents_required"] for r in rq), default=0)
+                            fte_req = round(avg_req / (1 - shrinkage), 1)
+                            emp_count = _demo_hc_for_month(lob_name, month_num, lang)
+                            gap = round(emp_count - fte_req, 1)
+                            wd = sum(1 for d in range(1, calendar.monthrange(year, month_num)[1] + 1)
+                                     if _dt.date(year, month_num, d).weekday() < 5)
+                            lob_plan["months"].append({
+                                "month":        month_num,
+                                "month_label":  _dt.date(year, month_num, 1).strftime("%b-%y"),
+                                "fc_offered":   round(avg_vol * len(fc)),
+                                "fc_answered":  round(avg_vol * len(fc) * answer_rate),
+                                "aht":          "—",
+                                "psih_raw":     round(avg_req, 1),
+                                "psih_shr":     round(avg_req / (1 - shrinkage), 1),
+                                "fte_req":      fte_req,
+                                "actual_hc":    emp_count,
+                                "gap":          gap,
+                                "occupancy":    occupancy,
+                                "shrinkage":    shrinkage,
+                                "working_days": wd,
+                                "peak_agents":  round(peak_agents, 1),
+                                "avg_agents":   round(avg_req, 1),
+                            })
+                        plan.append(lob_plan)
             else:
                 # Try DB-backed plan first (from Serevo-generated forecasts)
                 try:
