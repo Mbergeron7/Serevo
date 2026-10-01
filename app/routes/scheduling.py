@@ -983,16 +983,14 @@ def import_wfm_debug():
 
         today = "2026-10-01"
 
-        # Legacy API probes
+        # Legacy API probes — singular vs plural schedule paths
         results["legacy"] = {}
         for label, path in [
-            ("employee_schedules_today", f"employees/{eid}/schedules/{today}"),
-            ("pu_schedules_today", f"planning_units/{pu_id}/schedules/{today}"),
-            ("plan_data_today", f"plan_data/{today}"),
-            ("plan_data_pu", f"planning_units/{pu_id}/plan_data/{today}"),
-            ("shift_sequences_emp", f"employees/{eid}/shift_sequences"),
-            ("planning_periods", "planning_periods"),
-            ("availabilities_emp", f"employees/{eid}/availabilities/{today}"),
+            ("pu_schedule_singular", f"planning_units/{pu_id}/schedule/{today}"),
+            ("pu_schedules_plural", f"planning_units/{pu_id}/schedules/{today}"),
+            ("emp_schedules_plural", f"employees/{eid}/schedules/{today}"),
+            ("emp_schedule_singular", f"employees/{eid}/schedule/{today}"),
+            ("pu_schedule_with_level", f"planning_units/{pu_id}/schedule/{today}?levels=plan,final"),
         ]:
             results["legacy"][label] = probe(f"{API_LEGACY}/{path}")
 
