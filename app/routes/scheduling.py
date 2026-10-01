@@ -950,56 +950,57 @@ def import_wfm():
 @scheduling_bp.route("/import/wfm/debug", methods=["POST"])
 @login_required
 def import_wfm_debug():
-    """Try multiple schedule API URL patterns to find the correct one."""
+    """Try schedule API URL patterns on BOTH legacy and new API surfaces."""
     try:
         import requests as _req
-        from app.capacity.planning import _wfm_headers, API_LEGACY
+        from app.capacity.planning import _wfm_headers, API_LEGACY, API_NEW
         session = _req.Session()
         hdrs = _wfm_headers()
 
-        # Get first employee
+        # Get first employee from legacy API
         resp_emp = session.get(f"{API_LEGACY}/employees", headers=hdrs,
                                timeout=15, params={"page[size]": 2})
         emp_data = resp_emp.json() if resp_emp.ok else {}
         employees = emp_data.get("employees", emp_data) if isinstance(emp_data, dict) else emp_data
         employees = [e for e in employees if isinstance(e, dict)]
-        if not employees:
-            return jsonify({"error": "No employees", "emp_status": resp_emp.status_code})
+        eid = str(employees[0].get("employee_id", "")) if employees else "1001"
 
-        emp = employees[0]
-        eid = str(emp.get("employee_id") or emp.get("id", ""))
-        emp_name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
-
-        # Try many URL patterns
-        patterns = [
-            f"employees/{eid}/schedule/2026-10-02",
-            f"employees/{eid}/schedules/2026-10-02",
-            f"employees/{eid}/schedules?date=2026-10-02",
-            f"schedules?employee_id={eid}&date=2026-10-02",
-            f"schedules?start_date=2026-10-02&end_date=2026-10-02",
-            f"schedules/{eid}/2026-10-02",
-            f"scheduling/schedules?employee_id={eid}&start=2026-10-02&end=2026-10-02",
+        # Patterns to try on the NEW API (api.peopleware.com)
+        new_patterns = [
             "schedules",
-            "schedule",
+            f"schedules?employee_id={eid}",
+            f"schedules?start_date=2026-10-02&end_date=2026-10-02",
+            f"schedules?employee_ids={eid}&start_date=2026-10-02&end_date=2026-10-02",
+            "scheduling/schedules",
+            f"scheduling/schedules?start_date=2026-10-02&end_date=2026-10-02",
+            f"employees/{eid}/schedules",
+            f"employees/{eid}/shifts",
             "shifts",
-            f"shifts?employee_id={eid}&date=2026-10-02",
+            f"shifts?start_date=2026-10-02&end_date=2026-10-02",
+            "scheduling",
+            "schedule-data",
+            "people/schedules",
+            "planning-units",
+            "planning_units",
+            "activities",
         ]
 
         results = []
-        for pat in patterns:
-            url = f"{API_LEGACY}/{pat}"
+        for pat in new_patterns:
+            url = f"{API_NEW}/{pat}"
             try:
                 r = session.get(url, headers=hdrs, timeout=8)
                 preview = r.text[:500] if r.status_code != 404 else "(404)"
-                results.append({"pattern": pat, "status": r.status_code,
+                results.append({"api": "NEW", "pattern": pat, "status": r.status_code,
                                 "preview": preview})
             except Exception as ex:
-                results.append({"pattern": pat, "status": 0, "error": str(ex)})
+                results.append({"api": "NEW", "pattern": pat, "status": 0, "error": str(ex)})
 
         return jsonify({
-            "employee": {"id": eid, "name": emp_name, "keys": list(emp.keys())[:15]},
+            "employee_id": eid,
+            "api_new_base": API_NEW,
             "api_legacy_base": API_LEGACY,
-            "pattern_results": results,
+            "results": results,
         })
     except Exception as e:
         return jsonify({"error": str(e)})
