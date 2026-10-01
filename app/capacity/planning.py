@@ -825,12 +825,15 @@ def _segment_type_for(activity_name):
     return "on-call"
 
 
-def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8):
+def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=8,
+                       diagnose=False):
     """Pull schedules from the connected WFM system for a date range.
     Returns list of {employee_id, date, start, end, hours, segments:[{type,start,end,duration_mins,notes}]}.
-    Days with no schedule blocks are omitted."""
+    Days with no schedule blocks are omitted.
+    If diagnose=True, returns (shifts, diag_dict) instead."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
     session = requests.Session()
+    diag = {} if diagnose else None
 
     acts = _legacy_get(session, "activities") or {}
     activity_names = {}
@@ -839,22 +842,40 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             activity_names[str(a.get("activity_id"))] = a.get("name", "")
 
     base = _legacy_get(session, "employees") or {}
+    if diagnose:
+        diag["employees_raw_type"] = type(base).__name__
+        diag["employees_raw_keys"] = list(base.keys())[:10] if isinstance(base, dict) else f"list[{len(base)}]" if isinstance(base, list) else str(base)[:200]
     employees = base.get("employees", base) if isinstance(base, dict) else base
     employees = [e for e in employees if isinstance(e, dict) and not e.get("deleted")]
+    if diagnose:
+        diag["employees_count"] = len(employees)
+        if employees:
+            diag["sample_employee_keys"] = list(employees[0].keys())[:8]
     if employee_ext_ids:
         wanted = {str(i) for i in employee_ext_ids}
         employees = [e for e in employees if str(e.get("employee_id")) in wanted]
+        if diagnose:
+            diag["employees_after_filter"] = len(employees)
 
     days = []
     d = start_date
     while d <= end_date:
         days.append(d)
         d += datetime.timedelta(days=1)
+    if diagnose:
+        diag["days"] = len(days)
+
+    sample_raw = []  # capture a few raw schedule responses for diagnosis
 
     def _one(emp, day):
         sess = requests.Session()
         eid = str(emp.get("employee_id"))
         data = _legacy_get(sess, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+        # Capture first few raw responses for diagnosis
+        if diagnose and len(sample_raw) < 3 and data:
+            sample_raw.append({"eid": eid, "day": day.isoformat(),
+                               "keys": list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__,
+                               "preview": str(data)[:300]})
         blocks = []
         for entry in data.get("schedules", []):
             for blk in entry.get("schedule_blocks", []):
@@ -888,7 +909,16 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
         }
 
     out = []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+    # Limit concurrency to avoid overwhelming the API and Render timeout
+    actual_workers = min(max_workers, 4)
+    # If too many requests, limit to first 5 employees for diagnosis
+    total_requests = len(employees) * len(days)
+    if diagnose and total_requests > 100:
+        employees = employees[:5]
+        diag["limited_to_5_employees"] = True
+        diag["total_would_be"] = total_requests
+
+    with ThreadPoolExecutor(max_workers=actual_workers) as ex:
         futs = [ex.submit(_one, e, day) for e in employees for day in days]
         for f in as_completed(futs):
             try:
@@ -898,6 +928,11 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
             except Exception as e:
                 log.warning(f"schedule fetch error: {e}")
     log.info(f"WFM schedules: {len(out)} shifts for {len(employees)} employees over {len(days)} days")
+
+    if diagnose:
+        diag["shifts_found"] = len(out)
+        diag["sample_raw_responses"] = sample_raw
+        return out, diag
     return out
 
 

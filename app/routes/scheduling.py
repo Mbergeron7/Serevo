@@ -923,10 +923,16 @@ def import_wfm():
             if not ids:
                 return jsonify({"success": False, "error": f"No employees found for {lob} — pull the headcount first"})
 
-        shifts = cp.fetch_pw_schedules(start_date, end_date, employee_ext_ids=ids)
+        shifts, diag = cp.fetch_pw_schedules(start_date, end_date, employee_ext_ids=ids,
+                                                diagnose=True)
         if not shifts:
-            return jsonify({"success": False,
-                            "error": "The connected system returned no schedules — check the API connection (Settings → API Connections) and that the date range has published schedules."})
+            detail = "The connected system returned no schedules."
+            if diag.get("employees_count", 0) == 0:
+                detail += " The employees endpoint returned 0 employees — check the API connection."
+            else:
+                detail += (f" Found {diag['employees_count']} employee(s), checked "
+                           f"{diag.get('days', 0)} day(s) but no schedule blocks matched.")
+            return jsonify({"success": False, "error": detail, "diag": diag})
         created, replaced, skipped = cp.upsert_pw_schedules(shifts)
         msg = f"Imported {created} shift(s) from the connected system"
         if replaced:
