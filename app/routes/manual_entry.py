@@ -133,6 +133,8 @@ def save_employee():
                 db.session.add(emp)
 
         emp.employee_id = emp_id_str
+        emp.external_id_1 = (data.get("external_id_1") or "").strip() or None
+        emp.external_id_2 = (data.get("external_id_2") or "").strip() or None
         emp.first_name = first
         emp.last_name = last
         emp.status = (data.get("status") or "Active").strip()

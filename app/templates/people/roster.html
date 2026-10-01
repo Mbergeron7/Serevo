@@ -339,6 +339,17 @@
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
         <div class="form-group">
+          <label for="emp_ext_id1">External ID 1</label>
+          <input type="text" id="emp_ext_id1" placeholder="e.g. ISV-12345">
+        </div>
+        <div class="form-group">
+          <label for="emp_ext_id2">External ID 2</label>
+          <input type="text" id="emp_ext_id2" placeholder="e.g. CP-67890">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div class="form-group">
           <label for="emp_lob">LOB / Skill</label>
           <input type="text" id="emp_lob" placeholder="e.g. Customer Service" list="lobList">
           <datalist id="lobList"></datalist>
@@ -557,6 +568,8 @@ function openEmpModal(data) {
   document.getElementById('emp_first').value = data ? (data.first_name || data['First Name'] || '') : '';
   document.getElementById('emp_last').value = data ? (data.last_name || data['Last Name'] || '') : '';
   document.getElementById('emp_eid').value = data ? (data.employee_id || data['Employee ID'] || '') : '';
+  document.getElementById('emp_ext_id1').value = data ? (data.external_id_1 || '') : '';
+  document.getElementById('emp_ext_id2').value = data ? (data.external_id_2 || '') : '';
   document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
   document.getElementById('emp_team_lead').value = data ? (data.team_lead || data['Team Lead'] || '') : '';
@@ -817,6 +830,8 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
   const body = {
     id: document.getElementById('emp_pk').value || null,
     employee_id: document.getElementById('emp_eid').value,
+    external_id_1: document.getElementById('emp_ext_id1').value,
+    external_id_2: document.getElementById('emp_ext_id2').value,
     first_name: document.getElementById('emp_first').value,
     last_name: document.getElementById('emp_last').value,
     status: document.getElementById('emp_status').value,

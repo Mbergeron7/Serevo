@@ -64,6 +64,8 @@ class Employee(db.Model):
 
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    external_id_1    = db.Column(db.String(50), nullable=True, index=True)   # e.g. IntelYStorageVault ID
+    external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # e.g. CallPotential ID
     first_name       = db.Column(db.String(80), nullable=False)
     last_name        = db.Column(db.String(80), nullable=False)
     status           = db.Column(db.String(20), nullable=False, default="Active")
@@ -102,6 +104,8 @@ class Employee(db.Model):
             "First Name": self.first_name,
             "Last Name": self.last_name,
             "Employee ID": self.employee_id,
+            "external_id_1": self.external_id_1 or "",
+            "external_id_2": self.external_id_2 or "",
             "Latest Skill Name": pu.name if pu else "",
             "Latest Skill Start": self.skill_start.isoformat() if self.skill_start else "",
             "Latest Skill End": self.skill_end.isoformat() if self.skill_end else "",
