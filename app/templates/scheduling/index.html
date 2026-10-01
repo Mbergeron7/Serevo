@@ -1119,11 +1119,38 @@ function convertSavedToScheduleData(shifts, lob, startStr, endStr) {
     totalHours += d.shifts.reduce((h, s) => h + (s.hours || 0), 0);
   });
 
-  return {
+  const result = {
     lob, start_date: startStr, end_date: endStr,
     days,
     totals: { total_shifts: totalShifts, total_hours: Math.round(totalHours*10)/10, total_days: days.length, avg_coverage_pct: 0 },
   };
+
+  // Fetch coverage data for each day in the background
+  fetchCoverageForDays(result);
+
+  return result;
+}
+
+function fetchCoverageForDays(sd) {
+  if (!sd || !sd.days || !sd.days.length) return;
+  const lob = sd.lob;
+  const promises = sd.days.map(day => {
+    const shiftsPayload = day.shifts.map(s => ({start: s.start, end: s.end}));
+    return fetch('/scheduling/coverage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lob, date: day.date, shifts: shiftsPayload}),
+    }).then(r => r.json()).then(data => {
+      if (data.success && data.coverage) {
+        day.coverage = data.coverage;
+        if (data.summary) day.summary = data.summary;
+      }
+    }).catch(() => {});
+  });
+  Promise.all(promises).then(() => {
+    // Re-render current view so heatmaps appear
+    if (scheduleData === sd) switchView(currentView);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════

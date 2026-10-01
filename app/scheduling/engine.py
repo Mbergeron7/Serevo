@@ -1080,7 +1080,9 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     if requirements:
         # Compare scheduled vs required
         for r in requirements:
-            t = r["time"]
+            t_raw = r["time"]
+            # Normalize to HH:MM — requirements may return "YYYY-MM-DD HH:MM"
+            t = t_raw[11:16] if len(t_raw) > 5 else t_raw
             req = r["agents_required"]
             sched = scheduled_map.get(t, 0)
             gap = sched - req

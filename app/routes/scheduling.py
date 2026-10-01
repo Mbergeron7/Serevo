@@ -415,23 +415,36 @@ def coverage():
             reqs, _ = get_demo_requirements(lob, date_obj)
             cov = []
             for r in reqs:
-                # Count how many shifts cover this interval
+                t = r["time"][11:16] if len(r["time"]) > 5 else r["time"]  # "YYYY-MM-DD HH:MM" → "HH:MM"
+                t_min = int(t[:2]) * 60 + int(t[3:])
                 scheduled = 0
                 for s in shifts:
-                    if s.get("start") and s.get("end") and s["start"] <= r["time"] < s["end"]:
-                        scheduled += 1
+                    s_start = s.get("start", "")
+                    s_end = s.get("end", "")
+                    if s_start and s_end:
+                        s_min = int(s_start[:2]) * 60 + int(s_start[3:])
+                        e_min = int(s_end[:2]) * 60 + int(s_end[3:])
+                        if s_min <= t_min < e_min:
+                            scheduled += 1
+                req = r["agents_required"]
+                gap = scheduled - req
+                pct = round(scheduled / req * 100, 1) if req > 0 else (100.0 if scheduled > 0 else 0)
                 cov.append({
-                    "time": r["time"],
-                    "required": r["agents_required"],
+                    "time": t,
+                    "required": req,
                     "scheduled": scheduled,
-                    "delta": scheduled - r["agents_required"],
+                    "gap": gap,
+                    "coverage_pct": pct,
                 })
             total_req = sum(c["required"] for c in cov)
             total_sched = sum(c["scheduled"] for c in cov)
+            avg_pct = round(sum(c["coverage_pct"] for c in cov) / max(1, len(cov)), 1)
             summary = {
-                "avg_required": round(total_req / max(1, len(cov)), 1),
-                "avg_scheduled": round(total_sched / max(1, len(cov)), 1),
-                "coverage_pct": round(total_sched / max(1, total_req) * 100, 1),
+                "avg_coverage_pct": avg_pct,
+                "peak_required": max((c["required"] for c in cov), default=0),
+                "peak_gap": min((c["gap"] for c in cov), default=0),
+                "understaffed_intervals": sum(1 for c in cov if c["gap"] < 0),
+                "total_intervals": len(cov),
             }
         else:
             sheet = _get_sheet()
