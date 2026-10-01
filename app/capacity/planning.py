@@ -920,6 +920,12 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None, max_workers=
         diag["token_len"] = len(token_used)
         diag["token_preview"] = f"{token_used[:4]}...{token_used[-4:]}" if len(token_used) > 8 else "(short)"
         diag["api_base"] = API_LEGACY
+        # Capture sample employee object keys and first few employee IDs
+        if employees:
+            diag["sample_emp_keys"] = list(employees[0].keys())[:20]
+            diag["first_5_eids"] = [str(e.get("employee_id")) for e in employees[:5]]
+            # Also check if there's an 'id' field distinct from 'employee_id'
+            diag["first_5_ids"] = [str(e.get("id", "N/A")) for e in employees[:5]]
         # Do one raw test call to see the actual HTTP status
         if employees and days:
             test_eid = str(employees[0].get("employee_id"))
