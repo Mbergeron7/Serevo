@@ -24,6 +24,116 @@ DEFAULT_SHRINKAGE = 0.30
 
 
 # ═══════════════════════════════════════════════════════════════
+# LOB OPERATING-HOURS HELPERS
+# ═══════════════════════════════════════════════════════════════
+
+def _get_lob_setting(lob):
+    """Look up LOBSetting for a given LOB name (via its PlanningUnit)."""
+    try:
+        from app.models import PlanningUnit, LOBSetting
+        from app.data_source import normalize_lob
+        lob_norm = normalize_lob(str(lob).strip())
+        pu = PlanningUnit.query.filter_by(name=lob_norm).first()
+        if pu and pu.lob_setting:
+            return pu.lob_setting
+    except Exception as e:
+        log.warning("Could not load LOB setting for '%s': %s", lob, e)
+    return None
+
+
+def _operating_slots(lob_setting, target_date):
+    """
+    Return sorted list of time-slot strings (e.g. '08:00', '08:30', …)
+    covering every interval within the LOB's operating hours for a given date.
+
+    If no LOB setting, returns None (caller should fall back to history-only).
+    """
+    if not lob_setting:
+        return None
+
+    dow = target_date.weekday()
+    start_str, end_str = lob_setting.get_hours_for_day(dow)
+    if not start_str or not end_str:
+        return None
+
+    interval = lob_setting.interval_minutes or DEFAULT_INTERVAL_MINS
+
+    try:
+        sh, sm = int(start_str.split(":")[0]), int(start_str.split(":")[1])
+        eh, em = int(end_str.split(":")[0]), int(end_str.split(":")[1])
+    except (ValueError, IndexError):
+        return None
+
+    start_mins = sh * 60 + sm
+    end_mins = eh * 60 + em
+    if end_mins <= start_mins:
+        return None
+
+    slots = []
+    m = start_mins
+    while m < end_mins:
+        slots.append(f"{m // 60:02d}:{m % 60:02d}")
+        m += interval
+    return slots
+
+
+def _fill_operating_hours(forecast_rows, lob_setting, fc_date):
+    """
+    Given forecast rows for a single date (from historical averages) and the
+    LOB's operating hours, ensure every operating interval is represented.
+
+    For intervals with no historical data, volume is distributed proportionally
+    based on neighboring known intervals, or evenly if no history at all.
+    AHT for missing slots uses the day's average AHT.
+
+    Returns the complete list of rows for that date.
+    """
+    slots = _operating_slots(lob_setting, fc_date)
+    if not slots:
+        return forecast_rows  # no LOB setting — return as-is
+
+    date_str = fc_date.strftime("%Y-%m-%d")
+
+    # Build lookup of existing forecast data by time
+    existing = {}
+    for row in forecast_rows:
+        existing[row["time"]] = row
+
+    # If we have no historical data at all, return zero-volume rows
+    # (Erlang C will produce 0 agents required — better than nothing)
+    if not existing:
+        return [{"date": date_str, "time": t, "offered": 0, "aht": 0}
+                for t in slots]
+
+    # Compute average AHT from known intervals (volume-weighted)
+    total_vol = sum(r["offered"] for r in existing.values())
+    if total_vol > 0:
+        avg_aht = sum(r["offered"] * r["aht"] for r in existing.values()) / total_vol
+    else:
+        avg_aht = sum(r["aht"] for r in existing.values()) / len(existing) if existing else 0
+
+    # For missing slots, distribute volume proportionally.
+    # Strategy: use the average volume across known slots.
+    known_count = len(existing)
+    avg_vol = total_vol / known_count if known_count > 0 else 0
+
+    result = []
+    for t in slots:
+        if t in existing:
+            result.append(existing[t])
+        else:
+            # Fill with average volume and AHT from known intervals
+            result.append({
+                "date": date_str,
+                "time": t,
+                "offered": round(avg_vol, 2),
+                "aht": round(avg_aht, 1),
+            })
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════
 
@@ -364,19 +474,26 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
             "aht": round(avg_aht, 1),
         }
 
+    # Look up LOB operating hours
+    lob_setting = _get_lob_setting(lob)
+
     # Project forward
     forecast = []
     for d in range(1, forecast_days + 1):
         fc_date = today + datetime.timedelta(days=d - 1)
         date_str = fc_date.strftime("%Y-%m-%d")
+        day_rows = []
         for time_str in sorted(avg_profile.keys()):
             prof = avg_profile[time_str]
-            forecast.append({
+            day_rows.append({
                 "date": date_str,
                 "time": time_str,
                 "offered": prof["offered"],
                 "aht": prof["aht"],
             })
+        # Fill all operating-hour intervals
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        forecast.extend(day_rows)
 
     return {
         "method": "moving_average",
@@ -427,6 +544,9 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
             return 1.0
         return 1.0 / (1.0 + 0.1 * delta)
 
+    # Look up LOB operating hours
+    lob_setting = _get_lob_setting(lob)
+
     forecast = []
     for d_offset in range(forecast_days):
         fc_date = today + datetime.timedelta(days=d_offset)
@@ -439,6 +559,7 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
         for (dw, ts) in by_dow_time.keys():
             time_slots.add(ts)
 
+        day_rows = []
         for time_str in sorted(time_slots):
             entries = by_dow_time.get((dow, time_str), [])
             if not entries:
@@ -467,12 +588,16 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
                 avg_offered = 0
                 avg_aht = 0
 
-            forecast.append({
+            day_rows.append({
                 "date": date_str,
                 "time": time_str,
                 "offered": round(avg_offered, 2),
                 "aht": round(avg_aht, 1),
             })
+
+        # Fill all operating-hour intervals
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        forecast.extend(day_rows)
 
     return {
         "method": "weighted_trend",
@@ -873,6 +998,9 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
 
     today = datetime.date.today()
 
+    # Look up LOB operating hours
+    lob_setting = _get_lob_setting(lob)
+
     if method == "moving_average":
         # Simple moving average over the last `window` entries per timeslot
         forecast = []
@@ -882,6 +1010,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             dow = fc_date.weekday()
 
             time_slots = set(ts for (_, ts) in by_dow_time.keys())
+            day_rows = []
             for time_str in sorted(time_slots):
                 entries = by_dow_time.get((dow, time_str), [])
                 if not entries:
@@ -896,12 +1025,15 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
                 total_w = sum(r[0]["offered"] for r in recent)
                 avg_aht = (sum(r[0]["offered"] * r[0]["aht"] for r in recent) / total_w
                            if total_w > 0 else 0)
-                forecast.append({
+                day_rows.append({
                     "date": date_str,
                     "time": time_str,
                     "offered": round(avg_offered, 2),
                     "aht": round(avg_aht, 1),
                 })
+            # Fill all operating-hour intervals
+            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+            forecast.extend(day_rows)
     else:
         # Weighted trend (default) — same logic as generate_forecast_weighted
         def calc_weight(row_date, ref_date):
@@ -915,6 +1047,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             dow = fc_date.weekday()
 
             time_slots = set(ts for (_, ts) in by_dow_time.keys())
+            day_rows = []
             for time_str in sorted(time_slots):
                 entries = by_dow_time.get((dow, time_str), [])
                 if not entries:
@@ -938,12 +1071,15 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
                 else:
                     avg_offered = 0
                     avg_aht = 0
-                forecast.append({
+                day_rows.append({
                     "date": date_str,
                     "time": time_str,
                     "offered": round(avg_offered, 2),
                     "aht": round(avg_aht, 1),
                 })
+            # Fill all operating-hour intervals
+            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+            forecast.extend(day_rows)
 
     return {
         "method": method,
@@ -984,8 +1120,19 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     if not forecast:
         return {"ok": False, "error": f"No forecast generated for '{lob}'"}
 
+    # Use LOB-specific Erlang C parameters if available
+    lob_setting = unit.lob_setting if unit else None
+    sl_target = lob_setting.service_level_target if lob_setting else None
+    asa_target = lob_setting.target_asa if lob_setting else None
+    shrinkage_val = lob_setting.shrinkage_pct if lob_setting else None
+
     # Run Erlang C to compute requirements
-    requirements = compute_requirements_from_forecast(forecast)
+    requirements = compute_requirements_from_forecast(
+        forecast,
+        service_level_target=sl_target,
+        target_asa=asa_target,
+        shrinkage=shrinkage_val,
+    )
 
     # Delete existing future forecast + requirement intervals for this unit
     today = datetime.date.today()
