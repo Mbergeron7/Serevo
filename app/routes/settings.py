@@ -287,96 +287,53 @@ def _clean_token(raw):
 @settings_bp.route("/api-connections/test", methods=["POST"])
 @admin_required
 def test_connection():
-    """Test an API connection by attempting a basic request."""
+    """Test an API connection using the registered connector (or generic fallback)."""
     dg = _demo_guard()
     if dg:
         return dg
-    from app.models import db, APIConnection
-    import urllib.request
-    import urllib.error
-    import ssl
+    from app.connectors.sync import test_connection as connector_test
 
     data = request.get_json(silent=True) or {}
     conn_id = data.get("id")
     if not conn_id:
         return jsonify({"success": False, "error": "No connection ID"})
 
-    conn = APIConnection.query.get(conn_id)
-    if not conn:
-        return jsonify({"success": False, "error": "Connection not found"})
+    success, message = connector_test(conn_id)
+    return jsonify({"success": success, "status": "ok" if success else "error",
+                    "message": message})
 
-    if not conn.base_url:
-        conn.last_tested = datetime.utcnow()
-        conn.last_status = "error"
-        conn.last_error = "No base URL configured"
-        db.session.commit()
-        return jsonify({"success": False, "error": "No base URL configured"})
 
-    try:
-        creds = json.loads(conn.credentials) if conn.credentials else {}
+@settings_bp.route("/api-connections/sync", methods=["POST"])
+@admin_required
+def sync_connection():
+    """Sync data from an API connection using the connector framework."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.connectors.sync import sync_employees, sync_forecasts, sync_schedules
 
-        # Build a simple health-check request
-        url = conn.base_url.rstrip("/")
-        provider = (conn.provider or "").lower()
+    data = request.get_json(silent=True) or {}
+    conn_id = data.get("id")
+    sync_type = data.get("type", "employees")  # employees | forecasts | schedules
+    if not conn_id:
+        return jsonify({"ok": False, "error": "No connection ID"})
 
-        # PeopleWare / Injixo: always Bearer, token may be stored base64-encoded,
-        # and a bare host needs a real endpoint to answer 200.
-        if provider == "injixo":
-            token = _clean_token(creds.get("access_token") or creds.get("api_key", ""))
-            if url.endswith("peopleware.com") or url.endswith("/people") or url.endswith("/v1"):
-                url = "https://legacy-api.peopleware.com/v1/employees"
-            req = urllib.request.Request(url, method="GET")
-            req.add_header("User-Agent", "Serevo/1.0")
-            req.add_header("Accept", "application/json")
-            if token:
-                req.add_header("Authorization", f"Bearer {token}")
-        else:
-            req = urllib.request.Request(url, method="GET")
-            req.add_header("User-Agent", "Serevo/1.0")
+    if sync_type == "employees":
+        result = sync_employees(conn_id)
+    elif sync_type == "forecasts":
+        date_from = data.get("date_from", datetime.utcnow().strftime("%Y-%m-%d"))
+        date_to = data.get("date_to", datetime.utcnow().strftime("%Y-%m-%d"))
+        workload_ids = data.get("workload_ids")
+        result = sync_forecasts(conn_id, date_from, date_to, workload_ids)
+    elif sync_type == "schedules":
+        date_from = data.get("date_from", datetime.utcnow().strftime("%Y-%m-%d"))
+        date_to = data.get("date_to", datetime.utcnow().strftime("%Y-%m-%d"))
+        employee_ids = data.get("employee_ids")
+        result = sync_schedules(conn_id, date_from, date_to, employee_ids)
+    else:
+        return jsonify({"ok": False, "error": f"Unknown sync type: {sync_type}"})
 
-        if provider == "injixo":
-            pass
-        elif conn.auth_type == "bearer":
-            token = _clean_token(creds.get("access_token") or creds.get("api_key", ""))
-            if token:
-                req.add_header("Authorization", f"Bearer {token}")
-        elif conn.auth_type == "basic":
-            import base64
-            user = creds.get("username", "")
-            pwd = creds.get("password", "")
-            encoded = base64.b64encode(f"{user}:{pwd}".encode()).decode()
-            req.add_header("Authorization", f"Basic {encoded}")
-        elif conn.auth_type == "api_key":
-            key = creds.get("api_key", "")
-            if key:
-                req.add_header("X-API-Key", key)
-
-        ctx = ssl.create_default_context()
-        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-        status = resp.status
-
-        conn.last_tested = datetime.utcnow()
-        if 200 <= status < 400:
-            conn.last_status = "ok"
-            conn.last_error = ""
-        else:
-            conn.last_status = "error"
-            conn.last_error = f"HTTP {status}"
-        db.session.commit()
-        return jsonify({"success": True, "status": conn.last_status, "http": status})
-
-    except urllib.error.HTTPError as e:
-        conn.last_tested = datetime.utcnow()
-        conn.last_status = "error"
-        conn.last_error = f"HTTP {e.code}: {e.reason}"
-        db.session.commit()
-        return jsonify({"success": False, "error": conn.last_error})
-    except Exception as e:
-        conn.last_tested = datetime.utcnow()
-        conn.last_status = "error"
-        conn.last_error = str(e)
-        db.session.commit()
-        return jsonify({"success": False, "error": str(e)})
+    return jsonify(result)
 
 
 @settings_bp.route("/api-connections/delete", methods=["POST"])

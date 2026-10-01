@@ -8,6 +8,7 @@ from app.connectors.peopleware import PeopleWareConnector
 # Provider name (matches APIConnection.provider) → connector class
 REGISTRY = {
     "peopleware": PeopleWareConnector,
+    "injixo": PeopleWareConnector,       # alias — same API surface
 }
 
 
