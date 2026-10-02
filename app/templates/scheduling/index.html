@@ -973,6 +973,7 @@
 <script>
 let scheduleData = null;
 let currentView = 'timeline';
+const IS_DEMO = {% if user and user.is_demo is defined and user.is_demo %}true{% else %}false{% endif %};
 let scheduleSource = 'generated'; // 'generated' or 'saved'
 let empList = [];          // [{employee_id, name, lob}]
 let selectedEmpIds = [];   // [] means all
@@ -1838,13 +1839,14 @@ function removeSegment(segIdx) {
   const seg = shift.segments[segIdx];
 
   // If saved to DB, delete via API
-  if (seg.id) {
+  if (!IS_DEMO && seg.id != null) {
     fetch('/scheduling/segment/' + seg.id, {method: 'DELETE'})
       .then(r => r.json())
       .then(data => { if (!data.success) showToast('Delete failed', 'error'); });
   }
 
   shift.segments.splice(segIdx, 1);
+  recalcOncallClient(shift);
   renderSegmentList(shift.segments);
   switchView(currentView); // refresh timeline
 }
@@ -1883,7 +1885,7 @@ function confirmAddSegment() {
   const newSeg = { type, start, end, duration_mins: dur, notes, sort_order: shift.segments.length };
 
   // If schedule is saved to DB, persist via API
-  if (shift.id) {
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id + '/segment', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1898,6 +1900,7 @@ function confirmAddSegment() {
   }
 
   shift.segments.push(newSeg);
+  recalcOncallClient(shift);
   // Re-sort by start time
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
 
@@ -1918,7 +1921,7 @@ function applyShiftEdit() {
   shift.hours = Math.round((timeToMins(shift.end) - timeToMins(shift.start)) / 60 * 10) / 10;
 
   // If saved to DB, persist via API
-  if (shift.id) {
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
@@ -1951,7 +1954,7 @@ function deleteShift() {
 
   if (!confirm('Delete shift for ' + shift.employee + '?')) return;
 
-  if (shift.id) {
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id, {method: 'DELETE'})
       .then(r => r.json())
       .then(data => {
@@ -2016,7 +2019,7 @@ function applyAbsence(dayIdx, shiftIdx, absenceType) {
   shift.segments = [];
 
   // Persist via API if saved
-  if (shift.id) {
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
@@ -2859,15 +2862,15 @@ function segMouseUp(e) {
   seg.end = minsToTime(newEndMins);
   seg.duration_mins = duration;
 
-  // Persist to DB (if saved) or recalc on-call client-side (demo mode)
-  if (seg.id) {
+  // Persist to DB or recalc on-call client-side (demo mode)
+  if (!IS_DEMO && seg.id != null) {
     fetch('/scheduling/segment/' + seg.id, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({start: seg.start, end: seg.end})
     }).then(r => r.json()).then(d => {
       if (!d.success) { showToast('Move failed: ' + (d.error || ''), 'error'); return; }
-      if (seg.type !== 'on-call' && shift.id) {
+      if (baseSegType(seg.type) !== 'on-call' && shift.id) {
         fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'}
@@ -2884,7 +2887,7 @@ function segMouseUp(e) {
       }
     });
   } else if (baseSegType(seg.type) !== 'on-call') {
-    // Demo mode: recalculate on-call segments client-side
+    // Demo mode or unsaved: recalculate on-call segments client-side
     recalcOncallClient(shift);
   }
 
@@ -2987,8 +2990,8 @@ function shiftMouseUp(e) {
     seg.end = minsToTime(eMin);
   });
 
-  // Persist if saved
-  if (shift.id) {
+  // Persist if saved (live mode only)
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
@@ -3061,12 +3064,13 @@ function ctxDelete(dayIdx, shiftIdx, segIdx) {
   closeCtxMenu();
   const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
   const seg = shift.segments[segIdx];
-  if (seg.id) {
+  if (!IS_DEMO && seg.id != null) {
     fetch('/scheduling/segment/' + seg.id, {method: 'DELETE'})
       .then(r => r.json())
       .then(d => { if (!d.success) showToast('Delete failed', 'error'); });
   }
   shift.segments.splice(segIdx, 1);
+  recalcOncallClient(shift);
   clearSelection();
   switchView(currentView);
   showToast('Segment deleted');
@@ -3096,7 +3100,7 @@ function pasteSegment(dayIdx, shiftIdx) {
   newSeg.end = minsToTime(newStart + dur);
 
   // Persist
-  if (shift.id) {
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id + '/segment', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -3107,6 +3111,7 @@ function pasteSegment(dayIdx, shiftIdx) {
   }
 
   shift.segments.push(newSeg);
+  recalcOncallClient(shift);
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
   showToast(`Pasted ${segLabel(newSeg.type)} to ${shift.employee}`);
@@ -3305,8 +3310,11 @@ function actDrop(e) {
     notes: '',
   };
 
-  // Persist to DB if shift is saved
-  if (shift.id) {
+  // Add segment to shift
+  shift.segments.push(newSeg);
+
+  // Persist to DB if live mode
+  if (!IS_DEMO && shift.id != null) {
     fetch('/scheduling/shift/' + shift.id + '/segment', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -3314,8 +3322,8 @@ function actDrop(e) {
     }).then(r => r.json()).then(d => {
       if (d.success && d.segment) {
         newSeg.id = d.segment.id;
-        // Recalculate on-call
-        if (baseSegType(newSeg.type) !== 'on-call' && shift.id) {
+        // Recalculate on-call server-side
+        if (baseSegType(newSeg.type) !== 'on-call') {
           fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'}
@@ -3336,18 +3344,9 @@ function actDrop(e) {
     });
   } else {
     // Demo mode: recalc on-call client-side
-    if (baseSegType(newSeg.type) !== 'on-call') {
-      shift.segments.push(newSeg);
-      recalcOncallClient(shift);
-    } else {
-      shift.segments.push(newSeg);
-    }
+    recalcOncallClient(shift);
   }
 
-  if (shift.id) {
-    // For persisted shifts, push now — server recalc will handle the rest
-    shift.segments.push(newSeg);
-  }
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
   showToast(`Added ${_actDrag.label} to ${shift.employee}`);
