@@ -134,6 +134,7 @@ def create_app():
     from app.routes.settings import settings_bp
     from app.routes.manual_entry import manual_entry_bp
     from app.routes.agent import agent_bp
+    from app.routes.quality import quality_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -146,6 +147,7 @@ def create_app():
     app.register_blueprint(settings_bp)
     app.register_blueprint(manual_entry_bp)
     app.register_blueprint(agent_bp)
+    app.register_blueprint(quality_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

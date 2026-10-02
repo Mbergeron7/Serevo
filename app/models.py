@@ -1689,3 +1689,59 @@ class CoachingSession(db.Model):
             "outcome": self.outcome or "",
             "follow_up": self.follow_up or "",
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# QUALITY EVALUATIONS
+# ═══════════════════════════════════════════════════════════════
+
+class QualityEvaluation(db.Model):
+    __tablename__ = "quality_evaluations"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    evaluator     = db.Column(db.String(200), nullable=False)
+    eval_date     = db.Column(db.Date, nullable=False)
+    interaction_id = db.Column(db.String(100))    # external interaction/call ID
+    channel       = db.Column(db.String(50), default="voice")  # voice, chat, email
+    lob           = db.Column(db.String(100))
+    overall_score = db.Column(db.Float, nullable=False)
+    # Sub-scores
+    greeting_score     = db.Column(db.Float)
+    knowledge_score    = db.Column(db.Float)
+    process_score      = db.Column(db.Float)
+    communication_score = db.Column(db.Float)
+    resolution_score   = db.Column(db.Float)
+    compliance_score   = db.Column(db.Float)
+    # Metadata
+    call_duration_secs = db.Column(db.Integer)
+    disposition   = db.Column(db.String(100))    # resolved, escalated, callback, transfer
+    notes         = db.Column(db.Text)
+    critical_fail = db.Column(db.Boolean, default=False)
+    created_at    = db.Column(db.DateTime, default=db.func.now())
+
+    employee = db.relationship("Employee", backref="quality_evaluations")
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "employee_name": f"{emp.first_name} {emp.last_name}" if emp else "",
+            "evaluator": self.evaluator,
+            "eval_date": self.eval_date.isoformat() if self.eval_date else "",
+            "interaction_id": self.interaction_id or "",
+            "channel": self.channel or "voice",
+            "lob": self.lob or "",
+            "overall_score": self.overall_score,
+            "greeting_score": self.greeting_score,
+            "knowledge_score": self.knowledge_score,
+            "process_score": self.process_score,
+            "communication_score": self.communication_score,
+            "resolution_score": self.resolution_score,
+            "compliance_score": self.compliance_score,
+            "call_duration_secs": self.call_duration_secs,
+            "disposition": self.disposition or "",
+            "notes": self.notes or "",
+            "critical_fail": self.critical_fail or False,
+        }

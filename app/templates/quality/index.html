@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+{% block title %}Quality Management — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .q-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .q-header h1 { font-size:1.3rem; font-weight:800; margin:0; }
+  .q-filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .q-filters select, .q-filters input { font-size:.82rem; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+
+  .q-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:24px; }
+  .q-stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; box-shadow:var(--shadow); }
+  .q-stat .label { font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+  .q-stat .value { font-size:1.6rem; font-weight:800; }
+  .q-stat .sub { font-size:.75rem; color:var(--text-muted); margin-top:2px; }
+
+  .q-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:20px; }
+  .q-tabs button { background:none; border:none; padding:10px 20px; font-size:.85rem; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .15s, border-color .15s; }
+  .q-tabs button:hover { color:var(--text); }
+  .q-tabs button.active { color:var(--brand-accent); border-bottom-color:var(--brand-accent); }
+  .q-panel { display:none; }
+  .q-panel.active { display:block; }
+
+  .q-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden; }
+  .q-card-header { padding:12px 20px; font-weight:700; font-size:.85rem; background:var(--bg); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .q-card-body { padding:16px 20px; }
+
+  .q-tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .q-tbl th { text-align:left; font-weight:700; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-muted); font-size:.75rem; text-transform:uppercase; }
+  .q-tbl td { padding:8px 10px; border-bottom:1px solid var(--border); }
+  .q-tbl tr:hover { background:var(--bg); }
+
+  .score-badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.75rem; font-weight:700; min-width:40px; text-align:center; }
+  .score-high { background:#dcfce7; color:#166534; }
+  .score-mid { background:#fef9c3; color:#854d0e; }
+  .score-low { background:#fee2e2; color:#991b1b; }
+  .crit-badge { background:#fee2e2; color:#991b1b; font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:10px; }
+  .ch-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:600; }
+  .ch-voice { background:#dbeafe; color:#1e40af; }
+  .ch-chat { background:#dcfce7; color:#166534; }
+  .ch-email { background:#f3e8ff; color:#7c3aed; }
+
+  .cat-bar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .cat-bar .cat-label { width:110px; font-size:.8rem; font-weight:600; text-transform:capitalize; }
+  .cat-bar .cat-track { flex:1; height:22px; background:var(--bg); border-radius:6px; overflow:hidden; position:relative; }
+  .cat-bar .cat-fill { height:100%; border-radius:6px; transition:width .4s; }
+  .cat-bar .cat-val { font-size:.78rem; font-weight:700; width:40px; text-align:right; }
+
+  .agent-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .agent-row:last-child { border-bottom:none; }
+  .agent-row .rank { width:24px; font-weight:800; font-size:.85rem; color:var(--text-muted); text-align:center; }
+  .agent-row .name { flex:1; font-weight:600; font-size:.85rem; }
+  .agent-row .count { font-size:.75rem; color:var(--text-muted); width:50px; text-align:center; }
+
+  .mini-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:999; }
+  .mini-modal .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; max-width:620px; width:92%; max-height:90vh; overflow-y:auto; }
+  .mini-modal h3 { font-size:.95rem; margin:0 0 16px; }
+  .form-group { margin-bottom:12px; }
+  .form-group label { display:block; font-size:.78rem; font-weight:700; margin-bottom:4px; color:var(--text-muted); }
+  .form-group input, .form-group select, .form-group textarea { width:100%; font-size:.82rem; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); box-sizing:border-box; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="q-header">
+  <h1>Quality Management</h1>
+  <div class="q-filters">
+    <select id="qLob" onchange="loadQuality()">
+      <option value="All">All LOBs</option>
+      <option value="Sales Support">Sales Support</option>
+      <option value="Tech Help Desk">Tech Help Desk</option>
+      <option value="Billing">Billing</option>
+    </select>
+    <button class="btn btn-primary" style="font-size:.82rem;" onclick="openEvalModal()">+ New Evaluation</button>
+  </div>
+</div>
+
+<!-- Stats Row -->
+<div class="q-stats" id="qStats">
+  <div class="q-stat"><div class="label">Avg Score</div><div class="value" id="statAvg">—</div></div>
+  <div class="q-stat"><div class="label">Total Evaluations</div><div class="value" id="statTotal">—</div></div>
+  <div class="q-stat"><div class="label">Critical Fails</div><div class="value" id="statCrit" style="color:#b91c1c;">—</div></div>
+  <div class="q-stat"><div class="label">Pass Rate</div><div class="value" id="statPass">—</div><div class="sub">Score ≥ 80</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="q-tabs">
+  <button class="active" onclick="switchQTab('dashboard', this)">Dashboard</button>
+  <button onclick="switchQTab('evaluations', this)">Evaluations</button>
+  <button onclick="switchQTab('agents', this)">Agent Scores</button>
+</div>
+
+<!-- Dashboard Panel -->
+<div class="q-panel active" id="qp-dashboard">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <div class="q-card">
+      <div class="q-card-header">Score by Category</div>
+      <div class="q-card-body" id="catBars">
+        <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+      </div>
+    </div>
+    <div class="q-card">
+      <div class="q-card-header">Weekly Trend</div>
+      <div class="q-card-body" id="trendBody">
+        <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Evaluations Panel -->
+<div class="q-panel" id="qp-evaluations">
+  <div class="q-card">
+    <div class="q-card-header">Recent Evaluations</div>
+    <div class="q-card-body" id="evalsBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Agent Scores Panel -->
+<div class="q-panel" id="qp-agents">
+  <div class="q-card">
+    <div class="q-card-header">Agent Rankings</div>
+    <div class="q-card-body" id="agentBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Evaluation Modal -->
+<div id="evalModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeEvalModal()">
+  <div class="modal">
+    <h3 id="evalModalTitle">New Quality Evaluation</h3>
+    <form id="evalForm" onsubmit="return saveEval(event)">
+      <input type="hidden" id="eval_id">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>Agent</label>
+          <select id="eval_agent" required>
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Evaluator</label>
+          <input type="text" id="eval_evaluator" required>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="eval_date" required>
+        </div>
+        <div class="form-group">
+          <label>Channel</label>
+          <select id="eval_channel">
+            <option value="voice">Voice</option>
+            <option value="chat">Chat</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Interaction ID</label>
+          <input type="text" id="eval_intid" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label>Disposition</label>
+          <select id="eval_disp">
+            <option value="resolved">Resolved</option>
+            <option value="escalated">Escalated</option>
+            <option value="callback">Callback</option>
+            <option value="transfer">Transfer</option>
+          </select>
+        </div>
+      </div>
+      <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);">
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+        <div class="form-group"><label>Overall Score</label><input type="number" id="eval_overall" step="0.1" min="0" max="100" required></div>
+        <div class="form-group"><label>Greeting</label><input type="number" id="eval_greeting" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Knowledge</label><input type="number" id="eval_knowledge" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Process</label><input type="number" id="eval_process" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Communication</label><input type="number" id="eval_communication" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Resolution</label><input type="number" id="eval_resolution" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Compliance</label><input type="number" id="eval_compliance" step="0.1" min="0" max="100"></div>
+        <div class="form-group"><label>Call Duration (sec)</label><input type="number" id="eval_duration" min="0"></div>
+        <div class="form-group" style="display:flex; align-items:flex-end; gap:6px;">
+          <label style="display:inline;"><input type="checkbox" id="eval_critfail"> Critical Fail</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="eval_notes" rows="2" style="resize:vertical;"></textarea>
+      </div>
+      <div id="evalError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeEvalModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+function switchQTab(id, btn) {
+  document.querySelectorAll('.q-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.q-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('qp-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function scoreClass(s) { return s >= 85 ? 'score-high' : s >= 75 ? 'score-mid' : 'score-low'; }
+function chClass(c) { return 'ch-' + (c || 'voice'); }
+function catColor(s) { return s >= 85 ? '#10b981' : s >= 75 ? '#f59e0b' : '#ef4444'; }
+
+let DASH = null, EVALS = null;
+
+async function loadQuality() {
+  const lob = document.getElementById('qLob').value;
+  const [dashResp, evalsResp] = await Promise.all([
+    fetch('/quality/api/dashboard', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lob}) }),
+    fetch('/quality/api/evaluations', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lob}) }),
+  ]);
+  DASH = await dashResp.json();
+  EVALS = (await evalsResp.json()).evaluations || [];
+  renderStats();
+  renderCatBars();
+  renderTrend();
+  renderEvalsTable();
+  renderAgentRanking();
+}
+
+function renderStats() {
+  document.getElementById('statAvg').textContent = DASH.avg_score || '—';
+  document.getElementById('statTotal').textContent = DASH.total_evals || 0;
+  document.getElementById('statCrit').textContent = DASH.critical_fails || 0;
+  const pass = EVALS.length ? Math.round(EVALS.filter(e => e.overall_score >= 80).length / EVALS.length * 100) : 0;
+  document.getElementById('statPass').textContent = pass + '%';
+}
+
+function renderCatBars() {
+  const cats = DASH.by_category || {};
+  const el = document.getElementById('catBars');
+  if (!Object.keys(cats).length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No data</p>'; return; }
+  let html = '';
+  for (const [k, v] of Object.entries(cats)) {
+    if (v == null) continue;
+    html += `<div class="cat-bar">
+      <span class="cat-label">${esc(k)}</span>
+      <div class="cat-track"><div class="cat-fill" style="width:${v}%; background:${catColor(v)};"></div></div>
+      <span class="cat-val">${v}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderTrend() {
+  const trend = DASH.trend || [];
+  const el = document.getElementById('trendBody');
+  if (!trend.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">Not enough data for trend</p>'; return; }
+  let html = '<table class="q-tbl"><thead><tr><th>Week</th><th>Avg Score</th><th>Evals</th></tr></thead><tbody>';
+  trend.forEach(t => {
+    html += `<tr><td>${esc(t.week)}</td><td><span class="score-badge ${scoreClass(t.avg_score)}">${t.avg_score}</span></td><td>${t.count}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderEvalsTable() {
+  const el = document.getElementById('evalsBody');
+  if (!EVALS.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No evaluations found.</p>'; return; }
+  let html = '<table class="q-tbl"><thead><tr><th>Date</th><th>Agent</th><th>Evaluator</th><th>Channel</th><th>Score</th><th>Disposition</th><th></th></tr></thead><tbody>';
+  EVALS.slice(0, 50).forEach(e => {
+    html += '<tr>';
+    html += `<td>${esc(e.eval_date)}</td>`;
+    html += `<td style="font-weight:600;">${esc(e.employee_name)}</td>`;
+    html += `<td>${esc(e.evaluator)}</td>`;
+    html += `<td><span class="ch-pill ${chClass(e.channel)}">${esc(e.channel)}</span></td>`;
+    html += `<td><span class="score-badge ${scoreClass(e.overall_score)}">${e.overall_score}</span>`;
+    if (e.critical_fail) html += ' <span class="crit-badge">CRIT</span>';
+    html += `</td>`;
+    html += `<td>${esc(e.disposition)}</td>`;
+    html += `<td><button class="btn-add" style="font-size:.75rem; padding:2px 8px;" onclick='editEval(${JSON.stringify(e)})'>View</button></td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  if (EVALS.length > 50) html += `<p style="color:var(--text-muted); font-size:.78rem; margin-top:8px;">Showing 50 of ${EVALS.length}</p>`;
+  el.innerHTML = html;
+}
+
+function renderAgentRanking() {
+  const agents = DASH.by_agent || [];
+  const el = document.getElementById('agentBody');
+  if (!agents.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No data</p>'; return; }
+  let html = '';
+  agents.forEach((a, i) => {
+    html += `<div class="agent-row">
+      <span class="rank">${i+1}</span>
+      <span class="name">${esc(a.name)}</span>
+      <span class="score-badge ${scoreClass(a.avg_score)}">${a.avg_score}</span>
+      <span class="count">${a.eval_count} evals</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+// ── Eval Modal ──
+function openEvalModal(ev) {
+  document.getElementById('evalError').style.display = 'none';
+  const e = ev || {};
+  document.getElementById('eval_id').value = e.id || '';
+  document.getElementById('eval_evaluator').value = e.evaluator || '';
+  document.getElementById('eval_date').value = e.eval_date || new Date().toISOString().slice(0,10);
+  document.getElementById('eval_channel').value = e.channel || 'voice';
+  document.getElementById('eval_intid').value = e.interaction_id || '';
+  document.getElementById('eval_disp').value = e.disposition || 'resolved';
+  document.getElementById('eval_overall').value = e.overall_score || '';
+  document.getElementById('eval_greeting').value = e.greeting_score != null ? e.greeting_score : '';
+  document.getElementById('eval_knowledge').value = e.knowledge_score != null ? e.knowledge_score : '';
+  document.getElementById('eval_process').value = e.process_score != null ? e.process_score : '';
+  document.getElementById('eval_communication').value = e.communication_score != null ? e.communication_score : '';
+  document.getElementById('eval_resolution').value = e.resolution_score != null ? e.resolution_score : '';
+  document.getElementById('eval_compliance').value = e.compliance_score != null ? e.compliance_score : '';
+  document.getElementById('eval_duration').value = e.call_duration_secs || '';
+  document.getElementById('eval_critfail').checked = !!e.critical_fail;
+  document.getElementById('eval_notes').value = e.notes || '';
+  document.getElementById('evalModalTitle').textContent = e.id ? 'Edit Evaluation' : 'New Quality Evaluation';
+
+  // Populate agent dropdown
+  const sel = document.getElementById('eval_agent');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  const seen = new Set();
+  (EVALS || []).forEach(ev => {
+    if (!seen.has(ev.employee_id)) {
+      seen.add(ev.employee_id);
+      const opt = document.createElement('option');
+      opt.value = ev.employee_id;
+      opt.textContent = ev.employee_name;
+      sel.appendChild(opt);
+    }
+  });
+  if (e.employee_id) sel.value = e.employee_id;
+
+  document.getElementById('evalModal').style.display = '';
+}
+function editEval(e) { openEvalModal(e); }
+function closeEvalModal() { document.getElementById('evalModal').style.display = 'none'; }
+
+async function saveEval(ev) {
+  ev.preventDefault();
+  const body = {
+    id: document.getElementById('eval_id').value || null,
+    employee_id: document.getElementById('eval_agent').value,
+    evaluator: document.getElementById('eval_evaluator').value,
+    eval_date: document.getElementById('eval_date').value,
+    channel: document.getElementById('eval_channel').value,
+    interaction_id: document.getElementById('eval_intid').value || null,
+    lob: document.getElementById('qLob').value,
+    disposition: document.getElementById('eval_disp').value,
+    overall_score: document.getElementById('eval_overall').value,
+    greeting_score: document.getElementById('eval_greeting').value || null,
+    knowledge_score: document.getElementById('eval_knowledge').value || null,
+    process_score: document.getElementById('eval_process').value || null,
+    communication_score: document.getElementById('eval_communication').value || null,
+    resolution_score: document.getElementById('eval_resolution').value || null,
+    compliance_score: document.getElementById('eval_compliance').value || null,
+    call_duration_secs: document.getElementById('eval_duration').value || null,
+    critical_fail: document.getElementById('eval_critfail').checked,
+    notes: document.getElementById('eval_notes').value,
+  };
+  try {
+    const resp = await fetch('/quality/api/evaluations/save', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.success || data.demo) { closeEvalModal(); loadQuality(); }
+    else { document.getElementById('evalError').textContent = data.error || 'Save failed'; document.getElementById('evalError').style.display = ''; }
+  } catch(err) { document.getElementById('evalError').textContent = 'Network error'; document.getElementById('evalError').style.display = ''; }
+  return false;
+}
+
+// Load on page ready
+loadQuality();
+</script>
+{% endblock %}

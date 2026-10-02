@@ -1233,3 +1233,111 @@ def get_demo_coaching_sessions(employee_id=None):
     if employee_id:
         return [s for s in _all if s["employee_id"] == str(employee_id)]
     return _all
+
+
+def get_demo_quality_evaluations(lob="All", date_from=None, date_to=None):
+    """Demo quality evaluation data."""
+    import datetime as _dt, random
+    random.seed(42)
+    today = _dt.date.today()
+    agents = [
+        ("E1001", "Alex Morgan", "Sales Support"),
+        ("E1002", "Jordan Rivera", "Sales Support"),
+        ("E1003", "Casey Chen", "Sales Support"),
+        ("E1008", "Sam Patel", "Tech Help Desk"),
+        ("E1009", "Avery Kim", "Tech Help Desk"),
+        ("E1010", "Drew Foster", "Tech Help Desk"),
+        ("E1015", "Morgan Bailey", "Billing"),
+        ("E1016", "Riley Scott", "Billing"),
+    ]
+    evaluators = ["Lisa Tran", "Marcus Johnson", "Priya Sharma"]
+    channels = ["voice", "voice", "voice", "chat", "email"]
+    dispositions = ["resolved", "resolved", "resolved", "escalated", "callback", "transfer"]
+    evals = []
+    eid = 1
+    for days_ago in range(30):
+        d = today - _dt.timedelta(days=days_ago)
+        if d.weekday() >= 5:
+            continue
+        n_evals = random.randint(2, 5)
+        for _ in range(n_evals):
+            ag = random.choice(agents)
+            overall = round(random.uniform(65, 100), 1)
+            crit = overall < 70 and random.random() < 0.3
+            evals.append({
+                "id": eid,
+                "employee_id": ag[0],
+                "employee_name": ag[1],
+                "evaluator": random.choice(evaluators),
+                "eval_date": d.isoformat(),
+                "interaction_id": f"INT-{random.randint(100000, 999999)}",
+                "channel": random.choice(channels),
+                "lob": ag[2],
+                "overall_score": overall,
+                "greeting_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "knowledge_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "process_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "communication_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "resolution_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "compliance_score": round(random.uniform(max(60, overall-15), min(100, overall+10)), 1),
+                "call_duration_secs": random.randint(120, 900),
+                "disposition": random.choice(dispositions),
+                "notes": "",
+                "critical_fail": crit,
+            })
+            eid += 1
+
+    if lob and lob != "All":
+        evals = [e for e in evals if e["lob"] == lob]
+    if date_from:
+        evals = [e for e in evals if e["eval_date"] >= date_from]
+    if date_to:
+        evals = [e for e in evals if e["eval_date"] <= date_to]
+    return evals
+
+
+def get_demo_quality_dashboard(lob="All"):
+    """Aggregate quality dashboard stats from demo data."""
+    evals = get_demo_quality_evaluations(lob=lob)
+    if not evals:
+        return {"avg_score": 0, "total_evals": 0, "critical_fails": 0,
+                "by_agent": [], "by_category": {}, "trend": []}
+
+    total = len(evals)
+    avg = round(sum(e["overall_score"] for e in evals) / total, 1)
+    crit = sum(1 for e in evals if e["critical_fail"])
+
+    agent_scores = {}
+    for e in evals:
+        agent_scores.setdefault(e["employee_name"], []).append(e["overall_score"])
+    by_agent = sorted([
+        {"name": k, "avg_score": round(sum(v)/len(v), 1), "eval_count": len(v)}
+        for k, v in agent_scores.items()
+    ], key=lambda x: -x["avg_score"])
+
+    cats = {}
+    for attr in ["greeting", "knowledge", "process", "communication", "resolution", "compliance"]:
+        vals = [e[attr + "_score"] for e in evals if e.get(attr + "_score") is not None]
+        cats[attr] = round(sum(vals)/len(vals), 1) if vals else None
+
+    # Weekly trend
+    from collections import defaultdict
+    weekly = defaultdict(list)
+    for e in evals:
+        import datetime as _dt
+        d = _dt.date.fromisoformat(e["eval_date"])
+        week_start = d - _dt.timedelta(days=d.weekday())
+        weekly[week_start.isoformat()].append(e["overall_score"])
+    trend = sorted([
+        {"week": k, "avg_score": round(sum(v)/len(v), 1), "count": len(v)}
+        for k, v in weekly.items()
+    ], key=lambda x: x["week"])
+
+    return {
+        "avg_score": avg,
+        "total_evals": total,
+        "critical_fails": crit,
+        "by_agent": by_agent,
+        "by_category": cats,
+        "trend": trend,
+    }
