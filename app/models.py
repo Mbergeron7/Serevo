@@ -1773,3 +1773,164 @@ class AnalyticsIntegration(db.Model):
             "last_received": self.last_received.isoformat() if self.last_received else None,
             "events_count": self.events_count,
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT POSTS (Open-shift bidding — Phase 6.3)
+# ═══════════════════════════════════════════════════════════════
+
+class ShiftPost(db.Model):
+    """An open shift posted for agents to bid on."""
+    __tablename__ = "shift_posts"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    schedule_date   = db.Column(db.Date, nullable=False)
+    shift_start     = db.Column(db.Time, nullable=False)
+    shift_end       = db.Column(db.Time, nullable=False)
+    hours           = db.Column(db.Float, default=0)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    required_skills = db.Column(db.Text, default="")          # comma-separated
+    status          = db.Column(db.String(20), default="open") # open | assigned | cancelled
+    assigned_to     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    posted_by       = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    notes           = db.Column(db.Text, default="")
+    created_at      = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit   = db.relationship("PlanningUnit")
+    assigned_emp    = db.relationship("Employee", foreign_keys=[assigned_to])
+
+    def to_dict(self):
+        pu = self.planning_unit
+        emp = self.assigned_emp
+        return {
+            "id": self.id,
+            "date": self.schedule_date.isoformat(),
+            "start": self.shift_start.strftime("%H:%M"),
+            "end": self.shift_end.strftime("%H:%M"),
+            "hours": self.hours,
+            "lob": pu.name if pu else "",
+            "required_skills": self.required_skills or "",
+            "status": self.status,
+            "assigned_to": emp.full_name if emp else None,
+            "notes": self.notes or "",
+            "created_at": self.created_at.isoformat() if self.created_at else "",
+        }
+
+
+class ShiftBid(db.Model):
+    """An agent's bid on an open shift."""
+    __tablename__ = "shift_bids"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    shift_post_id = db.Column(db.Integer, db.ForeignKey("shift_posts.id", ondelete="CASCADE"), nullable=False)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    preference   = db.Column(db.Integer, default=1)            # 1=high, 2=med, 3=low
+    status       = db.Column(db.String(20), default="pending")  # pending | accepted | declined
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    shift_post   = db.relationship("ShiftPost", backref="bids")
+    employee     = db.relationship("Employee")
+
+    __table_args__ = (
+        db.UniqueConstraint("shift_post_id", "employee_id", name="uq_bid_post_emp"),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT SWAP REQUESTS (Phase 6.4)
+# ═══════════════════════════════════════════════════════════════
+
+class ShiftSwapRequest(db.Model):
+    """Agent-to-agent shift swap with manager approval."""
+    __tablename__ = "shift_swap_requests"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    requester_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    requester_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=False)
+    target_id        = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)  # null = open offer
+    target_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=True)
+    status           = db.Column(db.String(20), default="pending")  # pending | accepted | approved | declined | cancelled
+    reason           = db.Column(db.Text, default="")
+    reviewed_by      = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    requester        = db.relationship("Employee", foreign_keys=[requester_id])
+    target           = db.relationship("Employee", foreign_keys=[target_id])
+    requester_sched  = db.relationship("Schedule", foreign_keys=[requester_schedule_id])
+    target_sched     = db.relationship("Schedule", foreign_keys=[target_schedule_id])
+
+    def to_dict(self):
+        rs = self.requester_sched
+        ts = self.target_sched
+        return {
+            "id": self.id,
+            "requester": self.requester.full_name if self.requester else "",
+            "requester_date": rs.schedule_date.isoformat() if rs else "",
+            "requester_shift": f"{rs.shift_start.strftime('%H:%M')}-{rs.shift_end.strftime('%H:%M')}" if rs and rs.shift_start else "",
+            "target": self.target.full_name if self.target else "Open",
+            "target_date": ts.schedule_date.isoformat() if ts else "",
+            "target_shift": f"{ts.shift_start.strftime('%H:%M')}-{ts.shift_end.strftime('%H:%M')}" if ts and ts.shift_start else "",
+            "status": self.status,
+            "reason": self.reason or "",
+            "created_at": self.created_at.isoformat() if self.created_at else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# VTO / OT SIGN-UP BOARD (Phase 6.5)
+# ═══════════════════════════════════════════════════════════════
+
+class VTOOTPost(db.Model):
+    """A voluntary time-off or overtime opportunity."""
+    __tablename__ = "vto_ot_posts"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    post_type       = db.Column(db.String(10), nullable=False)  # vto | ot
+    schedule_date   = db.Column(db.Date, nullable=False)
+    start_time      = db.Column(db.Time, nullable=True)
+    end_time        = db.Column(db.Time, nullable=True)
+    hours           = db.Column(db.Float, default=0)
+    slots           = db.Column(db.Integer, default=1)
+    slots_filled    = db.Column(db.Integer, default=0)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    status          = db.Column(db.String(20), default="open")  # open | filled | cancelled
+    posted_by       = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    notes           = db.Column(db.Text, default="")
+    created_at      = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit   = db.relationship("PlanningUnit")
+
+    def to_dict(self):
+        pu = self.planning_unit
+        return {
+            "id": self.id,
+            "type": self.post_type,
+            "date": self.schedule_date.isoformat(),
+            "start": self.start_time.strftime("%H:%M") if self.start_time else "",
+            "end": self.end_time.strftime("%H:%M") if self.end_time else "",
+            "hours": self.hours,
+            "slots": self.slots,
+            "slots_filled": self.slots_filled,
+            "lob": pu.name if pu else "",
+            "status": self.status,
+            "notes": self.notes or "",
+        }
+
+
+class VTOOTSignup(db.Model):
+    """An agent's sign-up for a VTO/OT opportunity."""
+    __tablename__ = "vto_ot_signups"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    post_id      = db.Column(db.Integer, db.ForeignKey("vto_ot_posts.id", ondelete="CASCADE"), nullable=False)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    status       = db.Column(db.String(20), default="confirmed")  # confirmed | cancelled
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    post         = db.relationship("VTOOTPost", backref="signups")
+    employee     = db.relationship("Employee")
+
+    __table_args__ = (
+        db.UniqueConstraint("post_id", "employee_id", name="uq_vto_post_emp"),
+    )

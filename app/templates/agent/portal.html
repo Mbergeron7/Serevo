@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block title %}Self-Service Portal — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .portal-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .portal-header h1 { font-size:1.3rem; font-weight:800; margin:0; }
+  .portal-header .agent-info { font-size:.85rem; color:var(--text-muted); }
+
+  .p-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:20px; overflow-x:auto; }
+  .p-tabs button { background:none; border:none; padding:10px 18px; font-size:.83rem; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .15s, border-color .15s; white-space:nowrap; }
+  .p-tabs button:hover { color:var(--text); }
+  .p-tabs button.active { color:var(--brand-accent); border-bottom-color:var(--brand-accent); }
+  .p-panel { display:none; }
+  .p-panel.active { display:block; }
+
+  .p-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden; }
+  .p-card-header { padding:12px 20px; font-weight:700; font-size:.85rem; background:var(--bg); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .p-card-body { padding:16px 20px; }
+
+  .p-tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .p-tbl th { text-align:left; font-weight:700; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-muted); font-size:.75rem; text-transform:uppercase; }
+  .p-tbl td { padding:8px 10px; border-bottom:1px solid var(--border); }
+  .p-tbl tr:hover { background:var(--bg); }
+
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.72rem; font-weight:700; }
+  .pill-open { background:#dbeafe; color:#1e40af; }
+  .pill-vto { background:#dcfce7; color:#166534; }
+  .pill-ot { background:#fef9c3; color:#854d0e; }
+  .pill-pending { background:#fef9c3; color:#854d0e; }
+  .pill-accepted { background:#dbeafe; color:#1e40af; }
+  .pill-approved { background:#dcfce7; color:#166534; }
+  .pill-declined { background:#fee2e2; color:#991b1b; }
+  .pill-filled { background:#e5e7eb; color:#374151; }
+
+  .empty-msg { color:var(--text-muted); font-size:.85rem; padding:20px 0; text-align:center; }
+
+  .mini-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:999; }
+  .mini-modal .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; max-width:520px; width:92%; max-height:90vh; overflow-y:auto; }
+  .mini-modal h3 { font-size:.95rem; margin:0 0 16px; }
+  .form-group { margin-bottom:12px; }
+  .form-group label { display:block; font-size:.78rem; font-weight:700; margin-bottom:4px; color:var(--text-muted); }
+  .form-group select, .form-group textarea, .form-group input { width:100%; font-size:.82rem; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); box-sizing:border-box; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="portal-header">
+  <h1>Self-Service Portal</h1>
+  <span class="agent-info">{{ employee.full_name }} · {{ employee.employee_id }}</span>
+</div>
+
+<div class="p-tabs">
+  <button class="active" onclick="switchTab('shifts', this)">📋 Open Shifts</button>
+  <button onclick="switchTab('swaps', this)">🔄 Shift Swaps</button>
+  <button onclick="switchTab('vto', this)">🕐 VTO / OT</button>
+  <button onclick="switchTab('mybids', this)">⭐ My Bids</button>
+</div>
+
+<!-- ═══ Open Shifts Panel ═══ -->
+<div class="p-panel active" id="pp-shifts">
+  <div class="p-card">
+    <div class="p-card-header">Available Open Shifts
+      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadOpenShifts()">↻ Refresh</button>
+    </div>
+    <div class="p-card-body" id="openShiftsBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Shift Swaps Panel ═══ -->
+<div class="p-panel" id="pp-swaps">
+  <div class="p-card">
+    <div class="p-card-header">Swap Board
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" style="font-size:.78rem; padding:4px 14px;" onclick="openSwapModal()">+ Offer Swap</button>
+        <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadSwaps()">↻</button>
+      </div>
+    </div>
+    <div class="p-card-body" id="swapsBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VTO / OT Panel ═══ -->
+<div class="p-panel" id="pp-vto">
+  <div class="p-card">
+    <div class="p-card-header">Voluntary Time Off & Overtime Board
+      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadVtoOt()">↻ Refresh</button>
+    </div>
+    <div class="p-card-body" id="vtoBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ My Bids Panel ═══ -->
+<div class="p-panel" id="pp-mybids">
+  <div class="p-card">
+    <div class="p-card-header">My Shift Bids</div>
+    <div class="p-card-body" id="myBidsBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Swap Request Modal ═══ -->
+<div id="swapModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeSwapModal()">
+  <div class="modal">
+    <h3>Offer a Shift Swap</h3>
+    <form onsubmit="return submitSwap(event)">
+      <div class="form-group">
+        <label>My Shift to Swap</label>
+        <select id="swap_my_shift" required>
+          <option value="">Loading shifts…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Reason (optional)</label>
+        <textarea id="swap_reason" rows="2" style="resize:vertical;"></textarea>
+      </div>
+      <p style="font-size:.75rem; color:var(--text-muted); margin:8px 0;">This creates an open swap offer. Other agents can accept it, then a supervisor approves.</p>
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeSwapModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Post Swap</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.p-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.p-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('pp-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+async function api(url, body={}) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  return r.json();
+}
+
+// ── Open Shifts ──
+async function loadOpenShifts() {
+  const data = await api('/api/agent/open-shifts');
+  const el = document.getElementById('openShiftsBody');
+  const shifts = data.shifts || [];
+  if (!shifts.length) { el.innerHTML = '<p class="empty-msg">No open shifts available right now.</p>'; return; }
+  let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Hours</th><th>LOB</th><th>Skills</th><th>Bids</th><th>Notes</th><th></th></tr></thead><tbody>';
+  shifts.forEach(s => {
+    html += `<tr>
+      <td style="font-weight:600;">${esc(s.date)}</td>
+      <td>${esc(s.start)} – ${esc(s.end)}</td>
+      <td>${s.hours}</td>
+      <td>${esc(s.lob)}</td>
+      <td>${esc(s.required_skills) || '—'}</td>
+      <td>${s.bid_count || 0}</td>
+      <td style="font-size:.78rem; color:var(--text-muted);">${esc(s.notes)}</td>
+      <td><button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="placeBid(${s.id})">Bid</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function placeBid(postId) {
+  const data = await api('/api/agent/bid', {shift_post_id: postId, preference: 1});
+  if (data.ok || data.demo) {
+    loadOpenShifts();
+    loadMyBids();
+  } else {
+    alert(data.error || 'Could not place bid');
+  }
+}
+
+// ── My Bids ──
+async function loadMyBids() {
+  const data = await api('/api/agent/my-bids');
+  const el = document.getElementById('myBidsBody');
+  const bids = data.bids || [];
+  if (!bids.length) { el.innerHTML = '<p class="empty-msg">You haven\'t bid on any shifts yet. Check the Open Shifts tab.</p>'; return; }
+  let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Status</th><th></th></tr></thead><tbody>';
+  bids.forEach(b => {
+    html += `<tr>
+      <td style="font-weight:600;">${esc(b.date)}</td>
+      <td>${esc(b.start)} – ${esc(b.end)}</td>
+      <td><span class="pill pill-${b.status}">${esc(b.status)}</span></td>
+      <td>${b.status === 'pending' ? `<button class="btn btn-outline" style="font-size:.72rem; padding:2px 8px;" onclick="cancelBid(${b.id})">Cancel</button>` : ''}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function cancelBid(bidId) {
+  await fetch(`/api/agent/bid/${bidId}`, {method:'DELETE'});
+  loadMyBids();
+  loadOpenShifts();
+}
+
+// ── Swaps ──
+async function loadSwaps() {
+  const data = await api('/api/agent/swaps');
+  const el = document.getElementById('swapsBody');
+  const swaps = data.swaps || [];
+  if (!swaps.length) { el.innerHTML = '<p class="empty-msg">No swap requests. Use "+ Offer Swap" to post one.</p>'; return; }
+  let html = '<table class="p-tbl"><thead><tr><th>From</th><th>Shift</th><th>To</th><th>Their Shift</th><th>Status</th><th>Reason</th><th></th></tr></thead><tbody>';
+  swaps.forEach(s => {
+    const statusCls = 'pill-' + s.status;
+    let actions = '';
+    if (s.status === 'pending' && s.target === 'Open') {
+      actions = `<button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="acceptSwap(${s.id})">Accept</button>`;
+    }
+    html += `<tr>
+      <td style="font-weight:600;">${esc(s.requester)}</td>
+      <td>${esc(s.requester_date)}<br><span style="font-size:.78rem;">${esc(s.requester_shift)}</span></td>
+      <td style="font-weight:600;">${esc(s.target)}</td>
+      <td>${s.target_date ? esc(s.target_date) + '<br><span style="font-size:.78rem;">' + esc(s.target_shift) + '</span>' : '—'}</td>
+      <td><span class="pill ${statusCls}">${esc(s.status)}</span></td>
+      <td style="font-size:.78rem; color:var(--text-muted);">${esc(s.reason)}</td>
+      <td>${actions}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+let myShiftsCache = null;
+async function openSwapModal() {
+  document.getElementById('swapModal').style.display = '';
+  document.getElementById('swap_reason').value = '';
+  const sel = document.getElementById('swap_my_shift');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  const data = await api('/api/agent/upcoming-shifts');
+  myShiftsCache = data.shifts || [];
+  sel.innerHTML = '<option value="">— Select a shift —</option>';
+  myShiftsCache.forEach(s => {
+    sel.innerHTML += `<option value="${s.schedule_id}">${s.date} (${s.day}) ${s.start}–${s.end}</option>`;
+  });
+}
+function closeSwapModal() { document.getElementById('swapModal').style.display = 'none'; }
+
+async function submitSwap(ev) {
+  ev.preventDefault();
+  const schedId = document.getElementById('swap_my_shift').value;
+  if (!schedId) return;
+  const data = await api('/api/agent/swap-request', {
+    my_schedule_id: parseInt(schedId),
+    reason: document.getElementById('swap_reason').value,
+  });
+  if (data.ok || data.demo) { closeSwapModal(); loadSwaps(); }
+  else { alert(data.error || 'Failed'); }
+  return false;
+}
+
+async function acceptSwap(swapId) {
+  // For simplicity, accept without specifying which shift to trade
+  const data = await api(`/api/agent/swap/${swapId}/accept`);
+  if (data.ok || data.demo) { loadSwaps(); }
+  else { alert(data.error || 'Failed'); }
+}
+
+// ── VTO / OT ──
+async function loadVtoOt() {
+  const data = await api('/api/agent/vto-ot');
+  const el = document.getElementById('vtoBody');
+  const posts = data.posts || [];
+  if (!posts.length) { el.innerHTML = '<p class="empty-msg">No VTO or OT opportunities posted right now.</p>'; return; }
+  let html = '<table class="p-tbl"><thead><tr><th>Type</th><th>Date</th><th>Time</th><th>Hours</th><th>LOB</th><th>Slots</th><th>Notes</th><th></th></tr></thead><tbody>';
+  posts.forEach(p => {
+    const typeCls = p.type === 'vto' ? 'pill-vto' : 'pill-ot';
+    const remaining = p.slots - p.slots_filled;
+    html += `<tr>
+      <td><span class="pill ${typeCls}">${p.type.toUpperCase()}</span></td>
+      <td style="font-weight:600;">${esc(p.date)}</td>
+      <td>${esc(p.start)} – ${esc(p.end)}</td>
+      <td>${p.hours}</td>
+      <td>${esc(p.lob)}</td>
+      <td>${remaining} of ${p.slots} open</td>
+      <td style="font-size:.78rem; color:var(--text-muted);">${esc(p.notes)}</td>
+      <td>
+        ${p.signed_up
+          ? `<button class="btn btn-outline" style="font-size:.72rem; padding:2px 10px;" onclick="cancelVtoOt(${p.id})">Cancel</button>`
+          : `<button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="signupVtoOt(${p.id})">Sign Up</button>`
+        }
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function signupVtoOt(postId) {
+  const data = await api('/api/agent/vto-ot/signup', {post_id: postId});
+  if (data.ok || data.demo) { loadVtoOt(); }
+  else { alert(data.error || 'Could not sign up'); }
+}
+
+async function cancelVtoOt(postId) {
+  const data = await api('/api/agent/vto-ot/cancel', {post_id: postId});
+  if (data.ok || data.demo) { loadVtoOt(); }
+  else { alert(data.error || 'Failed'); }
+}
+
+// ── Init ──
+loadOpenShifts();
+loadSwaps();
+loadVtoOt();
+loadMyBids();
+</script>
+{% endblock %}

@@ -31,6 +31,7 @@
       {# Agent nav — limited to their own data #}
       <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
       <a href="/my-time-off/"{% if request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Time Off</a>
+      <a href="/portal/"{% if request.path.startswith('/portal') %} class="active"{% endif %}>Self-Service</a>
       {% else %}
       {# Supervisor / admin nav #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
