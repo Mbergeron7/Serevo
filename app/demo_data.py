@@ -1065,6 +1065,49 @@ def get_demo_activities():
     ]
 
 
+def get_demo_customization():
+    """Demo customization data including segment codes for scheduling."""
+    return {
+        "segments": [
+            {"id": 1, "code": "on-call", "label": "On-Call", "color": "#059669",
+             "is_productive": True, "is_paid": True, "is_default": True,
+             "sort_order": 0, "is_active": True,
+             "offset_mins": None, "duration_mins": None,
+             "is_flexible": False, "window_start_mins": None, "window_end_mins": None},
+            {"id": 2, "code": "break", "label": "Break", "color": "#d97706",
+             "is_productive": False, "is_paid": True, "is_default": True,
+             "sort_order": 1, "is_active": True,
+             "offset_mins": 120, "duration_mins": 15,
+             "is_flexible": True, "window_start_mins": 90, "window_end_mins": 180},
+            {"id": 3, "code": "lunch", "label": "Lunch", "color": "#2563eb",
+             "is_productive": False, "is_paid": False, "is_default": True,
+             "sort_order": 2, "is_active": True,
+             "offset_mins": 240, "duration_mins": 30,
+             "is_flexible": True, "window_start_mins": 210, "window_end_mins": 300},
+            {"id": 4, "code": "training", "label": "Training", "color": "#ea580c",
+             "is_productive": False, "is_paid": True, "is_default": True,
+             "sort_order": 3, "is_active": True,
+             "offset_mins": 60, "duration_mins": 60,
+             "is_flexible": False, "window_start_mins": None, "window_end_mins": None},
+            {"id": 5, "code": "meeting", "label": "Meeting", "color": "#7c3aed",
+             "is_productive": False, "is_paid": True, "is_default": True,
+             "sort_order": 4, "is_active": True,
+             "offset_mins": 0, "duration_mins": 30,
+             "is_flexible": False, "window_start_mins": None, "window_end_mins": None},
+            {"id": 6, "code": "coaching", "label": "Coaching", "color": "#06b6d4",
+             "is_productive": False, "is_paid": True, "is_default": False,
+             "sort_order": 5, "is_active": True,
+             "offset_mins": 180, "duration_mins": 30,
+             "is_flexible": True, "window_start_mins": 150, "window_end_mins": 240},
+            {"id": 7, "code": "project", "label": "Project Work", "color": "#10b981",
+             "is_productive": True, "is_paid": True, "is_default": False,
+             "sort_order": 6, "is_active": True,
+             "offset_mins": None, "duration_mins": 60,
+             "is_flexible": False, "window_start_mins": None, "window_end_mins": None},
+        ]
+    }
+
+
 def get_demo_contracts():
     """Demo data for Settings > Contracts page."""
     return [

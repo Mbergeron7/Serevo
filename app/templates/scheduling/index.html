@@ -376,12 +376,73 @@
     color: var(--text-muted); font-size: .78rem;
   }
 
+  /* ── Activity Drawer ────────────────────────── */
+  .activity-drawer-toggle {
+    position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+    z-index: 100; background: var(--brand-accent); color: #fff;
+    border: none; border-radius: 8px 0 0 8px; padding: 12px 8px;
+    cursor: pointer; font-size: .72rem; font-weight: 700;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    box-shadow: -2px 0 8px rgba(0,0,0,.15); letter-spacing: .05em;
+    transition: right .3s;
+  }
+  .activity-drawer-toggle:hover { background: color-mix(in srgb, var(--brand-accent) 85%, #000); }
+  .activity-drawer-toggle.drawer-open { right: 260px; }
+
+  .activity-drawer {
+    position: fixed; right: -260px; top: 0; bottom: 0; width: 260px;
+    z-index: 99; background: var(--surface); border-left: 1px solid var(--border);
+    box-shadow: -4px 0 20px rgba(0,0,0,.12); transition: right .3s;
+    display: flex; flex-direction: column;
+  }
+  .activity-drawer.open { right: 0; }
+  .activity-drawer-header {
+    padding: 16px 16px 12px; font-weight: 700; font-size: .9rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .activity-drawer-header .drawer-close {
+    background: none; border: none; font-size: 1.2rem; cursor: pointer;
+    color: var(--text-muted); padding: 2px 6px;
+  }
+  .activity-drawer-body {
+    flex: 1; overflow-y: auto; padding: 8px;
+  }
+  .activity-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+    cursor: grab; user-select: none; font-size: .82rem;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .activity-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .activity-item:active { cursor: grabbing; transform: scale(.97); }
+  .activity-item .act-color {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+  .activity-item .act-label { font-weight: 600; flex: 1; }
+  .activity-item .act-dur {
+    font-size: .72rem; color: var(--text-muted); white-space: nowrap;
+  }
+
+  /* Drop indicator on timeline rows */
+  .tl-row.drop-target { background: color-mix(in srgb, var(--brand-accent) 18%, transparent) !important; }
+  .tl-drop-preview {
+    position: absolute; top: 4px; height: 28px; border-radius: 4px;
+    pointer-events: none; z-index: 10; opacity: .5;
+    border: 2px dashed rgba(255,255,255,.8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 600; color: #fff;
+  }
+
   @media (max-width: 600px) {
     .config-row { flex-direction: column; }
     .stat-row { flex-direction: column; }
     .view-tabs { width: 100%; }
     .view-tab { flex: 1; text-align: center; }
     .tl-name-col, .tl-emp-name { width: 120px; min-width: 120px; }
+    .activity-drawer { width: 220px; right: -220px; }
+    .activity-drawer-toggle.drawer-open { right: 220px; }
   }
 </style>
 {% endblock %}
@@ -648,12 +709,17 @@
         <div class="form-group">
           <label>Activity Type</label>
           <select id="newSegType">
+            {% for sc in segment_codes %}
+            <option value="{{ sc.code }}">{{ sc.label }}</option>
+            {% endfor %}
+            {% if not segment_codes %}
             <option value="on-call">On-Call</option>
             <option value="break">Break</option>
             <option value="lunch">Lunch</option>
             <option value="meeting">Meeting</option>
             <option value="training">Training</option>
             <option value="other">Other</option>
+            {% endif %}
           </select>
         </div>
       </div>
@@ -865,6 +931,32 @@
         Run Optimizer
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ── Activity Drawer ────────────────────────────────────── -->
+<button class="activity-drawer-toggle" id="actDrawerToggle" onclick="toggleActivityDrawer()">ACTIVITIES</button>
+<div class="activity-drawer" id="actDrawer">
+  <div class="activity-drawer-header">
+    <span>Activities</span>
+    <button class="drawer-close" onclick="toggleActivityDrawer()">&times;</button>
+  </div>
+  <div class="activity-drawer-body" id="actDrawerBody">
+    {% for sc in segment_codes %}
+    {% if sc.code != 'on-call' %}
+    <div class="activity-item" draggable="true"
+         data-code="{{ sc.code }}" data-label="{{ sc.label }}"
+         data-color="{{ sc.color }}" data-duration="{{ sc.duration_mins or 30 }}"
+         ondragstart="actDragStart(event)">
+      <span class="act-color" style="background:{{ sc.color }}"></span>
+      <span class="act-label">{{ sc.label }}</span>
+      <span class="act-dur">{{ sc.duration_mins or 30 }}m</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% if not segment_codes %}
+    <div style="font-size:.82rem;color:var(--text-muted);padding:8px">No activity codes configured.</div>
+    {% endif %}
   </div>
 </div>
 
@@ -1475,8 +1567,8 @@ function renderTimelineView(container) {
       const baseLeft = ((shiftSMin - minH * 60) / 60) * TL_PX_PER_HOUR;
       const baseWidth = ((shiftEMin - shiftSMin) / 60) * TL_PX_PER_HOUR;
       html += `<div class="tl-segment tl-seg-oncall tl-seg-base" style="left:${baseLeft}px;width:${Math.max(baseWidth,2)}px"
-        title="On-Call: ${shift.start}–${shift.end}"
-        onclick="openEditModal(${dayIdx},${shiftIdx})"></div>`;
+        title="On-Call: ${shift.start}–${shift.end} (drag to move entire shift)"
+        onmousedown="shiftMouseDown(event,${dayIdx},${shiftIdx})"></div>`;
 
       // Overlay segments: breaks, lunch, meetings rendered ON TOP of the base bar
       const segments = shift.segments || [];
@@ -1487,9 +1579,8 @@ function renderTimelineView(container) {
         const eMin = timeToMins(seg.end);
         const left = ((sMin - minH * 60) / 60) * TL_PX_PER_HOUR;
         const width = ((eMin - sMin) / 60) * TL_PX_PER_HOUR;
-        const cls = 'tl-seg-' + bt.replace('-', '');
         const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
-        html += `<div class="tl-segment tl-seg-overlay ${cls}" style="left:${left}px;width:${Math.max(width,2)}px"
+        html += `<div class="tl-segment tl-seg-overlay" style="left:${left}px;width:${Math.max(width,2)}px;background:${segColor(seg.type)}"
           title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
           data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
           onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
@@ -1524,15 +1615,21 @@ function renderTimelineView(container) {
 
     html += `</div>`; // timeline-container
 
-    // Legend
-    html += `<div class="timeline-legend">
-      <span><span class="legend-dot" style="background:#059669"></span>On-Call</span>
-      <span><span class="legend-dot" style="background:#d97706"></span>Break</span>
-      <span><span class="legend-dot" style="background:#2563eb"></span>Lunch</span>
-      <span><span class="legend-dot" style="background:#7c3aed"></span>Meeting</span>
-      <span><span class="legend-dot" style="background:#ea580c"></span>Training</span>
-      <span><span class="legend-dot" style="background:#6b7280"></span>Other</span>
-    </div>`;
+    // Legend (dynamic from segment codes)
+    html += `<div class="timeline-legend">`;
+    if (SEGMENT_CODES.length) {
+      SEGMENT_CODES.forEach(sc => {
+        html += `<span><span class="legend-dot" style="background:${sc.color}"></span>${sc.label}</span>`;
+      });
+    } else {
+      html += `<span><span class="legend-dot" style="background:#059669"></span>On-Call</span>
+        <span><span class="legend-dot" style="background:#d97706"></span>Break</span>
+        <span><span class="legend-dot" style="background:#2563eb"></span>Lunch</span>
+        <span><span class="legend-dot" style="background:#7c3aed"></span>Meeting</span>
+        <span><span class="legend-dot" style="background:#ea580c"></span>Training</span>
+        <span><span class="legend-dot" style="background:#6b7280"></span>Other</span>`;
+    }
+    html += `</div>`;
 
     // Unassigned
     if (day.unassigned && day.unassigned.length) {
@@ -1553,9 +1650,52 @@ function baseSegType(t) {
   }
   return t;
 }
+// ── Dynamic segment codes from server ──
+const SEGMENT_CODES = {{ segment_codes | tojson }};
+const _segColorMap = {};
+const _segLabelMap = {};
+SEGMENT_CODES.forEach(sc => {
+  _segColorMap[sc.code] = sc.color;
+  _segLabelMap[sc.code] = sc.label;
+});
+
 function segLabel(type) {
-  const labels = {'on-call':'On-Call','break':'Break','lunch':'Lunch','meeting':'Mtg','training':'Train','other':'Other'};
-  return labels[baseSegType(type)] || type;
+  const bt = baseSegType(type);
+  if (_segLabelMap[bt]) return _segLabelMap[bt];
+  const fallback = {'on-call':'On-Call','break':'Break','lunch':'Lunch','meeting':'Mtg','training':'Train','other':'Other'};
+  return fallback[bt] || type;
+}
+
+function segColor(type) {
+  const bt = baseSegType(type);
+  if (_segColorMap[bt]) return _segColorMap[bt];
+  const fallback = {'on-call':'#059669','break':'#d97706','lunch':'#2563eb','meeting':'#7c3aed','training':'#ea580c','other':'#6b7280'};
+  return fallback[bt] || '#6b7280';
+}
+
+// ── Client-side on-call recalculation (demo mode) ──
+function recalcOncallClient(shift) {
+  const shiftS = timeToMins(shift.start);
+  const shiftE = timeToMins(shift.end);
+  // Remove existing on-call segments
+  shift.segments = shift.segments.filter(s => baseSegType(s.type) !== 'on-call');
+  // Sort non-on-call by start time
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+  // Build on-call segments filling the gaps
+  const oncallSegs = [];
+  let cursor = shiftS;
+  shift.segments.forEach(seg => {
+    const sMin = timeToMins(seg.start);
+    if (sMin > cursor) {
+      oncallSegs.push({type: 'on-call', start: minsToTime(cursor), end: seg.start, duration_mins: sMin - cursor, notes: ''});
+    }
+    cursor = Math.max(cursor, timeToMins(seg.end));
+  });
+  if (cursor < shiftE) {
+    oncallSegs.push({type: 'on-call', start: minsToTime(cursor), end: shift.end, duration_mins: shiftE - cursor, notes: ''});
+  }
+  shift.segments = shift.segments.concat(oncallSegs);
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
 }
 
 function timeToMins(t) {
@@ -1679,10 +1819,9 @@ function renderSegmentList(segments) {
     el.innerHTML = '<div style="font-size:.82rem;color:var(--text-muted);padding:8px">No segments</div>';
     return;
   }
-  const colors = {'on-call':'#059669','break':'#d97706','lunch':'#2563eb','meeting':'#7c3aed','training':'#ea580c','other':'#6b7280'};
   let html = '';
   segments.forEach((seg, idx) => {
-    const c = colors[baseSegType(seg.type)] || '#6b7280';
+    const c = segColor(seg.type);
     html += `<div class="seg-list-item">
       <span class="seg-type-dot" style="background:${c}"></span>
       <span class="seg-info"><strong>${segLabel(seg.type)}</strong> ${seg.start}–${seg.end} (${seg.duration_mins}m)${seg.notes ? ' — ' + seg.notes : ''}</span>
@@ -2718,8 +2857,9 @@ function segMouseUp(e) {
   // Update in memory
   seg.start = minsToTime(newStartMins);
   seg.end = minsToTime(newEndMins);
+  seg.duration_mins = duration;
 
-  // Persist to DB
+  // Persist to DB (if saved) or recalc on-call client-side (demo mode)
   if (seg.id) {
     fetch('/scheduling/segment/' + seg.id, {
       method: 'PUT',
@@ -2727,21 +2867,15 @@ function segMouseUp(e) {
       body: JSON.stringify({start: seg.start, end: seg.end})
     }).then(r => r.json()).then(d => {
       if (!d.success) { showToast('Move failed: ' + (d.error || ''), 'error'); return; }
-      // If we moved a non-on-call segment, recalculate on-call segments
       if (seg.type !== 'on-call' && shift.id) {
         fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'}
         }).then(r2 => r2.json()).then(d2 => {
           if (d2.success && d2.segments) {
-            // Replace all segments for this shift with the server response
             shift.segments = d2.segments.map(s => ({
-              id: s.id,
-              type: s.type,
-              start: s.start,
-              end: s.end,
-              duration: s.duration_mins,
-              notes: s.notes || ''
+              id: s.id, type: s.type, start: s.start, end: s.end,
+              duration_mins: s.duration_mins, notes: s.notes || ''
             }));
             shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
             switchView(currentView);
@@ -2749,12 +2883,123 @@ function segMouseUp(e) {
         });
       }
     });
+  } else if (baseSegType(seg.type) !== 'on-call') {
+    // Demo mode: recalculate on-call segments client-side
+    recalcOncallClient(shift);
   }
 
   // Re-sort and re-render immediately (optimistic)
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
   showToast(`Moved ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
+}
+
+// ── Whole-shift drag ─────────────────────────
+let _shiftDragState = null;
+
+function shiftMouseDown(e, dayIdx, shiftIdx) {
+  if (e.button === 2) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const segEl = e.currentTarget;
+  const barArea = segEl.parentElement;
+  const dayEl = barArea.closest('.day-content');
+  const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
+  const minH = firstHour ? parseInt(firstHour.textContent) : 0;
+
+  _shiftDragState = {
+    dayIdx, shiftIdx,
+    origStart: shift.start, origEnd: shift.end,
+    origLeft: parseFloat(segEl.style.left),
+    startX: e.clientX,
+    barArea, segEl, minH,
+    moved: false
+  };
+
+  document.addEventListener('mousemove', shiftMouseMove);
+  document.addEventListener('mouseup', shiftMouseUp);
+}
+
+function shiftMouseMove(e) {
+  if (!_shiftDragState) return;
+  const dx = e.clientX - _shiftDragState.startX;
+  if (Math.abs(dx) < 4 && !_shiftDragState.moved) return;
+
+  if (!_shiftDragState.moved) {
+    _shiftDragState.moved = true;
+    _shiftDragState.segEl.style.opacity = '0.5';
+  }
+
+  // Move the entire row visually via transform
+  const row = _shiftDragState.barArea;
+  const segs = row.querySelectorAll('.tl-segment');
+  segs.forEach(s => {
+    const origLeft = parseFloat(s.dataset.origLeft || s.style.left);
+    if (!s.dataset.origLeft) s.dataset.origLeft = s.style.left;
+    s.style.left = (origLeft + dx) + 'px';
+  });
+}
+
+function shiftMouseUp(e) {
+  document.removeEventListener('mousemove', shiftMouseMove);
+  document.removeEventListener('mouseup', shiftMouseUp);
+
+  if (!_shiftDragState) return;
+  const ds = _shiftDragState;
+  _shiftDragState = null;
+  ds.segEl.style.opacity = '';
+
+  // Clear origLeft data
+  const segs = ds.barArea.querySelectorAll('.tl-segment');
+  segs.forEach(s => delete s.dataset.origLeft);
+
+  if (!ds.moved) {
+    // Was a click — open edit modal
+    openEditModal(ds.dayIdx, ds.shiftIdx);
+    return;
+  }
+
+  const dx = e.clientX - ds.startX;
+  const dMins = (dx / TL_PX_PER_HOUR) * 60;
+  const shift = scheduleData.days[ds.dayIdx].shifts[ds.shiftIdx];
+  const origStartMins = timeToMins(ds.origStart);
+  const origEndMins = timeToMins(ds.origEnd);
+  const shiftDur = origEndMins - origStartMins;
+
+  let newStartMins = snapTo(origStartMins + dMins, SNAP_MINS);
+  if (newStartMins < 0) newStartMins = 0;
+  if (newStartMins + shiftDur > 24 * 60) newStartMins = 24 * 60 - shiftDur;
+  if (newStartMins === origStartMins) return;
+
+  const delta = newStartMins - origStartMins;
+
+  // Move shift times
+  shift.start = minsToTime(newStartMins);
+  shift.end = minsToTime(newStartMins + shiftDur);
+
+  // Move all segments by the same delta
+  (shift.segments || []).forEach(seg => {
+    const sMin = timeToMins(seg.start) + delta;
+    const eMin = timeToMins(seg.end) + delta;
+    seg.start = minsToTime(sMin);
+    seg.end = minsToTime(eMin);
+  });
+
+  // Persist if saved
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start: shift.start, end: shift.end, move_segments_delta: delta})
+    }).then(r => r.json()).then(d => {
+      if (!d.success) showToast('Shift move failed: ' + (d.error || ''), 'error');
+    });
+  }
+
+  switchView(currentView);
+  showToast(`Moved shift → ${shift.start}–${shift.end}`);
 }
 
 // ── Context menu ──────────────────────────────
@@ -2947,5 +3192,182 @@ document.addEventListener('mouseout', function(e) {
   const row = e.target.closest('.tl-row');
   if (row) row.classList.remove('paste-target');
 });
+
+// ═══════════════════════════════════════════════════════════
+// ── Activity Drawer: drag-and-drop onto timeline ─────────
+// ═══════════════════════════════════════════════════════════
+
+function toggleActivityDrawer() {
+  const drawer = document.getElementById('actDrawer');
+  const toggle = document.getElementById('actDrawerToggle');
+  drawer.classList.toggle('open');
+  toggle.classList.toggle('drawer-open');
+}
+
+let _actDrag = null;
+
+function actDragStart(e) {
+  const item = e.currentTarget;
+  _actDrag = {
+    code: item.dataset.code,
+    label: item.dataset.label,
+    color: item.dataset.color,
+    duration: parseInt(item.dataset.duration) || 30,
+  };
+  e.dataTransfer.setData('text/plain', _actDrag.code);
+  e.dataTransfer.effectAllowed = 'copy';
+
+  // Enable drop targets
+  document.querySelectorAll('.tl-bar-area').forEach(area => {
+    area.addEventListener('dragover', actDragOver);
+    area.addEventListener('dragleave', actDragLeave);
+    area.addEventListener('drop', actDrop);
+  });
+}
+
+function actDragOver(e) {
+  if (!_actDrag) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+
+  const barArea = e.currentTarget;
+  const row = barArea.closest('.tl-row');
+  if (row) row.classList.add('drop-target');
+
+  // Show/move preview ghost
+  let ghost = barArea.querySelector('.tl-drop-preview');
+  if (!ghost) {
+    ghost = document.createElement('div');
+    ghost.className = 'tl-drop-preview';
+    ghost.style.background = _actDrag.color;
+    ghost.textContent = _actDrag.label;
+    barArea.appendChild(ghost);
+  }
+
+  const rect = barArea.getBoundingClientRect();
+  const dayEl = barArea.closest('.day-content');
+  const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
+  const minH = firstHour ? parseInt(firstHour.textContent) : 0;
+
+  const clickX = e.clientX - rect.left;
+  const clickMins = minH * 60 + (clickX / TL_PX_PER_HOUR) * 60;
+  const snapped = snapTo(clickMins, SNAP_MINS);
+  const left = ((snapped - minH * 60) / 60) * TL_PX_PER_HOUR;
+  const width = (_actDrag.duration / 60) * TL_PX_PER_HOUR;
+
+  ghost.style.left = left + 'px';
+  ghost.style.width = width + 'px';
+}
+
+function actDragLeave(e) {
+  const barArea = e.currentTarget;
+  const row = barArea.closest('.tl-row');
+  if (row) row.classList.remove('drop-target');
+  const ghost = barArea.querySelector('.tl-drop-preview');
+  if (ghost) ghost.remove();
+}
+
+function actDrop(e) {
+  e.preventDefault();
+  if (!_actDrag) return;
+
+  const barArea = e.currentTarget;
+  const row = barArea.closest('.tl-row');
+  if (row) row.classList.remove('drop-target');
+  const ghost = barArea.querySelector('.tl-drop-preview');
+  if (ghost) ghost.remove();
+
+  const dayIdx = parseInt(barArea.dataset.day);
+  const shiftIdx = parseInt(barArea.dataset.shift);
+  if (isNaN(dayIdx) || isNaN(shiftIdx) || !scheduleData) return;
+
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const rect = barArea.getBoundingClientRect();
+  const dayEl = barArea.closest('.day-content');
+  const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
+  const minH = firstHour ? parseInt(firstHour.textContent) : 0;
+
+  const clickX = e.clientX - rect.left;
+  const clickMins = minH * 60 + (clickX / TL_PX_PER_HOUR) * 60;
+  let newStartMins = snapTo(clickMins, SNAP_MINS);
+
+  // Clamp within shift
+  const shiftStart = timeToMins(shift.start);
+  const shiftEnd = timeToMins(shift.end);
+  const dur = _actDrag.duration;
+  newStartMins = Math.max(shiftStart, Math.min(newStartMins, shiftEnd - dur));
+
+  const newSeg = {
+    type: _actDrag.code,
+    start: minsToTime(newStartMins),
+    end: minsToTime(newStartMins + dur),
+    duration_mins: dur,
+    notes: '',
+  };
+
+  // Persist to DB if shift is saved
+  if (shift.id) {
+    fetch('/scheduling/shift/' + shift.id + '/segment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(newSeg),
+    }).then(r => r.json()).then(d => {
+      if (d.success && d.segment) {
+        newSeg.id = d.segment.id;
+        // Recalculate on-call
+        if (baseSegType(newSeg.type) !== 'on-call' && shift.id) {
+          fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+          }).then(r2 => r2.json()).then(d2 => {
+            if (d2.success && d2.segments) {
+              shift.segments = d2.segments.map(s => ({
+                id: s.id, type: s.type, start: s.start, end: s.end,
+                duration_mins: s.duration_mins, notes: s.notes || ''
+              }));
+              shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+              switchView(currentView);
+            }
+          });
+        }
+      } else {
+        showToast('Add failed: ' + (d.error || ''), 'error');
+      }
+    });
+  } else {
+    // Demo mode: recalc on-call client-side
+    if (baseSegType(newSeg.type) !== 'on-call') {
+      shift.segments.push(newSeg);
+      recalcOncallClient(shift);
+    } else {
+      shift.segments.push(newSeg);
+    }
+  }
+
+  if (shift.id) {
+    // For persisted shifts, push now — server recalc will handle the rest
+    shift.segments.push(newSeg);
+  }
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+  switchView(currentView);
+  showToast(`Added ${_actDrag.label} to ${shift.employee}`);
+
+  // Clean up drag listeners
+  _cleanupActDrag();
+}
+
+function _cleanupActDrag() {
+  _actDrag = null;
+  document.querySelectorAll('.tl-bar-area').forEach(area => {
+    area.removeEventListener('dragover', actDragOver);
+    area.removeEventListener('dragleave', actDragLeave);
+    area.removeEventListener('drop', actDrop);
+  });
+  document.querySelectorAll('.tl-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+  document.querySelectorAll('.tl-drop-preview').forEach(g => g.remove());
+}
+
+// Clean up on drag end (e.g. cancelled drag)
+document.addEventListener('dragend', _cleanupActDrag);
 </script>
 {% endblock %}

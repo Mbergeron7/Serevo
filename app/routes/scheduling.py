@@ -46,14 +46,15 @@ def index():
     user = get_current_user()
 
     if user and user.get("is_demo"):
-        from app.demo_data import DEMO_LOBS, get_demo_selections, get_demo_skills_config, get_demo_shift_sequences
+        from app.demo_data import DEMO_LOBS, get_demo_selections, get_demo_skills_config, get_demo_shift_sequences, get_demo_customization
         lobs = list(DEMO_LOBS)
         selections = get_demo_selections()
         skills = get_demo_skills_config()
         shift_sequences = get_demo_shift_sequences().get("items", [])
+        segment_codes = get_demo_customization().get("segments", [])
     else:
         from app.scheduling.engine import get_available_lobs
-        from app.models import Selection, SkillGroup, ShiftSequence
+        from app.models import Selection, SkillGroup, ShiftSequence, SegmentCode
         sheet = _get_sheet()
         lobs = get_available_lobs(sheet)
         try:
@@ -68,6 +69,10 @@ def index():
             shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
         except Exception:
             shift_sequences = []
+        try:
+            segment_codes = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()]
+        except Exception:
+            segment_codes = []
 
     return render_template("scheduling/index.html",
         user=user,
@@ -75,6 +80,7 @@ def index():
         selections=selections,
         skills=skills,
         shift_sequences=shift_sequences,
+        segment_codes=segment_codes,
     )
 
 
