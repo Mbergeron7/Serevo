@@ -219,14 +219,9 @@ def _aggregate_service_level(user, date_obj):
 @login_required
 def index():
     user = get_current_user()
-    if user and user.get("is_demo"):
-        from app.demo_data import DEMO_LOBS
-        lobs = list(DEMO_LOBS)
-    else:
-        from app.realtime.engine import get_available_lobs
-        sheet = _get_sheet()
-        lobs = get_available_lobs(sheet)
-    return render_template("realtime/index.html", user=user, lobs=lobs)
+    lobs = _all_lobs(user)
+    return render_template("realtime/index.html", user=user, lobs=lobs,
+                           today=datetime.date.today().isoformat())
 
 
 # ── Intraday snapshot (API) ────────────────────────────────
@@ -353,10 +348,8 @@ def service_level():
 @realtime_bp.route("/reports")
 @login_required
 def reports():
-    user = get_current_user()
-    lobs = _all_lobs(user)
-    return render_template("realtime/reports.html", user=user, lobs=lobs,
-                           today=datetime.date.today().isoformat())
+    from flask import redirect, url_for
+    return redirect(url_for("realtime.index"))
 
 
 def _report_args():
