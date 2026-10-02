@@ -401,7 +401,8 @@ def api_agent_performance():
         from app.demo_data import (get_demo_quality_evaluations,
                                     get_demo_adherence)
         evals = get_demo_quality_evaluations(lob=lob, date_from=date_from, date_to=date_to)
-        adh = get_demo_adherence(lob=lob)
+        from datetime import date
+        adh = get_demo_adherence(lob=lob, date_obj=date.today())
 
         # Merge by agent
         agent_map = {}
@@ -431,7 +432,7 @@ def api_agent_performance():
             a["channels"] = sorted(a["channels"])
 
         # Add adherence data
-        for rec in adh:
+        for rec in adh.get("adherence", []):
             name = rec.get("employee", "")
             if name in agent_map:
                 agent_map[name]["adherence_pct"] = rec.get("adherence_pct")
