@@ -1048,3 +1048,113 @@ def get_demo_settings_data():
         "availability": availability,
         "current_year": cur_year,
     }
+
+
+def get_demo_activities():
+    """Demo data for Settings > Activities page."""
+    return [
+        {"id": 1, "name": "On Queue", "short_name": "OQ", "color": "#22c55e", "is_paid": True, "is_productive": True, "is_active": True, "sort_order": 0},
+        {"id": 2, "name": "Break", "short_name": "BRK", "color": "#f59e0b", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 1},
+        {"id": 3, "name": "Lunch", "short_name": "LCH", "color": "#ef4444", "is_paid": False, "is_productive": False, "is_active": True, "sort_order": 2},
+        {"id": 4, "name": "Training", "short_name": "TRN", "color": "#8b5cf6", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 3},
+        {"id": 5, "name": "Team Meeting", "short_name": "MTG", "color": "#3b82f6", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 4},
+        {"id": 6, "name": "Coaching", "short_name": "CCH", "color": "#06b6d4", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 5},
+        {"id": 7, "name": "Project Work", "short_name": "PRJ", "color": "#10b981", "is_paid": True, "is_productive": True, "is_active": True, "sort_order": 6},
+        {"id": 8, "name": "Admin", "short_name": "ADM", "color": "#64748b", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 7},
+    ]
+
+
+def get_demo_contracts():
+    """Demo data for Settings > Contracts page."""
+    return [
+        {"id": 1, "name": "Full-Time 42.5h", "weekly_hours": 42.5, "days_per_week": 5, "hours_per_day": 8.5, "is_active": True, "employee_count": 12},
+        {"id": 2, "name": "Full-Time 40h", "weekly_hours": 40.0, "days_per_week": 5, "hours_per_day": 8.0, "is_active": True, "employee_count": 5},
+        {"id": 3, "name": "Part-Time 32h", "weekly_hours": 32.0, "days_per_week": 4, "hours_per_day": 8.0, "is_active": True, "employee_count": 3},
+        {"id": 4, "name": "Part-Time 24h", "weekly_hours": 24.0, "days_per_week": 3, "hours_per_day": 8.0, "is_active": True, "employee_count": 2},
+        {"id": 5, "name": "Weekend Only", "weekly_hours": 16.0, "days_per_week": 2, "hours_per_day": 8.0, "is_active": True, "employee_count": 1},
+    ]
+
+
+def get_demo_day_models():
+    """Demo data for Settings > Day Models page."""
+    return [
+        {"id": 1, "name": "Early 6:00–14:30", "start_time": "06:00", "end_time": "14:30", "break_minutes": 30, "is_active": True},
+        {"id": 2, "name": "Morning 8:00–16:30", "start_time": "08:00", "end_time": "16:30", "break_minutes": 30, "is_active": True},
+        {"id": 3, "name": "Mid 10:00–18:30", "start_time": "10:00", "end_time": "18:30", "break_minutes": 30, "is_active": True},
+        {"id": 4, "name": "Late 12:00–20:30", "start_time": "12:00", "end_time": "20:30", "break_minutes": 30, "is_active": True},
+        {"id": 5, "name": "Evening 14:00–22:30", "start_time": "14:00", "end_time": "22:30", "break_minutes": 30, "is_active": True},
+        {"id": 6, "name": "Short AM 8:00–12:00", "start_time": "08:00", "end_time": "12:00", "break_minutes": 0, "is_active": True},
+        {"id": 7, "name": "Off", "start_time": None, "end_time": None, "break_minutes": 0, "is_active": True},
+    ]
+
+
+def get_demo_skills_config():
+    """Demo data for Settings > Skills page."""
+    return [
+        {"id": 1, "name": "English", "description": "English language support", "is_active": True, "mapping_count": 20},
+        {"id": 2, "name": "French", "description": "French language support", "is_active": True, "mapping_count": 8},
+        {"id": 3, "name": "Spanish", "description": "Spanish language support", "is_active": True, "mapping_count": 5},
+        {"id": 4, "name": "Billing", "description": "Billing and payment inquiries", "is_active": True, "mapping_count": 10},
+        {"id": 5, "name": "Tech Support", "description": "Technical troubleshooting", "is_active": True, "mapping_count": 12},
+        {"id": 6, "name": "Chat", "description": "Live chat channel", "is_active": True, "mapping_count": 15},
+        {"id": 7, "name": "Email", "description": "Email channel", "is_active": True, "mapping_count": 18},
+        {"id": 8, "name": "Escalations", "description": "Supervisor-level escalation handling", "is_active": True, "mapping_count": 4},
+    ]
+
+
+def get_demo_selections():
+    """Demo data for Settings > Selections page."""
+    return [
+        {"id": 1, "name": "Team Alpha", "description": "Morning shift team", "is_active": True, "member_count": 7},
+        {"id": 2, "name": "Team Bravo", "description": "Afternoon shift team", "is_active": True, "member_count": 6},
+        {"id": 3, "name": "Night Shift Pool", "description": "Agents available for night rotation", "is_active": True, "member_count": 5},
+        {"id": 4, "name": "New Hires Q4", "description": "Q4 2026 onboarding group", "is_active": True, "member_count": 3},
+        {"id": 5, "name": "Bilingual Agents", "description": "French/English certified", "is_active": True, "member_count": 8},
+    ]
+
+
+def get_demo_shift_sequences():
+    """Demo data for Settings > Shift Sequences page."""
+    return {
+        "items": [
+            {"id": 1, "name": "2-Week Rotation A", "cycle_weeks": 2, "is_active": True, "row_count": 2},
+            {"id": 2, "name": "4-Week Rotation B", "cycle_weeks": 4, "is_active": True, "row_count": 3},
+            {"id": 3, "name": "Fixed Early", "cycle_weeks": 1, "is_active": True, "row_count": 1},
+        ],
+        "day_models": [
+            {"id": 1, "name": "Early 6:00–14:30"},
+            {"id": 2, "name": "Morning 8:00–16:30"},
+            {"id": 3, "name": "Mid 10:00–18:30"},
+            {"id": 4, "name": "Late 12:00–20:30"},
+            {"id": 5, "name": "Evening 14:00–22:30"},
+            {"id": 6, "name": "Short AM 8:00–12:00"},
+            {"id": 7, "name": "Off"},
+        ],
+    }
+
+
+def get_demo_planning_calendars():
+    """Demo data for Settings > Planning Calendars page."""
+    import datetime as _dt
+    cur_year = _dt.date.today().year
+    return {
+        "day_types": [
+            {"id": 1, "name": "Public Holiday", "color": "#ef4444", "is_holiday": True},
+            {"id": 2, "name": "Company Holiday", "color": "#f97316", "is_holiday": True},
+            {"id": 3, "name": "Campaign Day", "color": "#8b5cf6", "is_holiday": False},
+            {"id": 4, "name": "Reduced Hours", "color": "#f59e0b", "is_holiday": False},
+        ],
+        "calendars": [
+            {"id": 1, "name": f"{cur_year} Ontario Holidays", "entry_count": 9},
+            {"id": 2, "name": f"{cur_year} Campaign Calendar", "entry_count": 4},
+        ],
+    }
+
+
+def get_demo_planning_units_config():
+    """Demo data for Settings > Planning Units page."""
+    return [
+        {"id": 1, "name": "Sales Support", "is_active": True, "employee_count": 7},
+        {"id": 2, "name": "Tech Help Desk", "is_active": True, "employee_count": 7},
+        {"id": 3, "name": "Billing", "is_active": True, "employee_count": 6},
+    ]

@@ -1594,3 +1594,44 @@ class CalendarEntry(db.Model):
             "day_type_id": self.day_type_id,
             "date": self.date.isoformat() if self.date else "",
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE ↔ SHIFT SEQUENCE (with reference date & validity)
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeeShiftSequence(db.Model):
+    """Assigns a shift sequence to an employee with a reference date
+    (when the rotation cycle starts) and optional validity period."""
+    __tablename__ = "employee_shift_sequences"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    employee_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    shift_sequence_id = db.Column(db.Integer, db.ForeignKey("shift_sequences.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    row_index         = db.Column(db.Integer, default=0)          # which row in the sequence
+    reference_date    = db.Column(db.Date, nullable=True)         # cycle start date
+    valid_from        = db.Column(db.Date, nullable=True)
+    valid_to          = db.Column(db.Date, nullable=True)
+    created_at        = db.Column(db.DateTime, default=_utcnow)
+
+    employee       = db.relationship("Employee", backref="shift_sequence_assignments")
+    shift_sequence = db.relationship("ShiftSequence", backref="employee_ss_assignments")
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "shift_sequence_id", name="uq_emp_ss"),
+    )
+
+    def to_dict(self):
+        ss = self.shift_sequence
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "shift_sequence_id": self.shift_sequence_id,
+            "shift_sequence_name": ss.name if ss else "",
+            "row_index": self.row_index,
+            "reference_date": self.reference_date.isoformat() if self.reference_date else "",
+            "valid_from": self.valid_from.isoformat() if self.valid_from else "",
+            "valid_to": self.valid_to.isoformat() if self.valid_to else "",
+        }

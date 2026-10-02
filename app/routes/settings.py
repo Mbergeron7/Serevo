@@ -1239,6 +1239,10 @@ def delete_lob_mapping():
 @settings_bp.route("/activities")
 @admin_required
 def activities():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_activities
+        return render_template("settings/activities.html", items=get_demo_activities(), segment_codes=[])
     from app.models import Activity, SegmentCode
     items = [a.to_dict() for a in Activity.query.order_by(Activity.sort_order, Activity.name).all()]
     segment_codes = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order).all()
@@ -1292,6 +1296,10 @@ def activities_delete():
 @settings_bp.route("/contracts")
 @admin_required
 def contracts():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_contracts
+        return render_template("settings/contracts.html", items=get_demo_contracts())
     from app.models import Contract, ScheduleRule
     items = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
     schedule_rules = ScheduleRule.query.filter_by(is_active=True).order_by(ScheduleRule.name).all()
@@ -1349,6 +1357,10 @@ def contracts_delete():
 @settings_bp.route("/day-models")
 @admin_required
 def day_models():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_day_models
+        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=[])
     from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
     items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
     activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
@@ -1405,6 +1417,10 @@ def day_models_delete():
 @settings_bp.route("/planning-units")
 @admin_required
 def planning_units_page():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_planning_units_config
+        return render_template("settings/planning_units.html", items=get_demo_planning_units_config())
     from app.models import PlanningUnit, Employee
     pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
     items = []
@@ -1459,6 +1475,10 @@ def planning_units_delete():
 @settings_bp.route("/skills")
 @admin_required
 def skills_page():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_skills_config
+        return render_template("settings/skills.html", items=get_demo_skills_config())
     from app.models import SkillGroup, SkillMapping
     groups = SkillGroup.query.order_by(SkillGroup.name).all()
     items = []
@@ -1514,6 +1534,10 @@ def skills_delete():
 @settings_bp.route("/selections")
 @admin_required
 def selections_page():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_selections
+        return render_template("settings/selections.html", items=get_demo_selections())
     from app.models import Selection, SelectionMember
     sels = Selection.query.order_by(Selection.name).all()
     items = []
@@ -1569,6 +1593,11 @@ def selections_delete():
 @settings_bp.route("/shift-sequences")
 @admin_required
 def shift_sequences_page():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_shift_sequences
+        data = get_demo_shift_sequences()
+        return render_template("settings/shift_sequences.html", items=data["items"], day_models=data["day_models"])
     from app.models import ShiftSequence, DayModel
     seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
     items = [s.to_dict() for s in seqs]
@@ -1654,6 +1683,11 @@ def shift_sequence_save_rows():
 @settings_bp.route("/planning-calendars")
 @admin_required
 def planning_calendars_page():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_planning_calendars
+        data = get_demo_planning_calendars()
+        return render_template("settings/planning_calendars.html", day_types=data["day_types"], calendars=data["calendars"])
     from app.models import DayType, PlanningCalendar
     day_types = [dt.to_dict() for dt in DayType.query.order_by(DayType.name).all()]
     calendars = [c.to_dict() for c in PlanningCalendar.query.order_by(PlanningCalendar.name).all()]
@@ -1808,7 +1842,7 @@ def master_reset():
         Activity, Contract, DayModel,
         EmployeePlanningUnit,
         EmployeeContract, Selection, SelectionMember,
-        ShiftSequence, ShiftSequenceRow,
+        ShiftSequence, ShiftSequenceRow, EmployeeShiftSequence,
         DayType, PlanningCalendar, CalendarEntry,
     )
 
@@ -1825,6 +1859,7 @@ def master_reset():
         EmployeeAvailability,
         EmployeePlanningUnit,
         EmployeeContract,
+        EmployeeShiftSequence,
         SelectionMember,
         AdherenceException,
         AgentStatusEvent,

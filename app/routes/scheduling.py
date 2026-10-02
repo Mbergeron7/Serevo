@@ -46,16 +46,35 @@ def index():
     user = get_current_user()
 
     if user and user.get("is_demo"):
-        from app.demo_data import DEMO_LOBS
+        from app.demo_data import DEMO_LOBS, get_demo_selections, get_demo_skills_config, get_demo_shift_sequences
         lobs = list(DEMO_LOBS)
+        selections = get_demo_selections()
+        skills = get_demo_skills_config()
+        shift_sequences = get_demo_shift_sequences().get("items", [])
     else:
         from app.scheduling.engine import get_available_lobs
+        from app.models import Selection, SkillGroup, ShiftSequence
         sheet = _get_sheet()
         lobs = get_available_lobs(sheet)
+        try:
+            selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+        except Exception:
+            selections = []
+        try:
+            skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
+        except Exception:
+            skills = []
+        try:
+            shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
+        except Exception:
+            shift_sequences = []
 
     return render_template("scheduling/index.html",
         user=user,
         lobs=lobs,
+        selections=selections,
+        skills=skills,
+        shift_sequences=shift_sequences,
     )
 
 
@@ -852,14 +871,31 @@ def employees_for_lob():
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
 
+        selection_id = payload.get("selection_id", "")
+        skill_id = payload.get("skill_id", "")
+        shift_sequence_id = payload.get("shift_sequence_id", "")
+
         user = get_current_user()
         if user and user.get("is_demo"):
-            from app.demo_data import DEMO_EMPLOYEES
+            from app.demo_data import DEMO_EMPLOYEES, get_demo_selections, get_demo_skills_config
+            # Build filter sets for demo mode
+            sel_members = set()
+            if selection_id:
+                sel = get_demo_selections()
+                for s in sel:
+                    if str(s["id"]) == str(selection_id):
+                        # In demo mode, assign members by index
+                        sel_members = {str(i+1) for i in range(s.get("member_count", 0))}
+                        break
+
             emps = []
             for e in DEMO_EMPLOYEES:
                 if lob and e.get("Latest Skill Name", "") != lob:
                     continue
                 if str(e.get("Status", "")).strip().lower() in ("inactive", "terminated"):
+                    continue
+                eid = str(e.get("Employee ID", ""))
+                if selection_id and eid not in sel_members:
                     continue
                 first = str(e.get("First Name", "")).strip()
                 last = str(e.get("Last Name", "")).strip()

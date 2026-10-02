@@ -16,7 +16,8 @@ from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
-                        SkillMapping, PlanningUnit)
+                        SkillMapping, PlanningUnit, ShiftSequence,
+                        EmployeeShiftSequence, SkillGroup)
 
 log = logging.getLogger("serevo.people")
 
@@ -816,6 +817,11 @@ def employee_profile(emp_id):
     selection_memberships = SelectionMember.query.filter_by(employee_id=emp.id).all()
     pu_assignments = EmployeePlanningUnit.query.filter_by(employee_id=emp.id).order_by(
         EmployeePlanningUnit.priority).all()
+    try:
+        ss_assignments = EmployeeShiftSequence.query.filter_by(employee_id=emp.id).all()
+    except Exception:
+        db.session.rollback()
+        ss_assignments = []
     # Build availability map keyed by day_of_week (0-6)
     avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
     avail_map = {a.day_of_week: a for a in avail_entries}
@@ -827,6 +833,7 @@ def employee_profile(emp_id):
         contract_assignments=contract_assignments,
         selection_memberships=selection_memberships,
         pu_assignments=pu_assignments,
+        ss_assignments=ss_assignments,
         avail_map=avail_map,
     )
 
@@ -846,6 +853,13 @@ def profile_contracts_list():
 @login_required
 def profile_selections_list():
     items = Selection.query.filter_by(is_active=True).order_by(Selection.name).all()
+    return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
+
+
+@people_bp.route("/api/profile/shift-sequences-list")
+@login_required
+def profile_shift_sequences_list():
+    items = ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
 
 
@@ -883,6 +897,14 @@ def profile_assign():
         elif assign_type == "selection":
             obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
             db.session.add(obj)
+        elif assign_type == "shift_sequence":
+            ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
+            obj = EmployeeShiftSequence(
+                employee_id=emp_id, shift_sequence_id=item_id,
+                reference_date=ref_date,
+                valid_from=valid_from, valid_to=valid_to,
+            )
+            db.session.add(obj)
         else:
             return jsonify({"success": False, "error": f"Unknown assignment type: {assign_type}"})
 
@@ -913,6 +935,7 @@ def profile_unassign():
         "planning_unit": EmployeePlanningUnit,
         "contract": EmployeeContract,
         "selection": SelectionMember,
+        "shift_sequence": EmployeeShiftSequence,
     }
     model = model_map.get(assign_type)
     if not model:

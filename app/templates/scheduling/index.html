@@ -460,6 +460,36 @@
       Clear
     </button>
   </div>
+  <!-- Filter row -->
+  <div class="config-row" style="margin-top:12px; align-items:flex-end; flex-wrap:wrap;">
+    <div class="config-group">
+      <label>Selection</label>
+      <select id="cfgSelection" onchange="applyFilters()">
+        <option value="">All</option>
+        {% for s in selections %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="config-group">
+      <label>Skill</label>
+      <select id="cfgSkill" onchange="applyFilters()">
+        <option value="">All</option>
+        {% for sk in skills %}
+          <option value="{{ sk.id }}">{{ sk.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="config-group">
+      <label>Shift Sequence</label>
+      <select id="cfgShiftSeq" onchange="applyFilters()">
+        <option value="">All</option>
+        {% for sq in shift_sequences %}
+          <option value="{{ sq.id }}">{{ sq.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
   <!-- Employee filter row -->
   <div class="config-row" style="margin-top:12px; align-items:flex-start;">
     <div class="config-group" style="flex:1; min-width:200px;">
@@ -904,16 +934,28 @@ function loadEmployeesForLOB(lob) {
   selectedEmpIds = [];
   renderEmpPicker();
   if (!lob) return;
+  const body = {lob: lob};
+  const selId = document.getElementById('cfgSelection').value;
+  const skId = document.getElementById('cfgSkill').value;
+  const sqId = document.getElementById('cfgShiftSeq').value;
+  if (selId) body.selection_id = selId;
+  if (skId) body.skill_id = skId;
+  if (sqId) body.shift_sequence_id = sqId;
   fetch('/scheduling/employees', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({lob: lob}),
+    body: JSON.stringify(body),
   }).then(r => r.json()).then(data => {
     if (!data.success) return;
     empList = (data.employees || []).sort((a, b) => a.name.localeCompare(b.name));
     selectedEmpIds = []; // empty = all
     renderEmpPicker();
   }).catch(() => {});
+}
+
+function applyFilters() {
+  const lob = document.getElementById('cfgLOB').value;
+  if (lob) loadEmployeesForLOB(lob);
 }
 
 function renderEmpPicker() {
