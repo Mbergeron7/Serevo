@@ -218,6 +218,7 @@
   <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status</button>
   <button class="view-tab" data-view="eff" onclick="showView('eff')">Efficiency</button>
   <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing</button>
+  <button class="view-tab" data-view="optimizer" onclick="showView('optimizer')">⚡ Optimizer</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
 </div>
 
@@ -286,6 +287,16 @@
   <div id="nsContent" style="display:none;">
     <div class="stats-row" id="nsStats"></div>
     <div id="nsLobs"></div>
+  </div>
+</div>
+
+<!-- ═══════════ INTRADAY OPTIMIZER ═══════════ -->
+<div id="view-optimizer" class="view-panel">
+  <div id="optEmpty" class="empty"><strong>Click Load to generate optimization recommendations</strong>
+    <br>Analyzes staffing gaps and suggests break moves, VTO offers, and skill reassignments.</div>
+  <div id="optContent" style="display:none;">
+    <div class="stats-row" id="optStats"></div>
+    <div id="optRecs"></div>
   </div>
 </div>
 
@@ -431,7 +442,7 @@ async function loadAll(silent) {
     names.forEach((n, i) => DATA[n] = reps[i]);
     renderDashboard(DATA.dashboard); renderForecast(DATA.forecast); renderInterval(DATA.interval);
     renderSvl(DATA.svl); renderAbsent(DATA.absenteeism); renderStatus(DATA['agent-status']); renderEff(DATA.efficiency);
-    renderNetStaffing(); renderGamify();
+    renderNetStaffing(); renderOptimizer(); renderGamify();
 
     const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
     $('asOf').textContent = asOf ? `As of ${asOf}` : '';
@@ -746,6 +757,68 @@ function renderNetStaffing() {
     $('nsLobs').innerHTML = h;
     $('nsLobs').querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
   });
+}
+
+/* ══════════════════════════════════════════════════
+   INTRADAY OPTIMIZER
+   ══════════════════════════════════════════════════ */
+function renderOptimizer() {
+  const lob = $('selLob').value;
+  const date = $('inpDate').value;
+  api('/realtime/optimize', { lob, date }).then(d => {
+    if (!d || !d.success) { $('optEmpty').innerHTML = '<strong>Optimizer unavailable</strong>'; return; }
+    $('optEmpty').style.display = 'none';
+    $('optContent').style.display = '';
+
+    const s = d.summary;
+    $('optStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Recommendations</div><div class="stat-value">${s.total_recs}</div></div>
+      <div class="stat-card"><div class="stat-label">Break Moves</div><div class="stat-value">${s.break_moves}</div></div>
+      <div class="stat-card"><div class="stat-label">VTO Offers</div><div class="stat-value">${s.vto_offers}</div></div>
+      <div class="stat-card"><div class="stat-label">Skill Reassign</div><div class="stat-value">${s.skill_reassign}</div></div>
+      <div class="stat-card"><div class="stat-label">Est. FTE Savings</div><div class="stat-value">${fmt(s.est_fte_savings,1)}</div></div>
+      <div class="stat-card"><div class="stat-label">Est. SL Lift</div><div class="stat-value">${s.est_sl_lift > 0 ? '+' : ''}${fmt(s.est_sl_lift,1)}%</div></div>`;
+
+    if (!d.recommendations || d.recommendations.length === 0) {
+      $('optRecs').innerHTML = '<div class="report-card"><div class="empty"><strong>No optimizations needed</strong>Staffing levels are well-balanced for the remaining intervals.</div></div>';
+      return;
+    }
+
+    const typeIcon = { break_move: '🔄', vto: '🏠', skill_reassign: '🔀' };
+    const typeLabel = { break_move: 'Break Move', vto: 'VTO', skill_reassign: 'Skill Reassign' };
+    const prioClass = { high: 'high', medium: 'medium', low: 'low' };
+
+    let h = '<div class="report-card"><h3>⚡ Optimization Recommendations <span class="hint">sorted by priority &amp; impact</span></h3>';
+    h += '<div class="wrap"><table class="rt sortable"><thead>';
+    h += '<tr><th style="text-align:center">Priority</th><th>Type</th><th>Recommendation</th><th>Interval</th><th>Agents</th><th>SL Impact</th><th style="text-align:center">Action</th></tr>';
+    h += '</thead><tbody>';
+    d.recommendations.forEach(r => {
+      const icon = typeIcon[r.type] || '📋';
+      const label = typeLabel[r.type] || r.type;
+      const slImpact = r.sl_impact > 0 ? `<span class="cell-good">+${fmt(r.sl_impact,1)}%</span>` : '—';
+      const savings = r.est_savings_usd ? ` · saves ~$${fmt(r.est_savings_usd)}` : '';
+      h += `<tr>
+        <td style="text-align:center"><span class="pill ${prioClass[r.priority] || ''}">${r.priority.toUpperCase()}</span></td>
+        <td>${icon} ${label}</td>
+        <td style="text-align:left;white-space:normal;max-width:340px;">${esc(r.title)}<br><span style="font-size:.76rem;color:var(--text-muted);">${esc(r.description)}${savings}</span></td>
+        <td>${esc(r.from_interval)}${r.to_interval !== r.from_interval ? ' → ' + esc(r.to_interval) : ''}</td>
+        <td>${r.agents}</td>
+        <td>${slImpact}</td>
+        <td style="text-align:center"><button class="btn-action" style="padding:4px 12px;font-size:.75rem;" onclick="applyRec(${r.id})">Apply</button></td>
+      </tr>`;
+    });
+    h += '</tbody></table></div></div>';
+    $('optRecs').innerHTML = h;
+    $('optRecs').querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+  });
+}
+
+function applyRec(id) {
+  // Placeholder — in production this would call an API to execute the recommendation
+  const btn = event.target;
+  btn.textContent = '✓ Applied';
+  btn.disabled = true;
+  btn.style.background = '#10b981';
 }
 
 /* ══════════════════════════════════════════════════

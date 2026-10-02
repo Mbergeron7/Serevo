@@ -815,6 +815,242 @@ def service_level():
 
 
 # ═════════════════════════════════════════════════════════════
+# INTRADAY OPTIMIZATION ENGINE
+# ═════════════════════════════════════════════════════════════
+
+import random as _random
+
+@realtime_bp.route("/optimize", methods=["POST"])
+@login_required
+def optimize():
+    """
+    POST JSON: {lob, date?}
+    Analyzes intraday staffing gaps and generates optimization
+    recommendations: break moves, VTO offers, skill reassignments.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+
+        user = get_current_user()
+
+        # Get snapshot data (reuse existing infrastructure)
+        if lob == "All":
+            snap = _aggregate_snapshots(user, date_obj)
+        elif user and user.get("is_demo"):
+            from app.demo_data import get_demo_realtime_snapshot
+            snap = get_demo_realtime_snapshot(lob, date_obj)
+        else:
+            from app.realtime.engine import get_intraday_snapshot
+            sheet = _get_sheet()
+            snap = get_intraday_snapshot(lob, date_obj, sheet)
+
+        intervals = snap.get("intervals", [])
+        shifts = snap.get("shifts", [])
+        current_iv = snap.get("current_interval", "")
+
+        recommendations = _generate_optimization_recs(
+            intervals, shifts, current_iv, lob, user
+        )
+
+        # Compute savings summary
+        total_savings_fte = sum(r.get("fte_impact", 0) for r in recommendations)
+        total_sl_lift = sum(r.get("sl_impact", 0) for r in recommendations
+                           if r.get("sl_impact", 0) > 0)
+
+        return jsonify({
+            "success": True,
+            "recommendations": recommendations,
+            "summary": {
+                "total_recs": len(recommendations),
+                "break_moves": sum(1 for r in recommendations if r["type"] == "break_move"),
+                "vto_offers": sum(1 for r in recommendations if r["type"] == "vto"),
+                "skill_reassign": sum(1 for r in recommendations if r["type"] == "skill_reassign"),
+                "est_fte_savings": round(total_savings_fte, 1),
+                "est_sl_lift": round(total_sl_lift, 1),
+            },
+            "current_interval": current_iv,
+        })
+
+    except Exception as e:
+        log.error(f"Optimize error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+def _generate_optimization_recs(intervals, shifts, current_iv, lob, user):
+    """
+    Analyze intervals for staffing gaps and generate actionable
+    recommendations: break shifts, VTO for overstaffed periods,
+    skill reassignment for understaffed ones.
+    """
+    from app.forecasting.engine import _service_level
+
+    recs = []
+    rec_id = 0
+
+    # Classify intervals
+    understaffed = []
+    overstaffed = []
+    for iv in intervals:
+        if iv["time"] < current_iv:
+            continue  # Only future/current intervals
+        req = iv.get("required", 0)
+        sched = iv.get("scheduled", 0)
+        gap = iv.get("gap", 0)
+        if req <= 0:
+            continue
+        if gap < -1:  # understaffed by more than 1
+            understaffed.append(iv)
+        elif gap > 2:  # overstaffed by more than 2
+            overstaffed.append(iv)
+
+    # ── 1. Break moves: shift breaks FROM understaffed TO overstaffed periods ──
+    # Find pairs where moving a break improves both intervals
+    for u_iv in understaffed[:8]:
+        for o_iv in overstaffed[:8]:
+            if abs(intervals.index(u_iv) - intervals.index(o_iv)) > 6:
+                continue  # Too far apart for a break move
+            deficit = abs(u_iv["gap"])
+            surplus = o_iv["gap"]
+            agents_to_move = min(int(min(deficit, surplus)), 3)
+            if agents_to_move < 1:
+                continue
+
+            # Estimate SL improvement
+            sl_lift = 0
+            offered = u_iv.get("forecast_offered", 0)
+            aht = u_iv.get("forecast_aht", 0)
+            sched = u_iv.get("scheduled", 0)
+            if offered > 0 and aht > 0 and sched > 0:
+                traffic = (offered * aht) / 1800
+                sl_before = _service_level(sched, traffic, 30, aht) * 100
+                sl_after = _service_level(sched + agents_to_move, traffic, 30, aht) * 100
+                sl_lift = round(sl_after - sl_before, 1)
+
+            rec_id += 1
+            recs.append({
+                "id": rec_id,
+                "type": "break_move",
+                "priority": "high" if deficit >= 3 else "medium",
+                "title": f"Move {agents_to_move} break(s) from {u_iv['time']} → {o_iv['time']}",
+                "description": (
+                    f"{u_iv['time']} is short {abs(u_iv['gap']):.0f} agents while "
+                    f"{o_iv['time']} has {o_iv['gap']:.0f} surplus. "
+                    f"Shifting {agents_to_move} break(s) adds coverage where needed."
+                ),
+                "from_interval": u_iv["time"],
+                "to_interval": o_iv["time"],
+                "agents": agents_to_move,
+                "fte_impact": round(agents_to_move * 0.5, 1),
+                "sl_impact": sl_lift,
+            })
+            break  # One rec per understaffed interval
+
+    # ── 2. VTO offers for sustained overstaffing ──
+    consecutive_over = []
+    run = []
+    for iv in intervals:
+        if iv["time"] < current_iv:
+            continue
+        if iv.get("gap", 0) > 2 and iv.get("required", 0) > 0:
+            run.append(iv)
+        else:
+            if len(run) >= 2:
+                consecutive_over.append(run)
+            run = []
+    if len(run) >= 2:
+        consecutive_over.append(run)
+
+    for block in consecutive_over[:4]:
+        surplus = min(iv["gap"] for iv in block)
+        vto_agents = min(int(surplus), 4)
+        if vto_agents < 1:
+            continue
+        start_t = block[0]["time"]
+        end_t = block[-1]["time"]
+        hours = len(block) * 0.5  # 30-min intervals
+
+        rec_id += 1
+        recs.append({
+            "id": rec_id,
+            "type": "vto",
+            "priority": "medium" if vto_agents <= 2 else "low",
+            "title": f"Offer VTO to {vto_agents} agent(s) for {start_t}–{end_t}",
+            "description": (
+                f"Overstaffed by {surplus:.0f}+ for {len(block)} intervals "
+                f"({hours:.1f} hrs). VTO saves ~${vto_agents * hours * 18:.0f} "
+                f"without impacting service level."
+            ),
+            "from_interval": start_t,
+            "to_interval": end_t,
+            "agents": vto_agents,
+            "fte_impact": round(vto_agents * hours / 8, 1),
+            "sl_impact": 0,
+            "est_savings_usd": round(vto_agents * hours * 18, 0),
+        })
+
+    # ── 3. Skill reassignment for critical understaffing ──
+    # Suggest pulling cross-trained agents from overstaffed LOBs
+    is_demo = user and user.get("is_demo")
+    if lob != "All" and is_demo:
+        # In demo mode, simulate cross-skill agents
+        from app.demo_data import DEMO_LOBS
+        other_lobs = [l for l in DEMO_LOBS if l != lob]
+        for u_iv in understaffed[:4]:
+            if u_iv.get("gap", 0) >= -1:
+                continue
+            deficit = abs(u_iv["gap"])
+            reassign = min(int(deficit * 0.5), 2)
+            if reassign < 1:
+                reassign = 1
+            source_lob = other_lobs[rec_id % len(other_lobs)] if other_lobs else "Other"
+
+            # Estimate SL improvement
+            sl_lift = 0
+            offered = u_iv.get("forecast_offered", 0)
+            aht = u_iv.get("forecast_aht", 0)
+            sched = u_iv.get("scheduled", 0)
+            if offered > 0 and aht > 0 and sched > 0:
+                traffic = (offered * aht) / 1800
+                sl_before = _service_level(sched, traffic, 30, aht) * 100
+                sl_after = _service_level(sched + reassign, traffic, 30, aht) * 100
+                sl_lift = round(sl_after - sl_before, 1)
+
+            rec_id += 1
+            recs.append({
+                "id": rec_id,
+                "type": "skill_reassign",
+                "priority": "high" if deficit >= 4 else "medium",
+                "title": f"Reassign {reassign} agent(s) from {source_lob} at {u_iv['time']}",
+                "description": (
+                    f"{lob} is short {deficit:.0f} agents at {u_iv['time']}. "
+                    f"Pull {reassign} cross-trained agent(s) from {source_lob} "
+                    f"to cover the gap (est. +{sl_lift:.1f}% SL)."
+                ),
+                "from_interval": u_iv["time"],
+                "to_interval": u_iv["time"],
+                "agents": reassign,
+                "source_lob": source_lob,
+                "target_lob": lob,
+                "fte_impact": round(reassign * 0.5, 1),
+                "sl_impact": sl_lift,
+            })
+
+    # Sort by priority then SL impact
+    prio_order = {"high": 0, "medium": 1, "low": 2}
+    recs.sort(key=lambda r: (prio_order.get(r["priority"], 9), -(r.get("sl_impact", 0))))
+
+    return recs
+
+
+# ═════════════════════════════════════════════════════════════
 # NUMERIC RTM REPORTS (Forecast/OTF, Interval, SVL, Absenteeism,
 # Agent Status, Efficiency, Combined Dashboard)
 # ═════════════════════════════════════════════════════════════
