@@ -10,8 +10,7 @@
 
 <!-- Tabs -->
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('segments',this)">Segments</button>
-  <button class="tab-btn" onclick="switchTab('shifts',this)">Shifts</button>
+  <button class="tab-btn active" onclick="switchTab('shifts',this)">Shifts</button>
   <button class="tab-btn" onclick="switchTab('lob',this)">LOB Settings</button>
   <button class="tab-btn" onclick="switchTab('timeoff',this)">Time-Off Types</button>
   <button class="tab-btn" onclick="switchTab('overtime',this)">Overtime</button>
@@ -24,15 +23,8 @@
   <button class="tab-btn" onclick="switchTab('branding',this)">Branding</button>
 </div>
 
-<!-- ═══════ TAB: Segment Codes ═══════ -->
-<div class="tab-panel" id="tab-segments">
-  <div class="tab-header"><h2>Segment Codes</h2><button class="btn btn-primary" onclick="openSegmentModal()">+ Add Code</button></div>
-  <p class="tab-desc">Activity codes used in scheduling — on-call, break, lunch, training, etc.</p>
-  <table class="data-table sortable" id="segments-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Offset</th><th>Duration</th><th>Placement</th><th>Order</th><th></th></tr></thead><tbody></tbody></table>
-</div>
-
 <!-- ═══════ TAB: Shift Templates ═══════ -->
-<div class="tab-panel" id="tab-shifts" hidden>
+<div class="tab-panel" id="tab-shifts">
   <div class="tab-header"><h2>Shift Templates</h2><button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button></div>
   <p class="tab-desc">Reusable shift definitions — assign to a LOB, day type (weekday/Saturday/Sunday/holiday), and category (opening/closing/mid).</p>
   <table class="data-table sortable" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table>
@@ -132,25 +124,6 @@
 <!-- ═══════════════════════════════════════════════ -->
 <!-- MODALS                                          -->
 <!-- ═══════════════════════════════════════════════ -->
-
-<!-- Segment Code Modal -->
-<div class="modal-overlay" id="segment-modal">
-  <div class="modal" style="max-width:480px;">
-    <h3 id="segment-modal-title">Add Segment Code</h3>
-    <form onsubmit="saveSegment(event)">
-      <input type="hidden" id="seg-id">
-      <div class="form-row"><label>Code <input type="text" id="seg-code" required placeholder="e.g. lunch"></label><label>Label <input type="text" id="seg-label" required placeholder="e.g. Lunch Break"></label></div>
-      <div class="form-row"><label>Color <input type="color" id="seg-color" value="#6b7280" style="height:36px;"></label><label>Sort Order <input type="number" id="seg-order" value="0" min="0"></label></div>
-      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="seg-productive" checked> Productive</label><label><input type="checkbox" id="seg-paid" checked> Paid</label></div>
-      <hr style="margin:0.75rem 0;">
-      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.5rem;">Scheduling Placement</p>
-      <div class="form-row"><label>Offset (mins from shift start) <input type="number" id="seg-offset" min="0" placeholder="e.g. 120"></label><label>Duration (mins) <input type="number" id="seg-duration" min="1" placeholder="e.g. 15"></label></div>
-      <div class="form-row" style="gap:1.5rem;align-items:center;"><label><input type="checkbox" id="seg-flexible" onchange="toggleSegWindow()"> Flexible (stagger within window)</label></div>
-      <div id="seg-window-row" class="form-row" style="display:none;"><label>Window Start (mins) <input type="number" id="seg-window-start" min="0" placeholder="e.g. 90"></label><label>Window End (mins) <input type="number" id="seg-window-end" min="0" placeholder="e.g. 150"></label></div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('segment-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
-    </form>
-  </div>
-</div>
 
 <!-- Shift Template Modal -->
 <div class="modal-overlay" id="shift-modal">
@@ -368,43 +341,6 @@ function upsert(arr, item) { const i=arr.findIndex(x=>x.id===item.id); if(i>=0)a
 function removeById(arr, id) { const i=arr.findIndex(x=>x.id===id); if(i>=0)arr.splice(i,1); }
 const ck = v => v ? '✓' : '—';
 
-/* ═══ SEGMENT CODES ═══════════════════════ */
-function renderSegments() {
-  const tb = document.querySelector('#segments-table tbody');
-  tb.innerHTML = SEGMENTS.map(s => `<tr>
-    <td><span style="display:inline-block;width:22px;height:22px;border-radius:4px;background:${s.color};"></span></td>
-    <td><code>${s.code}</code></td><td>${s.label}</td><td>${ck(s.is_productive)}</td><td>${ck(s.is_paid)}</td><td>${s.offset_mins!=null?s.offset_mins+'m':'-'}</td><td>${s.duration_mins!=null?s.duration_mins+'m':'-'}</td><td>${s.is_flexible?'Window '+s.window_start_mins+'-'+s.window_end_mins+'m':'Fixed'}</td><td>${s.sort_order}</td>
-    <td><button class="btn btn-sm" onclick="editSegment(${s.id})">Edit</button>${!s.is_default?` <button class="btn btn-sm btn-danger" onclick="deleteSegment(${s.id})">Del</button>`:''}</td>
-  </tr>`).join('') || '<tr><td colspan="10" class="empty-msg">No segment codes. Click "+ Add Code".</td></tr>';
-  if(window.initSortable) initSortable(document.getElementById('segments-table'));
-}
-function openSegmentModal(s) {
-  document.getElementById('segment-modal-title').textContent = s?'Edit Segment Code':'Add Segment Code';
-  document.getElementById('seg-id').value = s?s.id:'';
-  document.getElementById('seg-code').value = s?s.code:'';
-  document.getElementById('seg-label').value = s?s.label:'';
-  document.getElementById('seg-color').value = s?s.color:'#6b7280';
-  document.getElementById('seg-order').value = s?s.sort_order:0;
-  document.getElementById('seg-productive').checked = s?s.is_productive:true;
-  document.getElementById('seg-paid').checked = s?s.is_paid:true;
-  document.getElementById('seg-offset').value = s&&s.offset_mins!=null?s.offset_mins:'';
-  document.getElementById('seg-duration').value = s&&s.duration_mins!=null?s.duration_mins:'';
-  document.getElementById('seg-flexible').checked = s?!!s.is_flexible:false;
-  document.getElementById('seg-window-start').value = s&&s.window_start_mins!=null?s.window_start_mins:'';
-  document.getElementById('seg-window-end').value = s&&s.window_end_mins!=null?s.window_end_mins:'';
-  toggleSegWindow();
-  openModal('segment-modal');
-}
-function toggleSegWindow(){document.getElementById('seg-window-row').style.display=document.getElementById('seg-flexible').checked?'':'none';}
-function editSegment(id) { openSegmentModal(SEGMENTS.find(s=>s.id===id)); }
-async function saveSegment(e) {
-  e.preventDefault();
-  const oVal=document.getElementById('seg-offset').value, dVal=document.getElementById('seg-duration').value;
-  const res = await api('/settings/customization/segments/save', {id:document.getElementById('seg-id').value||undefined, code:document.getElementById('seg-code').value, label:document.getElementById('seg-label').value, color:document.getElementById('seg-color').value, is_productive:document.getElementById('seg-productive').checked, is_paid:document.getElementById('seg-paid').checked, sort_order:parseInt(document.getElementById('seg-order').value)||0, offset_mins:oVal!==''?parseInt(oVal):null, duration_mins:dVal!==''?parseInt(dVal):null, is_flexible:document.getElementById('seg-flexible').checked, window_start_mins:document.getElementById('seg-flexible').checked?parseInt(document.getElementById('seg-window-start').value)||null:null, window_end_mins:document.getElementById('seg-flexible').checked?parseInt(document.getElementById('seg-window-end').value)||null:null});
-  if(res.success){upsert(SEGMENTS,res.segment);renderSegments();closeModal('segment-modal');}else showToast(res.error || 'Something went wrong', 'error');
-}
-async function deleteSegment(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/segments/delete',{id});if(res.success){removeById(SEGMENTS,id);renderSegments();}else showToast(res.error || 'Something went wrong', 'error');}
-
 /* ═══ SHIFT TEMPLATES ═════════════════════ */
 const DAY_TYPE_LABELS={any:'Any',weekday:'Weekday',saturday:'Saturday',sunday:'Sunday',holiday:'Holiday'};
 const CAT_LABELS={any:'Any',opening:'Opening',closing:'Closing',mid:'Mid'};
@@ -575,7 +511,7 @@ async function saveBranding(e){
 }
 
 /* ── Initial render ────────────────────── */
-renderSegments(); renderShifts(); renderLOBSettings();
+renderShifts(); renderLOBSettings();
 renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
 renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); renderLobMappings(); loadBranding();
 </script>

@@ -1052,17 +1052,8 @@ def get_demo_settings_data():
 
 
 def get_demo_activities():
-    """Demo data for Settings > Activities page."""
-    return [
-        {"id": 1, "name": "On Queue", "short_name": "OQ", "color": "#22c55e", "is_paid": True, "is_productive": True, "is_active": True, "sort_order": 0},
-        {"id": 2, "name": "Break", "short_name": "BRK", "color": "#f59e0b", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 1},
-        {"id": 3, "name": "Lunch", "short_name": "LCH", "color": "#ef4444", "is_paid": False, "is_productive": False, "is_active": True, "sort_order": 2},
-        {"id": 4, "name": "Training", "short_name": "TRN", "color": "#8b5cf6", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 3},
-        {"id": 5, "name": "Team Meeting", "short_name": "MTG", "color": "#3b82f6", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 4},
-        {"id": 6, "name": "Coaching", "short_name": "CCH", "color": "#06b6d4", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 5},
-        {"id": 7, "name": "Project Work", "short_name": "PRJ", "color": "#10b981", "is_paid": True, "is_productive": True, "is_active": True, "sort_order": 6},
-        {"id": 8, "name": "Admin", "short_name": "ADM", "color": "#64748b", "is_paid": True, "is_productive": False, "is_active": True, "sort_order": 7},
-    ]
+    """Demo data for Settings > Activities page — returns segment code format."""
+    return get_demo_customization()["segments"]
 
 
 def get_demo_customization():
@@ -1161,18 +1152,17 @@ def get_demo_shift_sequences():
     """Demo data for Settings > Shift Sequences page."""
     return {
         "items": [
-            {"id": 1, "name": "2-Week Rotation A", "cycle_weeks": 2, "is_active": True, "row_count": 2},
-            {"id": 2, "name": "4-Week Rotation B", "cycle_weeks": 4, "is_active": True, "row_count": 3},
+            {"id": 1, "name": "2-Week Rotation A", "cycle_weeks": 2, "is_active": True, "row_count": 1},
+            {"id": 2, "name": "4-Week Rotation B", "cycle_weeks": 4, "is_active": True, "row_count": 1},
             {"id": 3, "name": "Fixed Early", "cycle_weeks": 1, "is_active": True, "row_count": 1},
         ],
-        "day_models": [
-            {"id": 1, "name": "Early 6:00–14:30"},
-            {"id": 2, "name": "Morning 8:00–16:30"},
-            {"id": 3, "name": "Mid 10:00–18:30"},
-            {"id": 4, "name": "Late 12:00–20:30"},
-            {"id": 5, "name": "Evening 14:00–22:30"},
-            {"id": 6, "name": "Short AM 8:00–12:00"},
-            {"id": 7, "name": "Off"},
+        "shift_templates": [
+            {"id": 1, "name": "Early", "start": "06:00", "end": "14:30"},
+            {"id": 2, "name": "Morning", "start": "08:00", "end": "16:30"},
+            {"id": 3, "name": "Mid", "start": "10:00", "end": "18:30"},
+            {"id": 4, "name": "Late", "start": "12:00", "end": "20:30"},
+            {"id": 5, "name": "Evening", "start": "14:00", "end": "22:30"},
+            {"id": 6, "name": "Short AM", "start": "08:00", "end": "12:00"},
         ],
     }
 

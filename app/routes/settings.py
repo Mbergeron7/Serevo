@@ -1242,29 +1242,60 @@ def activities():
     user = get_current_user()
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_activities
-        return render_template("settings/activities.html", items=get_demo_activities(), segment_codes=[])
-    from app.models import Activity, SegmentCode
-    items = [a.to_dict() for a in Activity.query.order_by(Activity.sort_order, Activity.name).all()]
-    segment_codes = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order).all()
-    return render_template("settings/activities.html", items=items, segment_codes=segment_codes)
+        return render_template("settings/activities.html", items=get_demo_activities())
+    from app.models import SegmentCode
+    items = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()]
+    return render_template("settings/activities.html", items=items)
 
 
 @settings_bp.route("/activities/save", methods=["POST"])
 @admin_required
 def activities_save():
-    from app.models import Activity, db
-    d = request.json or {}
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import SegmentCode, db
+    data = request.json or {}
     try:
-        item = Activity.query.get(int(d["id"])) if d.get("id") else Activity()
-        item.name = d["name"]
-        item.short_name = d.get("short_name", "")
-        item.activity_type = d.get("activity_type", "presence")
-        item.color = d.get("color", "#6b7280")
-        item.duration_mins = int(d["duration_mins"]) if d.get("duration_mins") else None
-        item.is_paid = bool(d.get("is_paid", True))
-        item.is_productive = bool(d.get("is_productive", True))
-        item.segment_code_id = int(d["segment_code_id"]) if d.get("segment_code_id") else None
-        if not d.get("id"):
+        label = (data.get("label") or "").strip()
+        code = (data.get("code") or "").strip().lower().replace(" ", "_")
+        if not code and label:
+            code = label.lower().replace(" ", "_")
+            code = "".join(c for c in code if c.isalnum() or c == "_").strip("_")
+        if not code or not label:
+            return jsonify(success=False, error="Code and label are required")
+
+        seg_id = data.get("id")
+        if seg_id:
+            item = SegmentCode.query.get(int(seg_id))
+            if not item:
+                return jsonify(success=False, error="Segment not found")
+            item.code = code
+            item.label = label
+            item.color = data.get("color", item.color)
+            item.is_productive = bool(data.get("is_productive", item.is_productive))
+            item.is_paid = bool(data.get("is_paid", item.is_paid))
+            item.sort_order = int(data.get("sort_order", item.sort_order))
+            item.offset_mins = data.get("offset_mins")
+            item.duration_mins = data.get("duration_mins")
+            item.is_flexible = bool(data.get("is_flexible", False))
+            item.window_start_mins = data.get("window_start_mins")
+            item.window_end_mins = data.get("window_end_mins")
+        else:
+            if SegmentCode.query.filter_by(code=code).first():
+                return jsonify(success=False, error=f"Code '{code}' already exists")
+            item = SegmentCode(
+                code=code, label=label,
+                color=data.get("color", "#6b7280"),
+                is_productive=bool(data.get("is_productive", True)),
+                is_paid=bool(data.get("is_paid", True)),
+                sort_order=int(data.get("sort_order", 0)),
+                offset_mins=data.get("offset_mins"),
+                duration_mins=data.get("duration_mins"),
+                is_flexible=bool(data.get("is_flexible", False)),
+                window_start_mins=data.get("window_start_mins"),
+                window_end_mins=data.get("window_end_mins"),
+            )
             db.session.add(item)
         db.session.commit()
         return jsonify(success=True)
@@ -1276,13 +1307,19 @@ def activities_save():
 @settings_bp.route("/activities/delete", methods=["POST"])
 @admin_required
 def activities_delete():
-    from app.models import Activity, db
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import SegmentCode, db
     d = request.json or {}
     try:
-        item = Activity.query.get(int(d["id"]))
-        if item:
-            db.session.delete(item)
-            db.session.commit()
+        item = SegmentCode.query.get(int(d["id"]))
+        if not item:
+            return jsonify(success=False, error="Segment not found")
+        if item.is_default:
+            return jsonify(success=False, error="Cannot delete a default segment code")
+        db.session.delete(item)
+        db.session.commit()
         return jsonify(success=True)
     except Exception as e:
         db.session.rollback()
@@ -1597,13 +1634,16 @@ def shift_sequences_page():
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_shift_sequences
         data = get_demo_shift_sequences()
-        return render_template("settings/shift_sequences.html", items=data["items"], day_models=data["day_models"])
-    from app.models import ShiftSequence, DayModel
+        return render_template("settings/shift_sequences.html",
+                               items=data["items"],
+                               shift_templates=data["shift_templates"])
+    from app.models import ShiftSequence, ShiftTemplate
     seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
     items = [s.to_dict() for s in seqs]
-    dms = DayModel.query.filter_by(is_active=True).order_by(DayModel.name).all()
-    day_models = [{"id": dm.id, "name": dm.name} for dm in dms]
-    return render_template("settings/shift_sequences.html", items=items, day_models=day_models)
+    templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+    shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
+    return render_template("settings/shift_sequences.html",
+                           items=items, shift_templates=shift_templates)
 
 
 @settings_bp.route("/shift-sequences/save", methods=["POST"])
