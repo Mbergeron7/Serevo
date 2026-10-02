@@ -119,6 +119,24 @@
   .adh-off { background:color-mix(in srgb, var(--text-muted) 10%, var(--surface)); color:var(--text-muted); }
   .adh-ended { background:color-mix(in srgb, #6366f1 12%, var(--surface)); color:#6366f1; }
 
+  /* ── Gamification / Leaderboard ─────────── */
+  .gm-badge { display:inline-block; font-size:1.1rem; margin-right:2px; }
+  .badge-legend { display:flex; flex-direction:column; gap:10px; }
+  .badge-item { display:flex; align-items:center; gap:8px; font-size:.82rem; }
+  .gm-rank { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
+    border-radius:50%; font-size:.75rem; font-weight:800; }
+  .gm-rank-1 { background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#78350f; }
+  .gm-rank-2 { background:linear-gradient(135deg,#d1d5db,#9ca3af); color:#374151; }
+  .gm-rank-3 { background:linear-gradient(135deg,#d97706,#b45309); color:#fff; }
+  .gm-pts { font-weight:700; font-variant-numeric:tabular-nums; }
+  .gm-adh-bar { display:inline-block; width:80px; height:8px; background:var(--border); border-radius:4px; overflow:hidden; vertical-align:middle; margin-right:6px; }
+  .gm-adh-bar span { display:block; height:100%; border-radius:4px; }
+  .top-card { display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:10px;
+    background:var(--bg); border:1px solid var(--border); margin-bottom:8px; }
+  .top-card .top-rank { font-size:1.5rem; font-weight:900; min-width:36px; text-align:center; }
+  .top-card .top-name { font-weight:700; font-size:.92rem; }
+  .top-card .top-stats { font-size:.78rem; color:var(--text-muted); }
+
   /* ── Adherence Timeline Drill-down ──────── */
   .adh-timeline-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:998; justify-content:center; align-items:center; }
   .adh-timeline-overlay.show { display:flex; }
@@ -199,6 +217,7 @@
   <button class="view-tab" data-view="absent" onclick="showView('absent')">Absenteeism</button>
   <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status</button>
   <button class="view-tab" data-view="eff" onclick="showView('eff')">Efficiency</button>
+  <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
 </div>
 
 <!-- ═══════════ INTRADAY (live monitor) ═══════════ -->
@@ -259,6 +278,39 @@
 <div id="view-absent" class="view-panel"></div>
 <div id="view-status" class="view-panel"></div>
 <div id="view-eff" class="view-panel"></div>
+
+<!-- ═══════════ LEADERBOARD / GAMIFICATION ═══════════ -->
+<div id="view-gamify" class="view-panel">
+  <div id="gamifyEmpty" class="empty"><strong>Click Load to see leaderboard</strong></div>
+  <div id="gamifyContent" style="display:none;">
+    <div class="stats-row" id="gamifyStats"></div>
+    <div class="grid-2">
+      <div class="report-card">
+        <h3>Adherence Leaderboard <span class="hint" id="gamifyHint">today</span></h3>
+        <div class="wrap"><table class="data-table sortable" id="tblLeaderboard"><thead>
+          <tr><th>#</th><th>Employee</th><th>Adherence</th><th>Points</th><th>Badges</th></tr>
+        </thead><tbody></tbody></table></div>
+      </div>
+      <div class="report-card">
+        <h3>Badge Legend</h3>
+        <div style="padding:14px 18px;">
+          <div class="badge-legend">
+            <div class="badge-item"><span class="gm-badge gm-gold">🏆</span> <strong>Perfect</strong> — 100% adherence</div>
+            <div class="badge-item"><span class="gm-badge gm-silver">⭐</span> <strong>Star</strong> — 95%+ adherence</div>
+            <div class="badge-item"><span class="gm-badge gm-bronze">🎯</span> <strong>On Target</strong> — 90%+ adherence</div>
+            <div class="badge-item"><span class="gm-badge gm-streak">🔥</span> <strong>Streak</strong> — 3+ days at 95%+</div>
+            <div class="badge-item"><span class="gm-badge gm-early">⏰</span> <strong>Early Bird</strong> — Logged in before shift start</div>
+            <div class="badge-item"><span class="gm-badge gm-iron">🛡️</span> <strong>Ironclad</strong> — Zero OOA periods</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="report-card">
+      <h3>Top Performers This Week</h3>
+      <div id="topPerformers" style="padding:14px 18px;"></div>
+    </div>
+  </div>
+</div>
 
 <!-- Adherence Timeline Drill-down -->
 <div class="adh-timeline-overlay" id="adhTimelineOverlay" onclick="if(event.target===this)closeTimeline()">
@@ -369,6 +421,7 @@ async function loadAll(silent) {
     names.forEach((n, i) => DATA[n] = reps[i]);
     renderDashboard(DATA.dashboard); renderForecast(DATA.forecast); renderInterval(DATA.interval);
     renderSvl(DATA.svl); renderAbsent(DATA.absenteeism); renderStatus(DATA['agent-status']); renderEff(DATA.efficiency);
+    renderGamify();
 
     const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
     $('asOf').textContent = asOf ? `As of ${asOf}` : '';
@@ -627,6 +680,57 @@ function renderEff(d) {
     d.agents.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${fmt(a.scheduled_hrs,2)}</td><td>${fmt(a.paid_hrs,2)}</td><td>${fmt(a.logged_in_hrs,2)}</td><td>${fmt(a.productive_hrs,2)}</td><td class="${effClass(a.efficiency_pct)}">${pct(a.efficiency_pct)}</td></tr>`).join('') + `</tbody></table></div></div>`;
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+}
+
+/* ══════════════════════════════════════════════════
+   LEADERBOARD / GAMIFICATION
+   ══════════════════════════════════════════════════ */
+function renderGamify() {
+  const lob = $('selLob').value;
+  const date = $('inpDate').value;
+  api('/realtime/leaderboard', { lob, date }).then(d => {
+    if (!d || !d.success) { $('gamifyEmpty').innerHTML = '<strong>Leaderboard unavailable</strong>'; return; }
+    $('gamifyEmpty').style.display = 'none';
+    $('gamifyContent').style.display = '';
+
+    const st = d.stats;
+    $('gamifyStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Avg Adherence</div><div class="stat-value ${st.avg_adherence>=90?'stat-ok':st.avg_adherence>=80?'stat-warn':'stat-crit'}">${st.avg_adherence}%</div></div>
+      <div class="stat-card"><div class="stat-label">Perfect Scores</div><div class="stat-value">${st.perfect_count}</div></div>
+      <div class="stat-card"><div class="stat-label">Above 90%</div><div class="stat-value">${st.above_90_count}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Agents</div><div class="stat-value">${st.total_agents}</div></div>`;
+
+    $('gamifyHint').textContent = date || 'today';
+
+    $('tblLeaderboard').querySelector('tbody').innerHTML = d.entries.map((e, i) => {
+      const rank = i + 1;
+      const rankCls = rank <= 3 ? ` gm-rank-${rank}` : '';
+      const rankEl = rank <= 3 ? `<span class="gm-rank${rankCls}">${rank}</span>` : rank;
+      const barColor = e.adherence_pct >= 90 ? '#10b981' : e.adherence_pct >= 80 ? '#f59e0b' : '#ef4444';
+      const barW = Math.min(100, e.adherence_pct);
+      return `<tr>
+        <td>${rankEl}</td>
+        <td>${esc(e.employee)}</td>
+        <td><span class="gm-adh-bar"><span style="width:${barW}%;background:${barColor}"></span></span>${e.adherence_pct}%</td>
+        <td class="gm-pts">${e.points}</td>
+        <td>${e.badges.join(' ') || '—'}</td>
+      </tr>`;
+    }).join('');
+    if(window.initSortable) initSortable($('tblLeaderboard'));
+
+    // Top 3 performers cards
+    const top3 = d.entries.slice(0, 3);
+    const medals = ['🥇', '🥈', '🥉'];
+    $('topPerformers').innerHTML = top3.length ? top3.map((e, i) =>
+      `<div class="top-card">
+        <div class="top-rank">${medals[i]}</div>
+        <div>
+          <div class="top-name">${esc(e.employee)}</div>
+          <div class="top-stats">${e.adherence_pct}% adherence · ${e.points} pts · ${e.badges.join(' ') || 'No badges'}</div>
+        </div>
+      </div>`
+    ).join('') : '<div class="empty">No data yet</div>';
+  });
 }
 
 /* ══════════════════════════════════════════════════

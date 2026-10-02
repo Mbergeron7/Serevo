@@ -565,6 +565,136 @@ def _calc_adherence_pct(scheduled, actual, shift_start, shift_end):
     return (in_adherence / total_mins) * 100
 
 
+# ── Leaderboard / Gamification (API) ──────────────────────
+@realtime_bp.route("/leaderboard", methods=["POST"])
+@login_required
+def leaderboard():
+    """
+    POST JSON: {lob, date?}
+    Returns adherence leaderboard with points and badges.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+
+        user = get_current_user()
+        is_demo = user and user.get("is_demo")
+
+        # Get shifts with segments for adherence computation
+        if is_demo:
+            from app.demo_data import plan_demo_day
+            day_plan, _ = plan_demo_day(date_obj, lob if lob != "All" else None)
+            shifts = [s for s in day_plan if s.get("status") == "scheduled"]
+        else:
+            from app.scheduling.engine import generate_shifts
+            sheet = _get_sheet()
+            try:
+                shifts, _, _ = generate_shifts(
+                    lob if lob != "All" else None, date_obj, sheet=sheet
+                )
+            except Exception:
+                shifts = []
+
+        import random
+        rng = random.Random(date_obj.toordinal() + hash(lob))
+        now = datetime.datetime.now()
+        cur_mins = now.hour * 60 + now.minute
+
+        entries = []
+        for s in shifts:
+            emp = s.get("employee", "")
+            emp_id = s.get("employee_id", "")
+            s_mins = _time_to_mins(s["start"])
+            e_mins = _time_to_mins(s["end"])
+
+            if cur_mins < s_mins:
+                continue  # shift hasn't started
+
+            # Compute adherence from segments
+            segments = s.get("segments", [])
+            if not segments:
+                segments = [{"type": "on-call", "start": s["start"], "end": s["end"]}]
+
+            if is_demo:
+                # Simulate adherence with some variance
+                base_adh = rng.uniform(78, 100)
+                adh_pct = round(min(100, base_adh), 1)
+                ooa_count = 0 if adh_pct >= 98 else rng.randint(1, 3)
+                logged_early = rng.random() < 0.3
+            else:
+                # Real: compute from DB actuals
+                actual = _build_db_actuals(emp_id, date_obj, s["start"], s["end"])
+                adh_pct = round(_calc_adherence_pct(segments, actual, s["start"], s["end"]), 1)
+                ooa_count = len([1 for seg in actual if seg["type"] == "aux"])
+                logged_early = False
+
+            # Points: base 100, +/- based on adherence
+            points = int(adh_pct)
+            if adh_pct >= 100:
+                points += 20
+            elif adh_pct >= 95:
+                points += 10
+            if ooa_count == 0:
+                points += 5
+            if logged_early:
+                points += 5
+
+            # Badges
+            badges = []
+            if adh_pct >= 100:
+                badges.append("🏆")
+            elif adh_pct >= 95:
+                badges.append("⭐")
+            elif adh_pct >= 90:
+                badges.append("🎯")
+            if ooa_count == 0 and adh_pct >= 85:
+                badges.append("🛡️")
+            if logged_early:
+                badges.append("⏰")
+            # Streak badge (simulated for demo)
+            if is_demo and rng.random() < 0.25 and adh_pct >= 95:
+                badges.append("🔥")
+
+            entries.append({
+                "employee": emp,
+                "employee_id": emp_id,
+                "adherence_pct": adh_pct,
+                "points": points,
+                "badges": badges,
+                "ooa_count": ooa_count,
+            })
+
+        # Sort by points descending
+        entries.sort(key=lambda e: (-e["points"], -e["adherence_pct"]))
+
+        # Stats
+        avg_adh = round(sum(e["adherence_pct"] for e in entries) / max(1, len(entries)), 1)
+        perfect = sum(1 for e in entries if e["adherence_pct"] >= 100)
+        above_90 = sum(1 for e in entries if e["adherence_pct"] >= 90)
+
+        return jsonify({
+            "success": True,
+            "entries": entries,
+            "stats": {
+                "avg_adherence": avg_adh,
+                "perfect_count": perfect,
+                "above_90_count": above_90,
+                "total_agents": len(entries),
+            },
+        })
+
+    except Exception as e:
+        log.error(f"Leaderboard error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Service level tracker (API) ────────────────────────────
 @realtime_bp.route("/service-level", methods=["POST"])
 @login_required
