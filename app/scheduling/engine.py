@@ -157,6 +157,91 @@ def _get_requirements_for_date(lob, date_obj, sheet=None):
     return []
 
 
+def get_multi_skill_requirements(lob, date_obj, sheet=None):
+    """
+    Calculate per-skill-group staffing requirements for a LOB.
+
+    If the LOB has multiple skill groups mapped, splits the total
+    requirement proportionally based on how many employees hold each
+    skill group (weighted by proficiency effectiveness).
+
+    Returns:
+      {
+        skill_group_name: [{time: "HH:MM", agents_required: float}, ...],
+        ...
+      }
+    If no multi-skill split applies, returns {lob: requirements}.
+    """
+    base_reqs = _get_requirements_for_date(lob, date_obj, sheet)
+    if not base_reqs:
+        return {lob: []}
+
+    # Check if there are multiple skill groups with employees mapped to this LOB
+    try:
+        from app.models import SkillGroup, SkillMapping, Employee, PlanningUnit, db
+        from app.data_source import normalize_lob
+
+        lob_norm = normalize_lob(lob.strip()).lower()
+
+        # Find the planning unit for this LOB
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob_norm
+        ).first()
+
+        if not pu:
+            return {lob: base_reqs}
+
+        # Get all employees in this LOB and their skill mappings
+        emps = Employee.query.filter_by(planning_unit_id=pu.id).filter(
+            db.func.lower(Employee.status).notin_(["inactive", "terminated", "deleted"])
+        ).all()
+
+        if not emps:
+            return {lob: base_reqs}
+
+        # Calculate effective capacity per skill group
+        skill_capacity = defaultdict(float)  # skill_group_name → total effectiveness
+        total_capacity = 0.0
+
+        for emp in emps:
+            mappings = SkillMapping.query.filter_by(
+                employee_id=emp.id, is_active=True
+            ).join(SkillGroup).all()
+
+            if mappings:
+                for m in mappings:
+                    eff = proficiency_to_effectiveness(m.proficiency)
+                    skill_capacity[m.skill_group.name] += eff
+                    total_capacity += eff
+            else:
+                # No explicit mapping — count under primary LOB
+                skill_capacity[lob] += 1.0
+                total_capacity += 1.0
+
+        if len(skill_capacity) <= 1 or total_capacity == 0:
+            return {lob: base_reqs}
+
+        # Split requirements proportionally by skill capacity
+        result = {}
+        for sg_name, cap in skill_capacity.items():
+            ratio = cap / total_capacity
+            result[sg_name] = [
+                {
+                    "time": r["time"],
+                    "agents_required": round(r["agents_required"] * ratio, 2),
+                }
+                for r in base_reqs
+            ]
+
+        log.info(f"Multi-skill split for {lob}: {len(skill_capacity)} groups, "
+                 f"ratios: {', '.join(f'{k}={v/total_capacity:.1%}' for k, v in skill_capacity.items())}")
+        return result
+
+    except Exception as e:
+        log.warning(f"Multi-skill requirements error: {e}")
+        return {lob: base_reqs}
+
+
 def get_skill_proficiency_map(lob=None):
     """
     Load skill proficiency mappings from the DB.
@@ -1002,8 +1087,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             total += req_by_minute.get(m, 0)
         return total
 
-    # Track how many agents are already scheduled per interval
-    scheduled_per_interval = defaultdict(int)
+    # Track effective headcount per interval (weighted by proficiency)
+    scheduled_per_interval = defaultdict(float)
 
     # Sort employees: those with accommodation restrictions first (they have
     # fewer placement options), then unrestricted employees
@@ -1031,9 +1116,12 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             continue
         emp_avails.append((emp, avail, rot_shift))
 
-    # Restricted employees first (have shift_start, half day, or rotation)
+    # Sort employees for optimal placement:
+    # 1. Restricted employees first (rotation, fixed start, half day) — fewer options
+    # 2. Among unrestricted: highest proficiency first — place best agents in peak gaps
     emp_avails.sort(key=lambda x: (
-        0 if x[2] or x[1].get("shift_start") or x[1]["day_type"] == "half" else 1
+        0 if x[2] or x[1].get("shift_start") or x[1]["day_type"] == "half" else 1,
+        -_emp_effectiveness(x[0]),  # highest effectiveness first within group
     ))
 
     shifts = []
@@ -1103,10 +1191,10 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                     end_min = le_min
                     length = end_min - start_min
 
-        # Record the shift (weight by proficiency effectiveness)
+        # Record the shift — track effective headcount per interval
         eff = _emp_effectiveness(emp)
         for m in range(start_min, end_min, DEFAULT_INTERVAL_MINS):
-            scheduled_per_interval[m] += 1
+            scheduled_per_interval[m] += eff
 
         stype = "half" if avail["day_type"] == "half" else "full"
         s_time = _minutes_to_time(start_min)
@@ -1415,6 +1503,17 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
 
     # Add schedule scoring
     result["score"] = score_schedule(days, lob)
+
+    # Add multi-skill demand breakdown if applicable
+    try:
+        skill_reqs = get_multi_skill_requirements(lob, start_date, sheet)
+        if len(skill_reqs) > 1:  # Only include if there's an actual multi-skill split
+            result["skill_demand"] = {
+                sg: [{"time": r["time"], "required": r["agents_required"]} for r in intervals]
+                for sg, intervals in skill_reqs.items()
+            }
+    except Exception as e:
+        log.warning(f"Multi-skill demand summary error: {e}")
 
     return result
 
