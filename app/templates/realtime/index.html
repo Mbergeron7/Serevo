@@ -217,6 +217,7 @@
   <button class="view-tab" data-view="absent" onclick="showView('absent')">Absenteeism</button>
   <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status</button>
   <button class="view-tab" data-view="eff" onclick="showView('eff')">Efficiency</button>
+  <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
 </div>
 
@@ -278,6 +279,15 @@
 <div id="view-absent" class="view-panel"></div>
 <div id="view-status" class="view-panel"></div>
 <div id="view-eff" class="view-panel"></div>
+
+<!-- ═══════════ NET STAFFING ═══════════ -->
+<div id="view-netstaffing" class="view-panel">
+  <div id="nsEmpty" class="empty"><strong>Click Load to see net staffing</strong></div>
+  <div id="nsContent" style="display:none;">
+    <div class="stats-row" id="nsStats"></div>
+    <div id="nsLobs"></div>
+  </div>
+</div>
 
 <!-- ═══════════ LEADERBOARD / GAMIFICATION ═══════════ -->
 <div id="view-gamify" class="view-panel">
@@ -421,7 +431,7 @@ async function loadAll(silent) {
     names.forEach((n, i) => DATA[n] = reps[i]);
     renderDashboard(DATA.dashboard); renderForecast(DATA.forecast); renderInterval(DATA.interval);
     renderSvl(DATA.svl); renderAbsent(DATA.absenteeism); renderStatus(DATA['agent-status']); renderEff(DATA.efficiency);
-    renderGamify();
+    renderNetStaffing(); renderGamify();
 
     const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
     $('asOf').textContent = asOf ? `As of ${asOf}` : '';
@@ -680,6 +690,62 @@ function renderEff(d) {
     d.agents.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${fmt(a.scheduled_hrs,2)}</td><td>${fmt(a.paid_hrs,2)}</td><td>${fmt(a.logged_in_hrs,2)}</td><td>${fmt(a.productive_hrs,2)}</td><td class="${effClass(a.efficiency_pct)}">${pct(a.efficiency_pct)}</td></tr>`).join('') + `</tbody></table></div></div>`;
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+}
+
+/* ══════════════════════════════════════════════════
+   NET STAFFING
+   ══════════════════════════════════════════════════ */
+function renderNetStaffing() {
+  const lob = $('selLob').value;
+  const date = $('inpDate').value;
+  api('/realtime/net-staffing', { lob, date }).then(d => {
+    if (!d || !d.success) { $('nsEmpty').innerHTML = '<strong>Net staffing unavailable</strong>'; return; }
+    $('nsEmpty').style.display = 'none';
+    $('nsContent').style.display = '';
+    const curIv = d.current_interval;
+
+    // Aggregate stats across LOBs
+    let totUnder = 0, totOver = 0, worstNet = 0, totIv = 0;
+    d.lobs.forEach(l => {
+      l.intervals.forEach(iv => {
+        totIv++;
+        if (iv.net < 0) totUnder++;
+        else if (iv.net > 0 && iv.required > 0) totOver++;
+        if (iv.net < worstNet) worstNet = iv.net;
+      });
+    });
+    $('nsStats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Understaffed</div><div class="stat-value ${totUnder>0?'stat-crit':''}">${totUnder}</div></div>
+      <div class="stat-card"><div class="stat-label">Overstaffed</div><div class="stat-value">${totOver}</div></div>
+      <div class="stat-card"><div class="stat-label">Worst Gap</div><div class="stat-value ${worstNet<0?'stat-crit':''}">${worstNet>0?'+':''}${worstNet}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Intervals</div><div class="stat-value">${totIv}</div></div>`;
+
+    let h = '';
+    d.lobs.forEach(l => {
+      h += `<div class="report-card"><h3>${esc(l.lob)} <span class="hint">net staffing by interval</span></h3>
+        <div class="wrap" style="max-height:50vh;"><table class="rt sortable"><thead>
+        <tr><th>Time</th><th>Required</th><th>Scheduled</th><th>Net</th><th>Coverage</th><th>Est. SL</th><th>Status</th></tr>
+        </thead><tbody>`;
+      l.intervals.forEach(iv => {
+        const isCur = iv.time === curIv;
+        const isFuture = iv.time > curIv;
+        const cls = isCur ? ' class="current"' : (isFuture ? ' class="future"' : '');
+        const netCls = iv.net < 0 ? 'bad' : iv.net > 0 ? 'good' : '';
+        const slCls = iv.est_sl === null ? '' : iv.est_sl >= 80 ? 'cell-good' : iv.est_sl >= 70 ? 'cell-warn' : 'cell-bad';
+        const statusPill = iv.status === 'critical' ? '<span class="pill high">CRITICAL</span>' :
+          iv.status === 'warning' ? '<span class="pill medium">WARNING</span>' :
+          iv.status === 'over' ? '<span class="pill low">OVER</span>' : '—';
+        h += `<tr${cls}><td>${iv.time}${isCur?' ◀':''}</td><td>${fmt(iv.required,1)}</td><td>${iv.scheduled}</td>
+          <td class="${netCls}">${iv.net>0?'+':''}${fmt(iv.net,1)}</td>
+          <td>${pct(iv.coverage_pct)}</td>
+          <td class="${slCls}">${iv.est_sl !== null ? pct(iv.est_sl) : '—'}</td>
+          <td>${statusPill}</td></tr>`;
+      });
+      h += '</tbody></table></div></div>';
+    });
+    $('nsLobs').innerHTML = h;
+    $('nsLobs').querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+  });
 }
 
 /* ══════════════════════════════════════════════════

@@ -695,6 +695,87 @@ def leaderboard():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Net Staffing (API) ─────────────────────────────────────
+@realtime_bp.route("/net-staffing", methods=["POST"])
+@login_required
+def net_staffing():
+    """
+    POST JSON: {lob, date?}
+    Returns per-interval net staffing with projected SL impact.
+    If lob=="All", returns per-LOB breakdowns.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+
+        user = get_current_user()
+
+        if lob == "All":
+            lobs = _all_lobs(user)
+        else:
+            lobs = [lob]
+
+        from app.realtime.engine import get_intraday_snapshot
+        from app.forecasting.engine import _service_level, _erlang_c
+
+        results = []
+        for l in lobs:
+            if user and user.get("is_demo"):
+                from app.demo_data import get_demo_realtime_snapshot
+                snap = get_demo_realtime_snapshot(l, date_obj)
+            else:
+                sheet = _get_sheet()
+                snap = get_intraday_snapshot(l, date_obj, sheet)
+
+            intervals = snap.get("intervals", [])
+            enriched = []
+            for iv in intervals:
+                offered = iv.get("forecast_offered", 0)
+                aht = iv.get("forecast_aht", 0)
+                sched = iv.get("scheduled", 0)
+                req = iv.get("required", 0)
+
+                # Compute projected SL with current staffing
+                est_sl = None
+                if offered > 0 and aht > 0 and sched > 0:
+                    traffic = (offered * aht) / 1800  # 30-min interval
+                    est_sl = round(_service_level(sched, traffic, 30, aht) * 100, 1)
+
+                enriched.append({
+                    "time": iv["time"],
+                    "required": iv["required"],
+                    "scheduled": iv["scheduled"],
+                    "net": round(iv["gap"], 1),
+                    "coverage_pct": iv["coverage_pct"],
+                    "est_sl": est_sl,
+                    "forecast_offered": offered,
+                    "status": iv["status"],
+                })
+
+            results.append({
+                "lob": l,
+                "intervals": enriched,
+                "summary": snap.get("summary", {}),
+            })
+
+        return jsonify({
+            "success": True,
+            "lobs": results,
+            "current_interval": snap.get("current_interval", ""),
+        })
+
+    except Exception as e:
+        log.error(f"Net staffing error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Service level tracker (API) ────────────────────────────
 @realtime_bp.route("/service-level", methods=["POST"])
 @login_required
