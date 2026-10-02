@@ -174,6 +174,24 @@
   .tl-segment.seg-selected { outline: 2px solid #fff; outline-offset: -1px; box-shadow: 0 0 0 3px var(--brand-accent), 0 1px 2px rgba(0,0,0,.15); z-index: 5; }
   .tl-segment.seg-copied  { outline: 2px dashed #fff; outline-offset: -1px; box-shadow: 0 0 0 3px #7c3aed, 0 1px 2px rgba(0,0,0,.15); z-index: 5; }
   .tl-segment.seg-dragging { opacity: .5; }
+  /* Resize handles */
+  .seg-handle { position:absolute; top:0; width:6px; height:100%; cursor:col-resize; z-index:6; }
+  .seg-handle-l { left:0; border-radius:4px 0 0 4px; }
+  .seg-handle-r { right:0; border-radius:0 4px 4px 0; }
+  .tl-seg-overlay:hover .seg-handle { background:rgba(255,255,255,.35); }
+  /* Segment edit popover */
+  .seg-edit-pop {
+    position:absolute; z-index:50; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.22); padding:14px; min-width:240px;
+    color:var(--text); font-size:.82rem;
+  }
+  .seg-edit-pop label { display:block; margin-bottom:8px; font-weight:500; }
+  .seg-edit-pop select, .seg-edit-pop input[type=time], .seg-edit-pop input[type=text] {
+    width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:6px;
+    background:var(--bg); color:var(--text); font-size:.82rem; margin-top:2px;
+  }
+  .seg-edit-pop .sep-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .seg-edit-pop .sep-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
   .tl-drag-ghost {
     position: absolute; top: 4px; height: 28px; border-radius: 4px;
     pointer-events: none; z-index: 10; opacity: .7;
@@ -1585,7 +1603,7 @@ function renderTimelineView(container) {
           title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
           data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
           onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
-          oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})">${label}</div>`;
+          oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})"><span class="seg-handle seg-handle-l" data-handle="l"></span>${label}<span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
       });
 
       html += `</div></div>`; // tl-bar-area, tl-row
@@ -2768,11 +2786,12 @@ function clearCopiedHighlight() {
   document.querySelectorAll('.tl-segment.seg-copied').forEach(el => el.classList.remove('seg-copied'));
 }
 
-// ── Mouse-down on segment: start drag or select ──
+// ── Mouse-down on segment: start drag, resize, or select ──
 function segMouseDown(e, dayIdx, shiftIdx, segIdx) {
   if (e.button === 2) return; // right-click handled by contextmenu
   e.preventDefault();
   e.stopPropagation();
+  closeSegEditPop(); // close any open edit popover
 
   selectSegment(dayIdx, shiftIdx, segIdx);
 
@@ -2785,13 +2804,19 @@ function segMouseDown(e, dayIdx, shiftIdx, segIdx) {
   const firstHour = dayEl ? dayEl.querySelector('.tl-hour-mark') : null;
   const minH = firstHour ? parseInt(firstHour.textContent) : 0;
 
+  // Detect resize handle
+  const handle = e.target.closest('.seg-handle');
+  const resizeEdge = handle ? handle.dataset.handle : null; // 'l' or 'r' or null
+
   _dragState = {
     dayIdx, shiftIdx, segIdx,
     origStart: seg.start, origEnd: seg.end,
     origLeft: parseFloat(segEl.style.left),
+    origWidth: parseFloat(segEl.style.width),
     startX: e.clientX,
     barArea, segEl, minH,
-    moved: false
+    moved: false,
+    resizeEdge // null=move, 'l'=resize left, 'r'=resize right
   };
 
   document.addEventListener('mousemove', segMouseMove);
@@ -2800,24 +2825,44 @@ function segMouseDown(e, dayIdx, shiftIdx, segIdx) {
 
 function segMouseMove(e) {
   if (!_dragState) return;
-  const dx = e.clientX - _dragState.startX;
-  if (Math.abs(dx) < 4 && !_dragState.moved) return; // dead zone
+  const ds = _dragState;
+  const dx = e.clientX - ds.startX;
+  if (Math.abs(dx) < 4 && !ds.moved) return; // dead zone
 
-  if (!_dragState.moved) {
-    _dragState.moved = true;
-    _dragState.segEl.classList.add('seg-dragging');
-    // Create ghost
-    const ghost = _dragState.segEl.cloneNode(true);
-    ghost.className = _dragState.segEl.className.replace('seg-dragging','') + ' tl-drag-ghost';
-    ghost.classList.remove('seg-selected');
-    ghost.style.width = _dragState.segEl.style.width;
-    _dragState.barArea.appendChild(ghost);
-    _dragState.ghost = ghost;
+  if (!ds.moved) {
+    ds.moved = true;
+    if (ds.resizeEdge) {
+      ds.segEl.style.cursor = 'col-resize';
+    } else {
+      ds.segEl.classList.add('seg-dragging');
+      // Create ghost for move
+      const ghost = ds.segEl.cloneNode(true);
+      ghost.className = ds.segEl.className.replace('seg-dragging','') + ' tl-drag-ghost';
+      ghost.classList.remove('seg-selected');
+      ghost.style.width = ds.segEl.style.width;
+      ds.barArea.appendChild(ghost);
+      ds.ghost = ghost;
+    }
   }
 
-  // Move ghost
-  const newLeft = _dragState.origLeft + dx;
-  _dragState.ghost.style.left = Math.max(0, newLeft) + 'px';
+  if (ds.resizeEdge) {
+    // Live-resize the segment element
+    if (ds.resizeEdge === 'r') {
+      const newW = Math.max(4, ds.origWidth + dx);
+      ds.segEl.style.width = newW + 'px';
+    } else {
+      const newL = ds.origLeft + dx;
+      const newW = ds.origWidth - dx;
+      if (newW > 4) {
+        ds.segEl.style.left = newL + 'px';
+        ds.segEl.style.width = newW + 'px';
+      }
+    }
+  } else {
+    // Move ghost
+    const newLeft = ds.origLeft + dx;
+    ds.ghost.style.left = Math.max(0, newLeft) + 'px';
+  }
 }
 
 function segMouseUp(e) {
@@ -2831,45 +2876,72 @@ function segMouseUp(e) {
   // Clean up ghost
   if (ds.ghost) ds.ghost.remove();
   ds.segEl.classList.remove('seg-dragging');
+  ds.segEl.style.cursor = '';
 
   if (!ds.moved) {
-    // It was a click — segment is already selected
+    // It was a click — open edit popover
+    openSegEditPop(ds.dayIdx, ds.shiftIdx, ds.segIdx, ds.segEl);
     return;
   }
 
-  // Calculate new time
-  const dx = e.clientX - ds.startX;
-  const dMins = (dx / TL_PX_PER_HOUR) * 60;
   const seg = scheduleData.days[ds.dayIdx].shifts[ds.shiftIdx].segments[ds.segIdx];
-  const origStartMins = timeToMins(ds.origStart);
-  const origEndMins = timeToMins(ds.origEnd);
-  const duration = origEndMins - origStartMins;
-
-  let newStartMins = snapTo(origStartMins + dMins, SNAP_MINS);
-
-  // Clamp within shift bounds
   const shift = scheduleData.days[ds.dayIdx].shifts[ds.shiftIdx];
   const shiftStart = timeToMins(shift.start);
   const shiftEnd = timeToMins(shift.end);
-  newStartMins = Math.max(shiftStart, Math.min(newStartMins, shiftEnd - duration));
+  const origStartMins = timeToMins(ds.origStart);
+  const origEndMins = timeToMins(ds.origEnd);
 
-  const newEndMins = newStartMins + duration;
+  if (ds.resizeEdge) {
+    // ── Resize logic ──
+    let newStartMins = origStartMins;
+    let newEndMins = origEndMins;
+    const dx = e.clientX - ds.startX;
+    const dMins = (dx / TL_PX_PER_HOUR) * 60;
 
-  if (newStartMins === origStartMins) return; // no change
+    if (ds.resizeEdge === 'r') {
+      newEndMins = snapTo(origEndMins + dMins, SNAP_MINS);
+      newEndMins = Math.max(newStartMins + SNAP_MINS, Math.min(newEndMins, shiftEnd));
+    } else {
+      newStartMins = snapTo(origStartMins + dMins, SNAP_MINS);
+      newStartMins = Math.max(shiftStart, Math.min(newStartMins, newEndMins - SNAP_MINS));
+    }
 
-  // Update in memory
-  seg.start = minsToTime(newStartMins);
-  seg.end = minsToTime(newEndMins);
-  seg.duration_mins = duration;
+    if (newStartMins === origStartMins && newEndMins === origEndMins) { switchView(currentView); return; }
 
-  // Persist to DB or recalc on-call client-side (demo mode)
+    seg.start = minsToTime(newStartMins);
+    seg.end = minsToTime(newEndMins);
+    seg.duration_mins = newEndMins - newStartMins;
+  } else {
+    // ── Move logic ──
+    const dx = e.clientX - ds.startX;
+    const dMins = (dx / TL_PX_PER_HOUR) * 60;
+    const duration = origEndMins - origStartMins;
+    let newStartMins = snapTo(origStartMins + dMins, SNAP_MINS);
+    newStartMins = Math.max(shiftStart, Math.min(newStartMins, shiftEnd - duration));
+    const newEndMins = newStartMins + duration;
+    if (newStartMins === origStartMins) return;
+    seg.start = minsToTime(newStartMins);
+    seg.end = minsToTime(newEndMins);
+    seg.duration_mins = duration;
+  }
+
+  // Persist
+  persistSegUpdate(seg, shift);
+
+  shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+  switchView(currentView);
+  showToast(`${ds.resizeEdge ? 'Resized' : 'Moved'} ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
+}
+
+// ── Shared persist helper for segment moves/resizes/edits ──
+function persistSegUpdate(seg, shift) {
   if (!IS_DEMO && seg.id != null) {
     fetch('/scheduling/segment/' + seg.id, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({start: seg.start, end: seg.end})
+      body: JSON.stringify({start: seg.start, end: seg.end, type: seg.type, notes: seg.notes || ''})
     }).then(r => r.json()).then(d => {
-      if (!d.success) { showToast('Move failed: ' + (d.error || ''), 'error'); return; }
+      if (!d.success) { showToast('Update failed: ' + (d.error || ''), 'error'); return; }
       if (baseSegType(seg.type) !== 'on-call' && shift.id) {
         fetch('/scheduling/shift/' + shift.id + '/recalc-oncall', {
           method: 'POST',
@@ -2887,14 +2959,97 @@ function segMouseUp(e) {
       }
     });
   } else if (baseSegType(seg.type) !== 'on-call') {
-    // Demo mode or unsaved: recalculate on-call segments client-side
     recalcOncallClient(shift);
   }
+}
 
-  // Re-sort and re-render immediately (optimistic)
+// ── Segment edit popover ──
+function closeSegEditPop() {
+  const old = document.getElementById('segEditPop');
+  if (old) old.remove();
+  document.removeEventListener('mousedown', _segEditOutsideClick);
+}
+
+function _segEditOutsideClick(e) {
+  const pop = document.getElementById('segEditPop');
+  if (pop && !pop.contains(e.target)) closeSegEditPop();
+}
+
+function openSegEditPop(dayIdx, shiftIdx, segIdx, anchorEl) {
+  closeSegEditPop();
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  // Build type options from SEGMENT_CODES
+  let typeOpts = '';
+  SEGMENT_CODES.forEach(sc => {
+    const sel = baseSegType(seg.type) === sc.code ? ' selected' : '';
+    typeOpts += `<option value="${sc.code}"${sel}>${sc.label}</option>`;
+  });
+
+  const pop = document.createElement('div');
+  pop.className = 'seg-edit-pop';
+  pop.id = 'segEditPop';
+  pop.innerHTML = `
+    <label>Type<select id="sep_type">${typeOpts}</select></label>
+    <div class="sep-row">
+      <label>Start<input type="time" id="sep_start" value="${seg.start}" step="900"></label>
+      <label>End<input type="time" id="sep_end" value="${seg.end}" step="900"></label>
+    </div>
+    <label>Notes<input type="text" id="sep_notes" value="${seg.notes || ''}" placeholder="Optional notes"></label>
+    <div class="sep-btns">
+      <button class="btn btn-sm btn-danger" onclick="sepDelete(${dayIdx},${shiftIdx},${segIdx})">Delete</button>
+      <button class="btn btn-sm" onclick="closeSegEditPop()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="sepSave(${dayIdx},${shiftIdx},${segIdx})">Save</button>
+    </div>`;
+
+  // Position near the anchor element
+  const barArea = anchorEl.parentElement;
+  barArea.style.position = 'relative';
+  const aRect = anchorEl.getBoundingClientRect();
+  const bRect = barArea.getBoundingClientRect();
+  pop.style.left = (aRect.left - bRect.left) + 'px';
+  pop.style.top = (aRect.bottom - bRect.top + 4) + 'px';
+  barArea.appendChild(pop);
+
+  // Close on outside click (delayed so current click doesn't trigger)
+  setTimeout(() => document.addEventListener('mousedown', _segEditOutsideClick), 10);
+}
+
+function sepSave(dayIdx, shiftIdx, segIdx) {
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+  const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+
+  const newType = document.getElementById('sep_type').value;
+  const newStart = document.getElementById('sep_start').value;
+  const newEnd = document.getElementById('sep_end').value;
+  const newNotes = document.getElementById('sep_notes').value.trim();
+
+  if (!newStart || !newEnd) { showToast('Start and end times required', 'error'); return; }
+  const sMins = timeToMins(newStart);
+  const eMins = timeToMins(newEnd);
+  if (eMins <= sMins) { showToast('End must be after start', 'error'); return; }
+
+  // Clamp within shift
+  const shiftStart = timeToMins(shift.start);
+  const shiftEnd = timeToMins(shift.end);
+  seg.start = minsToTime(Math.max(shiftStart, sMins));
+  seg.end = minsToTime(Math.min(shiftEnd, eMins));
+  seg.duration_mins = timeToMins(seg.end) - timeToMins(seg.start);
+  seg.type = newType;
+  seg.notes = newNotes;
+
+  persistSegUpdate(seg, shift);
+
+  closeSegEditPop();
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
-  showToast(`Moved ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
+  showToast(`Updated ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
+}
+
+function sepDelete(dayIdx, shiftIdx, segIdx) {
+  closeSegEditPop();
+  ctxDelete(dayIdx, shiftIdx, segIdx);
 }
 
 // ── Whole-shift drag ─────────────────────────
