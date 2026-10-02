@@ -119,6 +119,41 @@
   .adh-off { background:color-mix(in srgb, var(--text-muted) 10%, var(--surface)); color:var(--text-muted); }
   .adh-ended { background:color-mix(in srgb, #6366f1 12%, var(--surface)); color:#6366f1; }
 
+  /* ── Adherence Timeline Drill-down ──────── */
+  .adh-timeline-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:998; justify-content:center; align-items:center; }
+  .adh-timeline-overlay.show { display:flex; }
+  .adh-timeline-panel { background:var(--surface); border-radius:14px; width:95%; max-width:900px; max-height:85vh;
+    overflow-y:auto; box-shadow:0 12px 48px rgba(0,0,0,.25); }
+  .adh-tl-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px;
+    border-bottom:1px solid var(--border); }
+  .adh-tl-header h3 { margin:0; font-size:1.05rem; }
+  .adh-tl-header .adh-pct { font-size:1.3rem; font-weight:800; font-variant-numeric:tabular-nums; }
+  .adh-tl-close { background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--text-muted); padding:4px 8px; }
+  .adh-tl-body { padding:20px; }
+  .adh-tl-meta { display:flex; gap:24px; margin-bottom:16px; font-size:.82rem; color:var(--text-muted); }
+  .adh-tl-meta strong { color:var(--text); }
+
+  .tl-section { margin-bottom:14px; }
+  .tl-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-bottom:6px; }
+  .tl-track { position:relative; height:36px; background:var(--bg); border-radius:6px; border:1px solid var(--border); overflow:hidden; }
+  .tl-block { position:absolute; top:0; height:100%; display:flex; align-items:center; justify-content:center;
+    font-size:.65rem; font-weight:700; color:#fff; overflow:hidden; white-space:nowrap; min-width:2px; }
+  .tl-block.on-call { background:#10b981; }
+  .tl-block.break { background:#f59e0b; }
+  .tl-block.lunch { background:#6366f1; }
+  .tl-block.aux { background:#ef4444; }
+  .tl-block.unknown { background:var(--border); color:var(--text-muted); }
+
+  .tl-time-axis { display:flex; justify-content:space-between; font-size:.65rem; color:var(--text-muted); margin-top:4px; padding:0 2px; }
+  .tl-legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; font-size:.75rem; color:var(--text-muted); }
+  .tl-legend-dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px; vertical-align:middle; }
+
+  .tl-ooa-table { margin-top:16px; }
+  .tl-ooa-table h4 { font-size:.82rem; font-weight:700; margin-bottom:8px; }
+
+  #tblAdherence tbody tr { cursor:pointer; }
+  #tblAdherence tbody tr:hover td { background:color-mix(in srgb, var(--brand-accent) 10%, transparent); }
+
   .loading-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:999; justify-content:center; align-items:center; }
   .loading-overlay.show { display:flex; }
   .loading-box { background:var(--surface); padding:30px 40px; border-radius:12px; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -224,6 +259,41 @@
 <div id="view-absent" class="view-panel"></div>
 <div id="view-status" class="view-panel"></div>
 <div id="view-eff" class="view-panel"></div>
+
+<!-- Adherence Timeline Drill-down -->
+<div class="adh-timeline-overlay" id="adhTimelineOverlay" onclick="if(event.target===this)closeTimeline()">
+  <div class="adh-timeline-panel">
+    <div class="adh-tl-header">
+      <div>
+        <h3 id="tlEmpName">—</h3>
+        <span style="font-size:.8rem;color:var(--text-muted)" id="tlShiftInfo">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div class="adh-pct" id="tlAdhPct">—</div>
+        <button class="adh-tl-close" onclick="closeTimeline()">&times;</button>
+      </div>
+    </div>
+    <div class="adh-tl-body">
+      <div class="tl-section">
+        <div class="tl-label">Scheduled</div>
+        <div class="tl-track" id="tlScheduled"></div>
+      </div>
+      <div class="tl-section">
+        <div class="tl-label">Actual</div>
+        <div class="tl-track" id="tlActual"></div>
+      </div>
+      <div class="tl-time-axis" id="tlTimeAxis"></div>
+      <div class="tl-legend">
+        <span><span class="tl-legend-dot" style="background:#10b981;"></span> On Call</span>
+        <span><span class="tl-legend-dot" style="background:#f59e0b;"></span> Break</span>
+        <span><span class="tl-legend-dot" style="background:#6366f1;"></span> Lunch</span>
+        <span><span class="tl-legend-dot" style="background:#ef4444;"></span> Aux / OOA</span>
+        <span><span class="tl-legend-dot" style="background:var(--border);"></span> No Data</span>
+      </div>
+      <div class="tl-ooa-table" id="tlOOA"></div>
+    </div>
+  </div>
+</div>
 
 <!-- Loading overlay -->
 <div class="loading-overlay" id="loadingOverlay">
@@ -399,7 +469,7 @@ function renderIntraday() {
     $('adhHint').textContent = `${a.on_shift_count} on shift · ${a.total_scheduled} scheduled · ${a.current_interval}`;
     $('tblAdherence').querySelector('tbody').innerHTML = a.adherence.map(ag => {
       const cls = ag.expected_state === 'On Queue' ? 'adh-on' : ag.expected_state === 'Shift Ended' ? 'adh-ended' : 'adh-off';
-      return `<tr data-emp="${(ag.employee||'').toLowerCase()}"><td>${ag.employee}</td><td>${ag.shift_start} – ${ag.shift_end}</td><td>${ag.hours}h</td><td>${ag.shift_type}</td><td><span class="adh-badge ${cls}">${ag.expected_state}</span></td></tr>`;
+      return `<tr data-emp="${(ag.employee||'').toLowerCase()}" onclick="openTimeline('${esc(ag.employee)}','${esc(ag.employee_id||'')}')"><td>${ag.employee}</td><td>${ag.shift_start} – ${ag.shift_end}</td><td>${ag.hours}h</td><td>${ag.shift_type}</td><td><span class="adh-badge ${cls}">${ag.expected_state}</span></td></tr>`;
     }).join('');
     if(window.initSortable) initSortable($('tblAdherence'));
   }
@@ -557,6 +627,124 @@ function renderEff(d) {
     d.agents.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${fmt(a.scheduled_hrs,2)}</td><td>${fmt(a.paid_hrs,2)}</td><td>${fmt(a.logged_in_hrs,2)}</td><td>${fmt(a.productive_hrs,2)}</td><td class="${effClass(a.efficiency_pct)}">${pct(a.efficiency_pct)}</td></tr>`).join('') + `</tbody></table></div></div>`;
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+}
+
+/* ══════════════════════════════════════════════════
+   ADHERENCE TIMELINE DRILL-DOWN
+   ══════════════════════════════════════════════════ */
+function openTimeline(empName, empId) {
+  const lob = $('selLob').value;
+  const date = $('inpDate').value;
+  $('tlEmpName').textContent = empName;
+  $('tlShiftInfo').textContent = 'Loading…';
+  $('tlAdhPct').textContent = '—';
+  $('tlScheduled').innerHTML = '';
+  $('tlActual').innerHTML = '';
+  $('tlTimeAxis').innerHTML = '';
+  $('tlOOA').innerHTML = '';
+  $('adhTimelineOverlay').classList.add('show');
+
+  api('/realtime/adherence-timeline', { lob, date, employee_id: empId, employee: empName })
+    .then(d => {
+      if (!d.success) { $('tlShiftInfo').textContent = d.error || 'Error loading timeline'; return; }
+      $('tlShiftInfo').textContent = `Shift: ${d.shift_start} – ${d.shift_end}`;
+      const pctVal = d.adherence_pct;
+      $('tlAdhPct').textContent = pctVal + '%';
+      $('tlAdhPct').style.color = pctVal >= 90 ? '#10b981' : pctVal >= 75 ? '#f59e0b' : '#ef4444';
+      renderTimeline(d);
+    });
+}
+function closeTimeline() { $('adhTimelineOverlay').classList.remove('show'); }
+
+function renderTimeline(d) {
+  const s_mins = _tlMins(d.shift_start);
+  const e_mins = _tlMins(d.shift_end);
+  const span = e_mins - s_mins;
+  if (span <= 0) return;
+
+  // Render scheduled blocks
+  $('tlScheduled').innerHTML = d.scheduled.map(seg => _tlBlock(seg, s_mins, span)).join('');
+
+  // Render actual blocks
+  if (d.actual.length) {
+    $('tlActual').innerHTML = d.actual.map(seg => _tlBlock(seg, s_mins, span)).join('');
+  } else {
+    $('tlActual').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:.75rem;color:var(--text-muted);">No actual data yet</div>';
+  }
+
+  // Time axis
+  const step = span > 600 ? 120 : span > 300 ? 60 : 30;
+  let ticks = [];
+  for (let m = s_mins; m <= e_mins; m += step) {
+    ticks.push(`<span>${_tlFmt(m)}</span>`);
+  }
+  $('tlTimeAxis').innerHTML = ticks.join('');
+
+  // Out-of-adherence details
+  if (d.actual.length) {
+    const ooa = _findOOA(d.scheduled, d.actual, s_mins, e_mins);
+    if (ooa.length) {
+      let h = '<h4>Out-of-Adherence Periods</h4><table class="data-table"><thead><tr><th>Time</th><th>Expected</th><th>Actual</th><th>Duration</th></tr></thead><tbody>';
+      ooa.forEach(o => {
+        h += `<tr><td>${o.start} – ${o.end}</td><td><span class="tl-legend-dot" style="background:${_tlColor(o.expected)};"></span> ${_tlLabel(o.expected)}</td><td><span class="tl-legend-dot" style="background:${_tlColor(o.actual)};"></span> ${_tlLabel(o.actual)}</td><td>${o.mins} min</td></tr>`;
+      });
+      h += '</tbody></table>';
+      $('tlOOA').innerHTML = h;
+    } else {
+      $('tlOOA').innerHTML = '<div style="padding:12px 0;font-size:.82rem;color:#10b981;font-weight:700;">✓ Fully adherent during shift</div>';
+    }
+  }
+}
+
+function _tlMins(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
+function _tlFmt(m) { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function _tlColor(t) { return {'on-call':'#10b981','break':'#f59e0b','lunch':'#6366f1','aux':'#ef4444','unknown':'var(--border)'}[t]||'var(--border)'; }
+function _tlLabel(t) { return {'on-call':'On Call','break':'Break','lunch':'Lunch','aux':'Aux','unknown':'No Data'}[t]||t; }
+
+function _tlBlock(seg, s_mins, span) {
+  const start = _tlMins(seg.start);
+  const end = _tlMins(seg.end);
+  const left = ((start - s_mins) / span * 100).toFixed(2);
+  const width = ((end - start) / span * 100).toFixed(2);
+  const label = (end - start) >= 15 ? _tlLabel(seg.type) : '';
+  return `<div class="tl-block ${seg.type}" style="left:${left}%;width:${width}%;" title="${_tlLabel(seg.type)}: ${seg.start}–${seg.end}">${label}</div>`;
+}
+
+function _findOOA(scheduled, actual, s_mins, e_mins) {
+  const total = e_mins - s_mins;
+  const now = new Date();
+  const curMins = Math.min(now.getHours()*60+now.getMinutes(), e_mins);
+  const checkLen = Math.max(0, curMins - s_mins);
+  if (checkLen <= 0) return [];
+
+  // Build per-minute arrays
+  const sched = new Array(checkLen).fill('on-call');
+  scheduled.forEach(seg => {
+    const ss = Math.max(_tlMins(seg.start) - s_mins, 0);
+    const se = Math.min(_tlMins(seg.end) - s_mins, checkLen);
+    for (let i = ss; i < se; i++) sched[i] = seg.type;
+  });
+  const act = new Array(checkLen).fill('unknown');
+  actual.forEach(seg => {
+    const ss = Math.max(_tlMins(seg.start) - s_mins, 0);
+    const se = Math.min(_tlMins(seg.end) - s_mins, checkLen);
+    for (let i = ss; i < se; i++) act[i] = seg.type;
+  });
+
+  // Find contiguous OOA periods
+  const periods = [];
+  let ooaStart = -1, lastExp = '', lastAct = '';
+  for (let i = 0; i <= checkLen; i++) {
+    const isOOA = i < checkLen && sched[i] !== act[i];
+    if (isOOA && (ooaStart < 0 || sched[i] !== lastExp || act[i] !== lastAct)) {
+      if (ooaStart >= 0) periods.push({start: _tlFmt(s_mins+ooaStart), end: _tlFmt(s_mins+i), expected: lastExp, actual: lastAct, mins: i-ooaStart});
+      ooaStart = i; lastExp = sched[i]; lastAct = act[i];
+    } else if (!isOOA && ooaStart >= 0) {
+      periods.push({start: _tlFmt(s_mins+ooaStart), end: _tlFmt(s_mins+i), expected: lastExp, actual: lastAct, mins: i-ooaStart});
+      ooaStart = -1;
+    }
+  }
+  return periods;
 }
 
 // Deep link (#interval etc.) + auto-load

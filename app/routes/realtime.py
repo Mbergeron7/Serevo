@@ -302,6 +302,269 @@ def adherence():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Adherence Timeline (per-agent drill-down) ─────────────
+@realtime_bp.route("/adherence-timeline", methods=["POST"])
+@login_required
+def adherence_timeline():
+    """
+    POST JSON: {lob, date?, employee_id}
+    Returns per-agent schedule segments + simulated actual status for timeline view.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+        employee_id = payload.get("employee_id", "").strip()
+        employee_name = payload.get("employee", "").strip()
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+
+        user = get_current_user()
+        is_demo = user and user.get("is_demo")
+
+        # Get shifts for this day
+        if is_demo:
+            from app.demo_data import plan_demo_day
+            day_plan, _ = plan_demo_day(date_obj, lob if lob != "All" else None)
+            shifts = [s for s in day_plan if s.get("status") == "scheduled"]
+        else:
+            from app.scheduling.engine import generate_shifts
+            sheet = _get_sheet()
+            try:
+                shifts, _, _ = generate_shifts(
+                    lob if lob != "All" else None, date_obj, sheet=sheet
+                )
+            except Exception:
+                shifts = []
+
+        # Find the matching employee's shift
+        target_shift = None
+        for s in shifts:
+            eid = s.get("employee_id", "")
+            ename = s.get("employee", "")
+            if employee_id and str(eid) == str(employee_id):
+                target_shift = s
+                break
+            if employee_name and ename == employee_name:
+                target_shift = s
+                break
+
+        if not target_shift:
+            return jsonify({"success": False, "error": "Employee shift not found"})
+
+        # Build scheduled segments (the "expected" timeline)
+        segments = target_shift.get("segments", [])
+        shift_start = target_shift["start"]
+        shift_end = target_shift["end"]
+
+        scheduled = []
+        for seg in segments:
+            scheduled.append({
+                "type": seg.get("type", "on-call"),
+                "start": seg.get("start", shift_start),
+                "end": seg.get("end", shift_end),
+            })
+        if not scheduled:
+            scheduled.append({
+                "type": "on-call",
+                "start": shift_start,
+                "end": shift_end,
+            })
+
+        # Build actual status events
+        actual = []
+        if is_demo:
+            actual = _build_demo_actuals(
+                scheduled, shift_start, shift_end, date_obj,
+                employee_name or target_shift.get("employee", "")
+            )
+        else:
+            actual = _build_db_actuals(
+                employee_id or target_shift.get("employee_id"),
+                date_obj, shift_start, shift_end
+            )
+
+        # Compute adherence percentage
+        adh_pct = _calc_adherence_pct(scheduled, actual, shift_start, shift_end)
+
+        return jsonify({
+            "success": True,
+            "employee": target_shift.get("employee", ""),
+            "employee_id": target_shift.get("employee_id", ""),
+            "shift_start": shift_start,
+            "shift_end": shift_end,
+            "scheduled": scheduled,
+            "actual": actual,
+            "adherence_pct": round(adh_pct, 1),
+        })
+
+    except Exception as e:
+        log.error(f"Adherence timeline error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+def _time_to_mins(t):
+    h, m = map(int, t.split(":"))
+    return h * 60 + m
+
+
+def _mins_to_time(m):
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def _build_demo_actuals(scheduled, shift_start, shift_end, date_obj, emp_name):
+    """Generate simulated actual status events with small deviations from schedule."""
+    import random
+    rng = random.Random(hash(emp_name) + date_obj.toordinal())
+    now = datetime.datetime.now()
+    cur_mins = now.hour * 60 + now.minute
+    s_mins = _time_to_mins(shift_start)
+    e_mins = _time_to_mins(shift_end)
+
+    # Only show actuals up to current time
+    actual_end = min(cur_mins, e_mins)
+    if cur_mins < s_mins:
+        return []  # shift hasn't started
+
+    actual = []
+    for seg in scheduled:
+        seg_start = _time_to_mins(seg["start"])
+        seg_end = _time_to_mins(seg["end"])
+
+        if seg_start >= actual_end:
+            break
+
+        clipped_end = min(seg_end, actual_end)
+
+        # Add small time deviations for realism
+        if seg["type"] in ("break", "lunch"):
+            # Breaks sometimes start a bit late (0-5 min) and run over (0-3 min)
+            late = rng.randint(0, 5)
+            over = rng.randint(0, 3)
+            act_start = min(seg_start + late, clipped_end)
+            act_end = min(clipped_end + over, actual_end)
+            # On-call before break deviation
+            if actual and actual[-1]["end"] != _mins_to_time(act_start):
+                actual[-1]["end"] = _mins_to_time(act_start)
+            actual.append({
+                "type": seg["type"],
+                "start": _mins_to_time(act_start),
+                "end": _mins_to_time(act_end),
+            })
+        else:
+            # On-call: mostly adherent, occasionally a short aux/wrap
+            actual.append({
+                "type": "on-call",
+                "start": _mins_to_time(seg_start),
+                "end": _mins_to_time(clipped_end),
+            })
+
+    # Fix gaps and add a random short non-adherent period
+    if len(actual) > 2 and rng.random() < 0.4:
+        # Insert a short "aux" period somewhere in the on-call time
+        idx = rng.randint(0, len(actual) - 1)
+        if actual[idx]["type"] == "on-call":
+            a_start = _time_to_mins(actual[idx]["start"])
+            a_end = _time_to_mins(actual[idx]["end"])
+            if a_end - a_start > 20:
+                aux_start = a_start + rng.randint(10, max(11, a_end - a_start - 10))
+                aux_dur = rng.randint(3, 8)
+                aux_end = min(aux_start + aux_dur, a_end)
+                # Split the on-call around the aux period
+                new_events = []
+                for i, ev in enumerate(actual):
+                    if i == idx:
+                        if aux_start > a_start:
+                            new_events.append({"type": "on-call", "start": _mins_to_time(a_start), "end": _mins_to_time(aux_start)})
+                        new_events.append({"type": "aux", "start": _mins_to_time(aux_start), "end": _mins_to_time(aux_end)})
+                        if aux_end < a_end:
+                            new_events.append({"type": "on-call", "start": _mins_to_time(aux_end), "end": _mins_to_time(a_end)})
+                    else:
+                        new_events.append(ev)
+                actual = new_events
+
+    return actual
+
+
+def _build_db_actuals(employee_id, date_obj, shift_start, shift_end):
+    """Load actual status events from AgentStatusEvent model."""
+    if not employee_id:
+        return []
+    try:
+        from app import db
+        from app.models import AgentStatusEvent
+        start_dt = datetime.datetime.combine(date_obj, datetime.time(
+            *map(int, shift_start.split(":"))))
+        end_dt = datetime.datetime.combine(date_obj, datetime.time(
+            *map(int, shift_end.split(":"))))
+        events = (AgentStatusEvent.query
+                  .filter_by(employee_id=employee_id)
+                  .filter(AgentStatusEvent.start_ts >= start_dt,
+                          AgentStatusEvent.start_ts < end_dt)
+                  .order_by(AgentStatusEvent.start_ts)
+                  .all())
+        result = []
+        for ev in events:
+            s = ev.start_ts.strftime("%H:%M")
+            e = ev.end_ts.strftime("%H:%M") if ev.end_ts else datetime.datetime.now().strftime("%H:%M")
+            status = (ev.status or "").lower()
+            # Map ACD statuses to timeline types
+            if status in ("available", "on call", "talking", "on-call"):
+                typ = "on-call"
+            elif status in ("break",):
+                typ = "break"
+            elif status in ("lunch",):
+                typ = "lunch"
+            elif status in ("aux", "not ready", "after call work", "wrap"):
+                typ = "aux"
+            else:
+                typ = "aux"
+            result.append({"type": typ, "start": s, "end": e})
+        return result
+    except Exception:
+        return []
+
+
+def _calc_adherence_pct(scheduled, actual, shift_start, shift_end):
+    """Calculate adherence % = minutes in-adherence / total scheduled minutes (up to now)."""
+    now = datetime.datetime.now()
+    cur_mins = now.hour * 60 + now.minute
+    s_mins = _time_to_mins(shift_start)
+    e_mins = _time_to_mins(shift_end)
+
+    check_end = min(cur_mins, e_mins)
+    if check_end <= s_mins:
+        return 100.0
+
+    total_mins = check_end - s_mins
+    if total_mins <= 0:
+        return 100.0
+
+    # Build minute-by-minute scheduled state
+    sched_state = ["on-call"] * total_mins
+    for seg in scheduled:
+        seg_s = max(_time_to_mins(seg["start"]) - s_mins, 0)
+        seg_e = min(_time_to_mins(seg["end"]) - s_mins, total_mins)
+        for m in range(seg_s, seg_e):
+            sched_state[m] = seg["type"]
+
+    # Build minute-by-minute actual state
+    actual_state = ["unknown"] * total_mins
+    for ev in actual:
+        ev_s = max(_time_to_mins(ev["start"]) - s_mins, 0)
+        ev_e = min(_time_to_mins(ev["end"]) - s_mins, total_mins)
+        for m in range(ev_s, ev_e):
+            actual_state[m] = ev["type"]
+
+    # Compare
+    in_adherence = sum(1 for m in range(total_mins) if sched_state[m] == actual_state[m])
+    return (in_adherence / total_mins) * 100
+
+
 # ── Service level tracker (API) ────────────────────────────
 @realtime_bp.route("/service-level", methods=["POST"])
 @login_required
