@@ -1047,6 +1047,7 @@ def get_demo_settings_data():
         "fill_in_rules": fill_in_rules,
         "availability": availability,
         "current_year": cur_year,
+        "lob_mappings": [],
     }
 
 

@@ -1299,7 +1299,7 @@ def contracts():
     user = get_current_user()
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_contracts
-        return render_template("settings/contracts.html", items=get_demo_contracts())
+        return render_template("settings/contracts.html", items=get_demo_contracts(), schedule_rules=[])
     from app.models import Contract, ScheduleRule
     items = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
     schedule_rules = ScheduleRule.query.filter_by(is_active=True).order_by(ScheduleRule.name).all()
@@ -1360,7 +1360,7 @@ def day_models():
     user = get_current_user()
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_day_models
-        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=[])
+        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=[], planning_units=[], shift_templates=[])
     from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
     items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
     activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]

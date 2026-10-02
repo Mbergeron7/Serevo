@@ -113,7 +113,14 @@ def roster():
         if lob:
             lobs.add(lob)
 
-    contracts = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+    if user and user.get("is_demo"):
+        contracts = []
+    else:
+        try:
+            contracts = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+        except Exception:
+            db.session.rollback()
+            contracts = []
 
     return render_template("people/roster.html",
         user=user,

@@ -261,12 +261,12 @@
     <div class="card-label">Current Headcount</div>
   </div>
   <div class="summary-card">
-    <div class="big-num num-neutral">{{ ns.total_fte }}</div>
+    <div class="big-num num-neutral">{{ ns.total_fte|round(1) }}</div>
     <div class="card-label">FTE Required</div>
   </div>
   <div class="summary-card">
     <div class="big-num {{ 'num-positive' if total_gap >= 0 else 'num-negative' }}">
-      {{ "+" if total_gap > 0 }}{{ total_gap }}
+      {{ "+" if total_gap > 0 }}{{ total_gap|round(1) }}
     </div>
     <div class="card-label">Overall Gap</div>
   </div>
@@ -357,7 +357,7 @@
           <tr class="highlight-row fte-row" data-lob="{{ lob.lob }}">
             <td class="metric-label">FTE Required</td>
             {% for m in lob.months %}
-              <td class="fte-cell"><strong>{{ m.fte_req }}</strong></td>
+              <td class="fte-cell"><strong>{{ m.fte_req|round(1) }}</strong></td>
             {% endfor %}
           </tr>
           <tr>
@@ -371,7 +371,7 @@
             {% for m in lob.months %}
               {% set cls = 'cf-positive val-positive' if m.gap > 0 else ('cf-negative val-negative' if m.gap < 0 else 'val-neutral') %}
               <td class="{{ cls }}">
-                <strong>{{ "+" if m.gap > 0 }}{{ m.gap }}</strong>
+                <strong>{{ "+" if m.gap > 0 }}{{ m.gap|round(1) }}</strong>
               </td>
             {% endfor %}
           </tr>
@@ -521,7 +521,7 @@ function exportExcel() {
   // --- LOB Bar Chart: Headcount vs FTE Required ---
   const lobLabels = [{% for lob in plan %}'{{ lob.lob }}'{% if not loop.last %},{% endif %}{% endfor %}];
   const hcData = [{% for lob in plan %}{{ lob.months[0].actual_hc }}{% if not loop.last %},{% endif %}{% endfor %}];
-  const fteData = [{% for lob in plan %}{{ lob.months[0].fte_req }}{% if not loop.last %},{% endif %}{% endfor %}];
+  const fteData = [{% for lob in plan %}{{ lob.months[0].fte_req|round(1) }}{% if not loop.last %},{% endif %}{% endfor %}];
 
   const barCtx = document.getElementById('lobBarChart');
   if (barCtx) {
@@ -557,7 +557,7 @@ function exportExcel() {
     {% for lob in plan %}
     datasets.push({
       label: '{{ lob.lob }}',
-      data: [{% for m in lob.months %}{{ m.gap }}{% if not loop.last %},{% endif %}{% endfor %}],
+      data: [{% for m in lob.months %}{{ m.gap|round(1) }}{% if not loop.last %},{% endif %}{% endfor %}],
       borderColor: colors[{{ loop.index0 }} % colors.length],
       backgroundColor: colors[{{ loop.index0 }} % colors.length] + '22',
       fill: false,
