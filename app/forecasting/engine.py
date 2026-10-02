@@ -608,6 +608,390 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
 
 
 # ═══════════════════════════════════════════════════════════════
+# HOLT-WINTERS (TRIPLE EXPONENTIAL SMOOTHING)
+# ═══════════════════════════════════════════════════════════════
+
+def _holt_winters_forecast(series, season_length=7, forecast_steps=7,
+                            alpha=0.3, beta=0.05, gamma=0.15):
+    """
+    Multiplicative Holt-Winters triple exponential smoothing.
+
+    Args:
+        series: list of numeric values (daily totals), at least 2*season_length
+        season_length: seasonal period (7 for weekly pattern)
+        forecast_steps: how many steps ahead to forecast
+        alpha: level smoothing (0-1)
+        beta: trend smoothing (0-1)
+        gamma: seasonal smoothing (0-1)
+
+    Returns list of forecast_steps values.
+    """
+    n = len(series)
+    if n < season_length * 2:
+        # Not enough data — fall back to simple average
+        avg = sum(series) / n if n > 0 else 0
+        return [avg] * forecast_steps
+
+    # Initialise level as average of first season
+    first_season = series[:season_length]
+    level = sum(first_season) / season_length
+
+    # Initialise trend from first two seasons
+    second_season = series[season_length:season_length * 2]
+    trend = (sum(second_season) - sum(first_season)) / (season_length ** 2)
+
+    # Initialise seasonal indices (multiplicative)
+    seasonals = []
+    for i in range(season_length):
+        avg_s = sum(first_season) / season_length
+        seasonals.append(first_season[i] / avg_s if avg_s > 0 else 1.0)
+
+    # Smooth through the observed data
+    for i in range(n):
+        val = series[i]
+        s_idx = i % season_length
+        prev_seasonal = seasonals[s_idx]
+
+        # Guard against zero seasonal
+        if prev_seasonal == 0:
+            prev_seasonal = 0.001
+
+        new_level = alpha * (val / prev_seasonal) + (1 - alpha) * (level + trend)
+        new_trend = beta * (new_level - level) + (1 - beta) * trend
+        new_seasonal = gamma * (val / new_level if new_level > 0 else 1.0) + (1 - gamma) * prev_seasonal
+
+        level = new_level
+        trend = new_trend
+        seasonals[s_idx] = new_seasonal
+
+    # Forecast
+    forecasts = []
+    for step in range(1, forecast_steps + 1):
+        s_idx = (n + step - 1) % season_length
+        fc = (level + step * trend) * seasonals[s_idx]
+        forecasts.append(max(0, fc))
+
+    return forecasts
+
+
+def generate_forecast_holt_winters(lob, historical_days, forecast_days,
+                                    sheet=None):
+    """
+    Generate a forecast using Holt-Winters triple exponential smoothing.
+
+    Uses multiplicative seasonality with a 7-day seasonal cycle.
+    Decomposes each day into intraday patterns (by time slot) and
+    applies Holt-Winters to the daily totals, then distributes
+    across intervals using the average intraday shape.
+    """
+    today = datetime.date.today()
+    hist_start = today - datetime.timedelta(days=historical_days)
+    hist_end = today - datetime.timedelta(days=1)
+
+    historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    if err or not historical:
+        return {
+            "method": "holt_winters",
+            "historical": [],
+            "forecast": [],
+            "error": err or "No historical data found",
+        }
+
+    # Aggregate historical to daily totals
+    daily_totals = defaultdict(lambda: {"offered": 0, "aht_sum": 0, "count": 0})
+    for row in historical:
+        d = row["date"]
+        daily_totals[d]["offered"] += row["offered"]
+        daily_totals[d]["aht_sum"] += row["offered"] * row["aht"]
+        daily_totals[d]["count"] += 1
+
+    # Sort by date to get an ordered series
+    sorted_dates = sorted(daily_totals.keys())
+    if len(sorted_dates) < 14:
+        return {
+            "method": "holt_winters",
+            "historical": historical,
+            "forecast": [],
+            "error": "Need at least 14 days of history for Holt-Winters",
+        }
+
+    daily_offered = [daily_totals[d]["offered"] for d in sorted_dates]
+    daily_aht = [
+        daily_totals[d]["aht_sum"] / daily_totals[d]["offered"]
+        if daily_totals[d]["offered"] > 0 else 0
+        for d in sorted_dates
+    ]
+
+    # Run Holt-Winters on daily offered volumes
+    hw_offered = _holt_winters_forecast(daily_offered, season_length=7,
+                                         forecast_steps=forecast_days)
+    hw_aht = _holt_winters_forecast(daily_aht, season_length=7,
+                                     forecast_steps=forecast_days)
+
+    # Build intraday distribution shape by DOW
+    # (average fraction of daily volume in each time slot)
+    dow_shape = defaultdict(lambda: defaultdict(list))  # dow -> time -> [fractions]
+    for row in historical:
+        try:
+            d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+            dow = d.weekday()
+            day_total = daily_totals[row["date"]]["offered"]
+            if day_total > 0:
+                dow_shape[dow][row["time"]].append(row["offered"] / day_total)
+        except Exception:
+            continue
+
+    avg_shape = {}  # (dow, time) -> fraction
+    all_times = set()
+    for dow in range(7):
+        for time_str, fracs in dow_shape[dow].items():
+            avg_shape[(dow, time_str)] = sum(fracs) / len(fracs)
+            all_times.add(time_str)
+
+    # Look up LOB operating hours
+    lob_setting = _get_lob_setting(lob)
+
+    # Distribute daily forecasts across time slots
+    forecast = []
+    for d_offset in range(forecast_days):
+        fc_date = today + datetime.timedelta(days=d_offset)
+        date_str = fc_date.strftime("%Y-%m-%d")
+        dow = fc_date.weekday()
+
+        day_offered = hw_offered[d_offset]
+        day_aht = hw_aht[d_offset]
+
+        day_rows = []
+        # Get shape for this DOW, normalise
+        shape_for_day = {t: avg_shape.get((dow, t), 0) for t in all_times}
+        shape_total = sum(shape_for_day.values())
+
+        for time_str in sorted(all_times):
+            frac = shape_for_day[time_str] / shape_total if shape_total > 0 else 1.0 / max(1, len(all_times))
+            day_rows.append({
+                "date": date_str,
+                "time": time_str,
+                "offered": round(day_offered * frac, 2),
+                "aht": round(day_aht, 1),
+            })
+
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        forecast.extend(day_rows)
+
+    return {
+        "method": "holt_winters",
+        "historical_days_used": len(sorted_dates),
+        "historical": historical,
+        "forecast": forecast,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# HOLIDAY / SPECIAL DAY ADJUSTMENTS
+# ═══════════════════════════════════════════════════════════════
+
+def _get_holidays_in_range(start_date, end_date):
+    """Return set of date strings that are holidays."""
+    try:
+        from app.models import Holiday
+        holidays = Holiday.query.filter(
+            Holiday.date >= start_date,
+            Holiday.date <= end_date,
+        ).all()
+        return {h.date.isoformat() if hasattr(h.date, 'isoformat') else str(h.date)
+                for h in holidays}
+    except Exception:
+        return set()
+
+
+def _compute_holiday_factor(historical, holidays_set):
+    """
+    Compute the average ratio of holiday volume to same-DOW non-holiday volume.
+
+    Returns a multiplier (e.g. 0.6 means holidays have 60% of normal volume).
+    Returns 1.0 if insufficient data.
+    """
+    if not holidays_set:
+        return 1.0
+
+    daily = defaultdict(lambda: {"offered": 0})
+    for row in historical:
+        daily[row["date"]]["offered"] += row["offered"]
+
+    # Split into holiday vs non-holiday by DOW
+    dow_non_holiday = defaultdict(list)
+    holiday_volumes = []
+
+    for date_str, data in daily.items():
+        try:
+            d = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+            dow = d.weekday()
+        except Exception:
+            continue
+
+        if date_str in holidays_set:
+            holiday_volumes.append(data["offered"])
+        else:
+            dow_non_holiday[dow].append(data["offered"])
+
+    if not holiday_volumes:
+        return 1.0
+
+    avg_holiday = sum(holiday_volumes) / len(holiday_volumes)
+
+    # Average of all non-holiday daily volumes
+    all_non_holiday = []
+    for volumes in dow_non_holiday.values():
+        all_non_holiday.extend(volumes)
+    if not all_non_holiday:
+        return 1.0
+
+    avg_normal = sum(all_non_holiday) / len(all_non_holiday)
+    if avg_normal == 0:
+        return 1.0
+
+    return avg_holiday / avg_normal
+
+
+def apply_holiday_adjustments(forecast, historical=None):
+    """
+    Adjust forecast intervals for known holidays.
+
+    If historical data is provided, computes a data-driven holiday factor.
+    Otherwise uses a default 0.5 factor (50% of normal volume).
+    """
+    if not forecast:
+        return forecast
+
+    # Get date range of forecast
+    dates = [row["date"] for row in forecast]
+    try:
+        start = datetime.datetime.strptime(min(dates), "%Y-%m-%d").date()
+        end = datetime.datetime.strptime(max(dates), "%Y-%m-%d").date()
+    except Exception:
+        return forecast
+
+    holidays_set = _get_holidays_in_range(start, end)
+    if not holidays_set:
+        return forecast
+
+    # Compute factor from historical data if available
+    if historical:
+        hist_dates = [r["date"] for r in historical]
+        try:
+            hist_start = datetime.datetime.strptime(min(hist_dates), "%Y-%m-%d").date()
+            hist_end = datetime.datetime.strptime(max(hist_dates), "%Y-%m-%d").date()
+        except Exception:
+            hist_start = start - datetime.timedelta(days=90)
+            hist_end = start - datetime.timedelta(days=1)
+        hist_holidays = _get_holidays_in_range(hist_start, hist_end)
+        factor = _compute_holiday_factor(historical, hist_holidays)
+    else:
+        factor = 0.5  # default: holidays get ~50% of normal volume
+
+    # Apply factor to forecast intervals on holiday dates
+    adjusted = []
+    for row in forecast:
+        if row["date"] in holidays_set:
+            row = dict(row)
+            row["offered"] = round(row["offered"] * factor, 2)
+            row["is_holiday"] = True
+        adjusted.append(row)
+
+    return adjusted
+
+
+# ═══════════════════════════════════════════════════════════════
+# AUTO-METHOD SELECTION
+# ═══════════════════════════════════════════════════════════════
+
+def _mape(actual, predicted):
+    """Mean Absolute Percentage Error."""
+    if not actual or not predicted or len(actual) != len(predicted):
+        return float('inf')
+
+    errors = []
+    for a, p in zip(actual, predicted):
+        if a > 0:
+            errors.append(abs(a - p) / a)
+
+    return (sum(errors) / len(errors) * 100) if errors else float('inf')
+
+
+def auto_select_method(lob, historical_days=90, sheet=None):
+    """
+    Try all forecast methods on a holdout set and return the method
+    with the lowest MAPE.
+
+    Uses the last 7 days of historical data as the holdout set and
+    trains on everything before that.
+
+    Returns: {best_method, results: {method: mape, ...}}
+    """
+    holdout_days = 7
+    train_days = historical_days - holdout_days
+
+    if train_days < 14:
+        return {"best_method": "weighted_trend",
+                "results": {"note": "Not enough history for auto-select"}}
+
+    today = datetime.date.today()
+    holdout_start = today - datetime.timedelta(days=holdout_days)
+    holdout_end = today - datetime.timedelta(days=1)
+
+    # Get holdout actuals
+    actual_data, err = get_forecast_data(lob, holdout_start, holdout_end, sheet)
+    if err or not actual_data:
+        return {"best_method": "weighted_trend",
+                "results": {"note": f"No holdout data: {err}"}}
+
+    # Daily totals for holdout
+    actual_daily = defaultdict(float)
+    for row in actual_data:
+        actual_daily[row["date"]] += row["offered"]
+
+    holdout_dates = sorted(actual_daily.keys())
+    actual_values = [actual_daily[d] for d in holdout_dates]
+
+    methods = {
+        "moving_average": lambda: generate_forecast_moving_avg(
+            lob, train_days, holdout_days, 7, sheet),
+        "weighted_trend": lambda: generate_forecast_weighted(
+            lob, train_days, holdout_days, sheet),
+        "holt_winters": lambda: generate_forecast_holt_winters(
+            lob, train_days, holdout_days, sheet),
+    }
+
+    results = {}
+    for method_name, gen_fn in methods.items():
+        try:
+            result = gen_fn()
+            fc = result.get("forecast", [])
+            if not fc:
+                results[method_name] = float('inf')
+                continue
+
+            # Aggregate forecast to daily totals
+            fc_daily = defaultdict(float)
+            for row in fc:
+                fc_daily[row["date"]] += row["offered"]
+
+            # Match to holdout dates
+            predicted_values = [fc_daily.get(d, 0) for d in holdout_dates]
+            results[method_name] = round(_mape(actual_values, predicted_values), 2)
+        except Exception as e:
+            log.warning(f"Auto-select {method_name} failed: {e}")
+            results[method_name] = float('inf')
+
+    best = min(results, key=results.get) if results else "weighted_trend"
+
+    return {
+        "best_method": best,
+        "results": results,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
 # ERLANG C
 # ═══════════════════════════════════════════════════════════════
 
@@ -1001,6 +1385,20 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
     # Look up LOB operating hours
     lob_setting = _get_lob_setting(lob)
 
+    if method == "holt_winters":
+        # Use the standalone Holt-Winters generator (it handles its own data)
+        hw_result = generate_forecast_holt_winters(lob, historical_days, forecast_days)
+        if hw_result.get("error"):
+            return hw_result
+        forecast = hw_result.get("forecast", [])
+        forecast = apply_holiday_adjustments(forecast, historical)
+        return {
+            "method": "holt_winters",
+            "historical_days_used": historical_days,
+            "historical": historical,
+            "forecast": forecast,
+        }
+
     if method == "moving_average":
         # Simple moving average over the last `window` entries per timeslot
         forecast = []
@@ -1109,6 +1507,12 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
         unit = PlanningUnit(name=lob_normalized)
         db.session.add(unit)
         db.session.flush()
+
+    # Auto-select best method if requested
+    if method == "auto":
+        auto_result = auto_select_method(lob, historical_days)
+        method = auto_result["best_method"]
+        log.info(f"Auto-selected method '{method}' for '{lob}': {auto_result['results']}")
 
     # Generate forecast from DB history
     result = _generate_from_db_history(lob, method, historical_days,

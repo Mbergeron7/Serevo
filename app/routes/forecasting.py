@@ -134,6 +134,9 @@ def generate():
     """
     from app.forecasting.engine import (generate_forecast_moving_avg,
                                          generate_forecast_weighted,
+                                         generate_forecast_holt_winters,
+                                         auto_select_method,
+                                         apply_holiday_adjustments,
                                          compute_requirements_from_forecast,
                                          daily_summary)
     try:
@@ -162,10 +165,23 @@ def generate():
         else:
             sheet = _get_sheet()
 
-            if method == "weighted_trend":
+            # Auto-select best method if requested
+            if method == "auto":
+                auto_result = auto_select_method(lob, hist_days, sheet)
+                method = auto_result["best_method"]
+                # Will be included in response
+
+            if method == "holt_winters":
+                result = generate_forecast_holt_winters(lob, hist_days, fc_days, sheet)
+            elif method == "weighted_trend":
                 result = generate_forecast_weighted(lob, hist_days, fc_days, sheet)
             else:
                 result = generate_forecast_moving_avg(lob, hist_days, fc_days, window, sheet)
+
+            # Apply holiday adjustments
+            if result.get("forecast"):
+                result["forecast"] = apply_holiday_adjustments(
+                    result["forecast"], result.get("historical"))
 
         if result.get("error"):
             return jsonify({"success": False, "error": result["error"]})
