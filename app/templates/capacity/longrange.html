@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% block title %}Long-Range Capacity Plan — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .cap-banner {
+    background: var(--brand-accent, #6b21a8); color: #fff;
+    padding: 18px 24px; border-radius: var(--radius); margin-bottom: 20px;
+  }
+  .cap-banner h1 { font-size: 1.35rem; margin: 0 0 2px; }
+  .cap-banner .sub { font-size: .82rem; opacity: .85; }
+
+  /* ── Controls ────────────────────────────────── */
+  .lr-controls {
+    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px; align-items: flex-end;
+  }
+  .lr-controls .fg { display: flex; flex-direction: column; gap: 4px; }
+  .lr-controls label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); }
+  .lr-controls input, .lr-controls select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); width: 100px;
+  }
+  .lr-controls select { width: 130px; }
+  .btn-apply { background: var(--brand-accent, #6b21a8); color: #fff; border: none; padding: 8px 22px;
+    border-radius: 6px; font-weight: 700; font-size: .85rem; cursor: pointer; }
+
+  /* ── Stat cards ──────────────────────────────── */
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-card {
+    flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; text-align: center;
+  }
+  .stat-card .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-card .l { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-top: 4px; }
+  .stat-card .v.pos { color: #059669; }
+  .stat-card .v.neg { color: #dc2626; }
+
+  /* ── Chart area ─────────────────────────────── */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h3 { font-size: .95rem; font-weight: 700; margin: 0 0 14px; }
+  .chart-canvas { width: 100%; height: 300px; position: relative; }
+  .chart-svg { width: 100%; height: 100%; }
+  .chart-legend { display: flex; gap: 18px; margin-top: 10px; font-size: .78rem; flex-wrap: wrap; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+  /* ── LOB table ──────────────────────────────── */
+  .lr-table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .lr-table-wrap h3 {
+    font-size: .95rem; font-weight: 700; padding: 10px 16px; margin: 0;
+    background: var(--brand-accent, #6b21a8); color: #fff;
+  }
+  .lr-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .lr-tbl th { text-align: left; padding: 8px 12px; font-weight: 700; border-bottom: 2px solid var(--border);
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted);
+    background: var(--bg); position: sticky; top: 0; }
+  .lr-tbl td { padding: 7px 12px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .lr-tbl tr:hover { background: rgba(107, 33, 168, .04); }
+  .lr-tbl .pos { color: #059669; font-weight: 600; }
+  .lr-tbl .neg { color: #dc2626; font-weight: 600; }
+  .lr-tbl .yr-current { background: rgba(107, 33, 168, .06); }
+
+  /* ── Assumptions panel ──────────────────────── */
+  .assumptions {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 20px;
+  }
+  .assumptions h3 { font-size: .95rem; font-weight: 700; margin: 0 0 12px; }
+  .assump-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .assump-item { display: flex; flex-direction: column; gap: 4px; }
+  .assump-item label { font-size: .72rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+  .assump-item input {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); width: 100%;
+  }
+  .assump-item .help { font-size: .68rem; color: var(--text-muted); }
+
+  /* ── Hiring plan ────────────────────────────── */
+  .hire-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .hire-tbl th { text-align: left; padding: 8px 12px; font-weight: 700; border-bottom: 2px solid var(--border);
+    font-size: .72rem; text-transform: uppercase; color: var(--text-muted); background: var(--bg); }
+  .hire-tbl td { padding: 7px 12px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .hire-tbl .total-row { font-weight: 700; background: rgba(107, 33, 168, .06); }
+
+  @media (max-width: 700px) {
+    .lr-controls { flex-direction: column; }
+    .lr-controls input, .lr-controls select { width: 100%; }
+    .assump-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include "capacity/_subnav.html" %}
+
+<div class="cap-banner">
+  <h1>Long-Range Capacity Plan</h1>
+  <div class="sub">Multi-year headcount modeling with growth, attrition & hiring projections</div>
+</div>
+
+<!-- Controls -->
+<div class="lr-controls">
+  <div class="fg">
+    <label>Start Year</label>
+    <select id="startYear">
+      {% for y in years %}<option value="{{ y }}" {% if y == start_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fg">
+    <label>Horizon (Years)</label>
+    <select id="horizon">
+      <option value="3" {% if horizon == 3 %}selected{% endif %}>3 Years</option>
+      <option value="5" {% if horizon == 5 %}selected{% endif %}>5 Years</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label>Annual Growth %</label>
+    <input type="number" id="growthRate" value="{{ growth_rate }}" min="0" max="50" step="1">
+  </div>
+  <div class="fg">
+    <label>Annual Attrition %</label>
+    <input type="number" id="attritionRate" value="{{ attrition_rate }}" min="0" max="60" step="1">
+  </div>
+  <div class="fg">
+    <label>Shrinkage %</label>
+    <input type="number" id="shrinkage" value="{{ shrinkage_pct }}" min="0" max="50" step="1">
+  </div>
+  <div class="fg">
+    <label>LOB</label>
+    <select id="lobFilter">
+      <option value="All">All LOBs</option>
+      {% for l in all_lobs %}<option value="{{ l }}" {% if sel_lob == l %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="btn-apply" onclick="applyFilters()">Apply</button>
+</div>
+
+<!-- Stats -->
+<div class="stats-row" id="statsRow"></div>
+
+<!-- Chart -->
+<div class="chart-card">
+  <h3>Projected FTE Demand vs. Headcount</h3>
+  <div class="chart-canvas" id="chartArea"></div>
+  <div class="chart-legend" id="chartLegend"></div>
+</div>
+
+<!-- LOB Breakdown Table -->
+<div class="lr-table-wrap">
+  <h3>Year-over-Year Projection by LOB</h3>
+  <div style="overflow-x:auto;">
+    <table class="lr-tbl" id="lobTable">
+      <thead><tr id="lobTableHead"></tr></thead>
+      <tbody id="lobTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Hiring Plan -->
+<div class="lr-table-wrap">
+  <h3>Hiring Plan Summary</h3>
+  <div style="overflow-x:auto;">
+    <table class="hire-tbl" id="hireTable">
+      <thead><tr id="hireTableHead"></tr></thead>
+      <tbody id="hireTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Assumptions -->
+<div class="assumptions">
+  <h3>Model Assumptions</h3>
+  <div class="assump-grid" id="assumpGrid">
+    <div class="assump-item">
+      <label>Ramp-up Time (Weeks)</label>
+      <input type="number" id="rampWeeks" value="8" min="1" max="26">
+      <span class="help">Time for new hires to reach full productivity</span>
+    </div>
+    <div class="assump-item">
+      <label>Avg Training Cost ($)</label>
+      <input type="number" id="trainCost" value="5000" min="0" step="500">
+      <span class="help">Per-hire training investment</span>
+    </div>
+    <div class="assump-item">
+      <label>Avg Annual Salary ($)</label>
+      <input type="number" id="avgSalary" value="42000" min="0" step="1000">
+      <span class="help">Fully loaded cost per FTE</span>
+    </div>
+    <div class="assump-item">
+      <label>Hiring Lead Time (Weeks)</label>
+      <input type="number" id="hireLead" value="6" min="1" max="20">
+      <span class="help">Weeks from posting to start date</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {{ projection | tojson }};
+const CURRENT_YEAR = {{ current_year }};
+
+function applyFilters() {
+  const params = new URLSearchParams({
+    start_year: document.getElementById('startYear').value,
+    horizon: document.getElementById('horizon').value,
+    growth_rate: document.getElementById('growthRate').value,
+    attrition_rate: document.getElementById('attritionRate').value,
+    shrinkage: document.getElementById('shrinkage').value,
+    lob: document.getElementById('lobFilter').value,
+  });
+  window.location.href = '/capacity/longrange?' + params.toString();
+}
+
+function renderStats() {
+  const d = DATA;
+  if (!d.years || !d.years.length) { document.getElementById('statsRow').innerHTML = '<div class="stat-card"><div class="v">—</div><div class="l">No data</div></div>'; return; }
+
+  const first = d.years[0], last = d.years[d.years.length - 1];
+  const totalHiresNeeded = d.years.reduce((s, y) => s + Math.max(0, y.hires_needed), 0);
+  const totalAttrition = d.years.reduce((s, y) => s + y.attrition_loss, 0);
+  const endGap = last.projected_hc - last.fte_required;
+
+  const trainCost = parseInt(document.getElementById('trainCost').value) || 5000;
+  const totalCost = totalHiresNeeded * trainCost;
+
+  const cards = [
+    { v: first.current_hc, l: `Current HC (${first.year})` },
+    { v: last.fte_required, l: `FTE Required (${last.year})`, cls: '' },
+    { v: totalHiresNeeded, l: `Total Hires Needed`, cls: totalHiresNeeded > 0 ? 'neg' : 'pos' },
+    { v: totalAttrition, l: `Projected Attrition Loss`, cls: 'neg' },
+    { v: (endGap >= 0 ? '+' : '') + endGap, l: `End-of-Horizon Gap`, cls: endGap >= 0 ? 'pos' : 'neg' },
+    { v: '$' + totalCost.toLocaleString(), l: 'Est. Hiring Investment' },
+  ];
+
+  document.getElementById('statsRow').innerHTML = cards.map(c =>
+    `<div class="stat-card"><div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`
+  ).join('');
+}
+
+function renderChart() {
+  const years = DATA.years || [];
+  if (!years.length) return;
+  const area = document.getElementById('chartArea');
+  const W = area.clientWidth || 700, H = 280;
+  const pad = { top: 20, right: 30, bottom: 40, left: 55 };
+  const cw = W - pad.left - pad.right, ch = H - pad.top - pad.bottom;
+
+  const allVals = years.flatMap(y => [y.fte_required, y.projected_hc, y.current_hc]);
+  const maxV = Math.max(...allVals) * 1.15;
+  const minV = 0;
+
+  const xStep = cw / Math.max(1, years.length - 1);
+  const scaleY = v => pad.top + ch - ((v - minV) / (maxV - minV)) * ch;
+  const scaleX = i => pad.left + i * xStep;
+
+  const fteLine = years.map((y, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i)},${scaleY(y.fte_required)}`).join(' ');
+  const hcLine = years.map((y, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i)},${scaleY(y.projected_hc)}`).join(' ');
+
+  // Fill area between
+  const fillPath = years.map((y, i) => `${scaleX(i)},${scaleY(y.fte_required)}`).join(' L')
+    + ' L' + [...years].reverse().map((y, i) => `${scaleX(years.length - 1 - i)},${scaleY(y.projected_hc)}`).join(' L');
+
+  let svg = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+
+  // Grid lines
+  const gridSteps = 5;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = minV + (maxV - minV) * (i / gridSteps);
+    const y = scaleY(v);
+    svg += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="var(--border)" stroke-dasharray="3,3"/>`;
+    svg += `<text x="${pad.left - 8}" y="${y + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">${Math.round(v)}</text>`;
+  }
+
+  // X labels
+  years.forEach((y, i) => {
+    svg += `<text x="${scaleX(i)}" y="${H - 10}" text-anchor="middle" fill="var(--text-muted)" font-size="11" font-weight="${y.year === CURRENT_YEAR ? 700 : 400}">${y.year}</text>`;
+  });
+
+  // Fill
+  svg += `<polygon points="${fillPath}" fill="rgba(107,33,168,.08)"/>`;
+
+  // Lines
+  svg += `<path d="${fteLine}" fill="none" stroke="#dc2626" stroke-width="2.5"/>`;
+  svg += `<path d="${hcLine}" fill="none" stroke="#059669" stroke-width="2.5"/>`;
+
+  // Dots
+  years.forEach((y, i) => {
+    svg += `<circle cx="${scaleX(i)}" cy="${scaleY(y.fte_required)}" r="4" fill="#dc2626"/>`;
+    svg += `<circle cx="${scaleX(i)}" cy="${scaleY(y.projected_hc)}" r="4" fill="#059669"/>`;
+    // Value labels
+    svg += `<text x="${scaleX(i)}" y="${scaleY(y.fte_required) - 10}" text-anchor="middle" fill="#dc2626" font-size="10" font-weight="600">${y.fte_required}</text>`;
+    svg += `<text x="${scaleX(i)}" y="${scaleY(y.projected_hc) + 18}" text-anchor="middle" fill="#059669" font-size="10" font-weight="600">${y.projected_hc}</text>`;
+  });
+
+  svg += '</svg>';
+  area.innerHTML = svg;
+
+  document.getElementById('chartLegend').innerHTML = `
+    <span><span class="legend-dot" style="background:#dc2626"></span> FTE Required (with growth)</span>
+    <span><span class="legend-dot" style="background:#059669"></span> Projected Headcount</span>
+    <span><span class="legend-dot" style="background:rgba(107,33,168,.2)"></span> Gap Area</span>
+  `;
+}
+
+function renderLobTable() {
+  const lobs = DATA.by_lob || [];
+  const years = DATA.years || [];
+  if (!years.length) return;
+
+  const head = document.getElementById('lobTableHead');
+  const body = document.getElementById('lobTableBody');
+
+  head.innerHTML = '<th>LOB</th><th>Metric</th>' + years.map(y =>
+    `<th class="${y.year === CURRENT_YEAR ? 'yr-current' : ''}">${y.year}</th>`
+  ).join('');
+
+  let html = '';
+  lobs.forEach(lob => {
+    const metrics = ['FTE Required', 'Projected HC', 'Gap', 'Hires Needed', 'Attrition Loss'];
+    metrics.forEach((metric, mi) => {
+      html += `<tr${mi === 0 ? ' style="border-top:2px solid var(--border)"' : ''}>`;
+      if (mi === 0) html += `<td rowspan="5" style="font-weight:700;vertical-align:top;padding-top:12px">${lob.lob}</td>`;
+      html += `<td style="font-size:.75rem;color:var(--text-muted)">${metric}</td>`;
+      lob.years.forEach(y => {
+        let val, cls = '';
+        if (metric === 'FTE Required') val = y.fte_required;
+        else if (metric === 'Projected HC') val = y.projected_hc;
+        else if (metric === 'Gap') { val = y.gap; cls = val >= 0 ? 'pos' : 'neg'; val = (val >= 0 ? '+' : '') + val; }
+        else if (metric === 'Hires Needed') { val = y.hires_needed; cls = val > 0 ? 'neg' : ''; }
+        else if (metric === 'Attrition Loss') { val = y.attrition_loss; cls = val > 0 ? 'neg' : ''; }
+        html += `<td class="${cls} ${y.year === CURRENT_YEAR ? 'yr-current' : ''}">${val}</td>`;
+      });
+      html += '</tr>';
+    });
+  });
+  body.innerHTML = html;
+}
+
+function renderHiringPlan() {
+  const years = DATA.years || [];
+  const lobs = DATA.by_lob || [];
+  if (!years.length) return;
+
+  const head = document.getElementById('hireTableHead');
+  const body = document.getElementById('hireTableBody');
+  const avgSalary = parseInt(document.getElementById('avgSalary').value) || 42000;
+  const trainCost = parseInt(document.getElementById('trainCost').value) || 5000;
+
+  head.innerHTML = '<th>LOB</th>' + years.map(y =>
+    `<th>${y.year}</th>`
+  ).join('') + '<th>Total</th>';
+
+  let html = '';
+  let yearTotals = years.map(() => 0);
+  let grandTotal = 0;
+
+  lobs.forEach(lob => {
+    html += '<tr>';
+    html += `<td style="font-weight:600">${lob.lob}</td>`;
+    let lobTotal = 0;
+    lob.years.forEach((y, i) => {
+      const h = Math.max(0, y.hires_needed);
+      html += `<td>${h}</td>`;
+      yearTotals[i] += h;
+      lobTotal += h;
+    });
+    grandTotal += lobTotal;
+    html += `<td style="font-weight:700">${lobTotal}</td>`;
+    html += '</tr>';
+  });
+
+  // Totals row
+  html += '<tr class="total-row"><td>Total Hires</td>';
+  yearTotals.forEach(t => html += `<td>${t}</td>`);
+  html += `<td>${grandTotal}</td></tr>`;
+
+  // Cost row
+  html += '<tr class="total-row"><td>Est. Hiring Cost</td>';
+  yearTotals.forEach(t => html += `<td>$${(t * trainCost).toLocaleString()}</td>`);
+  html += `<td>$${(grandTotal * trainCost).toLocaleString()}</td></tr>`;
+
+  // Salary impact row
+  html += '<tr class="total-row"><td>Annual Salary Impact</td>';
+  yearTotals.forEach(t => html += `<td>$${(t * avgSalary).toLocaleString()}</td>`);
+  html += `<td>$${(grandTotal * avgSalary).toLocaleString()}</td></tr>`;
+
+  body.innerHTML = html;
+}
+
+function renderAll() {
+  renderStats();
+  renderChart();
+  renderLobTable();
+  renderHiringPlan();
+}
+
+document.addEventListener('DOMContentLoaded', renderAll);
+window.addEventListener('resize', renderChart);
+
+// Re-render hiring plan when cost assumptions change
+['trainCost', 'avgSalary'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { renderStats(); renderHiringPlan(); });
+});
+</script>
+{% endblock %}

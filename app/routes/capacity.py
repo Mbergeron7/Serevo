@@ -840,3 +840,112 @@ def sources_sync_all():
     from app.ingestion.service import sync_all_sources
     results = sync_all_sources()
     return jsonify({"ok": True, "results": results})
+
+
+# ══════════════════════════════════════════════════════════════
+# LONG-RANGE CAPACITY PLANNING — multi-year headcount modeling
+# ══════════════════════════════════════════════════════════════
+
+@capacity_bp.route("/longrange")
+@login_required
+def longrange_view():
+    """1-5 year capacity projection with growth, attrition & hiring plan."""
+    user = get_current_user()
+    now = datetime.now(ZoneInfo(TIMEZONE))
+
+    start_year = int(request.args.get("start_year", now.year))
+    horizon = int(request.args.get("horizon", 3))
+    growth_rate = int(request.args.get("growth_rate", 8))
+    attrition_rate = int(request.args.get("attrition_rate", 20))
+    shrinkage = int(request.args.get("shrinkage", 30))
+    sel_lob = request.args.get("lob", "All")
+
+    years_range = list(range(2024, now.year + 6))
+
+    # Build baseline from monthly capacity plan for start_year
+    base_plan = _build_plan(user, start_year, shrinkage / 100.0, 0.85, 0.92)
+    all_lobs = [p["lob"] for p in base_plan]
+
+    if sel_lob and sel_lob != "All":
+        base_plan = [p for p in base_plan if p["lob"] == sel_lob]
+
+    projection = _build_longrange_projection(
+        base_plan, start_year, horizon,
+        growth_rate / 100.0, attrition_rate / 100.0, shrinkage / 100.0
+    )
+
+    return render_template("capacity/longrange.html",
+        user=user, projection=projection,
+        start_year=start_year, horizon=horizon,
+        growth_rate=growth_rate, attrition_rate=attrition_rate,
+        shrinkage_pct=shrinkage, sel_lob=sel_lob,
+        all_lobs=all_lobs, years=years_range,
+        current_year=now.year)
+
+
+def _build_longrange_projection(base_plan, start_year, horizon,
+                                 growth_rate, attrition_rate, shrinkage):
+    """Compute multi-year projection from a single-year capacity plan."""
+    import math
+
+    # Aggregate baseline year from monthly plan
+    lob_baselines = {}
+    for lob_data in base_plan:
+        lob_name = lob_data["lob"]
+        months = lob_data.get("months", [])
+        if not months:
+            continue
+        avg_fte = sum(m.get("fte_req", 0) for m in months) / max(1, len(months))
+        avg_hc = sum(m.get("actual_hc", 0) for m in months) / max(1, len(months))
+        lob_baselines[lob_name] = {
+            "base_fte": round(avg_fte, 1),
+            "base_hc": round(avg_hc),
+        }
+
+    # Project forward
+    total_years = []
+    by_lob = []
+
+    for lob_name, base in lob_baselines.items():
+        lob_years = []
+        current_hc = base["base_hc"]
+        base_fte = base["base_fte"]
+
+        for yi in range(horizon):
+            yr = start_year + yi
+            fte_required = round(base_fte * ((1 + growth_rate) ** yi), 1)
+            attrition_loss = round(current_hc * attrition_rate)
+            projected_hc_after_attrition = max(0, current_hc - attrition_loss)
+            gap = round(projected_hc_after_attrition - fte_required)
+            hires_needed = max(0, round(fte_required - projected_hc_after_attrition))
+            projected_hc = projected_hc_after_attrition + hires_needed
+
+            lob_years.append({
+                "year": yr,
+                "fte_required": round(fte_required),
+                "current_hc": round(current_hc),
+                "attrition_loss": attrition_loss,
+                "projected_hc": round(projected_hc),
+                "gap": round(projected_hc - fte_required),
+                "hires_needed": hires_needed,
+            })
+            # Next year starts with this year's projected HC
+            current_hc = projected_hc
+
+        by_lob.append({"lob": lob_name, "years": lob_years})
+
+    # Build aggregate totals across LOBs
+    for yi in range(horizon):
+        yr = start_year + yi
+        agg = {
+            "year": yr,
+            "fte_required": sum(l["years"][yi]["fte_required"] for l in by_lob),
+            "current_hc": sum(l["years"][yi]["current_hc"] for l in by_lob),
+            "projected_hc": sum(l["years"][yi]["projected_hc"] for l in by_lob),
+            "attrition_loss": sum(l["years"][yi]["attrition_loss"] for l in by_lob),
+            "hires_needed": sum(l["years"][yi]["hires_needed"] for l in by_lob),
+            "gap": sum(l["years"][yi]["gap"] for l in by_lob),
+        }
+        total_years.append(agg)
+
+    return {"years": total_years, "by_lob": by_lob}

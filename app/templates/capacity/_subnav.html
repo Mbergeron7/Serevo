@@ -2,6 +2,7 @@
   <a href="/" style="font-weight:600;">← Home</a>
   <a href="/capacity/" style="font-weight:{% if request.path == '/capacity/' or '/summary' in request.path %}700{% else %}600{% endif %};">📊 Summary</a>
   <a href="/capacity/panel" style="font-weight:{% if '/panel' in request.path %}700{% else %}600{% endif %};">🛠 Control Panel</a>
-  <a href="/capacity/plan" style="font-weight:{% if '/plan' in request.path %}700{% else %}600{% endif %};">📋 Capacity Plan</a>
+  <a href="/capacity/plan" style="font-weight:{% if '/plan' in request.path and 'longrange' not in request.path %}700{% else %}600{% endif %};">📋 Capacity Plan</a>
+  <a href="/capacity/longrange" style="font-weight:{% if '/longrange' in request.path %}700{% else %}600{% endif %};">📈 Long-Range</a>
   <a href="/people/" style="font-weight:600;">👥 Headcount</a>
 </nav>
