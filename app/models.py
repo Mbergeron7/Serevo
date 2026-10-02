@@ -25,11 +25,14 @@ class User(db.Model):
     email         = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)  # nullable for demo accounts
     display_name  = db.Column(db.String(120), nullable=False, default="")
-    role          = db.Column(db.String(20), nullable=False, default="viewer")  # viewer | admin
+    role          = db.Column(db.String(20), nullable=False, default="viewer")  # viewer | admin | agent
     is_demo       = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
+    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
     created_at    = db.Column(db.DateTime, default=_utcnow)
     updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    employee      = db.relationship("Employee", backref="user_account", foreign_keys=[employee_id])
 
     def __repr__(self):
         return f"<User {self.email}>"
@@ -170,13 +173,22 @@ class Accommodation(db.Model):
 class PTOEntry(db.Model):
     __tablename__ = "pto_entries"
 
-    id          = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
-    start_date  = db.Column(db.Date, nullable=False, index=True)
-    end_date    = db.Column(db.Date, nullable=False, index=True)
-    pto_type    = db.Column(db.String(20), default="full")   # full | partial
-    note        = db.Column(db.Text, default="")
-    updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+    id               = db.Column(db.Integer, primary_key=True)
+    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    start_date       = db.Column(db.Date, nullable=False, index=True)
+    end_date         = db.Column(db.Date, nullable=False, index=True)
+    pto_type         = db.Column(db.String(20), default="full")   # full | partial
+    time_off_type_id = db.Column(db.Integer, db.ForeignKey("time_off_types.id"), nullable=True)
+    approval_status  = db.Column(db.String(20), default="approved")  # pending | approved | denied
+    requested_by     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_by      = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at      = db.Column(db.DateTime, nullable=True)
+    note             = db.Column(db.Text, default="")
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    time_off_type    = db.relationship("TimeOffType", backref="pto_entries")
+    requester        = db.relationship("User", foreign_keys=[requested_by])
+    reviewer         = db.relationship("User", foreign_keys=[reviewed_by])
 
     def to_legacy_dict(self):
         emp = self.employee

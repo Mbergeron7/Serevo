@@ -384,11 +384,13 @@ def toggle_connection():
 @settings_bp.route("/users")
 @admin_required
 def users():
-    from app.models import User
+    from app.models import User, Employee
     all_users = User.query.order_by(User.created_at.desc()).all()
+    all_employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()
     return render_template("settings/users.html",
         user=get_current_user(),
         users=all_users,
+        employees=all_employees,
     )
 
 
@@ -411,8 +413,18 @@ def save_user():
 
     if not email:
         return jsonify({"success": False, "error": "Email is required"})
-    if role not in ("viewer", "admin"):
+    if role not in ("viewer", "admin", "agent"):
         role = "viewer"
+
+    # For agent role, resolve linked employee
+    employee_id = data.get("employee_id")
+    if role == "agent" and employee_id:
+        from app.models import Employee
+        emp = Employee.query.get(employee_id)
+        if not emp:
+            return jsonify({"success": False, "error": "Selected employee not found"})
+    elif role == "agent" and not employee_id:
+        employee_id = None  # Can link later
 
     if user_id:
         # Edit existing
@@ -425,6 +437,11 @@ def save_user():
             if len(password) < 6:
                 return jsonify({"success": False, "error": "Password must be at least 6 characters"})
             user.password_hash = generate_password_hash(password).decode("utf-8")
+        # Link employee for agent role
+        try:
+            user.employee_id = int(employee_id) if employee_id else None
+        except Exception:
+            pass
         db.session.commit()
         # Set is_demo via raw SQL to avoid ORM column-missing issues
         try:
@@ -447,6 +464,10 @@ def save_user():
             display_name=name or email.split("@")[0].title(),
             role=role,
         )
+        try:
+            user.employee_id = int(employee_id) if employee_id else None
+        except Exception:
+            pass
         db.session.add(user)
         db.session.commit()
         # Set is_demo via raw SQL

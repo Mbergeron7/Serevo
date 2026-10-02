@@ -58,6 +58,12 @@ def create_app():
             ("employees", "external_id_1", "VARCHAR(50)"),
             ("employees", "external_id_2", "VARCHAR(50)"),
             ("employees", "contract_id", "INTEGER"),
+            ("users", "employee_id", "INTEGER REFERENCES employees(id)"),
+            ("pto_entries", "time_off_type_id", "INTEGER REFERENCES time_off_types(id)"),
+            ("pto_entries", "approval_status", "VARCHAR(20) DEFAULT 'approved'"),
+            ("pto_entries", "requested_by", "INTEGER REFERENCES users(id)"),
+            ("pto_entries", "reviewed_by", "INTEGER REFERENCES users(id)"),
+            ("pto_entries", "reviewed_at", "TIMESTAMP"),
         ]
         for tbl, col, col_type in _ensure_columns:
             try:
@@ -127,6 +133,7 @@ def create_app():
     from app.routes.data_import import data_import_bp
     from app.routes.settings import settings_bp
     from app.routes.manual_entry import manual_entry_bp
+    from app.routes.agent import agent_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -138,6 +145,7 @@ def create_app():
     app.register_blueprint(data_import_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(manual_entry_bp)
+    app.register_blueprint(agent_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

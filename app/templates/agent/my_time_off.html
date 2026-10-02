@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}My Time Off — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="agent-header">
+  <div>
+    <h1>My Time Off</h1>
+    <p class="text-muted">{{ employee.full_name }}</p>
+  </div>
+  <button class="btn btn-primary" onclick="openRequestModal()">+ Request Time Off</button>
+</div>
+
+{% if upcoming %}
+<section class="pto-section">
+  <h2>Upcoming</h2>
+  <div class="pto-list">
+    {% for entry in upcoming %}
+    <div class="pto-card">
+      <div class="pto-dates">
+        <span class="date-start">{{ entry.start_date.strftime('%b %d') }}</span>
+        {% if entry.start_date != entry.end_date %}
+        <span class="date-sep">—</span>
+        <span class="date-end">{{ entry.end_date.strftime('%b %d, %Y') }}</span>
+        {% else %}
+        <span class="date-year">, {{ entry.start_date.strftime('%Y') }}</span>
+        {% endif %}
+        <span class="pto-days">
+          {% set days = (entry.end_date - entry.start_date).days + 1 %}
+          ({{ days }} day{{ 's' if days > 1 else '' }})
+        </span>
+      </div>
+      <div class="pto-meta">
+        {% if entry.time_off_type %}
+        <span class="type-badge" style="--type-color: {{ entry.time_off_type.color }}">{{ entry.time_off_type.label }}</span>
+        {% else %}
+        <span class="type-badge">{{ entry.pto_type|title }}</span>
+        {% endif %}
+        {% set status = entry.approval_status if entry.approval_status else 'approved' %}
+        <span class="status-badge {{ status }}">{{ status|title }}</span>
+        {% if status == 'pending' %}
+        <button class="btn btn-sm btn-danger" onclick="cancelRequest({{ entry.id }})">Cancel</button>
+        {% endif %}
+      </div>
+      {% if entry.note %}<p class="pto-note">{{ entry.note }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if past %}
+<section class="pto-section">
+  <h2>Past</h2>
+  <div class="pto-list">
+    {% for entry in past %}
+    <div class="pto-card past">
+      <div class="pto-dates">
+        <span class="date-start">{{ entry.start_date.strftime('%b %d') }}</span>
+        {% if entry.start_date != entry.end_date %}
+        <span class="date-sep">—</span>
+        <span class="date-end">{{ entry.end_date.strftime('%b %d, %Y') }}</span>
+        {% else %}
+        <span class="date-year">, {{ entry.start_date.strftime('%Y') }}</span>
+        {% endif %}
+      </div>
+      <div class="pto-meta">
+        {% if entry.time_off_type %}
+        <span class="type-badge" style="--type-color: {{ entry.time_off_type.color }}">{{ entry.time_off_type.label }}</span>
+        {% endif %}
+        {% set status = entry.approval_status if entry.approval_status else 'approved' %}
+        <span class="status-badge {{ status }}">{{ status|title }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if not upcoming and not past %}
+<div class="empty-state">
+  <p>No time-off entries yet.</p>
+  <button class="btn btn-primary" onclick="openRequestModal()">Request Time Off</button>
+</div>
+{% endif %}
+
+<!-- Request Modal -->
+<div id="requestModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <h2>Request Time Off</h2>
+    <form id="requestForm" onsubmit="submitRequest(event)">
+      {% if types %}
+      <label>Type
+        <select id="toType">
+          {% for t in types %}
+          <option value="{{ t.id }}">{{ t.label }}{% if not t.is_paid %} (Unpaid){% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <div class="form-row">
+        <label>Start Date <input type="date" id="toStart" required></label>
+        <label>End Date <input type="date" id="toEnd" required></label>
+      </div>
+      <label>Duration
+        <select id="toScope">
+          <option value="full">Full Day(s)</option>
+          <option value="partial">Partial Day</option>
+        </select>
+      </label>
+      <label>Note (optional) <textarea id="toNote" rows="2" placeholder="Reason or details..."></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.agent-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.agent-header h1 { font-size: 1.6rem; font-weight: 700; }
+.text-muted { color: var(--text-muted); font-size: .9rem; }
+
+.btn { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: .85rem; cursor: pointer; text-decoration: none; }
+.btn:hover { background: var(--bg); text-decoration: none; }
+.btn-sm { padding: 4px 10px; font-size: .8rem; }
+.btn-primary { background: var(--brand-accent); color: #fff; border-color: var(--brand-accent); }
+.btn-primary:hover { opacity: .9; }
+.btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+.btn-danger:hover { opacity: .9; }
+
+.pto-section { margin-bottom: 28px; }
+.pto-section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 10px; }
+.pto-list { display: flex; flex-direction: column; gap: 8px; }
+
+.pto-card {
+  background: var(--surface); border-radius: var(--radius); padding: 14px 16px;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  justify-content: space-between;
+}
+.pto-card.past { opacity: .65; }
+
+.pto-dates { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.date-sep { color: var(--text-muted); }
+.pto-days { color: var(--text-muted); font-weight: 400; font-size: .85rem; }
+
+.pto-meta { display: flex; align-items: center; gap: 8px; }
+.type-badge {
+  font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--type-color, var(--brand-accent)) 15%, transparent);
+  color: var(--type-color, var(--brand-accent));
+}
+.status-badge {
+  font-size: .72rem; font-weight: 600; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px;
+}
+.status-badge.pending { background: #fef3c7; color: #92400e; }
+.status-badge.approved { background: #d1fae5; color: #065f46; }
+.status-badge.denied { background: #fee2e2; color: #991b1b; }
+
+.pto-note { width: 100%; color: var(--text-muted); font-size: .85rem; margin-top: 4px; }
+
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-state .btn { margin-top: 12px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-card {
+  background: var(--surface); border-radius: var(--radius); padding: 24px;
+  width: 100%; max-width: 440px; box-shadow: 0 8px 30px rgba(0,0,0,.15);
+}
+.modal-card h2 { margin-bottom: 16px; font-size: 1.2rem; }
+.modal-card label { display: block; margin-bottom: 12px; font-size: .85rem; font-weight: 500; }
+.modal-card input, .modal-card select, .modal-card textarea {
+  display: block; width: 100%; margin-top: 4px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; font-size: .9rem;
+  background: var(--bg); color: var(--text);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+</style>
+
+<script>
+function openRequestModal() {
+  var d = new Date();
+  var iso = d.toISOString().slice(0,10);
+  document.getElementById('toStart').value = iso;
+  document.getElementById('toEnd').value = iso;
+  document.getElementById('requestModal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('requestModal').style.display = 'none';
+}
+function submitRequest(e) {
+  e.preventDefault();
+  var btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  var body = {
+    start_date: document.getElementById('toStart').value,
+    end_date: document.getElementById('toEnd').value,
+    pto_type: document.getElementById('toScope').value,
+    note: document.getElementById('toNote').value
+  };
+  var sel = document.getElementById('toType');
+  if (sel) body.time_off_type_id = sel.value;
+  fetch('/api/agent/time-off', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) { showToast('Request submitted!','success'); setTimeout(function(){ location.reload(); }, 800); }
+      else { showToast(d.error||'Error','error'); btn.disabled=false; btn.textContent='Submit Request'; }
+    })
+    .catch(function(){ showToast('Network error','error'); btn.disabled=false; btn.textContent='Submit Request'; });
+}
+function cancelRequest(id) {
+  if (!confirm('Cancel this time-off request?')) return;
+  fetch('/api/agent/time-off/'+id, {method:'DELETE'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) { showToast('Request cancelled','success'); setTimeout(function(){ location.reload(); }, 600); }
+      else showToast(d.error||'Error','error');
+    });
+}
+</script>
+{% endblock %}

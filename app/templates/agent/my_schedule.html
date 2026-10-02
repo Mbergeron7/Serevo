@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}My Schedule — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="agent-header">
+  <div>
+    <h1>My Schedule</h1>
+    <p class="text-muted">{{ employee.full_name }} · {{ employee.planning_unit.name if employee.planning_unit else 'Unassigned' }}</p>
+  </div>
+</div>
+
+<div class="week-nav">
+  <a href="/my-schedule/?start={{ prev_week }}" class="btn btn-sm">&larr; Previous</a>
+  <span class="week-label">
+    {{ week_start.strftime('%b %d') }} — {{ week_end.strftime('%b %d, %Y') }}
+  </span>
+  <a href="/my-schedule/?start={{ next_week }}" class="btn btn-sm">Next &rarr;</a>
+  {% if week_start != today - (today - today).__class__(days=today.weekday()) %}
+  <a href="/my-schedule/" class="btn btn-sm btn-outline">Today</a>
+  {% endif %}
+</div>
+
+<div class="schedule-grid">
+  {% for day in days %}
+  <div class="schedule-day{% if day.is_today %} today{% endif %}{% if not day.schedules %} off-day{% endif %}">
+    <div class="day-header">
+      <span class="day-name">{{ day.day_name }}</span>
+      <span class="day-date">{{ day.short }}</span>
+      {% if day.is_today %}<span class="today-badge">Today</span>{% endif %}
+    </div>
+    <div class="day-body">
+      {% if day.schedules %}
+        {% for sched in day.schedules %}
+        <div class="shift-card">
+          <div class="shift-time">
+            <span class="time-start">{{ sched.shift_start.strftime('%I:%M %p') if sched.shift_start else '—' }}</span>
+            <span class="time-sep">→</span>
+            <span class="time-end">{{ sched.shift_end.strftime('%I:%M %p') if sched.shift_end else '—' }}</span>
+            <span class="shift-hours">({{ '%.1f' % sched.hours }}h)</span>
+          </div>
+          {% if sched.segments %}
+          <div class="segments">
+            {% for seg in sched.segments %}
+            <div class="segment" style="--seg-color: {{ seg.color or '#6b7280' }}">
+              <span class="seg-type">{{ seg.activity_type or seg.segment_type or 'Activity' }}</span>
+              <span class="seg-time">{{ seg.start_time.strftime('%I:%M %p') if seg.start_time else '' }} – {{ seg.end_time.strftime('%I:%M %p') if seg.end_time else '' }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if sched.status == 'pto' %}
+          <span class="status-badge pto">PTO</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="no-shift">
+          <span>Day off</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.agent-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px;
+}
+.agent-header h1 { font-size: 1.6rem; font-weight: 700; }
+.text-muted { color: var(--text-muted); font-size: .9rem; }
+
+.week-nav {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.week-label { font-weight: 600; font-size: 1.05rem; }
+
+.btn { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: .85rem; cursor: pointer; text-decoration: none; }
+.btn:hover { background: var(--bg); text-decoration: none; }
+.btn-sm { padding: 4px 10px; font-size: .8rem; }
+.btn-outline { border-color: var(--brand-accent); color: var(--brand-accent); }
+
+.schedule-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+@media (min-width: 900px) {
+  .schedule-grid { grid-template-columns: repeat(7, 1fr); }
+}
+
+.schedule-day {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.schedule-day.today { border-color: var(--brand-accent); border-width: 2px; }
+.schedule-day.off-day { opacity: .7; }
+
+.day-header {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg);
+}
+.day-name { font-weight: 600; font-size: .9rem; }
+.day-date { color: var(--text-muted); font-size: .8rem; }
+.today-badge {
+  font-size: .65rem; font-weight: 700; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px;
+  background: var(--brand-accent); color: #fff;
+  margin-left: auto;
+}
+
+.day-body { padding: 10px 12px; min-height: 80px; }
+
+.shift-card {
+  background: var(--bg); border-radius: 8px; padding: 10px;
+  border-left: 3px solid var(--brand-accent);
+}
+.shift-time { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.time-start, .time-end { font-weight: 600; font-size: .9rem; }
+.time-sep { color: var(--text-muted); font-size: .8rem; }
+.shift-hours { color: var(--text-muted); font-size: .8rem; }
+
+.segments { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.segment {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 8px; border-radius: 6px; font-size: .78rem;
+  background: color-mix(in srgb, var(--seg-color) 12%, transparent);
+  border-left: 3px solid var(--seg-color);
+}
+.seg-type { font-weight: 500; }
+.seg-time { color: var(--text-muted); font-size: .72rem; }
+
+.status-badge { display: inline-block; font-size: .7rem; font-weight: 600; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; margin-top: 6px; }
+.status-badge.pto { background: #fef3c7; color: #92400e; }
+
+.no-shift {
+  display: flex; align-items: center; justify-content: center;
+  height: 60px; color: var(--text-muted); font-size: .85rem;
+  font-style: italic;
+}
+</style>
+{% endblock %}

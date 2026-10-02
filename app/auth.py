@@ -1,10 +1,8 @@
 """
 Session helpers and route protection for Serevo.
 
-Phase 2: reads from the User database table instead of a flat allow-list.
-
 Usage:
-    from app.auth import login_required, admin_required, get_current_user
+    from app.auth import login_required, admin_required, agent_required, get_current_user
 """
 
 from functools import wraps
@@ -36,12 +34,19 @@ def get_current_user():
         u = User.query.get(user_id)
         if not u or not u.is_active:
             return None
+        emp_id = None
+        try:
+            emp_id = u.employee_id
+        except Exception:
+            pass
         return {
             "id": u.id,
             "email": u.email,
             "name": u.display_name or u.email.split("@")[0].title(),
             "is_admin": u.role == "admin",
+            "is_agent": u.role == "agent",
             "role": u.role,
+            "employee_id": emp_id,
             "is_demo": _is_demo_user(u),
         }
     except Exception:
@@ -67,5 +72,31 @@ def admin_required(f):
             return redirect(url_for("auth.login", next=request.path))
         if not user["is_admin"]:
             return redirect("/")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def agent_required(f):
+    """Redirect to / if user is not an agent linked to an employee."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return redirect(url_for("auth.login", next=request.path))
+        if not user.get("is_agent") or not user.get("employee_id"):
+            return redirect("/")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def supervisor_required(f):
+    """Allow admin or viewer roles (supervisors), not agents."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return redirect(url_for("auth.login", next=request.path))
+        if user.get("is_agent"):
+            return redirect("/my-schedule/")
         return f(*args, **kwargs)
     return decorated
