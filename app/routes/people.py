@@ -17,7 +17,7 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
                         SkillMapping, PlanningUnit, ShiftSequence,
-                        EmployeeShiftSequence, SkillGroup)
+                        EmployeeShiftSequence, SkillGroup, CoachingSession)
 
 log = logging.getLogger("serevo.people")
 
@@ -505,3 +505,86 @@ def profile_availability():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)})
+
+
+# ── Coaching Sessions ─────────────────────────────────────────
+
+@people_bp.route("/api/coaching/list", methods=["POST"])
+@login_required
+def coaching_list():
+    data = request.get_json(silent=True) or {}
+    emp_id = data.get("employee_id")
+    user = get_current_user()
+
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_coaching_sessions
+        return jsonify({"sessions": get_demo_coaching_sessions(emp_id)})
+
+    if not emp_id:
+        return jsonify({"sessions": []})
+
+    try:
+        sessions = (CoachingSession.query
+                    .filter_by(employee_id=emp_id)
+                    .order_by(CoachingSession.session_date.desc())
+                    .all())
+        return jsonify({"sessions": [s.to_dict() for s in sessions]})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"sessions": [], "error": str(e)})
+
+
+@people_bp.route("/api/coaching/save", methods=["POST"])
+@login_required
+@admin_required
+def coaching_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("id")
+
+    try:
+        if session_id:
+            cs = CoachingSession.query.get(session_id)
+            if not cs:
+                return jsonify({"success": False, "error": "Session not found."})
+        else:
+            cs = CoachingSession(employee_id=data["employee_id"])
+            db.session.add(cs)
+
+        cs.coach_name = data.get("coach_name", "")
+        cs.session_date = _dt.date.fromisoformat(data["session_date"])
+        cs.session_time = data.get("session_time") or None
+        cs.duration_mins = int(data.get("duration_mins") or 30)
+        cs.topic = data.get("topic", "")
+        cs.category = data.get("category", "general")
+        cs.quality_score = float(data["quality_score"]) if data.get("quality_score") else None
+        cs.notes = data.get("notes", "")
+        cs.outcome = data.get("outcome", "")
+        cs.follow_up = data.get("follow_up", "")
+
+        db.session.commit()
+        return jsonify({"success": True, "session": cs.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)})
+
+
+@people_bp.route("/api/coaching/delete", methods=["POST"])
+@login_required
+@admin_required
+def coaching_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("id")
+
+    cs = CoachingSession.query.get(session_id)
+    if not cs:
+        return jsonify({"success": False, "error": "Session not found."})
+
+    db.session.delete(cs)
+    db.session.commit()
+    return jsonify({"success": True})

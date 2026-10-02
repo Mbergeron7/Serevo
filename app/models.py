@@ -1647,3 +1647,45 @@ class EmployeeShiftSequence(db.Model):
             "valid_from": self.valid_from.isoformat() if self.valid_from else "",
             "valid_to": self.valid_to.isoformat() if self.valid_to else "",
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# COACHING SESSIONS
+# ═══════════════════════════════════════════════════════════════
+
+class CoachingSession(db.Model):
+    __tablename__ = "coaching_sessions"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    coach_name    = db.Column(db.String(200), nullable=False)
+    session_date  = db.Column(db.Date, nullable=False)
+    session_time  = db.Column(db.String(5))   # HH:MM
+    duration_mins = db.Column(db.Integer, default=30)
+    topic         = db.Column(db.String(200))
+    category      = db.Column(db.String(50), default="general")  # quality, adherence, performance, general
+    quality_score = db.Column(db.Float)       # related quality score if applicable
+    notes         = db.Column(db.Text)
+    outcome       = db.Column(db.String(100)) # completed, rescheduled, cancelled, no-show
+    follow_up     = db.Column(db.Text)
+    created_at    = db.Column(db.DateTime, default=db.func.now())
+
+    employee = db.relationship("Employee", backref="coaching_sessions")
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "employee_name": f"{emp.first_name} {emp.last_name}" if emp else "",
+            "coach_name": self.coach_name,
+            "session_date": self.session_date.isoformat() if self.session_date else "",
+            "session_time": self.session_time or "",
+            "duration_mins": self.duration_mins,
+            "topic": self.topic or "",
+            "category": self.category or "general",
+            "quality_score": self.quality_score,
+            "notes": self.notes or "",
+            "outcome": self.outcome or "",
+            "follow_up": self.follow_up or "",
+        }

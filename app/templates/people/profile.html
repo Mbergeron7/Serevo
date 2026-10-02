@@ -115,6 +115,23 @@
   }
   .avail-day .day-times { font-size: .78rem; color: var(--text); }
 
+  /* Coaching table */
+  .coaching-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .coaching-tbl th { text-align: left; font-weight: 700; padding: 8px 10px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: .75rem; text-transform: uppercase; }
+  .coaching-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .coaching-tbl tr:hover { background: var(--bg); }
+  .cat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
+  .cat-quality { background: #dbeafe; color: #1e40af; }
+  .cat-adherence { background: #fef9c3; color: #854d0e; }
+  .cat-performance { background: #dcfce7; color: #166534; }
+  .cat-general { background: #f3f4f6; color: #6b7280; }
+  .outcome-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 600; }
+  .outcome-completed { background: #dcfce7; color: #166534; }
+  .outcome-rescheduled { background: #fef9c3; color: #854d0e; }
+  .outcome-cancelled { background: #fee2e2; color: #991b1b; }
+  .outcome-no-show { background: #fee2e2; color: #991b1b; }
+  .outcome-pending { background: #f3f4f6; color: #6b7280; }
+
   /* Inline edit modal */
   .mini-modal {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -170,6 +187,7 @@
   <button onclick="switchTab('work-profile', this)">Work Profile</button>
   <button onclick="switchTab('planning', this)">Planning</button>
   <button onclick="switchTab('availability', this)">Availability</button>
+  <button onclick="switchTab('coaching', this)">Coaching</button>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════ -->
@@ -443,6 +461,98 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Coaching                                                   -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-coaching">
+  <div class="section-card">
+    <div class="section-card-header">
+      Coaching Sessions
+      <button class="btn-add" onclick="openCoachingModal()">+ New Session</button>
+    </div>
+    <div class="section-card-body" id="coachingBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Coaching Modal -->
+<div id="coachingModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeCoachingModal()">
+  <div class="modal" style="max-width:560px;">
+    <h3 id="coachingModalTitle">New Coaching Session</h3>
+    <form id="coachingForm" onsubmit="return saveCoaching(event)">
+      <input type="hidden" id="coach_id">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>Coach Name</label>
+          <input type="text" id="coach_name" required>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="coach_category">
+            <option value="general">General</option>
+            <option value="quality">Quality</option>
+            <option value="adherence">Adherence</option>
+            <option value="performance">Performance</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="coach_date" required>
+        </div>
+        <div class="form-group">
+          <label>Time</label>
+          <input type="time" id="coach_time">
+        </div>
+        <div class="form-group">
+          <label>Duration (min)</label>
+          <input type="number" id="coach_duration" value="30" min="5" max="180">
+        </div>
+        <div class="form-group">
+          <label>Quality Score</label>
+          <input type="number" id="coach_qscore" step="0.1" min="0" max="100" placeholder="Optional">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Topic</label>
+        <input type="text" id="coach_topic" placeholder="e.g. Call handling improvement">
+      </div>
+
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="coach_notes" rows="3" style="width:100%; resize:vertical;"></textarea>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>Outcome</label>
+          <select id="coach_outcome">
+            <option value="">— Pending —</option>
+            <option value="completed">Completed</option>
+            <option value="rescheduled">Rescheduled</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no-show">No-Show</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Follow-Up</label>
+        <textarea id="coach_followup" rows="2" style="width:100%; resize:vertical;" placeholder="Next steps…"></textarea>
+      </div>
+
+      <div id="coachingError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeCoachingModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════ -->
@@ -807,5 +917,136 @@ function showError(elemId, msg) {
   el.textContent = msg;
   el.style.display = '';
 }
+
+// ── Coaching Sessions ──
+let _coachingLoaded = false;
+
+function loadCoachingSessions() {
+  if (_coachingLoaded) return;
+  _coachingLoaded = true;
+  fetch('/people/api/coaching/list', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ employee_id: EMP_ID }),
+  })
+  .then(r => r.json())
+  .then(data => renderCoachingTable(data.sessions || []))
+  .catch(() => {
+    document.getElementById('coachingBody').innerHTML =
+      '<p style="color:#b91c1c; font-size:.85rem;">Error loading sessions.</p>';
+  });
+}
+
+function renderCoachingTable(sessions) {
+  const body = document.getElementById('coachingBody');
+  if (!sessions.length) {
+    body.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No coaching sessions recorded yet.</p>';
+    return;
+  }
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const catClass = c => 'cat-' + (c || 'general');
+  const outClass = o => o ? 'outcome-' + o.replace(/\s+/g,'-') : 'outcome-pending';
+  const outLabel = o => o ? o.charAt(0).toUpperCase() + o.slice(1) : 'Pending';
+
+  let html = '<table class="coaching-tbl"><thead><tr>';
+  html += '<th>Date</th><th>Coach</th><th>Topic</th><th>Category</th><th>Score</th><th>Outcome</th><th></th>';
+  html += '</tr></thead><tbody>';
+  sessions.forEach(s => {
+    html += '<tr>';
+    html += `<td>${esc(s.session_date)}${s.session_time ? ' ' + esc(s.session_time) : ''}</td>`;
+    html += `<td>${esc(s.coach_name)}</td>`;
+    html += `<td>${esc(s.topic)}</td>`;
+    html += `<td><span class="cat-pill ${catClass(s.category)}">${esc(s.category)}</span></td>`;
+    html += `<td>${s.quality_score != null ? s.quality_score.toFixed(1) : '—'}</td>`;
+    html += `<td><span class="outcome-pill ${outClass(s.outcome)}">${outLabel(s.outcome)}</span></td>`;
+    html += `<td><button class="btn-add" style="font-size:.75rem; padding:2px 8px;" onclick='editCoaching(${JSON.stringify(s)})'>Edit</button>`;
+    html += ` <button class="btn-add" style="font-size:.75rem; padding:2px 8px; color:#b91c1c;" onclick="deleteCoaching(${s.id})">✕</button></td>`;
+    html += '</tr>';
+    if (s.notes || s.follow_up) {
+      html += '<tr><td colspan="7" style="padding:4px 10px 12px; font-size:.78rem; color:var(--text-muted);">';
+      if (s.notes) html += '<strong>Notes:</strong> ' + esc(s.notes) + '<br>';
+      if (s.follow_up) html += '<strong>Follow-up:</strong> ' + esc(s.follow_up);
+      html += '</td></tr>';
+    }
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function openCoachingModal(session) {
+  document.getElementById('coachingError').style.display = 'none';
+  const s = session || {};
+  document.getElementById('coach_id').value = s.id || '';
+  document.getElementById('coach_name').value = s.coach_name || '';
+  document.getElementById('coach_category').value = s.category || 'general';
+  document.getElementById('coach_date').value = s.session_date || new Date().toISOString().slice(0,10);
+  document.getElementById('coach_time').value = s.session_time || '';
+  document.getElementById('coach_duration').value = s.duration_mins || 30;
+  document.getElementById('coach_qscore').value = s.quality_score != null ? s.quality_score : '';
+  document.getElementById('coach_topic').value = s.topic || '';
+  document.getElementById('coach_notes').value = s.notes || '';
+  document.getElementById('coach_outcome').value = s.outcome || '';
+  document.getElementById('coach_followup').value = s.follow_up || '';
+  document.getElementById('coachingModalTitle').textContent = s.id ? 'Edit Coaching Session' : 'New Coaching Session';
+  document.getElementById('coachingModal').style.display = '';
+}
+
+function editCoaching(s) { openCoachingModal(s); }
+
+function closeCoachingModal() { document.getElementById('coachingModal').style.display = 'none'; }
+
+async function saveCoaching(e) {
+  e.preventDefault();
+  const body = {
+    id: document.getElementById('coach_id').value || null,
+    employee_id: EMP_ID,
+    coach_name: document.getElementById('coach_name').value,
+    category: document.getElementById('coach_category').value,
+    session_date: document.getElementById('coach_date').value,
+    session_time: document.getElementById('coach_time').value || null,
+    duration_mins: parseInt(document.getElementById('coach_duration').value) || 30,
+    quality_score: document.getElementById('coach_qscore').value || null,
+    topic: document.getElementById('coach_topic').value,
+    notes: document.getElementById('coach_notes').value,
+    outcome: document.getElementById('coach_outcome').value,
+    follow_up: document.getElementById('coach_followup').value,
+  };
+  try {
+    const resp = await fetch('/people/api/coaching/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.success || data.demo) {
+      closeCoachingModal();
+      _coachingLoaded = false;
+      loadCoachingSessions();
+    } else {
+      showError('coachingError', data.error || 'Save failed');
+    }
+  } catch(err) { showError('coachingError', 'Network error: ' + err.message); }
+  return false;
+}
+
+async function deleteCoaching(id) {
+  if (!confirm('Delete this coaching session?')) return;
+  try {
+    const resp = await fetch('/people/api/coaching/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id: id }),
+    });
+    const data = await resp.json();
+    if (data.success || data.demo) {
+      _coachingLoaded = false;
+      loadCoachingSessions();
+    } else { alert(data.error || 'Delete failed'); }
+  } catch(err) { alert('Network error: ' + err.message); }
+}
+
+// Hook coaching tab load into switchTab
+const _origSwitchTab = switchTab;
+switchTab = function(tabId, btn) {
+  _origSwitchTab(tabId, btn);
+  if (tabId === 'coaching') loadCoachingSessions();
+};
 </script>
 {% endblock %}

@@ -1192,3 +1192,44 @@ def get_demo_planning_units_config():
         {"id": 2, "name": "Tech Help Desk", "is_active": True, "employee_count": 7},
         {"id": 3, "name": "Billing", "is_active": True, "employee_count": 6},
     ]
+
+
+def get_demo_coaching_sessions(employee_id=None):
+    """Demo coaching session data."""
+    import datetime as _dt
+    today = _dt.date.today()
+    _all = [
+        {"id": 1, "employee_id": "E1001", "employee_name": "Alex Morgan",
+         "coach_name": "Lisa Tran", "session_date": (today - _dt.timedelta(days=3)).isoformat(),
+         "session_time": "10:00", "duration_mins": 30, "topic": "Call handling improvement",
+         "category": "quality", "quality_score": 82.5, "notes": "Reviewed 5 calls. Tone is good but needs to summarize issue earlier.",
+         "outcome": "completed", "follow_up": "Shadow top performer for 2 hours next week"},
+        {"id": 2, "employee_id": "E1001", "employee_name": "Alex Morgan",
+         "coach_name": "Lisa Tran", "session_date": (today - _dt.timedelta(days=17)).isoformat(),
+         "session_time": "14:00", "duration_mins": 30, "topic": "Schedule adherence review",
+         "category": "adherence", "quality_score": None, "notes": "Break overruns averaging 4 min. Discussed time management strategies.",
+         "outcome": "completed", "follow_up": "Check adherence next week"},
+        {"id": 3, "employee_id": "E1002", "employee_name": "Jordan Rivera",
+         "coach_name": "Lisa Tran", "session_date": (today - _dt.timedelta(days=1)).isoformat(),
+         "session_time": "09:30", "duration_mins": 45, "topic": "Upselling techniques",
+         "category": "performance", "quality_score": 91.0, "notes": "Strong closer. Focus on identifying opportunities earlier in the call.",
+         "outcome": "completed", "follow_up": "Review conversion metrics in 2 weeks"},
+        {"id": 4, "employee_id": "E1003", "employee_name": "Casey Chen",
+         "coach_name": "Lisa Tran", "session_date": (today + _dt.timedelta(days=2)).isoformat(),
+         "session_time": "11:00", "duration_mins": 30, "topic": "New product training follow-up",
+         "category": "general", "quality_score": None, "notes": "",
+         "outcome": "", "follow_up": ""},
+        {"id": 5, "employee_id": "E1008", "employee_name": "Sam Patel",
+         "coach_name": "Marcus Johnson", "session_date": (today - _dt.timedelta(days=5)).isoformat(),
+         "session_time": "13:00", "duration_mins": 30, "topic": "Troubleshooting process review",
+         "category": "quality", "quality_score": 78.0, "notes": "Needs to follow diagnostic tree more consistently. Skipping steps leads to repeat calls.",
+         "outcome": "completed", "follow_up": "Side-by-side session next Tuesday"},
+        {"id": 6, "employee_id": "E1015", "employee_name": "Morgan Bailey",
+         "coach_name": "Priya Sharma", "session_date": (today - _dt.timedelta(days=10)).isoformat(),
+         "session_time": "15:00", "duration_mins": 30, "topic": "Billing accuracy",
+         "category": "quality", "quality_score": 88.0, "notes": "Good overall. Two credits issued incorrectly — reviewed policy.",
+         "outcome": "completed", "follow_up": "Audit next 10 billing adjustments"},
+    ]
+    if employee_id:
+        return [s for s in _all if s["employee_id"] == str(employee_id)]
+    return _all
