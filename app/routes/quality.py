@@ -126,7 +126,7 @@ def api_eval_save():
         if eval_id:
             ev = QualityEvaluation.query.get(eval_id)
             if not ev:
-                return jsonify({"success": False, "error": "Evaluation not found."})
+                return jsonify({"success": False, "error": "Evaluation not found."}), 404
         else:
             ev = QualityEvaluation(employee_id=data["employee_id"],
                                    overall_score=0)
@@ -168,10 +168,14 @@ def api_eval_delete():
     data = request.get_json(silent=True) or {}
     ev = QualityEvaluation.query.get(data.get("id"))
     if not ev:
-        return jsonify({"success": False, "error": "Evaluation not found."})
-    db.session.delete(ev)
-    db.session.commit()
-    return jsonify({"success": True})
+        return jsonify({"success": False, "error": "Evaluation not found."}), 404
+    try:
+        db.session.delete(ev)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ═════════════════════════════════════════════════════════════
@@ -219,7 +223,7 @@ def api_integration_save():
         if rec_id:
             integ = AnalyticsIntegration.query.get(rec_id)
             if not integ:
-                return jsonify({"success": False, "error": "Integration not found."})
+                return jsonify({"success": False, "error": "Integration not found."}), 404
         else:
             integ = AnalyticsIntegration(
                 webhook_key=_secrets.token_urlsafe(24)
@@ -251,10 +255,14 @@ def api_integration_delete():
     data = request.get_json(silent=True) or {}
     integ = AnalyticsIntegration.query.get(data.get("id"))
     if not integ:
-        return jsonify({"success": False, "error": "Integration not found."})
-    db.session.delete(integ)
-    db.session.commit()
-    return jsonify({"success": True})
+        return jsonify({"success": False, "error": "Integration not found."}), 404
+    try:
+        db.session.delete(integ)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ── Webhook receiver (no auth — uses webhook_key) ────────────
@@ -359,9 +367,13 @@ def webhook_receive(webhook_key):
             errors.append({"index": i, "error": str(e)})
 
     if created:
-        integ.events_count = (integ.events_count or 0) + created
-        integ.last_received = _dt.datetime.utcnow()
-        db.session.commit()
+        try:
+            integ.events_count = (integ.events_count or 0) + created
+            integ.last_received = _dt.datetime.utcnow()
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"success": False, "error": f"Failed to save evaluations: {e}"}), 500
 
     return jsonify({
         "success": True,

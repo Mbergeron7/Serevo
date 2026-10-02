@@ -58,7 +58,7 @@
     </select></label>
     <label>Status <select id="filterStatus" onchange="filterUploads()"><option value="">All</option><option value="success">Success</option><option value="partial">Partial</option><option value="error">Error</option></select></label>
   </div>
-  <table class="data-table sortable" id="uploadsTable">
+  <div style="overflow-x:auto"><table class="data-table sortable" id="uploadsTable">
     <thead>
       <tr>
         <th>Date</th>
@@ -83,7 +83,7 @@
       </tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
 </div>
 {% endif %}
 

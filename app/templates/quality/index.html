@@ -325,18 +325,18 @@ function renderTrend() {
   const trend = DASH.trend || [];
   const el = document.getElementById('trendBody');
   if (!trend.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">Not enough data for trend</p>'; return; }
-  let html = '<table class="q-tbl"><thead><tr><th>Week</th><th>Avg Score</th><th>Evals</th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="q-tbl"><thead><tr><th>Week</th><th>Avg Score</th><th>Evals</th></tr></thead><tbody>';
   trend.forEach(t => {
     html += `<tr><td>${esc(t.week)}</td><td><span class="score-badge ${scoreClass(t.avg_score)}">${t.avg_score}</span></td><td>${t.count}</td></tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
 function renderEvalsTable() {
   const el = document.getElementById('evalsBody');
   if (!EVALS.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No evaluations found.</p>'; return; }
-  let html = '<table class="q-tbl"><thead><tr><th>Date</th><th>Agent</th><th>Evaluator</th><th>Channel</th><th>Score</th><th>Disposition</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="q-tbl"><thead><tr><th>Date</th><th>Agent</th><th>Evaluator</th><th>Channel</th><th>Score</th><th>Disposition</th><th></th></tr></thead><tbody>';
   EVALS.slice(0, 50).forEach(e => {
     html += '<tr>';
     html += `<td>${esc(e.eval_date)}</td>`;
@@ -350,7 +350,7 @@ function renderEvalsTable() {
     html += `<td><button class="btn-add" style="font-size:.75rem; padding:2px 8px;" onclick='editEval(${JSON.stringify(e)})'>View</button></td>`;
     html += '</tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   if (EVALS.length > 50) html += `<p style="color:var(--text-muted); font-size:.78rem; margin-top:8px;">Showing 50 of ${EVALS.length}</p>`;
   el.innerHTML = html;
 }
@@ -458,7 +458,7 @@ async function loadIntegrations() {
 function renderIntegrations(ints) {
   const el = document.getElementById('intBody');
   if (!ints.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No integrations configured. Click "+ Add Integration" to set up a webhook connection to your QM platform.</p>'; return; }
-  let html = '<table class="q-tbl"><thead><tr><th>Name</th><th>Platform</th><th>Status</th><th>Events</th><th>Last Received</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="q-tbl"><thead><tr><th>Name</th><th>Platform</th><th>Status</th><th>Events</th><th>Last Received</th><th></th></tr></thead><tbody>';
   ints.forEach(i => {
     const status = i.is_active ? '<span style="color:#16a34a; font-weight:700;">● Active</span>' : '<span style="color:var(--text-muted);">● Inactive</span>';
     html += `<tr>
@@ -473,7 +473,7 @@ function renderIntegrations(ints) {
       </td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -541,7 +541,7 @@ function renderAnalytics(agents) {
     <div class="q-stat"><div class="label">Avg Adherence</div><div class="value">${avgAdh}%</div></div>
     <div class="q-stat"><div class="label">Composite (60/40)</div><div class="value">${avgComposite}</div></div>
     <div class="q-stat"><div class="label">Agents</div><div class="value">${agents.length}</div></div>`;
-  let html = '<table class="q-tbl"><thead><tr><th>#</th><th>Agent</th><th>QM Score</th><th>Adherence</th><th>Composite</th><th>Evals</th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="q-tbl"><thead><tr><th>#</th><th>Agent</th><th>QM Score</th><th>Adherence</th><th>Composite</th><th>Evals</th></tr></thead><tbody>';
   agents.sort((a,b) => ((b.avg_quality||0)*0.6+(b.adherence_pct||0)*0.4) - ((a.avg_quality||0)*0.6+(a.adherence_pct||0)*0.4));
   agents.forEach((a, i) => {
     const composite = ((a.avg_quality||0)*0.6 + (a.adherence_pct||0)*0.4).toFixed(1);
@@ -554,7 +554,7 @@ function renderAnalytics(agents) {
       <td>${a.eval_count || 0}</td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 

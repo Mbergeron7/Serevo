@@ -258,7 +258,7 @@
     </div>
     <div class="section-card-body">
       {% if skill_mappings %}
-      <table class="assign-table">
+      <div style="overflow-x:auto"><table class="assign-table">
         <thead>
           <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th></tr>
         </thead>
@@ -276,7 +276,7 @@
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No skills assigned yet.</p>
       {% endif %}
@@ -297,7 +297,7 @@
     </div>
     <div class="section-card-body">
       {% if contract_assignments %}
-      <table class="assign-table">
+      <div style="overflow-x:auto"><table class="assign-table">
         <thead>
           <tr><th>Contract</th><th>Type</th><th>Weekly Hours</th><th>Valid From</th><th>Valid To</th><th></th></tr>
         </thead>
@@ -313,7 +313,7 @@
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% elif emp.contract %}
       <p style="font-size:.85rem;">Legacy contract: <strong>{{ emp.contract.name }}</strong> ({{ emp.contract.weekly_hours }}h/wk)</p>
       <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign contracts with validity periods.</p>
@@ -331,7 +331,7 @@
     </div>
     <div class="section-card-body">
       {% if selection_memberships %}
-      <table class="assign-table">
+      <div style="overflow-x:auto"><table class="assign-table">
         <thead>
           <tr><th>Selection</th><th>Description</th><th></th></tr>
         </thead>
@@ -344,7 +344,7 @@
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">Not part of any selections.</p>
       {% endif %}
@@ -366,7 +366,7 @@
     </div>
     <div class="section-card-body">
       {% if pu_assignments %}
-      <table class="assign-table">
+      <div style="overflow-x:auto"><table class="assign-table">
         <thead>
           <tr><th>Planning Unit</th><th>Priority</th><th>Valid From</th><th>Valid To</th><th></th></tr>
         </thead>
@@ -384,7 +384,7 @@
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% elif emp.planning_unit %}
       <p style="font-size:.85rem;">Legacy assignment: <strong>{{ emp.planning_unit.name }}</strong></p>
       <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign planning units with priority &amp; validity.</p>
@@ -402,7 +402,7 @@
     </div>
     <div class="section-card-body">
       {% if ss_assignments %}
-      <table class="assign-table">
+      <div style="overflow-x:auto"><table class="assign-table">
         <thead>
           <tr><th>Sequence</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
         </thead>
@@ -417,7 +417,7 @@
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No shift sequence assigned.</p>
       {% endif %}
@@ -947,7 +947,7 @@ function renderCoachingTable(sessions) {
   const outClass = o => o ? 'outcome-' + o.replace(/\s+/g,'-') : 'outcome-pending';
   const outLabel = o => o ? o.charAt(0).toUpperCase() + o.slice(1) : 'Pending';
 
-  let html = '<table class="coaching-tbl"><thead><tr>';
+  let html = '<div style="overflow-x:auto"><table class="coaching-tbl"><thead><tr>';
   html += '<th>Date</th><th>Coach</th><th>Topic</th><th>Category</th><th>Score</th><th>Outcome</th><th></th>';
   html += '</tr></thead><tbody>';
   sessions.forEach(s => {
@@ -968,7 +968,7 @@ function renderCoachingTable(sessions) {
       html += '</td></tr>';
     }
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
 }
 
