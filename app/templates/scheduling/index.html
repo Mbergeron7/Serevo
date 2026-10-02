@@ -533,6 +533,9 @@
     <button class="btn-action" id="btnOptimize" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff;">
       Optimize Breaks
     </button>
+    <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">
+      Bulk Edit
+    </button>
     <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">
       Clear
     </button>
@@ -950,6 +953,102 @@
       </button>
     </div>
   </div>
+</div>
+
+<!-- ── Bulk Edit modal ─────────────────────────────────── -->
+<div class="modal-overlay" id="bulkEditOverlay">
+  <div class="modal" style="max-width:560px">
+    <h2>Bulk Shift Edit</h2>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:16px">
+      Select multiple employees and apply the same change — shift time, activity, or removal.
+    </p>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group" style="flex:1">
+        <label>Action</label>
+        <select id="bulkAction" onchange="bulkToggleParams()">
+          <option value="change_time">Change Shift Times</option>
+          <option value="change_activity">Add Activity Segment</option>
+          <option value="remove_shifts">Remove Shifts</option>
+        </select>
+      </div>
+    </div>
+    <div id="bulkTimeParams">
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>New Start</label>
+          <input type="time" id="bulkNewStart" value="08:00">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>New End</label>
+          <input type="time" id="bulkNewEnd" value="16:30">
+        </div>
+      </div>
+    </div>
+    <div id="bulkActivityParams" style="display:none">
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>Activity Type</label>
+          <select id="bulkActType">
+            <option value="break">Break</option>
+            <option value="lunch">Lunch</option>
+            <option value="meeting">Meeting</option>
+            <option value="training">Training</option>
+            <option value="coaching">Coaching</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>Start</label>
+          <input type="time" id="bulkActStart" value="12:00">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>End</label>
+          <input type="time" id="bulkActEnd" value="12:30">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="bulkActNotes" placeholder="Optional notes">
+      </div>
+    </div>
+    <div style="margin:12px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer">
+        <input type="checkbox" id="bulkSelectAll" checked onchange="bulkToggleAll()"> Select all
+      </label>
+    </div>
+    <div id="bulkEmpList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
+    <div id="bulkResult" style="margin-top:8px"></div>
+    <div class="modal-footer" style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-modal btn-modal-secondary" onclick="closeBulkEditModal()">Cancel</button>
+      <button class="btn-modal btn-modal-primary" id="bulkApplyBtn" onclick="bulkApply()" style="background:#2563eb">
+        Apply to Selected
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Schedule Score Panel ─────────────────────────────── -->
+<div id="scorePanel" style="display:none; margin:12px 0;">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;">
+    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Overall Score</div>
+      <div id="scoreOverall" style="font-size:1.8rem;font-weight:800;"></div>
+    </div>
+    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Coverage</div>
+      <div id="scoreCoverage" style="font-size:1.3rem;font-weight:700;"></div>
+    </div>
+    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Efficiency</div>
+      <div id="scoreCost" style="font-size:1.3rem;font-weight:700;"></div>
+    </div>
+    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Balance</div>
+      <div id="scoreBalance" style="font-size:1.3rem;font-weight:700;"></div>
+    </div>
+  </div>
+  <div id="scoreDetails" style="font-size:.78rem;color:var(--text-muted);margin-top:6px;"></div>
 </div>
 
 <!-- ── Activity Drawer ────────────────────────────────────── -->
@@ -1475,6 +1574,7 @@ function showResults() {
   } else {
     gw.style.display = 'none';
   }
+  renderScorePanel();
   switchView(currentView);
 }
 
@@ -3601,5 +3701,203 @@ function _cleanupActDrag() {
 
 // Clean up on drag end (e.g. cancelled drag)
 document.addEventListener('dragend', _cleanupActDrag);
+
+// ═══════════════════════════════════════════════════════════
+// SCHEDULE SCORE PANEL
+// ═══════════════════════════════════════════════════════════
+function scoreColor(pct) {
+  if (pct >= 85) return '#16a34a';
+  if (pct >= 65) return '#ca8a04';
+  return '#dc2626';
+}
+
+function renderScorePanel() {
+  const panel = document.getElementById('scorePanel');
+  if (!scheduleData || !scheduleData.score) { panel.style.display = 'none'; return; }
+  const s = scheduleData.score;
+  const overall = Math.round(s.overall_score);
+  const cov = Math.round(s.coverage_score);
+  const eff = Math.round(s.cost_score);
+  const bal = Math.round(s.balance_score);
+
+  document.getElementById('scoreOverall').textContent = overall + '%';
+  document.getElementById('scoreOverall').style.color = scoreColor(overall);
+  document.getElementById('scoreCoverage').textContent = cov + '%';
+  document.getElementById('scoreCoverage').style.color = scoreColor(cov);
+  document.getElementById('scoreCost').textContent = eff + '%';
+  document.getElementById('scoreCost').style.color = scoreColor(eff);
+  document.getElementById('scoreBalance').textContent = bal + '%';
+  document.getElementById('scoreBalance').style.color = scoreColor(bal);
+
+  const details = [];
+  if (s.details) {
+    if (s.details.avg_coverage_pct != null) details.push('Avg coverage: ' + s.details.avg_coverage_pct.toFixed(1) + '%');
+    if (s.details.overstaffed_intervals != null) details.push('Overstaffed intervals: ' + s.details.overstaffed_intervals);
+    if (s.details.overtime_hours != null && s.details.overtime_hours > 0) details.push('Overtime: ' + s.details.overtime_hours.toFixed(1) + 'h');
+    if (s.details.efficiency_pct != null) details.push('Efficiency: ' + s.details.efficiency_pct.toFixed(1) + '%');
+  }
+  document.getElementById('scoreDetails').textContent = details.join(' · ');
+  panel.style.display = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// BULK EDIT MODAL
+// ═══════════════════════════════════════════════════════════
+function openBulkEditModal() {
+  if (!scheduleData || !scheduleData.days || !scheduleData.days.length) {
+    showToast('Generate or load a schedule first.', 'error');
+    return;
+  }
+  // Build unique employee list from current schedule
+  const empSet = new Map();
+  scheduleData.days.forEach(day => {
+    (day.shifts || []).forEach(sh => {
+      if (sh.employee && !empSet.has(sh.employee)) {
+        empSet.set(sh.employee, sh.employee_id || null);
+      }
+    });
+  });
+  const list = document.getElementById('bulkEmpList');
+  if (empSet.size === 0) {
+    list.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:.82rem">No employees in schedule.</div>';
+  } else {
+    list.innerHTML = '';
+    empSet.forEach((eid, name) => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:.84rem;cursor:pointer;';
+      lbl.innerHTML = '<input type="checkbox" class="bulk-emp-cb" data-emp="' + name + '" data-eid="' + (eid||'') + '" checked> ' + name;
+      list.appendChild(lbl);
+    });
+  }
+  document.getElementById('bulkSelectAll').checked = true;
+  document.getElementById('bulkResult').innerHTML = '';
+  bulkToggleParams();
+  document.getElementById('bulkEditOverlay').classList.add('active');
+}
+
+function closeBulkEditModal() {
+  document.getElementById('bulkEditOverlay').classList.remove('active');
+}
+
+// Close on overlay click
+document.getElementById('bulkEditOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeBulkEditModal();
+});
+
+function bulkToggleParams() {
+  const action = document.getElementById('bulkAction').value;
+  document.getElementById('bulkTimeParams').style.display = action === 'change_time' ? '' : 'none';
+  document.getElementById('bulkActivityParams').style.display = action === 'change_activity' ? '' : 'none';
+}
+
+function bulkToggleAll() {
+  const checked = document.getElementById('bulkSelectAll').checked;
+  document.querySelectorAll('.bulk-emp-cb').forEach(cb => { cb.checked = checked; });
+}
+
+function bulkApply() {
+  const action = document.getElementById('bulkAction').value;
+  const selected = [];
+  document.querySelectorAll('.bulk-emp-cb:checked').forEach(cb => {
+    selected.push({ name: cb.dataset.emp, id: cb.dataset.eid || null });
+  });
+  if (!selected.length) { showToast('Select at least one employee.', 'error'); return; }
+
+  // Get the current day index (first visible day for simplicity)
+  const dayIdx = scheduleData.days.findIndex(d => d.shifts && d.shifts.length > 0);
+  const date = scheduleData.days[dayIdx >= 0 ? dayIdx : 0].date;
+
+  const lob = document.getElementById('cfgLOB').value;
+  const empNames = selected.map(e => e.name);
+
+  // Collect shift IDs from scheduleData for selected employees
+  const shiftIds = [];
+  const matchingShifts = [];
+  scheduleData.days.forEach((day, di) => {
+    (day.shifts || []).forEach((sh, si) => {
+      if (empNames.includes(sh.employee)) {
+        matchingShifts.push({dayIdx: di, shiftIdx: si, shift: sh});
+        if (sh.id) shiftIds.push(sh.id);
+      }
+    });
+  });
+
+  const params = {};
+  if (action === 'change_time') {
+    params.new_start = document.getElementById('bulkNewStart').value;
+    params.new_end = document.getElementById('bulkNewEnd').value;
+  } else if (action === 'change_activity') {
+    params.activity_type = document.getElementById('bulkActType').value;
+    params.activity_start = document.getElementById('bulkActStart').value;
+    params.activity_end = document.getElementById('bulkActEnd').value;
+    params.notes = document.getElementById('bulkActNotes').value;
+  }
+
+  const payload = { action, shift_ids: shiftIds, params };
+
+  // Demo/generated mode: apply client-side
+  if (!shiftIds.length) {
+    if (action === 'change_time') {
+      matchingShifts.forEach(m => {
+        m.shift.start = params.new_start;
+        m.shift.end = params.new_end;
+      });
+    } else if (action === 'change_activity') {
+      matchingShifts.forEach(m => {
+        if (!m.shift.segments) m.shift.segments = [];
+        const st = params.activity_type;
+        const s = params.activity_start;
+        const e = params.notes; // notes
+        m.shift.segments.push({
+          type: params.activity_type,
+          start: params.activity_start,
+          end: params.activity_end || params.activity_start,
+          duration_mins: (timeToMins(params.activity_end) - timeToMins(params.activity_start)),
+          notes: params.notes || '',
+        });
+        m.shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+      });
+    } else if (action === 'remove_shifts') {
+      // Remove in reverse order to preserve indices
+      matchingShifts.sort((a, b) => b.shiftIdx - a.shiftIdx || b.dayIdx - a.dayIdx);
+      matchingShifts.forEach(m => {
+        scheduleData.days[m.dayIdx].shifts.splice(m.shiftIdx, 1);
+      });
+    }
+    closeBulkEditModal();
+    showToast('Applied to ' + matchingShifts.length + ' shift(s).', 'success');
+    switchView(currentView);
+    return;
+  }
+
+  document.getElementById('bulkApplyBtn').disabled = true;
+  document.getElementById('bulkResult').innerHTML = '<span style="color:var(--text-muted);font-size:.82rem">Applying…</span>';
+
+  fetch('/scheduling/bulk-edit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('bulkApplyBtn').disabled = false;
+    if (data.success) {
+      const msg = 'Updated ' + (data.affected || empNames.length) + ' shift(s).';
+      document.getElementById('bulkResult').innerHTML = '<span style="color:#16a34a;font-size:.82rem">✓ ' + msg + '</span>';
+      showToast(msg, 'success');
+      // Reload schedule to reflect changes
+      setTimeout(() => {
+        closeBulkEditModal();
+        loadSchedule();
+      }, 800);
+    } else {
+      document.getElementById('bulkResult').innerHTML = '<span style="color:#dc2626;font-size:.82rem">Error: ' + (data.error || 'Unknown') + '</span>';
+    }
+  })
+  .catch(e => {
+    document.getElementById('bulkApplyBtn').disabled = false;
+    document.getElementById('bulkResult').innerHTML = '<span style="color:#dc2626;font-size:.82rem">Failed: ' + e + '</span>';
+  });
+}
 </script>
 {% endblock %}

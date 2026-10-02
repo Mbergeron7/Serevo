@@ -157,6 +157,170 @@ def _get_requirements_for_date(lob, date_obj, sheet=None):
     return []
 
 
+def get_skill_proficiency_map(lob=None):
+    """
+    Load skill proficiency mappings from the DB.
+    Returns dict: employee_db_id → {skill_group_name: proficiency (1-5)}.
+    If lob is given, also returns multi-skilled employees who have that
+    skill group in their mappings (even if their primary LOB differs).
+    """
+    try:
+        from app.models import SkillGroup, SkillMapping, Employee
+        query = SkillMapping.query.filter_by(is_active=True).join(SkillGroup)
+        if lob:
+            from app.data_source import normalize_lob
+            lob_norm = normalize_lob(lob.strip()).lower()
+            # Get all skill groups, then filter mappings for employees
+            # who have any mapping to a group matching this LOB
+            all_groups = SkillGroup.query.filter_by(is_active=True).all()
+            matching_group_ids = [
+                g.id for g in all_groups
+                if normalize_lob(g.name).lower() == lob_norm
+            ]
+            if not matching_group_ids:
+                return {}
+            # Get all employees mapped to these groups
+            mappings = SkillMapping.query.filter(
+                SkillMapping.skill_group_id.in_(matching_group_ids),
+                SkillMapping.is_active == True
+            ).all()
+        else:
+            mappings = query.all()
+
+        result = {}
+        for m in mappings:
+            emp_id = m.employee_id
+            if emp_id not in result:
+                result[emp_id] = {}
+            sg = m.skill_group
+            if sg:
+                result[emp_id][sg.name] = m.proficiency
+        return result
+    except Exception as e:
+        log.debug(f"get_skill_proficiency_map: {e}")
+        return {}
+
+
+def proficiency_to_effectiveness(proficiency):
+    """
+    Convert a 1-5 proficiency rating to an effectiveness multiplier.
+    5 = 1.0 (full effectiveness), 1 = 0.4 (minimal effectiveness).
+    """
+    # Linear scale: 1→0.4, 2→0.55, 3→0.7, 4→0.85, 5→1.0
+    return round(0.25 + (proficiency * 0.15), 2)
+
+
+def score_schedule(days_data, lob=None):
+    """
+    Score a generated schedule across multiple dimensions.
+
+    Input: list of day dicts from generate_schedule_range output.
+    Returns: {
+        overall_score: 0-100,
+        coverage_score: 0-100,
+        cost_score: 0-100,
+        balance_score: 0-100,
+        details: {...}
+    }
+    """
+    if not days_data:
+        return {"overall_score": 0, "coverage_score": 0, "cost_score": 0,
+                "balance_score": 0, "details": {}}
+
+    # ── Coverage score ──
+    total_intervals = 0
+    understaffed_intervals = 0
+    overstaffed_intervals = 0
+    total_coverage_pct_sum = 0
+    worst_gap = 0
+
+    for day in days_data:
+        for c in day.get("coverage", []):
+            total_intervals += 1
+            if c["required"] > 0:
+                total_coverage_pct_sum += min(c["coverage_pct"], 100)
+                if c["gap"] < 0:
+                    understaffed_intervals += 1
+                    worst_gap = min(worst_gap, c["gap"])
+                elif c["gap"] > 2:  # overstaffed by more than 2
+                    overstaffed_intervals += 1
+
+    avg_coverage = (total_coverage_pct_sum / total_intervals
+                    if total_intervals > 0 else 0)
+    understaffed_pct = (understaffed_intervals / total_intervals * 100
+                        if total_intervals > 0 else 0)
+    # Coverage score: penalize understaffing heavily
+    coverage_score = min(100, max(0, avg_coverage - understaffed_pct * 0.5))
+
+    # ── Cost score (overtime & efficiency) ──
+    total_hours = 0
+    total_required_hours = 0
+    overtime_hours = 0
+    employee_hours = defaultdict(float)
+
+    for day in days_data:
+        for s in day.get("shifts", []):
+            h = s.get("hours", 0)
+            total_hours += h
+            employee_hours[s.get("employee", "")] += h
+        for c in day.get("coverage", []):
+            total_required_hours += c.get("required", 0) * (DEFAULT_INTERVAL_MINS / 60)
+
+    # Overtime: employees over 40 hrs across the range
+    for emp, hrs in employee_hours.items():
+        if hrs > 40:
+            overtime_hours += hrs - 40
+
+    # Efficiency: ratio of required to scheduled (closer to 1 is better)
+    efficiency = (total_required_hours / total_hours
+                  if total_hours > 0 else 0)
+    efficiency = min(efficiency, 1.0)  # cap at 1
+
+    overtime_penalty = min(30, overtime_hours * 2)
+    cost_score = max(0, min(100, efficiency * 100 - overtime_penalty))
+
+    # ── Balance score (workload distribution) ──
+    if employee_hours:
+        hrs_values = list(employee_hours.values())
+        avg_hrs = sum(hrs_values) / len(hrs_values)
+        if avg_hrs > 0:
+            variance = sum((h - avg_hrs) ** 2 for h in hrs_values) / len(hrs_values)
+            std_dev = variance ** 0.5
+            cv = std_dev / avg_hrs  # coefficient of variation
+            # Lower CV = more balanced; CV of 0 = perfect, CV > 0.5 = poor
+            balance_score = max(0, min(100, 100 - cv * 200))
+        else:
+            balance_score = 50
+    else:
+        balance_score = 0
+
+    # ── Overall score ──
+    overall_score = round(
+        coverage_score * 0.50 +  # coverage is most important
+        cost_score * 0.25 +
+        balance_score * 0.25, 1
+    )
+
+    return {
+        "overall_score": round(overall_score, 1),
+        "coverage_score": round(coverage_score, 1),
+        "cost_score": round(cost_score, 1),
+        "balance_score": round(balance_score, 1),
+        "details": {
+            "avg_coverage_pct": round(avg_coverage, 1),
+            "understaffed_intervals": understaffed_intervals,
+            "overstaffed_intervals": overstaffed_intervals,
+            "total_intervals": total_intervals,
+            "worst_gap": round(worst_gap, 1),
+            "total_hours": round(total_hours, 1),
+            "total_required_hours": round(total_required_hours, 1),
+            "overtime_hours": round(overtime_hours, 1),
+            "num_employees": len(employee_hours),
+            "efficiency_pct": round(efficiency * 100, 1),
+        },
+    }
+
+
 def _get_employees_for_lob(lob, sheet=None):
     """
     Return active employees assigned to a given LOB/skill.
@@ -658,7 +822,8 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
     return segments
 
 
-def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_ids=None):
+def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_ids=None,
+                    use_proficiency=True):
     """
     Generate shift assignments for a LOB on a given date.
 
@@ -669,6 +834,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     4. Assign employees to shifts that best cover the requirement curve
     5. Respect accommodations (restricted hours, half days)
     6. Respect PTO (skip unavailable employees)
+    7. Weight effective headcount by skill proficiency (if enabled)
 
     Returns:
         shifts: list of {employee, start, end, hours, type}
@@ -685,6 +851,23 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     warnings = []
     log.info(f"generate_shifts: {lob} on {date_obj}: {len(employees)} employees found, "
              f"{len(requirements)} requirement intervals")
+
+    # Load proficiency map for effectiveness weighting
+    prof_map = {}
+    if use_proficiency:
+        prof_map = get_skill_proficiency_map(lob)
+
+    def _emp_effectiveness(emp_dict):
+        """Get effectiveness multiplier for an employee based on proficiency."""
+        if not prof_map:
+            return 1.0
+        db_id = _resolve_employee_db_id(emp_dict.get("employee_id"))
+        if db_id and db_id in prof_map:
+            # Use the max proficiency across matching skill groups
+            profs = list(prof_map[db_id].values())
+            if profs:
+                return proficiency_to_effectiveness(max(profs))
+        return 1.0
 
     # Filter by selected employee IDs if provided
     if employee_ids:
@@ -756,6 +939,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                     if _time_to_minutes(end) > le_min:
                         end = avail["latest_end"]
                         hours = round((_time_to_minutes(end) - _time_to_minutes(start)) / 60, 1)
+            eff = _emp_effectiveness(emp)
             shifts.append({
                 "employee": emp["name"],
                 "employee_id": emp["employee_id"],
@@ -765,6 +949,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 "type": stype,
                 "status": "scheduled",
                 "team_lead": emp.get("team_lead", ""),
+                "effectiveness": eff,
                 "segments": [],  # filled below with stagger
             })
 
@@ -918,7 +1103,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                     end_min = le_min
                     length = end_min - start_min
 
-        # Record the shift
+        # Record the shift (weight by proficiency effectiveness)
+        eff = _emp_effectiveness(emp)
         for m in range(start_min, end_min, DEFAULT_INTERVAL_MINS):
             scheduled_per_interval[m] += 1
 
@@ -934,6 +1120,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "type": stype,
             "status": "scheduled",
             "team_lead": emp.get("team_lead", ""),
+            "effectiveness": eff,
             "segments": [],  # filled below with stagger
         })
 
@@ -1067,14 +1254,15 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     """
     requirements = _get_requirements_for_date(lob, date_obj, sheet)
 
-    # Build scheduled count per interval
-    scheduled_map = defaultdict(int)
+    # Build scheduled count per interval (with optional proficiency weighting)
+    scheduled_map = defaultdict(float)
     for shift in shifts:
         s_min = _time_to_minutes(shift["start"])
         e_min = _time_to_minutes(shift["end"])
+        weight = shift.get("effectiveness", 1.0)
         for m in range(s_min, e_min, DEFAULT_INTERVAL_MINS):
             t = _minutes_to_time(m)
-            scheduled_map[t] += 1
+            scheduled_map[t] += weight
 
     coverage = []
     if requirements:
@@ -1211,7 +1399,7 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
             "Check their PTO, accommodations, and availability settings."
         )
 
-    return {
+    result = {
         "lob": lob,
         "start_date": start_date.strftime("%Y-%m-%d"),
         "end_date": end_date.strftime("%Y-%m-%d"),
@@ -1224,6 +1412,11 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
         },
         "warnings": global_warnings,
     }
+
+    # Add schedule scoring
+    result["score"] = score_schedule(days, lob)
+
+    return result
 
 
 def get_available_lobs(sheet=None):

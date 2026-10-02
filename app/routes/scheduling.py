@@ -10,6 +10,7 @@ import csv
 import logging
 import datetime
 
+from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
 from app.auth import login_required, get_current_user
@@ -1562,4 +1563,179 @@ def mass_segment_cross_lob_shifts():
 
     except Exception as e:
         log.exception("Cross-LOB shifts error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# BULK SHIFT EDITING
+# ═══════════════════════════════════════════════════════════════
+
+@scheduling_bp.route("/bulk-edit", methods=["POST"])
+@login_required
+def bulk_edit():
+    """
+    Apply the same change to multiple shifts at once.
+
+    POST JSON: {
+        shift_ids: [int],
+        action: "change_time" | "change_activity" | "remove_shifts" | "add_day_off",
+        params: {
+            // for change_time:
+            new_start: "HH:MM",
+            new_end: "HH:MM",
+            // for change_activity:
+            activity_type: str,
+            activity_start: "HH:MM",
+            activity_end: "HH:MM",
+            notes: str,
+        }
+    }
+    """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True,
+                        "message": "Demo mode — changes not saved",
+                        "affected": 0})
+    try:
+        payload = request.get_json(silent=True) or {}
+        shift_ids = payload.get("shift_ids", [])
+        action = payload.get("action", "")
+        params = payload.get("params", {})
+
+        if not shift_ids:
+            return jsonify({"success": False, "error": "No shifts selected"})
+        if not action:
+            return jsonify({"success": False, "error": "No action specified"})
+
+        shifts = Schedule.query.filter(Schedule.id.in_(shift_ids)).all()
+        if not shifts:
+            return jsonify({"success": False, "error": "No matching shifts found"})
+
+        affected = 0
+
+        if action == "change_time":
+            new_start = _parse_time(params.get("new_start"))
+            new_end = _parse_time(params.get("new_end"))
+            if not new_start or not new_end:
+                return jsonify({"success": False, "error": "Start and end times required"})
+            for s in shifts:
+                s.start_time = new_start
+                s.end_time = new_end
+                s.hours = _time_diff_hours(new_start, new_end)
+                affected += 1
+
+        elif action == "change_activity":
+            act_type = params.get("activity_type", "break")
+            act_start = _parse_time(params.get("activity_start"))
+            act_end = _parse_time(params.get("activity_end"))
+            notes = params.get("notes", "")
+            if not act_start or not act_end:
+                return jsonify({"success": False, "error": "Activity start/end required"})
+            dur = (act_end.hour * 60 + act_end.minute) - (act_start.hour * 60 + act_start.minute)
+            for s in shifts:
+                seg = ShiftSegment(
+                    schedule_id=s.id,
+                    segment_type=act_type,
+                    start_time=act_start,
+                    end_time=act_end,
+                    duration_mins=dur,
+                    notes=notes,
+                )
+                db.session.add(seg)
+                affected += 1
+
+        elif action == "remove_shifts":
+            for s in shifts:
+                # Remove segments first
+                ShiftSegment.query.filter_by(schedule_id=s.id).delete()
+                db.session.delete(s)
+                affected += 1
+
+        elif action == "add_day_off":
+            for s in shifts:
+                s.shift_type = "day_off"
+                s.start_time = None
+                s.end_time = None
+                s.hours = 0
+                # Remove segments
+                ShiftSegment.query.filter_by(schedule_id=s.id).delete()
+                affected += 1
+
+        else:
+            return jsonify({"success": False, "error": f"Unknown action: {action}"})
+
+        db.session.commit()
+        return jsonify({"success": True, "affected": affected})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bulk edit error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/score", methods=["POST"])
+@login_required
+def get_schedule_score():
+    """
+    Score the current schedule.
+
+    POST JSON: { days: [{date, shifts: [...], coverage: [...]}] }
+    OR: { schedule_date: "YYYY-MM-DD", lob: "..." } to score from DB
+    """
+    try:
+        from app.scheduling.engine import score_schedule
+        payload = request.get_json(silent=True) or {}
+
+        days_data = payload.get("days")
+        if days_data:
+            result = score_schedule(days_data, payload.get("lob"))
+            return jsonify({"success": True, "score": result})
+
+        # Score from DB
+        lob = payload.get("lob")
+        start = payload.get("start_date")
+        end = payload.get("end_date")
+        if not lob or not start:
+            return jsonify({"success": False, "error": "Provide days data or lob+start_date"})
+
+        start_dt = datetime.datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.datetime.strptime(end or start, "%Y-%m-%d").date()
+
+        # Load saved schedule
+        schedules = Schedule.query.filter(
+            Schedule.lob == lob,
+            Schedule.schedule_date >= start_dt,
+            Schedule.schedule_date <= end_dt,
+        ).all()
+
+        if not schedules:
+            return jsonify({"success": False, "error": "No saved schedule found"})
+
+        # Group by date
+        by_date = defaultdict(list)
+        for s in schedules:
+            d = s.schedule_date.strftime("%Y-%m-%d")
+            by_date[d].append({
+                "employee": s.employee_name or "",
+                "employee_id": s.employee_ext_id or "",
+                "start": s.start_time.strftime("%H:%M") if s.start_time else "08:00",
+                "end": s.end_time.strftime("%H:%M") if s.end_time else "16:30",
+                "hours": s.hours or 0,
+                "type": s.shift_type or "full",
+                "effectiveness": 1.0,
+            })
+
+        days = []
+        for date_str in sorted(by_date.keys()):
+            days.append({
+                "date": date_str,
+                "shifts": by_date[date_str],
+                "coverage": [],  # would need requirements to fill
+            })
+
+        result = score_schedule(days, lob)
+        return jsonify({"success": True, "score": result})
+
+    except Exception as e:
+        log.exception("Score error")
         return jsonify({"success": False, "error": str(e)})
