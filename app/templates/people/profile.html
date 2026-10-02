@@ -624,7 +624,7 @@
 
 {% block scripts %}
 <script>
-const EMP_ID = {{ emp.id }};
+const EMP_ID = {{ emp.id|tojson }};
 
 // ── Tab switching ──
 function switchTab(tabId, btn) {

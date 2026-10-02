@@ -11,7 +11,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, jsonify)
+                   url_for, jsonify, abort)
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
@@ -806,11 +806,59 @@ def generate_rotation_schedules():
 # EMPLOYEE PROFILE PAGE
 # ═══════════════════════════════════════════════════════════════
 
-@people_bp.route("/<int:emp_id>/profile")
+@people_bp.route("/<emp_id>/profile")
 @login_required
 def employee_profile(emp_id):
-    emp = Employee.query.get_or_404(emp_id)
     user = get_current_user()
+
+    # Demo mode: build a mock employee object from DEMO_EMPLOYEES
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_EMPLOYEES
+        demo_emp = None
+        for e in DEMO_EMPLOYEES:
+            if str(e.get("Employee ID", "")) == str(emp_id):
+                demo_emp = e
+                break
+        if not demo_emp:
+            abort(404)
+
+        class _MockPU:
+            def __init__(self, name): self.name = name
+        class _MockEmp:
+            def __init__(self, d):
+                self.id = d.get("Employee ID")
+                self.employee_id = d.get("Employee ID", "")
+                self.first_name = d.get("First Name", "")
+                self.last_name = d.get("Last Name", "")
+                self.full_name = f"{self.first_name} {self.last_name}".strip()
+                self.status = d.get("Status", "Active")
+                self.team_lead = d.get("Team Lead", "")
+                self.languages = d.get("Languages", "English")
+                self.timezone = d.get("Timezone", "America/Toronto")
+                self.skill_start = d.get("Latest Skill Start", "")
+                self.skill_end = d.get("Latest Skill End", "")
+                self.end_date = d.get("End Date", "")
+                self.schedule_excluded = d.get("Schedule Excluded", "") == "Yes"
+                self.external_id_1 = ""
+                self.external_id_2 = ""
+                lob = d.get("Latest Skill Name", "")
+                self.planning_unit = _MockPU(lob) if lob else None
+                self.contract = None
+
+        emp = _MockEmp(demo_emp)
+        return render_template("people/profile.html",
+            user=user,
+            emp=emp,
+            skill_mappings=[],
+            contract_assignments=[],
+            selection_memberships=[],
+            pu_assignments=[],
+            ss_assignments=[],
+            avail_map={},
+        )
+
+    emp_id = int(emp_id)
+    emp = Employee.query.get_or_404(emp_id)
 
     skill_mappings = SkillMapping.query.filter_by(employee_id=emp.id).all()
     contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()

@@ -248,7 +248,7 @@
             data-contract="{{ emp['Contract Type']|default('Full-Time') }}"
             data-db-id="{{ emp['_db_id']|default('') }}">
           <td style="font-weight:600;">
-            <a href="/people/{{ emp['_db_id'] }}/profile" style="color:var(--brand-accent); text-decoration:none;" title="View profile">{{ full_name }}</a>
+            <a href="/people/{{ emp['_db_id'] or emp['Employee ID'] }}/profile" style="color:var(--brand-accent); text-decoration:none;" title="View profile">{{ full_name }}</a>
           </td>
           <td>
             {% set st = emp['Status']|default('Active')|lower|trim %}
