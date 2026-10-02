@@ -1745,3 +1745,31 @@ class QualityEvaluation(db.Model):
             "notes": self.notes or "",
             "critical_fail": self.critical_fail or False,
         }
+
+
+class AnalyticsIntegration(db.Model):
+    """Tracks external QM/analytics platform webhook configurations."""
+    __tablename__ = "analytics_integrations"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    name         = db.Column(db.String(200), nullable=False)        # e.g. "NICE CXone", "Calabrio"
+    platform     = db.Column(db.String(100), nullable=False)        # nice, calabrio, custom
+    webhook_key  = db.Column(db.String(100), nullable=False, unique=True)  # API key for auth
+    is_active    = db.Column(db.Boolean, default=True)
+    field_map    = db.Column(db.Text)    # JSON mapping of external fields → internal fields
+    last_received = db.Column(db.DateTime)
+    events_count = db.Column(db.Integer, default=0)
+    created_at   = db.Column(db.DateTime, default=db.func.now())
+
+    def to_dict(self):
+        import json as _json
+        return {
+            "id": self.id,
+            "name": self.name,
+            "platform": self.platform,
+            "webhook_key": self.webhook_key,
+            "is_active": self.is_active,
+            "field_map": _json.loads(self.field_map) if self.field_map else {},
+            "last_received": self.last_received.isoformat() if self.last_received else None,
+            "events_count": self.events_count,
+        }

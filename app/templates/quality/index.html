@@ -88,6 +88,10 @@
   <button class="active" onclick="switchQTab('dashboard', this)">Dashboard</button>
   <button onclick="switchQTab('evaluations', this)">Evaluations</button>
   <button onclick="switchQTab('agents', this)">Agent Scores</button>
+  <button onclick="switchQTab('analytics', this)">📊 Analytics</button>
+  {% if current_user.role == 'admin' %}
+  <button onclick="switchQTab('integrations', this)">🔗 Integrations</button>
+  {% endif %}
 </div>
 
 <!-- Dashboard Panel -->
@@ -125,6 +129,67 @@
     <div class="q-card-body" id="agentBody">
       <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
     </div>
+  </div>
+</div>
+
+<!-- Analytics Panel -->
+<div class="q-panel" id="qp-analytics">
+  <div class="q-stats" id="analyticsStats"></div>
+  <div class="q-card">
+    <div class="q-card-header">Agent Performance — QM Scores + Adherence
+      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadAnalytics()">↻ Refresh</button>
+    </div>
+    <div class="q-card-body" id="analyticsBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Integrations Panel -->
+<div class="q-panel" id="qp-integrations">
+  <div class="q-card">
+    <div class="q-card-header">Configured Integrations
+      <button class="btn btn-primary" style="font-size:.78rem; padding:4px 14px;" onclick="openIntModal()">+ Add Integration</button>
+    </div>
+    <div class="q-card-body" id="intBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Integration Modal -->
+<div id="intModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeIntModal()">
+  <div class="modal">
+    <h3 id="intModalTitle">Add Integration</h3>
+    <form id="intForm" onsubmit="return saveInt(event)">
+      <input type="hidden" id="int_id">
+      <div class="form-group">
+        <label>Integration Name</label>
+        <input type="text" id="int_name" required placeholder="e.g. NICE CXone Production">
+      </div>
+      <div class="form-group">
+        <label>Platform</label>
+        <select id="int_platform">
+          <option value="nice">NICE CXone</option>
+          <option value="calabrio">Calabrio</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Field Mapping (JSON) — optional</label>
+        <textarea id="int_fieldmap" rows="4" style="resize:vertical; font-family:monospace; font-size:.78rem;" placeholder='{"score":"overall_score","agent_id":"employee_id"}'></textarea>
+      </div>
+      <div id="intWebhookUrl" style="display:none; margin-top:12px; padding:12px; background:var(--bg); border-radius:6px;">
+        <label style="font-size:.78rem; font-weight:700; color:var(--text-muted);">Webhook URL</label>
+        <div style="font-family:monospace; font-size:.8rem; word-break:break-all; margin-top:4px;" id="intWebhookDisplay"></div>
+        <p style="font-size:.72rem; color:var(--text-muted); margin-top:6px;">Send POST requests with a JSON <code>evaluations</code> array to this URL. No auth header needed — the key in the URL authenticates.</p>
+      </div>
+      <div id="intError" style="display:none; margin-top:.75rem; padding:10px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:.85rem;"></div>
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closeIntModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -381,7 +446,121 @@ async function saveEval(ev) {
   return false;
 }
 
+// ── Integrations ──
+async function loadIntegrations() {
+  try {
+    const resp = await fetch('/quality/api/integrations', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const data = await resp.json();
+    renderIntegrations(data.integrations || []);
+  } catch(e) { document.getElementById('intBody').innerHTML = '<p style="color:#b91c1c;">Failed to load</p>'; }
+}
+
+function renderIntegrations(ints) {
+  const el = document.getElementById('intBody');
+  if (!ints.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No integrations configured. Click "+ Add Integration" to set up a webhook connection to your QM platform.</p>'; return; }
+  let html = '<table class="q-tbl"><thead><tr><th>Name</th><th>Platform</th><th>Status</th><th>Events</th><th>Last Received</th><th></th></tr></thead><tbody>';
+  ints.forEach(i => {
+    const status = i.is_active ? '<span style="color:#16a34a; font-weight:700;">● Active</span>' : '<span style="color:var(--text-muted);">● Inactive</span>';
+    html += `<tr>
+      <td style="font-weight:600;">${esc(i.name)}</td>
+      <td>${esc(i.platform)}</td>
+      <td>${status}</td>
+      <td>${i.events_count || 0}</td>
+      <td>${i.last_received ? esc(i.last_received) : '—'}</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn-add" style="font-size:.72rem; padding:2px 8px;" onclick='editInt(${JSON.stringify(i)})'>Edit</button>
+        <button class="btn-add" style="font-size:.72rem; padding:2px 8px; background:#fee2e2; color:#991b1b;" onclick="deleteInt(${i.id})">Delete</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function openIntModal(i) {
+  document.getElementById('intError').style.display = 'none';
+  const e = i || {};
+  document.getElementById('int_id').value = e.id || '';
+  document.getElementById('int_name').value = e.name || '';
+  document.getElementById('int_platform').value = e.platform || 'nice';
+  document.getElementById('int_fieldmap').value = e.field_map || '';
+  document.getElementById('intModalTitle').textContent = e.id ? 'Edit Integration' : 'Add Integration';
+  if (e.webhook_key) {
+    const url = location.origin + '/quality/webhook/' + e.webhook_key;
+    document.getElementById('intWebhookDisplay').textContent = url;
+    document.getElementById('intWebhookUrl').style.display = '';
+  } else {
+    document.getElementById('intWebhookUrl').style.display = 'none';
+  }
+  document.getElementById('intModal').style.display = '';
+}
+function editInt(i) { openIntModal(i); }
+function closeIntModal() { document.getElementById('intModal').style.display = 'none'; }
+
+async function saveInt(ev) {
+  ev.preventDefault();
+  const body = {
+    id: document.getElementById('int_id').value || null,
+    name: document.getElementById('int_name').value,
+    platform: document.getElementById('int_platform').value,
+    field_map: document.getElementById('int_fieldmap').value || null,
+  };
+  try {
+    const resp = await fetch('/quality/api/integrations/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await resp.json();
+    if (data.success || data.demo) { closeIntModal(); loadIntegrations(); }
+    else { document.getElementById('intError').textContent = data.error || 'Save failed'; document.getElementById('intError').style.display = ''; }
+  } catch(err) { document.getElementById('intError').textContent = 'Network error'; document.getElementById('intError').style.display = ''; }
+  return false;
+}
+
+async function deleteInt(id) {
+  if (!confirm('Delete this integration?')) return;
+  await fetch('/quality/api/integrations/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  loadIntegrations();
+}
+
+// ── Analytics ──
+async function loadAnalytics() {
+  try {
+    const resp = await fetch('/quality/api/agent-performance', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const data = await resp.json();
+    renderAnalytics(data.agents || []);
+  } catch(e) { document.getElementById('analyticsBody').innerHTML = '<p style="color:#b91c1c;">Failed to load</p>'; }
+}
+
+function renderAnalytics(agents) {
+  const el = document.getElementById('analyticsBody');
+  const stats = document.getElementById('analyticsStats');
+  if (!agents.length) { el.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No agent performance data available.</p>'; stats.innerHTML = ''; return; }
+  const avgQm = (agents.reduce((s,a) => s + (a.avg_quality || 0), 0) / agents.length).toFixed(1);
+  const avgAdh = (agents.reduce((s,a) => s + (a.adherence_pct || 0), 0) / agents.length).toFixed(1);
+  const avgComposite = (agents.reduce((s,a) => s + ((a.avg_quality||0)*0.6 + (a.adherence_pct||0)*0.4), 0) / agents.length).toFixed(1);
+  stats.innerHTML = `
+    <div class="q-stat"><div class="label">Avg QM Score</div><div class="value">${avgQm}</div></div>
+    <div class="q-stat"><div class="label">Avg Adherence</div><div class="value">${avgAdh}%</div></div>
+    <div class="q-stat"><div class="label">Composite (60/40)</div><div class="value">${avgComposite}</div></div>
+    <div class="q-stat"><div class="label">Agents</div><div class="value">${agents.length}</div></div>`;
+  let html = '<table class="q-tbl"><thead><tr><th>#</th><th>Agent</th><th>QM Score</th><th>Adherence</th><th>Composite</th><th>Evals</th></tr></thead><tbody>';
+  agents.sort((a,b) => ((b.avg_quality||0)*0.6+(b.adherence_pct||0)*0.4) - ((a.avg_quality||0)*0.6+(a.adherence_pct||0)*0.4));
+  agents.forEach((a, i) => {
+    const composite = ((a.avg_quality||0)*0.6 + (a.adherence_pct||0)*0.4).toFixed(1);
+    html += `<tr>
+      <td style="font-weight:700; color:var(--text-muted);">${i+1}</td>
+      <td style="font-weight:600;">${esc(a.name)}</td>
+      <td><span class="score-badge ${scoreClass(a.avg_quality||0)}">${(a.avg_quality||0).toFixed(1)}</span></td>
+      <td><span class="score-badge ${scoreClass(a.adherence_pct||0)}">${(a.adherence_pct||0).toFixed(1)}%</span></td>
+      <td><span class="score-badge ${scoreClass(parseFloat(composite))}">${composite}</span></td>
+      <td>${a.eval_count || 0}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
 // Load on page ready
 loadQuality();
+loadAnalytics();
+{% if current_user.role == 'admin' %}loadIntegrations();{% endif %}
 </script>
 {% endblock %}
