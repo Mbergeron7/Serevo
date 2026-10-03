@@ -273,14 +273,20 @@
     <h1>📈 Forecasting</h1>
     <div class="sub">Call volume, AHT &amp; staffing requirements • {{ year }}</div>
   </div>
-  <div style="display:flex;gap:12px;align-items:center;">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
     <div class="view-toggle" id="viewToggle">
-      <button class="vt-btn active" data-view="daily" onclick="setView('daily',this)">Daily</button>
+      <button class="vt-btn" data-view="daily" onclick="setView('daily',this)">Daily</button>
       <button class="vt-btn" data-view="weekly" onclick="setView('weekly',this)">Weekly</button>
       <button class="vt-btn" data-view="monthly" onclick="setView('monthly',this)">Monthly</button>
-      <button class="vt-btn" data-view="yearly" onclick="setView('yearly',this)">Yearly</button>
+      <button class="vt-btn active" data-view="yearly" onclick="setView('yearly',this)">Yearly</button>
     </div>
-    <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button onclick="navPrev()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:.9rem;">‹</button>
+      <button onclick="navNext()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:.9rem;">›</button>
+      <span id="navLabel" style="font-size:.85rem;font-weight:600;min-width:140px;text-align:center;"></span>
+    </div>
+    <input type="date" id="navDate" style="padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.82rem;">
+    <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;display:none;">
       {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
     </select>
   </div>
@@ -339,14 +345,7 @@
       <label>Forecast Days</label>
       <input type="number" id="fcDays" value="90" min="7" max="365">
     </div>
-    <div class="setting-group">
-      <label>Date Range</label>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <input type="date" id="dateFrom" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);">
-        <span style="font-size:.78rem;color:var(--text-muted);">to</span>
-        <input type="date" id="dateTo" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);">
-      </div>
-    </div>
+    <!-- Date range is now controlled by the view toggle + nav arrows in the banner -->
     <div class="setting-group">
       <label>Service Level</label>
       <input type="number" id="slTarget" value="80" min="50" max="99" step="1">
@@ -618,18 +617,130 @@
 <script>
 const ALL_LOBS = {{ all_lobs | tojson }};
 let chartOffered = null, chartAht = null, chartReq = null;
-let forecastData = {};  // {lob: {dates, dailyOffered, dailyAht, dailyReq, isHistoric}}
+let forecastData = {};  // {lob: {daily, totals}}
 let activeLob = null;
-let currentView = 'daily';
+let currentView = 'yearly';
+let navAnchor = new Date();  // current navigation anchor date
+let intervalData = null;     // interval-level data for daily view
 
 function setView(view, btn) {
   currentView = view;
   document.querySelectorAll('.vt-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const viewLabel = {daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[view];
+  if (btn) btn.classList.add('active');
+  else document.querySelector(`.vt-btn[data-view="${view}"]`).classList.add('active');
+
+  // Update nav label and date picker visibility
+  updateNavLabel();
+
+  const viewLabel = {daily:'Intraday',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[view];
   document.getElementById('offeredSub').textContent = viewLabel + ' call volume — historical (grey) vs forecast (blue)';
   document.getElementById('ahtSub').textContent = viewLabel + ' average handle time in seconds — historical vs forecast';
   document.getElementById('reqSub').textContent = viewLabel + ' agents required based on Erlang C calculation';
+
+  if (view === 'daily') {
+    loadIntervalData();
+  } else {
+    intervalData = null;
+    renderCharts();
+    renderHeatmap();
+  }
+}
+
+function updateNavLabel() {
+  const label = document.getElementById('navLabel');
+  const datePicker = document.getElementById('navDate');
+  const d = navAnchor;
+  const opts = { timeZone: 'America/New_York' };
+
+  if (currentView === 'daily') {
+    label.textContent = d.toLocaleDateString('en-US', {day:'numeric', month:'long', year:'numeric'});
+    datePicker.style.display = '';
+    datePicker.value = fmtDate(d);
+  } else if (currentView === 'weekly') {
+    const mon = getMonday(d);
+    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+    label.textContent = mon.toLocaleDateString('en-US', {day:'numeric', month:'short'}) + ' – ' +
+                        sun.toLocaleDateString('en-US', {day:'numeric', month:'short', year:'numeric'});
+    datePicker.style.display = '';
+    datePicker.value = fmtDate(d);
+  } else if (currentView === 'monthly') {
+    label.textContent = d.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+    datePicker.style.display = 'none';
+  } else {
+    label.textContent = d.getFullYear().toString();
+    datePicker.style.display = 'none';
+  }
+}
+
+function fmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function getMonday(d) {
+  const dt = new Date(d);
+  const day = dt.getDay() || 7;
+  dt.setDate(dt.getDate() - day + 1);
+  dt.setHours(12,0,0,0);
+  return dt;
+}
+
+function navPrev() {
+  if (currentView === 'daily') navAnchor.setDate(navAnchor.getDate() - 1);
+  else if (currentView === 'weekly') navAnchor.setDate(navAnchor.getDate() - 7);
+  else if (currentView === 'monthly') navAnchor.setMonth(navAnchor.getMonth() - 1);
+  else navAnchor.setFullYear(navAnchor.getFullYear() - 1);
+  setView(currentView, null);
+}
+
+function navNext() {
+  if (currentView === 'daily') navAnchor.setDate(navAnchor.getDate() + 1);
+  else if (currentView === 'weekly') navAnchor.setDate(navAnchor.getDate() + 7);
+  else if (currentView === 'monthly') navAnchor.setMonth(navAnchor.getMonth() + 1);
+  else navAnchor.setFullYear(navAnchor.getFullYear() + 1);
+  setView(currentView, null);
+}
+
+document.getElementById('navDate').addEventListener('change', function() {
+  if (this.value) {
+    navAnchor = new Date(this.value + 'T12:00:00');
+    setView(currentView, null);
+  }
+});
+
+async function loadIntervalData() {
+  const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  if (!lobs.length) { renderCharts(); return; }
+
+  const dateStr = fmtDate(navAnchor);
+  // Aggregate intervals across selected LOBs
+  const combined = {};
+  for (const lob of lobs) {
+    try {
+      const resp = await fetch('/forecasting/api/intervals', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ lob, date: dateStr })
+      });
+      const data = await resp.json();
+      if (data.success && data.intervals) {
+        for (const iv of data.intervals) {
+          if (!combined[iv.time]) combined[iv.time] = {time: iv.time, offered: 0, aht_w: 0, aht_off: 0, req: 0};
+          combined[iv.time].offered += iv.offered;
+          combined[iv.time].aht_w += iv.offered * iv.aht;
+          combined[iv.time].aht_off += iv.offered;
+          combined[iv.time].req += iv.agents_required;
+        }
+      }
+    } catch(e) { console.error('Interval load error:', e); }
+  }
+
+  intervalData = Object.values(combined).sort((a,b) => a.time.localeCompare(b.time)).map(iv => ({
+    time: iv.time,
+    offered: Math.round(iv.offered),
+    aht: iv.aht_off > 0 ? Math.round(iv.aht_w / iv.aht_off) : 0,
+    agents_required: Math.round(iv.req * 10) / 10,
+  }));
+
   renderCharts();
   renderHeatmap();
 }
@@ -739,7 +850,7 @@ async function loadExistingData() {
 // ── Load data for a single LOB from the API ─────
 async function loadLobData(lob, sl, asa, shrink) {
   try {
-    const year = parseInt(document.getElementById('yearSelect').value);
+    const year = navAnchor.getFullYear();
     const resp = await fetch('/forecasting/api/data', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -814,15 +925,26 @@ function switchLob(lob, btn) {
 }
 
 // ── Build combined daily data ───────────────────
-function getDateRange() {
-  const from = document.getElementById('dateFrom').value;
-  const to = document.getElementById('dateTo').value;
-  return { from: from || null, to: to || null };
+function getViewDateRange() {
+  // Returns {from, to} date strings based on current view + navAnchor
+  const d = navAnchor;
+  if (currentView === 'weekly') {
+    const mon = getMonday(d);
+    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+    return { from: fmtDate(mon), to: fmtDate(sun) };
+  }
+  if (currentView === 'monthly') {
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return { from: fmtDate(first), to: fmtDate(last) };
+  }
+  // yearly
+  return { from: d.getFullYear() + '-01-01', to: d.getFullYear() + '-12-31' };
 }
 
 function getRawDailyData() {
   const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
-  const { from, to } = getDateRange();
+  const { from, to } = getViewDateRange();
   const dateMap = {};
   for (const lob of lobs) {
     const d = forecastData[lob];
@@ -874,40 +996,25 @@ function getGroupLabel(key) {
 }
 
 function getDailyData() {
-  const raw = getRawDailyData();
-  if (currentView === 'daily') return raw;
-
-  // Aggregate by group
-  const groups = {};
-  const today = new Date().toISOString().slice(0, 10);
-  for (const row of raw) {
-    const key = getGroupKey(row.date);
-    if (!groups[key]) groups[key] = {key, offered: 0, aht_w: 0, aht_off: 0, req: 0, days: 0, is_historic: true};
-    const g = groups[key];
-    g.offered += row.offered;
-    g.aht_w += row.offered * row.aht;
-    g.aht_off += row.offered;
-    g.req += row.req;
-    g.days++;
-    if (row.date > today) g.is_historic = false;
-  }
-  return Object.values(groups).sort((a, b) => a.key.localeCompare(b.key)).map(g => ({
-    date: g.key,
-    label: getGroupLabel(g.key),
-    offered: g.offered,
-    aht: g.aht_off > 0 ? g.aht_w / g.aht_off : 0,
-    req: currentView === 'yearly' ? g.req / Math.max(1, g.days) : g.req / Math.max(1, g.days),
-    is_historic: g.is_historic,
-  }));
+  // For weekly/monthly/yearly views — returns daily data points filtered to the current range
+  return getRawDailyData();
 }
 
 // ── Render charts ───────────────────────────────
 function renderCharts() {
+  // Daily view uses interval data (intraday breakdown)
+  if (currentView === 'daily' && intervalData && intervalData.length) {
+    renderIntervalCharts();
+    return;
+  }
+
   const daily = getDailyData();
-  if (!daily.length) return;
+  if (!daily.length) {
+    ['offeredSection','ahtSection','reqSection'].forEach(id => document.getElementById(id).style.display = 'none');
+    return;
+  }
 
   const labels = daily.map(d => d.label || d.date);
-  const today = new Date().toISOString().slice(0, 10);
 
   // Color arrays: grey for historic, colored for forecast
   const offeredColors = daily.map(d => d.is_historic ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
@@ -975,6 +1082,94 @@ function renderCharts() {
   });
 }
 
+// ── Render interval-level charts for Daily view ──
+function renderIntervalCharts() {
+  const labels = intervalData.map(iv => iv.time);
+
+  // Offered chart — bar chart by time-of-day
+  document.getElementById('offeredSection').style.display = '';
+  if (chartOffered) chartOffered.destroy();
+  chartOffered = new Chart(document.getElementById('offeredChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Offered Calls',
+        data: intervalData.map(iv => iv.offered),
+        backgroundColor: 'rgba(59,130,246,.7)',
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: intervalChartOpts('Calls'),
+  });
+
+  // AHT chart — line by time-of-day
+  document.getElementById('ahtSection').style.display = '';
+  if (chartAht) chartAht.destroy();
+  chartAht = new Chart(document.getElementById('ahtChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'AHT (s)',
+        data: intervalData.map(iv => iv.aht),
+        borderColor: 'rgba(234,88,12,.8)',
+        backgroundColor: 'rgba(234,88,12,.1)',
+        borderWidth: 2,
+        fill: true,
+        pointRadius: 2,
+        tension: .3,
+      }]
+    },
+    options: intervalChartOpts('Seconds'),
+  });
+
+  // Requirements chart — bar by time-of-day
+  document.getElementById('reqSection').style.display = '';
+  if (chartReq) chartReq.destroy();
+  chartReq = new Chart(document.getElementById('reqChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Agents Required',
+        data: intervalData.map(iv => iv.agents_required),
+        backgroundColor: 'rgba(34,197,94,.6)',
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: intervalChartOpts('Agents'),
+  });
+}
+
+function intervalChartOpts(yLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: arr => arr[0].label,
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { maxTicksLimit: 20 },
+        title: { display: true, text: 'Time of Day' },
+      },
+      y: {
+        title: { display: true, text: yLabel },
+        beginAtZero: true,
+      }
+    }
+  };
+}
+
 function chartOpts(yLabel, isLine) {
   return {
     responsive: true,
@@ -1008,7 +1203,7 @@ function chartOpts(yLabel, isLine) {
 
 // ── Render heatmap ──────────────────────────────
 function filterByDateRange(daily) {
-  const { from, to } = getDateRange();
+  const { from, to } = getViewDateRange();
   if (!from && !to) return daily;
   return daily.filter(r => {
     if (from && r.date < from) return false;
@@ -1035,6 +1230,12 @@ function aggregateLobByView(daily) {
 function renderHeatmap() {
   const lobs = Object.keys(forecastData);
   if (!lobs.length) return;
+
+  // Hide heatmap in daily view (interval data shown in charts instead)
+  if (currentView === 'daily') {
+    document.getElementById('heatmapSection').style.display = 'none';
+    return;
+  }
 
   // Build aggregated keys across all LOBs
   const allKeys = new Set();
@@ -1118,22 +1319,8 @@ document.getElementById('yearSelect').addEventListener('change', function() {
   window.location.href = '/forecasting/?year=' + this.value;
 });
 
-// ── Date range defaults ────────────────────────
-(function initDateRange() {
-  const year = {{ year }};
-  const from = document.getElementById('dateFrom');
-  const to = document.getElementById('dateTo');
-  from.value = year + '-01-01';
-  to.value = year + '-12-31';
-
-  // Re-render charts/heatmap when date range changes
-  from.addEventListener('change', function() {
-    if (Object.keys(forecastData).length) { renderCharts(); renderHeatmap(); }
-  });
-  to.addEventListener('change', function() {
-    if (Object.keys(forecastData).length) { renderCharts(); renderHeatmap(); }
-  });
-})();
+// ── Init nav label on load ────────────────────────
+updateNavLabel();
 
 // ── Scenario management ────────────────────────
 let currentScenarios = [];

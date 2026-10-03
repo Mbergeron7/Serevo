@@ -678,6 +678,121 @@ def forecast_api_data():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Interval-level data API (for daily intraday chart) ────────
+@forecasting_bp.route("/api/intervals", methods=["POST"])
+@login_required
+def forecast_api_intervals():
+    """Return interval-level forecast + requirements data for a LOB on a single day.
+
+    POST JSON: {lob, date, service_level?, target_asa?, shrinkage?}
+    Returns: {success, intervals: [{time, offered, aht, agents_required}]}
+    """
+    from app.models import (ForecastInterval, RequirementInterval,
+                            PlanningUnit, IntervalActual)
+    from app.data_source import normalize_lob
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+
+        if not lob or not date_str:
+            return jsonify({"success": False, "error": "LOB and date are required"})
+
+        target_date = datetime.datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+        user = get_current_user()
+
+        # Demo mode
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_forecast, get_demo_requirements
+            fc, _ = get_demo_forecast(lob, target_date)
+            rq, _ = get_demo_requirements(lob, target_date)
+            rq_map = {r["time"]: r["agents_required"] for r in rq}
+            intervals = []
+            for row in fc:
+                intervals.append({
+                    "time": row["time"].split(" ")[-1] if " " in row["time"] else row["time"],
+                    "offered": round(row["offered"], 1),
+                    "aht": round(row["aht"], 1),
+                    "agents_required": rq_map.get(row["time"], 0),
+                })
+            return jsonify({"success": True, "intervals": intervals})
+
+        lob_normalized = normalize_lob(lob)
+        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        if not unit:
+            return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
+
+        today = date.today()
+        day_start = datetime.datetime.combine(target_date, datetime.time.min)
+        day_end = datetime.datetime.combine(target_date, datetime.time.max)
+
+        intervals = []
+        if target_date <= today:
+            # Historical — use actuals
+            rows = (
+                IntervalActual.query
+                .filter(
+                    IntervalActual.planning_unit_id == unit.id,
+                    IntervalActual.timestamp >= day_start,
+                    IntervalActual.timestamp <= day_end,
+                )
+                .order_by(IntervalActual.timestamp)
+                .all()
+            )
+            for row in rows:
+                intervals.append({
+                    "time": row.timestamp.strftime("%H:%M"),
+                    "offered": round(float(row.offered or 0), 1),
+                    "aht": round(float(row.aht_secs or 0), 1),
+                    "agents_required": 0,
+                })
+        # Overlay forecast intervals
+        fc_rows = (
+            ForecastInterval.query
+            .filter(
+                ForecastInterval.planning_unit_id == unit.id,
+                ForecastInterval.timestamp >= day_start,
+                ForecastInterval.timestamp <= day_end,
+            )
+            .order_by(ForecastInterval.timestamp)
+            .all()
+        )
+        rq_rows = (
+            RequirementInterval.query
+            .filter(
+                RequirementInterval.planning_unit_id == unit.id,
+                RequirementInterval.timestamp >= day_start,
+                RequirementInterval.timestamp <= day_end,
+            )
+            .order_by(RequirementInterval.timestamp)
+            .all()
+        )
+        rq_map = {r.timestamp.strftime("%H:%M"): round(float(r.agents_required or 0), 1) for r in rq_rows}
+
+        if not intervals and fc_rows:
+            # Future day — use forecast data
+            for row in fc_rows:
+                t = row.timestamp.strftime("%H:%M")
+                intervals.append({
+                    "time": t,
+                    "offered": round(float(row.offered or 0), 1),
+                    "aht": round(float(row.aht or 0), 1),
+                    "agents_required": rq_map.get(t, 0),
+                })
+        elif intervals:
+            # Merge requirement data into actuals
+            for iv in intervals:
+                if iv["agents_required"] == 0:
+                    iv["agents_required"] = rq_map.get(iv["time"], 0)
+
+        return jsonify({"success": True, "intervals": intervals})
+
+    except Exception as e:
+        log.exception("Forecast intervals API error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ═══════════════════════════════════════════════════════════════
 # MID-DAY REFORECASTING
 # ═══════════════════════════════════════════════════════════════
