@@ -1143,3 +1143,159 @@ def report_efficiency():
 def report_dashboard():
     from app.realtime.reports import combined_dashboard
     return _run_report(combined_dashboard)
+
+
+# ═══════════════════════════════════════════════════════════════
+# VTO / OT MANAGEMENT (supervisors & admins)
+# ═══════════════════════════════════════════════════════════════
+
+@realtime_bp.route("/vto-ot")
+@login_required
+def vto_ot_page():
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import PlanningUnit
+    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    return render_template("realtime/vto_ot.html", user=user, lobs=lobs)
+
+
+@realtime_bp.route("/vto-ot/list", methods=["POST"])
+@login_required
+def vto_ot_list():
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import VTOOTPost, VTOOTSignup, Employee
+    from datetime import date, timedelta
+
+    payload = request.get_json(silent=True) or {}
+    status_filter = payload.get("status", "all")
+    type_filter = payload.get("type", "all")
+
+    q = VTOOTPost.query.order_by(VTOOTPost.schedule_date.desc(), VTOOTPost.created_at.desc())
+    if status_filter != "all":
+        q = q.filter_by(status=status_filter)
+    if type_filter != "all":
+        q = q.filter_by(post_type=type_filter)
+
+    posts = q.limit(100).all()
+    result = []
+    for p in posts:
+        signups = VTOOTSignup.query.filter_by(post_id=p.id, status="confirmed").all()
+        signup_names = []
+        for s in signups:
+            emp = Employee.query.get(s.employee_id)
+            signup_names.append(emp.full_name if emp else f"Emp #{s.employee_id}")
+        d = p.to_dict()
+        d["signups"] = signup_names
+        d["posted_by"] = p.posted_by
+        result.append(d)
+
+    return jsonify(success=True, posts=result)
+
+
+@realtime_bp.route("/vto-ot/save", methods=["POST"])
+@login_required
+def vto_ot_save():
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import db, VTOOTPost, PlanningUnit
+    from datetime import datetime as dt
+
+    payload = request.get_json(silent=True) or {}
+    post_type = payload.get("post_type", "vto")
+    schedule_date = payload.get("schedule_date")
+    start_time = payload.get("start_time")
+    end_time = payload.get("end_time")
+    hours = payload.get("hours", 0)
+    slots = payload.get("slots", 1)
+    lob = payload.get("lob", "")
+    notes = payload.get("notes", "")
+    post_id = payload.get("id")
+
+    if not schedule_date:
+        return jsonify(success=False, error="Date is required")
+
+    pu_id = None
+    if lob:
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        if pu:
+            pu_id = pu.id
+
+    try:
+        sdate = dt.strptime(schedule_date, "%Y-%m-%d").date()
+        stime = dt.strptime(start_time, "%H:%M").time() if start_time else None
+        etime = dt.strptime(end_time, "%H:%M").time() if end_time else None
+    except (ValueError, TypeError):
+        return jsonify(success=False, error="Invalid date/time format")
+
+    if post_id:
+        post = VTOOTPost.query.get(post_id)
+        if not post:
+            return jsonify(success=False, error="Post not found")
+        post.post_type = post_type
+        post.schedule_date = sdate
+        post.start_time = stime
+        post.end_time = etime
+        post.hours = hours
+        post.slots = max(1, int(slots))
+        post.planning_unit_id = pu_id
+        post.notes = notes
+    else:
+        post = VTOOTPost(
+            post_type=post_type,
+            schedule_date=sdate,
+            start_time=stime,
+            end_time=etime,
+            hours=hours,
+            slots=max(1, int(slots)),
+            planning_unit_id=pu_id,
+            status="open",
+            posted_by=user.get("id"),
+            notes=notes,
+        )
+        db.session.add(post)
+
+    db.session.commit()
+    return jsonify(success=True, id=post.id)
+
+
+@realtime_bp.route("/vto-ot/cancel", methods=["POST"])
+@login_required
+def vto_ot_cancel():
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import db, VTOOTPost
+
+    payload = request.get_json(silent=True) or {}
+    post_id = payload.get("id")
+    post = VTOOTPost.query.get(post_id)
+    if not post:
+        return jsonify(success=False, error="Post not found")
+
+    post.status = "cancelled"
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@realtime_bp.route("/vto-ot/delete", methods=["POST"])
+@login_required
+def vto_ot_delete():
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import db, VTOOTPost, VTOOTSignup
+
+    payload = request.get_json(silent=True) or {}
+    post_id = payload.get("id")
+    post = VTOOTPost.query.get(post_id)
+    if not post:
+        return jsonify(success=False, error="Post not found")
+
+    VTOOTSignup.query.filter_by(post_id=post_id).delete()
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify(success=True)

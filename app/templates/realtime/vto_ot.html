@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}VTO / OT Management — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .vto-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .vto-header h1 { font-size:1.3rem; font-weight:800; margin:0; }
+  .vto-filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .vto-filters select { font-size:.82rem; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-primary); }
+
+  .vto-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:14px; margin-bottom:24px; }
+  .vto-stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; box-shadow:var(--shadow); }
+  .vto-stat .label { font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+  .vto-stat .value { font-size:1.5rem; font-weight:800; }
+
+  .vto-tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .vto-tbl th { text-align:left; font-weight:700; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-muted); font-size:.75rem; text-transform:uppercase; }
+  .vto-tbl td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .vto-tbl tr:hover { background:var(--bg); }
+
+  .type-badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.72rem; font-weight:700; }
+  .type-vto { background:#dcfce7; color:#166534; }
+  .type-ot { background:#fef9c3; color:#854d0e; }
+  .status-open { color:#16a34a; font-weight:600; }
+  .status-filled { color:#2563eb; font-weight:600; }
+  .status-cancelled { color:#dc2626; font-weight:600; text-decoration:line-through; }
+
+  .modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal-box { background:var(--surface); border-radius:12px; padding:24px; width:440px; max-width:92vw; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .modal-box h2 { font-size:1rem; font-weight:800; margin:0 0 16px; }
+  .modal-box label { display:block; font-size:.8rem; font-weight:600; margin-bottom:4px; margin-top:10px; }
+  .modal-box input, .modal-box select, .modal-box textarea { width:100%; font-size:.82rem; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-primary); box-sizing:border-box; }
+  .modal-box textarea { resize:vertical; height:60px; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+  .signup-list { font-size:.78rem; color:var(--text-muted); }
+  .signup-list span { display:inline-block; background:var(--bg); padding:1px 8px; border-radius:8px; margin:2px 2px; font-size:.72rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vto-header">
+  <div>
+    <h1>VTO / OT Management</h1>
+    <p style="font-size:.82rem; color:var(--text-muted); margin:4px 0 0;">Post voluntary time off and overtime opportunities for agents.</p>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <a href="/realtime/" class="btn btn-outline" style="font-size:.8rem; text-decoration:none;">← Real-Time</a>
+    <button class="btn btn-primary" onclick="openModal()">+ New Post</button>
+  </div>
+</div>
+
+<div class="vto-stats" id="statsRow"></div>
+
+<div class="vto-filters">
+  <select id="filterStatus" onchange="loadPosts()">
+    <option value="all">All Statuses</option>
+    <option value="open" selected>Open</option>
+    <option value="filled">Filled</option>
+    <option value="cancelled">Cancelled</option>
+  </select>
+  <select id="filterType" onchange="loadPosts()">
+    <option value="all">All Types</option>
+    <option value="vto">VTO</option>
+    <option value="ot">OT</option>
+  </select>
+</div>
+
+<div class="card" style="margin-top:16px; overflow:hidden;">
+  <div style="overflow-x:auto;">
+    <table class="vto-tbl">
+      <thead>
+        <tr>
+          <th>Type</th><th>Date</th><th>Time</th><th>Hours</th><th>LOB</th>
+          <th>Slots</th><th>Sign-ups</th><th>Status</th><th>Notes</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="postsBody">
+        <tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-muted);">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="modal-overlay" id="postModal">
+  <div class="modal-box">
+    <h2 id="modalTitle">New VTO / OT Post</h2>
+    <input type="hidden" id="editId">
+    <label>Type</label>
+    <select id="fType"><option value="vto">VTO (Voluntary Time Off)</option><option value="ot">OT (Overtime)</option></select>
+    <label>Date</label>
+    <input type="date" id="fDate">
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1"><label>Start Time</label><input type="time" id="fStart"></div>
+      <div style="flex:1"><label>End Time</label><input type="time" id="fEnd"></div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1"><label>Hours</label><input type="number" id="fHours" step="0.5" min="0" value="0"></div>
+      <div style="flex:1"><label>Slots</label><input type="number" id="fSlots" min="1" value="1"></div>
+    </div>
+    <label>LOB (Planning Unit)</label>
+    <select id="fLob"><option value="">— Any —</option>{% for lob in lobs %}<option value="{{ lob }}">{{ lob }}</option>{% endfor %}</select>
+    <label>Notes</label>
+    <textarea id="fNotes" placeholder="Optional details for agents…"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="savePost()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]');
+const csrfVal = csrf ? csrf.content : '';
+
+async function api(url, body={}) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfVal}, body:JSON.stringify(body)});
+  return r.json();
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+async function loadPosts() {
+  const status = document.getElementById('filterStatus').value;
+  const type = document.getElementById('filterType').value;
+  const data = await api('/realtime/vto-ot/list', {status, type});
+  const body = document.getElementById('postsBody');
+  const stats = document.getElementById('statsRow');
+
+  if (!data.success || !data.posts.length) {
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-muted);">No posts found.</td></tr>';
+    stats.innerHTML = '';
+    return;
+  }
+
+  const posts = data.posts;
+  let openVto=0, openOt=0, totalSignups=0, filledCount=0;
+  posts.forEach(p => {
+    if (p.status==='open' && p.type==='vto') openVto++;
+    if (p.status==='open' && p.type==='ot') openOt++;
+    totalSignups += (p.signups||[]).length;
+    if (p.status==='filled') filledCount++;
+  });
+
+  stats.innerHTML = `
+    <div class="vto-stat"><div class="label">Open VTO</div><div class="value" style="color:#16a34a;">${openVto}</div></div>
+    <div class="vto-stat"><div class="label">Open OT</div><div class="value" style="color:#d97706;">${openOt}</div></div>
+    <div class="vto-stat"><div class="label">Total Sign-ups</div><div class="value">${totalSignups}</div></div>
+    <div class="vto-stat"><div class="label">Filled</div><div class="value" style="color:#2563eb;">${filledCount}</div></div>
+  `;
+
+  let html = '';
+  posts.forEach(p => {
+    const typeCls = p.type==='vto' ? 'type-vto' : 'type-ot';
+    const statusCls = 'status-' + p.status;
+    const signupHtml = (p.signups||[]).map(n => `<span>${esc(n)}</span>`).join('') || '<span style="color:var(--text-muted);">—</span>';
+    const remaining = p.slots - p.slots_filled;
+    const actions = p.status==='open'
+      ? `<button class="btn btn-outline" style="font-size:.72rem;padding:2px 10px;" onclick="editPost(${p.id})">Edit</button>
+         <button class="btn btn-outline" style="font-size:.72rem;padding:2px 10px;color:#dc2626;border-color:#dc2626;" onclick="cancelPost(${p.id})">Cancel</button>`
+      : p.status==='cancelled'
+        ? `<button class="btn btn-outline" style="font-size:.72rem;padding:2px 10px;color:#dc2626;" onclick="deletePost(${p.id})">Delete</button>`
+        : '';
+    html += `<tr>
+      <td><span class="type-badge ${typeCls}">${p.type.toUpperCase()}</span></td>
+      <td>${p.date}</td>
+      <td>${p.start||'—'}${p.end ? ' – '+p.end : ''}</td>
+      <td>${p.hours || '—'}</td>
+      <td>${esc(p.lob) || '—'}</td>
+      <td>${p.slots_filled} / ${p.slots}</td>
+      <td class="signup-list">${signupHtml}</td>
+      <td class="${statusCls}">${p.status}</td>
+      <td style="font-size:.78rem; color:var(--text-muted); max-width:160px;">${esc(p.notes)}</td>
+      <td style="white-space:nowrap;">${actions}</td>
+    </tr>`;
+  });
+  body.innerHTML = html;
+}
+
+let _editCache = {};
+
+function openModal(post) {
+  document.getElementById('modalTitle').textContent = post ? 'Edit Post' : 'New VTO / OT Post';
+  document.getElementById('editId').value = post ? post.id : '';
+  document.getElementById('fType').value = post ? post.type : 'vto';
+  document.getElementById('fDate').value = post ? post.date : new Date().toISOString().slice(0,10);
+  document.getElementById('fStart').value = post ? post.start : '';
+  document.getElementById('fEnd').value = post ? post.end : '';
+  document.getElementById('fHours').value = post ? post.hours : 0;
+  document.getElementById('fSlots').value = post ? post.slots : 1;
+  document.getElementById('fLob').value = post ? post.lob : '';
+  document.getElementById('fNotes').value = post ? post.notes : '';
+  document.getElementById('postModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('postModal').classList.remove('active');
+}
+
+async function savePost() {
+  const body = {
+    id: document.getElementById('editId').value || undefined,
+    post_type: document.getElementById('fType').value,
+    schedule_date: document.getElementById('fDate').value,
+    start_time: document.getElementById('fStart').value || null,
+    end_time: document.getElementById('fEnd').value || null,
+    hours: parseFloat(document.getElementById('fHours').value) || 0,
+    slots: parseInt(document.getElementById('fSlots').value) || 1,
+    lob: document.getElementById('fLob').value,
+    notes: document.getElementById('fNotes').value,
+  };
+  const data = await api('/realtime/vto-ot/save', body);
+  if (data.success) { closeModal(); loadPosts(); }
+  else { alert(data.error || 'Failed to save'); }
+}
+
+async function editPost(id) {
+  // Fetch current data and open modal
+  const data = await api('/realtime/vto-ot/list', {status:'all', type:'all'});
+  const post = (data.posts||[]).find(p => p.id === id);
+  if (post) openModal(post);
+}
+
+async function cancelPost(id) {
+  if (!confirm('Cancel this post? Agents will no longer see it.')) return;
+  await api('/realtime/vto-ot/cancel', {id});
+  loadPosts();
+}
+
+async function deletePost(id) {
+  if (!confirm('Permanently delete this post and all sign-ups?')) return;
+  await api('/realtime/vto-ot/delete', {id});
+  loadPosts();
+}
+
+document.getElementById('postModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+loadPosts();
+</script>
+{% endblock %}
