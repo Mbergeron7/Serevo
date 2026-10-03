@@ -27,42 +27,42 @@
 <div class="tab-panel" id="tab-shifts">
   <div class="tab-header"><h2>Shift Templates</h2><button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button></div>
   <p class="tab-desc">Reusable shift definitions — assign to a LOB, day type (weekday/Saturday/Sunday/holiday), and category (opening/closing/mid).</p>
-  <table class="data-table sortable" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: LOB Settings ═══════ -->
 <div class="tab-panel" id="tab-lob" hidden>
   <div class="tab-header"><h2>LOB Settings</h2><button class="btn btn-primary" onclick="openLOBModal()">+ Add LOB Setting</button></div>
   <p class="tab-desc">Per-LOB operational defaults — SLA, shrinkage, occupancy, interval, hours of operation.</p>
-  <table class="data-table sortable" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Time-Off Types ═══════ -->
 <div class="tab-panel" id="tab-timeoff" hidden>
   <div class="tab-header"><h2>Time-Off Types</h2><button class="btn btn-primary" onclick="openTimeOffModal()">+ Add Type</button></div>
   <p class="tab-desc">Configurable PTO categories — vacation, sick, personal, FMLA, bereavement, etc.</p>
-  <table class="data-table sortable" id="timeoff-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Paid</th><th>Approval</th><th>Max Days/Yr</th><th>Notice (days)</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="timeoff-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Paid</th><th>Approval</th><th>Max Days/Yr</th><th>Notice (days)</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Overtime Rules ═══════ -->
 <div class="tab-panel" id="tab-overtime" hidden>
   <div class="tab-header"><h2>Overtime Rules</h2><button class="btn btn-primary" onclick="openOTModal()">+ Add Rule</button></div>
   <p class="tab-desc">Overtime policies — max hours, approval requirements, eligibility, and pay multipliers.</p>
-  <table class="data-table sortable" id="ot-table"><thead><tr><th>Name</th><th>Type</th><th>Max/Week</th><th>Max/Day</th><th>Approval</th><th>Pay Rate</th><th>Eligible After</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="ot-table"><thead><tr><th>Name</th><th>Type</th><th>Max/Week</th><th>Max/Day</th><th>Approval</th><th>Pay Rate</th><th>Eligible After</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Schedule Rules ═══════ -->
 <div class="tab-panel" id="tab-schedrules" hidden>
   <div class="tab-header"><h2>Schedule Rules</h2><button class="btn btn-primary" onclick="openSchedRuleModal()">+ Add Rule</button></div>
   <p class="tab-desc">Scheduling constraints — min/max hours, consecutive days, rest periods, split shift limits.</p>
-  <table class="data-table sortable" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Holidays ═══════ -->
 <div class="tab-panel" id="tab-holidays" hidden>
   <div class="tab-header"><h2>Holiday Calendar ({{ current_year }})</h2><button class="btn btn-primary" onclick="openHolidayModal()">+ Add Holiday</button></div>
   <p class="tab-desc">Company holidays that affect scheduling and forecast volume adjustments.</p>
-  <table class="data-table sortable" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Skill Groups ═══════ -->
@@ -76,21 +76,21 @@
 <div class="tab-panel" id="tab-adherence" hidden>
   <div class="tab-header"><h2>Adherence Exception Codes</h2><button class="btn btn-primary" onclick="openAdherenceModal()">+ Add Code</button></div>
   <p class="tab-desc">Exception reasons for adherence deviations — late arrival, early departure, approved absence, etc.</p>
-  <table class="data-table sortable" id="adherence-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Category</th><th>Excused</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="adherence-table"><thead><tr><th>Color</th><th>Code</th><th>Label</th><th>Category</th><th>Excused</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Alert Configuration ═══════ -->
 <div class="tab-panel" id="tab-alerts" hidden>
   <div class="tab-header"><h2>Alert Configuration</h2><button class="btn btn-primary" onclick="openAlertModal()">+ Add Alert</button></div>
   <p class="tab-desc">Set up threshold-based alerts for service level, staffing, adherence, and forecast variance.</p>
-  <table class="data-table sortable" id="alerts-table"><thead><tr><th>Name</th><th>Type</th><th>Threshold</th><th>LOB</th><th>In-App</th><th>Email</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="alerts-table"><thead><tr><th>Name</th><th>Type</th><th>Threshold</th><th>LOB</th><th>In-App</th><th>Email</th><th>Active</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: LOB Mappings ═══════ -->
 <div class="tab-panel" id="tab-lobmap" hidden>
   <div class="tab-header"><h2>LOB Mappings</h2><button class="btn btn-primary" onclick="openLobMapModal()">+ Add Mapping</button></div>
   <p class="tab-desc">Map source LOB/workload names from your data feed to canonical planning-unit names. E.g. "SS Sales Combined" → "SS Sales". Data that arrives with a mapped source name will automatically be stored under the correct planning unit.</p>
-  <table class="data-table sortable" id="lobmap-table"><thead><tr><th>Source Name</th><th>→ Planning Unit</th><th></th></tr></thead><tbody></tbody></table>
+  <div style="overflow-x:auto"><table class="data-table sortable" id="lobmap-table"><thead><tr><th>Source Name</th><th>→ Planning Unit</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Branding ═══════ -->

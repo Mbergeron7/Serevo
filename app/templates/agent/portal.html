@@ -212,7 +212,7 @@ async function loadSchedule() {
       el.innerHTML = '<p class="empty-msg">No shifts scheduled this week.</p>';
       return;
     }
-    let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Status</th><th>LOB</th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Status</th><th>LOB</th></tr></thead><tbody>';
     const today = fmtDate(new Date());
     scheds.forEach(s => {
       const dt = new Date(s.date + 'T00:00:00');
@@ -232,7 +232,7 @@ async function loadSchedule() {
       html += '<td>' + esc(s.lob || '') + '</td>';
       html += '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     el.innerHTML = html;
   } catch(err) {
     el.innerHTML = '<p class="empty-msg">Error loading schedule.</p>';
@@ -257,7 +257,7 @@ async function loadOpenShifts() {
   const el = document.getElementById('openShiftsBody');
   const shifts = data.shifts || [];
   if (!shifts.length) { el.innerHTML = '<p class="empty-msg">No open shifts available right now.</p>'; return; }
-  let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Hours</th><th>LOB</th><th>Skills</th><th>Bids</th><th>Notes</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Hours</th><th>LOB</th><th>Skills</th><th>Bids</th><th>Notes</th><th></th></tr></thead><tbody>';
   shifts.forEach(s => {
     html += `<tr>
       <td style="font-weight:600;">${esc(s.date)}</td>
@@ -270,7 +270,7 @@ async function loadOpenShifts() {
       <td><button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="placeBid(${s.id})">Bid</button></td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -290,7 +290,7 @@ async function loadMyBids() {
   const el = document.getElementById('myBidsBody');
   const bids = data.bids || [];
   if (!bids.length) { el.innerHTML = '<p class="empty-msg">You haven\'t bid on any shifts yet. Check the Open Shifts tab.</p>'; return; }
-  let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Status</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Status</th><th></th></tr></thead><tbody>';
   bids.forEach(b => {
     html += `<tr>
       <td style="font-weight:600;">${esc(b.date)}</td>
@@ -299,7 +299,7 @@ async function loadMyBids() {
       <td>${b.status === 'pending' ? `<button class="btn btn-outline" style="font-size:.72rem; padding:2px 8px;" onclick="cancelBid(${b.id})">Cancel</button>` : ''}</td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -315,7 +315,7 @@ async function loadSwaps() {
   const el = document.getElementById('swapsBody');
   const swaps = data.swaps || [];
   if (!swaps.length) { el.innerHTML = '<p class="empty-msg">No swap requests. Use "+ Offer Swap" to post one.</p>'; return; }
-  let html = '<table class="p-tbl"><thead><tr><th>From</th><th>Shift</th><th>To</th><th>Their Shift</th><th>Status</th><th>Reason</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>From</th><th>Shift</th><th>To</th><th>Their Shift</th><th>Status</th><th>Reason</th><th></th></tr></thead><tbody>';
   swaps.forEach(s => {
     const statusCls = 'pill-' + s.status;
     let actions = '';
@@ -332,7 +332,7 @@ async function loadSwaps() {
       <td>${actions}</td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -377,7 +377,7 @@ async function loadVtoOt() {
   const el = document.getElementById('vtoBody');
   const posts = data.posts || [];
   if (!posts.length) { el.innerHTML = '<p class="empty-msg">No VTO or OT opportunities posted right now.</p>'; return; }
-  let html = '<table class="p-tbl"><thead><tr><th>Type</th><th>Date</th><th>Time</th><th>Hours</th><th>LOB</th><th>Slots</th><th>Notes</th><th></th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Type</th><th>Date</th><th>Time</th><th>Hours</th><th>LOB</th><th>Slots</th><th>Notes</th><th></th></tr></thead><tbody>';
   posts.forEach(p => {
     const typeCls = p.type === 'vto' ? 'pill-vto' : 'pill-ot';
     const remaining = p.slots - p.slots_filled;
@@ -397,7 +397,7 @@ async function loadVtoOt() {
       </td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 

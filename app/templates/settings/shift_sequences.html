@@ -12,12 +12,12 @@
   <button class="btn btn-primary" onclick="openModal()">+ Add Shift Sequence</button>
 </div>
 
-<table class="data-table" id="main-table">
+<div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
     <tr><th>Name</th><th>Cycle Weeks</th><th>Active</th><th></th></tr>
   </thead>
   <tbody></tbody>
-</table>
+</table></div>
 
 <!-- Create / Edit modal -->
 <dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface);color:var(--text);">
@@ -162,7 +162,7 @@ function getTemplate(id) {
 function renderGrid() {
   const el = document.getElementById('patternGrid');
   document.getElementById('removeWeekBtn').style.display = editingCycleWeeks > 1 ? '' : 'none';
-  let html = '<table class="pattern-table"><thead><tr><th></th>';
+  let html = '<div style="overflow-x:auto"><table class="pattern-table"><thead><tr><th></th>';
   DAYS.forEach(d => html += `<th>${d}</th>`);
   html += '</tr></thead><tbody>';
   for (let w = 0; w < editingCycleWeeks; w++) {
@@ -181,7 +181,7 @@ function renderGrid() {
     });
     html += '</tr>';
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 

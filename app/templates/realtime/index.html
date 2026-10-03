@@ -927,11 +927,11 @@ function renderTimeline(d) {
   if (d.actual.length) {
     const ooa = _findOOA(d.scheduled, d.actual, s_mins, e_mins);
     if (ooa.length) {
-      let h = '<h4>Out-of-Adherence Periods</h4><table class="data-table"><thead><tr><th>Time</th><th>Expected</th><th>Actual</th><th>Duration</th></tr></thead><tbody>';
+      let h = '<h4>Out-of-Adherence Periods</h4><div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Time</th><th>Expected</th><th>Actual</th><th>Duration</th></tr></thead><tbody>';
       ooa.forEach(o => {
         h += `<tr><td>${o.start} – ${o.end}</td><td><span class="tl-legend-dot" style="background:${_tlColor(o.expected)};"></span> ${_tlLabel(o.expected)}</td><td><span class="tl-legend-dot" style="background:${_tlColor(o.actual)};"></span> ${_tlLabel(o.actual)}</td><td>${o.mins} min</td></tr>`;
       });
-      h += '</tbody></table>';
+      h += '</tbody></table></div>';
       $('tlOOA').innerHTML = h;
     } else {
       $('tlOOA').innerHTML = '<div style="padding:12px 0;font-size:.82rem;color:#10b981;font-weight:700;">✓ Fully adherent during shift</div>';

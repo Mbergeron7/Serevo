@@ -20,19 +20,19 @@
   <div>
     <h3 style="margin:0 0 8px;">Day Types</h3>
     <p style="font-size:.85rem;color:var(--text-muted);margin:0 0 12px;">Reusable labels for special days (Holiday, Campaign, etc.)</p>
-    <table class="data-table" id="dt-table">
+    <div style="overflow-x:auto"><table class="data-table" id="dt-table">
       <thead><tr><th>Name</th><th>Color</th><th></th></tr></thead>
       <tbody></tbody>
-    </table>
+    </table></div>
   </div>
 
   <!-- Calendars panel -->
   <div>
     <h3 style="margin:0 0 8px;">Calendars</h3>
-    <table class="data-table" id="cal-table">
+    <div style="overflow-x:auto"><table class="data-table" id="cal-table">
       <thead><tr><th>Name</th><th>Entries</th><th></th></tr></thead>
       <tbody></tbody>
-    </table>
+    </table></div>
 
     <!-- Calendar entry editor -->
     <div id="calEditor" style="display:none;margin-top:1rem;border:1px solid var(--border);border-radius:10px;padding:16px;">
@@ -44,10 +44,10 @@
         </label>
         <button class="btn btn-primary" onclick="addEntry()">Add</button>
       </div>
-      <table class="data-table" id="entry-table">
+      <div style="overflow-x:auto"><table class="data-table" id="entry-table">
         <thead><tr><th>Date</th><th>Day Type</th><th></th></tr></thead>
         <tbody></tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 </div>
