@@ -1284,7 +1284,9 @@ function importFromWFM() {
 // ═══════════════════════════════════════════════════════════
 // GENERATE
 // ═══════════════════════════════════════════════════════════
+let _generateInFlight = false;
 function generateSchedule() {
+  if (_generateInFlight) return;
   const lob = document.getElementById('cfgLOB').value;
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
@@ -1293,6 +1295,7 @@ function generateSchedule() {
   if (!lob) { showToast('Please select a LOB.', 'error'); return; }
   if (!start || !end) { showToast('Please set start and end dates.', 'error'); return; }
 
+  _generateInFlight = true;
   document.getElementById('btnGenerate').disabled = true;
   showLoading('Generating schedule…');
 
@@ -1306,6 +1309,7 @@ function generateSchedule() {
   .then(r => r.json())
   .then(data => {
     if (!data.success) {
+      _generateInFlight = false;
       document.getElementById('btnGenerate').disabled = false;
       hideLoading();
       showToast('Error: ' + (data.error || 'Unknown'), 'error');
@@ -1317,6 +1321,7 @@ function generateSchedule() {
       _pollGenerateJob(data.job_id, 0);
     } else {
       // Sync result (demo mode)
+      _generateInFlight = false;
       document.getElementById('btnGenerate').disabled = false;
       hideLoading();
       scheduleData = data;
@@ -1325,6 +1330,7 @@ function generateSchedule() {
     }
   })
   .catch(e => {
+    _generateInFlight = false;
     document.getElementById('btnGenerate').disabled = false;
     hideLoading();
     showToast('Generation failed: ' + e, 'error');
@@ -1338,6 +1344,7 @@ function _pollGenerateJob(jobId, attempt) {
       if (data.status === 'running') {
         // Still working — poll again (2s intervals, up to 5 min)
         if (attempt > 150) {
+          _generateInFlight = false;
           document.getElementById('btnGenerate').disabled = false;
           hideLoading();
           showToast('Schedule generation timed out. Try a shorter date range.', 'error');
@@ -1346,10 +1353,16 @@ function _pollGenerateJob(jobId, attempt) {
         setTimeout(() => _pollGenerateJob(jobId, attempt + 1), 2000);
         return;
       }
+      _generateInFlight = false;
       document.getElementById('btnGenerate').disabled = false;
       hideLoading();
       if (!data.success) {
         showToast('Error: ' + (data.error || 'Unknown'), 'error');
+        return;
+      }
+      if (!data.days || !data.totals) {
+        showToast('Schedule generated but returned incomplete data. Please try again.', 'error');
+        console.error('Incomplete schedule data:', JSON.stringify(data).slice(0, 500));
         return;
       }
       scheduleData = data;
@@ -1357,6 +1370,7 @@ function _pollGenerateJob(jobId, attempt) {
       showResults();
     })
     .catch(e => {
+      _generateInFlight = false;
       document.getElementById('btnGenerate').disabled = false;
       hideLoading();
       showToast('Generation failed: ' + e, 'error');
@@ -1624,15 +1638,16 @@ function showResults() {
 
 function updateStats() {
   if (!scheduleData) return;
-  const t = scheduleData.totals;
-  document.getElementById('statShifts').textContent = t.total_shifts;
-  document.getElementById('statHours').textContent = t.total_hours;
-  document.getElementById('statDays').textContent = t.total_days;
+  const t = scheduleData.totals || {};
+  document.getElementById('statShifts').textContent = t.total_shifts ?? '—';
+  document.getElementById('statHours').textContent = t.total_hours ?? '—';
+  document.getElementById('statDays').textContent = t.total_days ?? '—';
 
   const covEl = document.getElementById('statCoverage');
-  covEl.textContent = t.avg_coverage_pct + '%';
-  covEl.className = 'stat-num ' + (t.avg_coverage_pct >= 95 ? 'good' :
-                                     t.avg_coverage_pct >= 80 ? 'warn' : 'danger');
+  const cov = t.avg_coverage_pct ?? 0;
+  covEl.textContent = cov + '%';
+  covEl.className = 'stat-num ' + (cov >= 95 ? 'good' :
+                                     cov >= 80 ? 'warn' : 'danger');
 }
 
 function switchView(view) {
