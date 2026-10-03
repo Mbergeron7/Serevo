@@ -2052,3 +2052,24 @@ class ShiftNote(db.Model):
     created_at  = db.Column(db.DateTime, default=_utcnow)
 
     author = db.relationship("User", foreign_keys=[created_by])
+
+
+class EmployeeDocument(db.Model):
+    """Files attached to an employee record (certs, write-ups, onboarding, etc.)."""
+    __tablename__ = "employee_documents"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    title        = db.Column(db.String(200), nullable=False)
+    category     = db.Column(db.String(60), default="general")  # general, onboarding, certification, performance, policy
+    filename     = db.Column(db.String(255), nullable=False)
+    mime_type    = db.Column(db.String(100), default="application/octet-stream")
+    file_size    = db.Column(db.Integer, default=0)             # bytes
+    file_data    = db.Column(db.LargeBinary, nullable=False)
+    notes        = db.Column(db.Text, default="")
+    uploaded_by  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    employee = db.relationship("Employee", backref="documents")
+    uploader = db.relationship("User", foreign_keys=[uploaded_by])

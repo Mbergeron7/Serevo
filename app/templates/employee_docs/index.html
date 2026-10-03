@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Employee Documents — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Employee Documents</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Upload and manage files for each employee — certifications, write-ups, onboarding docs.</p>
+  </div>
+  <button class="btn btn-primary" onclick="openUpload()" style="font-size:.82rem;padding:6px 14px;">+ Upload Document</button>
+</div>
+
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+  <select id="filterEmployee" onchange="loadDocs()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;min-width:180px;">
+    <option value="">All Employees</option>
+    {% for e in employees %}
+    <option value="{{ e.id }}">{{ e.last_name }}, {{ e.first_name }}</option>
+    {% endfor %}
+  </select>
+  <select id="filterCategory" onchange="loadDocs()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+    <option value="">All Categories</option>
+    <option value="general">General</option>
+    <option value="onboarding">Onboarding</option>
+    <option value="certification">Certification</option>
+    <option value="performance">Performance</option>
+    <option value="policy">Policy</option>
+  </select>
+</div>
+
+<div id="docsList"></div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:480px;width:92%;max-height:90vh;overflow-y:auto;">
+    <h3 style="font-size:1rem;margin:0 0 16px;">Upload Document</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Employee *</label>
+        <select id="upEmployee" name="employee_id" required style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="">— Select —</option>
+          {% for e in employees %}
+          <option value="{{ e.id }}">{{ e.last_name }}, {{ e.first_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Title</label>
+        <input type="text" id="upTitle" name="title" placeholder="e.g. CPR Certification" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Category</label>
+        <select id="upCategory" name="category" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="general">General</option>
+          <option value="onboarding">Onboarding</option>
+          <option value="certification">Certification</option>
+          <option value="performance">Performance</option>
+          <option value="policy">Policy</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">File * <span style="font-weight:400;">(max 10 MB)</span></label>
+        <input type="file" id="upFile" name="file" required style="font-size:.85rem;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Notes</label>
+        <textarea id="upNotes" name="notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;resize:vertical;" placeholder="Optional notes about this document"></textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" class="btn btn-outline" onclick="closeUpload()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.doc-row { display:flex; align-items:center; gap:14px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; transition:border-color .15s; }
+.doc-row:hover { border-color:var(--brand-accent); }
+.doc-icon { font-size:1.5rem; flex-shrink:0; }
+.cat-pill { display:inline-block; padding:2px 8px; border-radius:8px; font-size:.68rem; font-weight:700; text-transform:uppercase; }
+.cat-general { background:#e5e7eb; color:#374151; }
+.cat-onboarding { background:#dbeafe; color:#1e40af; }
+.cat-certification { background:#d1fae5; color:#065f46; }
+.cat-performance { background:#fef9c3; color:#854d0e; }
+.cat-policy { background:#fee2e2; color:#991b1b; }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+loadDocs();
+
+async function loadDocs() {
+  const empId = document.getElementById('filterEmployee').value;
+  const cat = document.getElementById('filterCategory').value;
+  const payload = {};
+  if (empId) payload.employee_id = parseInt(empId);
+  if (cat) payload.category = cat;
+
+  const r = await fetch('/employee-docs/api/list', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify(payload)
+  });
+  const d = await r.json();
+  if (!d.success) return;
+
+  const el = document.getElementById('docsList');
+  if (!d.docs.length) {
+    el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 0;">No documents found.</p>';
+    return;
+  }
+
+  const icons = {
+    'application/pdf':'📄','image/png':'🖼️','image/jpeg':'🖼️','image/gif':'🖼️',
+    'text/plain':'📝','text/csv':'📊',
+  };
+  function getIcon(mime) {
+    for (const [k,v] of Object.entries(icons)) { if (mime.startsWith(k)) return v; }
+    if (mime.includes('spreadsheet') || mime.includes('excel')) return '📊';
+    if (mime.includes('word') || mime.includes('document')) return '📃';
+    return '📎';
+  }
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  }
+
+  let html = '';
+  d.docs.forEach(doc => {
+    const icon = getIcon(doc.mime_type);
+    const dt = doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    html += `<div class="doc-row">
+      <span class="doc-icon">${icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:.88rem;font-weight:600;">${esc(doc.title)}</div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span>${esc(doc.employee_name)}</span>
+          <span class="cat-pill cat-${doc.category}">${esc(doc.category)}</span>
+          <span>${esc(doc.filename)} · ${fmtSize(doc.file_size)}</span>
+          <span>${dt}</span>
+          <span>by ${esc(doc.uploaded_by)}</span>
+        </div>
+        ${doc.notes ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:4px;">${esc(doc.notes)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <a href="/employee-docs/api/download/${doc.id}" class="btn btn-outline" style="font-size:.7rem;padding:3px 10px;text-decoration:none;">Download</a>
+        <button class="btn" style="font-size:.7rem;padding:3px 8px;background:#dc2626;color:#fff;" onclick="deleteDoc(${doc.id})">✕</button>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function openUpload() {
+  document.getElementById('uploadForm').reset();
+  // Pre-select employee if filter is set
+  const fEmp = document.getElementById('filterEmployee').value;
+  if (fEmp) document.getElementById('upEmployee').value = fEmp;
+  document.getElementById('uploadModal').style.display = 'flex';
+}
+function closeUpload() { document.getElementById('uploadModal').style.display = 'none'; }
+
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+
+  const fd = new FormData(this);
+  try {
+    const r = await fetch('/employee-docs/api/upload', {
+      method:'POST', headers:{'X-CSRFToken':csrf}, body:fd
+    });
+    const d = await r.json();
+    if (d.success) { closeUpload(); loadDocs(); }
+    else alert(d.error || 'Upload failed');
+  } catch(err) { alert('Upload failed'); }
+  btn.disabled = false; btn.textContent = 'Upload';
+});
+
+async function deleteDoc(id) {
+  if (!confirm('Delete this document?')) return;
+  const r = await fetch('/employee-docs/api/delete', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({id})
+  });
+  const d = await r.json();
+  if (d.success) loadDocs();
+}
+</script>
+{% endblock %}

@@ -45,6 +45,7 @@
       <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
       <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
       <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
+      <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
       <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
       <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
       {% elif current_user and current_user.is_supervisor %}
@@ -62,6 +63,7 @@
       <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
       <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
       <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
+      <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
       <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
       {% else %}
       {# Agent nav — portal only #}
