@@ -259,12 +259,13 @@
     <div class="section-card-header">
       Skills
       <span style="font-size:.75rem; color:var(--text-muted);">{{ skill_mappings|length }} assigned</span>
+      <button class="btn-add" onclick="openAssignModal('skill')">+ Add</button>
     </div>
     <div class="section-card-body">
       {% if skill_mappings %}
       <div style="overflow-x:auto"><table class="assign-table">
         <thead>
-          <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th></tr>
+          <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           {% for sm in skill_mappings %}
@@ -277,6 +278,7 @@
             </td>
             <td>{{ sm.priority }}</td>
             <td>{% if sm.is_active %}<span style="color:#16a34a;">Active</span>{% else %}<span style="color:#9ca3af;">Inactive</span>{% endif %}</td>
+            <td><button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">Remove</button></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -578,6 +580,23 @@
         <input type="number" id="assign_priority" min="1" max="99" value="1">
       </div>
 
+      <div class="form-group" id="assign_proficiency_group" style="display:none;">
+        <label for="assign_proficiency">Proficiency (1–5)</label>
+        <select id="assign_proficiency">
+          <option value="1">★ — Beginner</option>
+          <option value="2">★★ — Basic</option>
+          <option value="3" selected>★★★ — Intermediate</option>
+          <option value="4">★★★★ — Advanced</option>
+          <option value="5">★★★★★ — Expert</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="assign_skill_priority_group" style="display:none;">
+        <label for="assign_skill_priority">Routing Priority</label>
+        <input type="number" id="assign_skill_priority" min="1" max="99" value="1">
+        <small style="color:var(--text-muted);">1 = Primary skill</small>
+      </div>
+
       <div class="form-group" id="assign_ref_date_group" style="display:none;">
         <label for="assign_ref_date">Reference Date</label>
         <input type="date" id="assign_ref_date">
@@ -809,14 +828,23 @@ function openAssignModal(type) {
     contract: 'Add Contract',
     selection: 'Add to Selection',
     shift_sequence: 'Add Shift Sequence',
+    skill: 'Add Skill',
   };
   document.getElementById('assignModalTitle').textContent = titles[type] || 'Add Assignment';
 
   // Show/hide extra fields
   priorityGrp.style.display = type === 'planning_unit' ? '' : 'none';
   refDateGrp.style.display = type === 'shift_sequence' ? '' : 'none';
-  // Selection has no validity
-  const hasValidity = type !== 'selection';
+  const profGrp = document.getElementById('assign_proficiency_group');
+  const skillPriGrp = document.getElementById('assign_skill_priority_group');
+  profGrp.style.display = type === 'skill' ? '' : 'none';
+  skillPriGrp.style.display = type === 'skill' ? '' : 'none';
+  if (type === 'skill') {
+    document.getElementById('assign_proficiency').value = '3';
+    document.getElementById('assign_skill_priority').value = 1;
+  }
+  // Selection and skill have no validity dates
+  const hasValidity = type !== 'selection' && type !== 'skill';
   fromGrp.parentElement.style.display = hasValidity ? '' : 'none';
 
   // Populate dropdown
@@ -825,6 +853,7 @@ function openAssignModal(type) {
     contract: '/people/api/profile/contracts-list',
     selection: '/people/api/profile/selections-list',
     shift_sequence: '/people/api/profile/shift-sequences-list',
+    skill: '/api/skill-groups',
   };
   const sel = document.getElementById('assign_item_id');
   sel.innerHTML = '<option value="">Loading…</option>';
@@ -832,7 +861,7 @@ function openAssignModal(type) {
   fetch(endpoints[type])
     .then(r => r.json())
     .then(data => {
-      const items = data.items || data.units || [];
+      const items = data.items || data.units || data.groups || [];
       sel.innerHTML = '<option value="">— Select —</option>';
       items.forEach(item => {
         const opt = document.createElement('option');
@@ -860,6 +889,10 @@ async function saveAssignment(e) {
     valid_from: document.getElementById('assign_from').value || null,
     valid_to: document.getElementById('assign_to').value || null,
   };
+  if (type === 'skill') {
+    body.proficiency = parseInt(document.getElementById('assign_proficiency').value) || 3;
+    body.priority = parseInt(document.getElementById('assign_skill_priority').value) || 1;
+  }
   if (!body.item_id) { showError('assignError', 'Please select an item.'); return false; }
 
   try {

@@ -419,6 +419,14 @@ def profile_assign():
                 valid_from=valid_from, valid_to=valid_to,
             )
             db.session.add(obj)
+        elif assign_type == "skill":
+            obj = SkillMapping(
+                employee_id=emp_id, skill_group_id=item_id,
+                proficiency=int(data.get("proficiency", 3)),
+                priority=int(data.get("priority", 1)),
+                is_active=True,
+            )
+            db.session.add(obj)
         else:
             return jsonify({"success": False, "error": f"Unknown assignment type: {assign_type}"})
 
@@ -427,7 +435,7 @@ def profile_assign():
     except Exception as e:
         db.session.rollback()
         err = str(e)
-        if "uq_emp_pu" in err or "uq_emp_wtpm" in err or "uq_sel_emp" in err:
+        if "uq_emp_pu" in err or "uq_emp_wtpm" in err or "uq_sel_emp" in err or "uq_skill_employee" in err:
             return jsonify({"success": False, "error": "This assignment already exists."})
         return jsonify({"success": False, "error": err})
 
@@ -450,6 +458,7 @@ def profile_unassign():
         "contract": EmployeeContract,
         "selection": SelectionMember,
         "shift_sequence": EmployeeShiftSequence,
+        "skill": SkillMapping,
     }
     model = model_map.get(assign_type)
     if not model:
