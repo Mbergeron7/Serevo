@@ -113,6 +113,8 @@ def roster():
         if lob:
             lobs.add(lob)
 
+    rotation_map = {}  # placeholder — rotation feature not yet wired
+
     if user and user.get("is_demo"):
         contracts = []
     else:
@@ -136,6 +138,7 @@ def roster():
         accom_count=len(accoms),
         pto_count=len(pto_list),
         contracts=contracts,
+        rotation_map=rotation_map,
     )
 
 

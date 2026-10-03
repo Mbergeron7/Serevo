@@ -10,7 +10,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from app.auth import login_required
-from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability
+from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability, User
 
 log = logging.getLogger("serevo.manual_entry")
 
@@ -180,6 +180,9 @@ def delete_employee():
         emp = Employee.query.get(int(pk))
         if not emp:
             return jsonify({"success": False, "error": "Employee not found."})
+        # Unlink any user accounts referencing this employee
+        User.query.filter_by(employee_id=emp.id).update({User.employee_id: None})
+        db.session.flush()
         db.session.delete(emp)
         db.session.commit()
         return jsonify({"success": True})
