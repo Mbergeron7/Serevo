@@ -3,7 +3,7 @@ Notifications API — bell-icon dropdown for in-app alerts.
 """
 import logging
 from flask import Blueprint, jsonify, request
-from flask_login import login_required, current_user
+from app.auth import login_required, get_current_user
 from app.models import db, Notification
 
 log = logging.getLogger(__name__)
@@ -16,15 +16,16 @@ def list_notifications():
     """Return most recent notifications for the current user."""
     try:
         limit = int(request.json.get("limit", 20)) if request.is_json else 20
+        user = get_current_user()
         notifs = (
             Notification.query
-            .filter_by(user_id=current_user.id)
+            .filter_by(user_id=user["id"])
             .order_by(Notification.created_at.desc())
             .limit(min(limit, 50))
             .all()
         )
         unread = Notification.query.filter_by(
-            user_id=current_user.id, is_read=False
+            user_id=user["id"], is_read=False
         ).count()
         return jsonify({
             "success": True,
@@ -41,8 +42,9 @@ def list_notifications():
 def unread_count():
     """Quick count of unread notifications (for badge)."""
     try:
+        user = get_current_user()
         count = Notification.query.filter_by(
-            user_id=current_user.id, is_read=False
+            user_id=user["id"], is_read=False
         ).count()
         return jsonify({"success": True, "count": count})
     except Exception:
@@ -56,13 +58,14 @@ def mark_read():
     try:
         payload = request.get_json(silent=True) or {}
         notif_id = payload.get("id")
+        user = get_current_user()
         if notif_id == "all":
             Notification.query.filter_by(
-                user_id=current_user.id, is_read=False
+                user_id=user["id"], is_read=False
             ).update({"is_read": True})
         elif notif_id:
             n = Notification.query.filter_by(
-                id=notif_id, user_id=current_user.id
+                id=notif_id, user_id=user["id"]
             ).first()
             if n:
                 n.is_read = True
@@ -79,8 +82,9 @@ def mark_read():
 def clear_notifications():
     """Delete all read notifications for current user."""
     try:
+        user = get_current_user()
         Notification.query.filter_by(
-            user_id=current_user.id, is_read=True
+            user_id=user["id"], is_read=True
         ).delete()
         db.session.commit()
         return jsonify({"success": True})
@@ -116,8 +120,11 @@ def audit(action, detail=None, entity_type=None, entity_id=None, user_id=None):
     from app.models import AuditLog
     try:
         if user_id is None:
-            from flask_login import current_user as cu
-            user_id = cu.id if cu and cu.is_authenticated else None
+            try:
+                cu = get_current_user()
+                user_id = cu["id"] if cu else None
+            except Exception:
+                user_id = None
         entry = AuditLog(
             user_id=user_id,
             action=action,
