@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Team Calendar{% endblock %}
+{% block head %}
+<style>
+  .cal-controls { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1.5rem; }
+  .cal-controls select { padding:.4rem .8rem; border:1px solid #ccc; border-radius:6px; font-size:.9rem; }
+  .cal-controls button { padding:.4rem .8rem; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; font-size:.9rem; }
+  .cal-controls button:hover { background:#f0f0f0; }
+  .cal-controls .week-label { font-weight:600; min-width:200px; text-align:center; }
+  .cal-grid { overflow-x:auto; }
+  .cal-grid table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  .cal-grid th, .cal-grid td { border:1px solid #e0e0e0; padding:.4rem .6rem; text-align:center; white-space:nowrap; }
+  .cal-grid th { background:#f7f7f7; font-weight:600; position:sticky; top:0; }
+  .cal-grid th.emp-col { text-align:left; min-width:160px; }
+  .cal-grid td.emp-col { text-align:left; font-weight:500; }
+  .cal-grid .cell-scheduled { background:#d4edda; color:#155724; font-size:.8rem; }
+  .cal-grid .cell-off { background:#f8f9fa; color:#6c757d; }
+  .cal-grid .cell-pto { background:#fff3cd; color:#856404; font-weight:600; }
+  .cal-grid .cell-none { background:#fff; color:#ccc; }
+  .summary-row td { font-weight:600; background:#f0f0f0 !important; color:#333; font-size:.8rem; }
+  .summary-row td.emp-col { text-align:left; }
+  .stats-row { display:flex; gap:1.5rem; margin-bottom:1rem; flex-wrap:wrap; }
+  .stats-row .stat { background:#f7f7f7; border-radius:8px; padding:.6rem 1rem; }
+  .stats-row .stat strong { display:block; font-size:1.2rem; }
+  .stats-row .stat span { font-size:.8rem; color:#666; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      .cal-controls select, .cal-controls button { background:#2a2a2a; border-color:#444; color:#eee; }
+      .cal-grid th { background:#2a2a2a; color:#eee; border-color:#444; }
+      .cal-grid td { border-color:#444; }
+      .cell-scheduled { background:#1a3a1a !important; color:#8dda8d !important; }
+      .cell-off { background:#2a2a2a !important; color:#888 !important; }
+      .cell-pto { background:#3a3020 !important; color:#e0c060 !important; }
+      .cell-none { background:#222 !important; color:#555 !important; }
+      .summary-row td { background:#2a2a2a !important; color:#ccc; }
+      .stats-row .stat { background:#2a2a2a; }
+      .stats-row .stat span { color:#aaa; }
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Team Calendar</h1>
+<p style="color:#666; margin-bottom:1rem;">Weekly roster view — see who's working, off, or on PTO at a glance.</p>
+
+<div class="cal-controls">
+  <label>LOB:
+    <select id="lobSelect">
+      <option value="">All</option>
+      {% for l in lobs %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+    </select>
+  </label>
+  <button onclick="changeWeek(-1)">&larr; Prev</button>
+  <span class="week-label" id="weekLabel">Loading...</span>
+  <button onclick="changeWeek(1)">Next &rarr;</button>
+  <button onclick="goToday()">Today</button>
+</div>
+
+<div class="stats-row" id="statsRow"></div>
+
+<div class="cal-grid" id="calGrid">
+  <p style="color:#888;">Loading calendar...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  let weekStart = mondayOf(new Date());
+
+  function mondayOf(d) {
+    const dt = new Date(d);
+    const day = dt.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    return dt;
+  }
+
+  function fmt(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  window.changeWeek = function(dir) {
+    weekStart.setDate(weekStart.getDate() + dir * 7);
+    loadData();
+  };
+  window.goToday = function() {
+    weekStart = mondayOf(new Date());
+    loadData();
+  };
+
+  function loadData() {
+    const lob = document.getElementById('lobSelect').value;
+    fetch('/team-calendar/api/data', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({lob, week_start: fmt(weekStart)})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { document.getElementById('calGrid').innerHTML = '<p>Error loading data.</p>'; return; }
+      renderStats(data);
+      renderGrid(data);
+      document.getElementById('weekLabel').textContent =
+        data.day_labels[0] + ' – ' + data.day_labels[6];
+    });
+  }
+
+  function renderStats(data) {
+    const el = document.getElementById('statsRow');
+    const totEmp = data.total_employees;
+    // Average scheduled per day
+    const days = data.dates;
+    let totalSched = 0, totalPto = 0;
+    days.forEach(d => { totalSched += data.daily_counts[d].scheduled; totalPto += data.daily_counts[d].pto; });
+    el.innerHTML = `
+      <div class="stat"><strong>${totEmp}</strong><span>Total Employees</span></div>
+      <div class="stat"><strong>${Math.round(totalSched/7)}</strong><span>Avg Scheduled / Day</span></div>
+      <div class="stat"><strong>${totalPto}</strong><span>PTO Days This Week</span></div>
+    `;
+  }
+
+  function renderGrid(data) {
+    if (!data.rows.length) {
+      document.getElementById('calGrid').innerHTML = '<p style="color:#888;">No employees found for this LOB.</p>';
+      return;
+    }
+    let html = '<table><thead><tr><th class="emp-col">Employee</th>';
+    data.day_labels.forEach(d => { html += `<th>${d}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    data.rows.forEach(row => {
+      html += `<tr><td class="emp-col">${esc(row.name)}</td>`;
+      row.cells.forEach(c => {
+        html += `<td class="cell-${c.status}" title="${esc(c.label)}">${esc(c.label) || '—'}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    // Summary row
+    html += '<tr class="summary-row"><td class="emp-col">Daily Totals</td>';
+    data.dates.forEach(d => {
+      const c = data.daily_counts[d];
+      html += `<td>${c.scheduled} on / ${c.pto} PTO</td>`;
+    });
+    html += '</tr></tbody></table>';
+    document.getElementById('calGrid').innerHTML = html;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  document.getElementById('lobSelect').addEventListener('change', loadData);
+  loadData();
+})();
+</script>
+{% endblock %}
