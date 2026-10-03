@@ -61,9 +61,11 @@ def login():
                 session.clear()
                 session["user_id"] = user.id
                 session.permanent = True
+                log.info("Login success: user_id=%s email=%s role=%s", user.id, email, user.role)
                 next_page = request.args.get("next") or url_for("dashboard.index")
                 return redirect(next_page)
 
+        log.warning("Login failed: email=%s ip=%s", email, request.remote_addr)
         error = "Invalid email or password."
 
     # Check if any users exist (for first-time setup prompt)
@@ -107,6 +109,7 @@ def setup():
             )
             db.session.add(user)
             db.session.commit()
+            log.info("Setup: admin account created email=%s", email)
             session["user_id"] = user.id
             session.permanent = True
             return redirect(url_for("dashboard.index"))
@@ -218,5 +221,7 @@ def admin_setup():
 
 @auth_bp.route("/logout")
 def logout():
+    user_id = session.get("user_id")
     session.clear()
+    log.info("Logout: user_id=%s", user_id)
     return redirect(url_for("auth.login"))

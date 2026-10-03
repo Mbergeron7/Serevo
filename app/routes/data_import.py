@@ -132,7 +132,12 @@ def upload():
         })
 
     # Process rows
+    log.info("Upload started: type=%s rows=%d file=%s user=%s", upload_type, len(rows), file.filename, user.get("email", ""))
     result = _import_rows(upload_type, rows, user.get("email", ""))
+    if result.get("success"):
+        log.info("Upload complete: type=%s imported=%d skipped=%d", upload_type, result.get("imported", 0), result.get("skipped", 0))
+    else:
+        log.error("Upload failed: type=%s error=%s", upload_type, result.get("error", ""))
     return jsonify(result)
 
 

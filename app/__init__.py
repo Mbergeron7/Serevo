@@ -6,11 +6,23 @@ blueprints (to be added as modules are ported in).
 """
 
 import logging
+import sys
 from datetime import timedelta
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_wtf.csrf import CSRFProtect
 from config import cfg
+
+# Configure root serevo logger — ensures all serevo.* logs go to stdout
+_serevo_logger = logging.getLogger("serevo")
+if not _serevo_logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    _serevo_logger.addHandler(_handler)
+    _serevo_logger.setLevel(logging.INFO)
 
 log = logging.getLogger("serevo.app")
 
