@@ -26,6 +26,11 @@
       <div style="font-size:.8rem; color:var(--text-muted);">On PTO Today</div>
     </div>
   </div>
+  {% else %}
+  <div class="card" style="text-align:center; padding:2rem; color:var(--text-muted);">
+    <p style="font-size:1.1rem; margin-bottom:.5rem;">No data loaded yet</p>
+    <p style="font-size:.85rem;">Import employee and schedule data to see your dashboard stats.</p>
+  </div>
   {% endif %}
 
   <div class="card-grid">
