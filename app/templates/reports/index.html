@@ -16,6 +16,13 @@
       <option value="60">Last 60 days</option>
       <option value="90">Last 90 days</option>
     </select>
+    <div style="position:relative;display:inline-block;">
+      <button onclick="document.getElementById('exportMenu').style.display=document.getElementById('exportMenu').style.display==='block'?'none':'block'" style="padding:6px 14px;background:var(--brand-accent,#6366f1);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;">⬇ Export CSV</button>
+      <div id="exportMenu" style="display:none;position:absolute;right:0;top:36px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:10;min-width:180px;">
+        <a href="#" onclick="exportCSV('summary');return false;" style="display:block;padding:10px 16px;color:var(--text);text-decoration:none;font-size:.85rem;border-bottom:1px solid var(--border);">Summary KPIs</a>
+        <a href="#" onclick="exportCSV('attendance');return false;" style="display:block;padding:10px 16px;color:var(--text);text-decoration:none;font-size:.85rem;">Attendance Report</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -168,6 +175,27 @@ async function loadAttendanceReport() {
   html += '</tbody></table>';
   document.getElementById('attReport').innerHTML = html;
 }
+
+async function exportCSV(type) {
+  document.getElementById('exportMenu').style.display = 'none';
+  const days = parseInt(document.getElementById('periodSelect').value);
+  const url = type === 'summary' ? '/reports/api/summary/csv' : '/reports/api/attendance/csv';
+  const res = await fetch(url, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({days})
+  });
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = res.headers.get('Content-Disposition')?.split('filename=')[1] || `${type}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('exportMenu');
+  if (menu && !e.target.closest('#exportMenu') && !e.target.closest('[onclick*="exportMenu"]')) menu.style.display = 'none';
+});
 
 loadReport();
 loadAttendanceReport();

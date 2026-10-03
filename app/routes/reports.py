@@ -1,9 +1,11 @@
 """
 Reports & Analytics — cross-module dashboard with key workforce metrics.
 """
+import csv
+import io
 import logging
 from datetime import date, timedelta
-from flask import Blueprint, jsonify, request, render_template
+from flask import Blueprint, jsonify, request, render_template, Response
 from sqlalchemy import func
 from app.auth import login_required, get_current_user
 from app.models import (
@@ -222,3 +224,98 @@ def attendance_report():
             })
 
     return jsonify(success=True, rows=rows, period_days=days)
+
+
+@reports_bp.route("/api/attendance/csv", methods=["POST"])
+@login_required
+def attendance_csv():
+    """Download attendance report as CSV."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+
+    payload = request.get_json(silent=True) or {}
+    days = int(payload.get("days", 7))
+    cutoff = date.today() - timedelta(days=days)
+
+    employees = Employee.query.filter_by(status="Active").order_by(
+        Employee.last_name, Employee.first_name
+    ).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Employee", "Employee ID", "Scheduled Hours", "Actual Hours", "Difference"])
+
+    for emp in employees:
+        actual = db.session.query(
+            func.coalesce(func.sum(TimeClock.total_hours), 0)
+        ).filter(
+            TimeClock.employee_id == emp.id,
+            TimeClock.date >= cutoff,
+            TimeClock.status == "completed",
+        ).scalar()
+        scheduled = db.session.query(
+            func.coalesce(func.sum(Schedule.hours), 0)
+        ).filter(
+            Schedule.employee_id == emp.id,
+            Schedule.schedule_date >= cutoff,
+        ).scalar()
+        actual_f = round(float(actual), 1)
+        scheduled_f = round(float(scheduled), 1)
+        if actual_f > 0 or scheduled_f > 0:
+            writer.writerow([emp.full_name, emp.employee_id, scheduled_f, actual_f, round(actual_f - scheduled_f, 1)])
+
+    buf.seek(0)
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=attendance_{date.today().isoformat()}.csv"},
+    )
+
+
+@reports_bp.route("/api/summary/csv", methods=["POST"])
+@login_required
+def summary_csv():
+    """Download summary KPIs as CSV."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+
+    payload = request.get_json(silent=True) or {}
+    days = int(payload.get("days", 30))
+    cutoff = date.today() - timedelta(days=days)
+
+    total_employees = Employee.query.filter_by(status="Active").count()
+    total_hours = db.session.query(
+        func.coalesce(func.sum(Schedule.hours), 0)
+    ).filter(Schedule.schedule_date >= cutoff).scalar()
+    total_shifts = Schedule.query.filter(Schedule.schedule_date >= cutoff).count()
+    pto_pending = PTOEntry.query.filter_by(approval_status="pending").count()
+    pto_approved = PTOEntry.query.filter(
+        PTOEntry.approval_status == "approved", PTOEntry.start_date >= cutoff
+    ).count()
+    quality_avg = db.session.query(
+        func.avg(QualityEvaluation.overall_score)
+    ).filter(QualityEvaluation.eval_date >= cutoff).scalar()
+    quality_count = QualityEvaluation.query.filter(
+        QualityEvaluation.eval_date >= cutoff
+    ).count()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Period (days)", days])
+    writer.writerow(["Active Employees", total_employees])
+    writer.writerow(["Total Shifts", total_shifts])
+    writer.writerow(["Total Scheduled Hours", round(float(total_hours), 1)])
+    writer.writerow(["PTO Pending", pto_pending])
+    writer.writerow(["PTO Approved", pto_approved])
+    writer.writerow(["Quality Avg Score", round(float(quality_avg), 1) if quality_avg else "N/A"])
+    writer.writerow(["Quality Evaluations", quality_count])
+
+    buf.seek(0)
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=summary_{date.today().isoformat()}.csv"},
+    )
