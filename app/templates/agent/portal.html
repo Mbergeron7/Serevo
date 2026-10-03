@@ -600,7 +600,7 @@ async function cancelPto(id) {
   if (!confirm('Cancel this time-off request?')) return;
   const r = await fetch(`/api/agent/time-off/${id}`, {
     method: 'DELETE',
-    headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+    headers: {'Content-Type':'application/json'},
   });
   const d = await r.json();
   if (d.ok) { loadBalances(); loadPtoRequests(); }
@@ -651,7 +651,7 @@ async function loadQuality() {
 
 // ── Weekly Hours ──
 function loadWeeklyHours() {
-  fetch('/attendance/api/weekly-hours', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'})
+  fetch('/attendance/api/weekly-hours', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
   .then(r=>r.json()).then(d=>{
     const body = document.getElementById('weeklyHoursBody');
     const totalEl = document.getElementById('weeklyTotal');
@@ -687,6 +687,8 @@ function loadWeeklyHours() {
     });
     html += '</div>';
     body.innerHTML = html;
+  }).catch(()=>{
+    document.getElementById('weeklyHoursBody').innerHTML = '<p class="empty-msg">Unable to load hours.</p>';
   });
 }
 
@@ -740,7 +742,7 @@ function timeAgo(iso) {
 
 // ── Clock In / Out ─────────────────────────────
 function loadClockStatus() {
-  fetch('/attendance/api/status', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'})
+  fetch('/attendance/api/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
   .then(r=>r.json()).then(d=>{
     if (!d.success) return;
     const st = document.getElementById('clockStatus');
@@ -760,11 +762,13 @@ function loadClockStatus() {
       btnOut.style.display = 'none';
       el.textContent = '';
     }
+  }).catch(()=>{
+    document.getElementById('clockStatus').textContent = 'Unable to load status';
   });
 }
 window.doClock = function(action) {
   const url = action === 'in' ? '/attendance/api/clock-in' : '/attendance/api/clock-out';
-  fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'})
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
   .then(r=>r.json()).then(d=>{
     if (d.success) { loadClockStatus(); }
     else { alert(d.error || 'Clock action failed'); }
