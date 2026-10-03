@@ -106,9 +106,12 @@ def _get_employees_from_db():
             # try to repair from the Google Sheet's "Latest Skill Name" column.
             missing = [e for e in emps if e.planning_unit_id is None]
             if missing:
-                _backfill_planning_units(missing)
-                # Re-query after possible updates
-                emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+                try:
+                    _backfill_planning_units(missing)
+                    # Re-query after possible updates
+                    emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+                except Exception as bf_err:
+                    log.warning(f"Backfill planning units failed (non-fatal): {bf_err}")
         return [e.to_legacy_dict() for e in emps], None
     except Exception as e:
         return [], str(e)
