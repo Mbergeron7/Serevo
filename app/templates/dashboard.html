@@ -34,23 +34,28 @@
       <p style="font-size:1.1rem; font-weight:600; margin-bottom:.5rem; color:var(--text-primary);">Getting Started</p>
       <p style="font-size:.85rem; color:var(--text-muted);">Set up your workspace in a few steps to start managing your workforce.</p>
     </div>
+    {% set s = setup or {} %}
     <ol style="list-style:none; padding:0; margin:0; max-width:480px; margin:0 auto;">
-      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">1</span>
-        <a href="/settings/planning-units" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Set up Planning Units</a>
+      {% set steps = [
+        (s.get('has_units', false), '/settings/planning-units', 'Set up Planning Units', none),
+        (s.get('has_employees', false), '/people/', 'Add Employees', '/data/'),
+        (s.get('has_forecast', false), '/forecasting/', 'Enter Forecast Data', none),
+        (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', none),
+      ] %}
+      {% for done, url, label, alt_url in steps %}
+      <li style="display:flex; align-items:center; gap:12px; padding:12px 0;{{ '' if loop.last else ' border-bottom:1px solid var(--border);' }}">
+        {% if done %}
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#16a34a; color:#fff; font-size:1rem; flex-shrink:0;">✓</span>
+        <span style="font-size:.95rem; color:var(--text-muted); text-decoration:line-through;">{{ label }}</span>
+        {% else %}
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">{{ loop.index }}</span>
+        <span style="font-size:.95rem;">
+          <a href="{{ url }}" style="color:var(--brand-accent); font-weight:600; text-decoration:none;">{{ label }}</a>
+          {% if alt_url %}<span style="color:var(--text-muted); font-size:.85rem;"> or <a href="{{ alt_url }}" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span>{% endif %}
+        </span>
+        {% endif %}
       </li>
-      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">2</span>
-        <span style="font-size:.95rem;"><a href="/people/" style="color:var(--brand-accent); font-weight:600; text-decoration:none;">Add Employees</a> <span style="color:var(--text-muted); font-size:.85rem;">or <a href="/data/" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span></span>
-      </li>
-      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">3</span>
-        <a href="/forecasting/" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Enter Forecast Data</a>
-      </li>
-      <li style="display:flex; align-items:center; gap:12px; padding:12px 0;">
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">4</span>
-        <a href="/scheduling/" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Generate Schedules</a>
-      </li>
+      {% endfor %}
     </ol>
   </div>
   {% endif %}
@@ -59,38 +64,38 @@
     <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Forecasting</h3>
       <p>Interval-level volume forecasting and trend analysis.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Capacity Planning</h3>
       <p>Headcount requirements by LOB, skill, and interval.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
       <h3>People</h3>
       <p>Employee roster, accommodations, and time-off management.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Scheduling</h3>
       <p>Shift generation, coverage analysis, and roster views.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Real-Time</h3>
       <p>Live queue monitoring, adherence, and staffing alerts.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     {% if current_user and current_user.is_admin %}
     <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Data Import</h3>
       <p>Upload CSV/Excel files or enter data manually.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Settings</h3>
       <p>API connections, branding, and platform configuration.</p>
-      <span class="badge coming-soon" style="background:var(--brand-accent); color:#fff;">Active</span>
+      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
     </a>
     {% endif %}
   </div>

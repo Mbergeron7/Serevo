@@ -27,14 +27,25 @@ def index():
         from app.demo_data import get_demo_dashboard_stats
         demo_stats = get_demo_dashboard_stats()
     else:
+        from app.models import ForecastInterval
         today = date.today()
+        emp_count = Employee.query.count()
+        pu_count = PlanningUnit.query.filter_by(is_active=True).count()
         live_stats = {
-            "total_employees": Employee.query.count(),
-            "planning_units": PlanningUnit.query.filter_by(is_active=True).count(),
+            "total_employees": emp_count,
+            "planning_units": pu_count,
             "on_today": Schedule.query.filter_by(schedule_date=today).count(),
             "pto_today": PTOEntry.query.filter(
                 PTOEntry.start_date <= today,
                 PTOEntry.end_date >= today,
             ).count(),
         }
-    return render_template("dashboard.html", user=user, demo_stats=demo_stats, live_stats=live_stats)
+        # Setup progress for getting-started checklist
+        setup = {
+            "has_units": pu_count > 0,
+            "has_employees": emp_count > 0,
+            "has_forecast": ForecastInterval.query.first() is not None,
+            "has_schedules": Schedule.query.first() is not None,
+        }
+    return render_template("dashboard.html", user=user, demo_stats=demo_stats,
+                           live_stats=live_stats, setup=setup if not demo_stats else None)
