@@ -124,9 +124,8 @@ nav .nav-links a.active { color: var(--brand-accent); text-decoration: none; }
 .nav-dropdown-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: 100%;
+  left: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
