@@ -41,7 +41,7 @@ def create_app():
     # ---- session security ----
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = not cfg.is_demo  # HTTPS in prod
+    app.config["SESSION_COOKIE_SECURE"] = cfg.DATABASE_URL.startswith("postgresql")  # HTTPS in prod
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 
     # ---- database ----
