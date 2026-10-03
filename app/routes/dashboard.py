@@ -1,7 +1,8 @@
 """
 Dashboard — the landing page after login.
 
-Stub for now; will be built out with real data views.
+Shows live stats (employee count, planning units, schedules today, PTO today)
+and a getting-started guide when no data has been loaded yet.
 """
 
 from datetime import date

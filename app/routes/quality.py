@@ -502,19 +502,3 @@ def _demo_integrations():
             "events_count": 0,
         },
     ]
-
-
-def get_demo_adherence(lob="All"):
-    """Simple demo adherence data for merging with QM scores."""
-    import random
-    random.seed(42)
-    from app.demo_data import DEMO_EMPLOYEES
-    results = []
-    for emp in DEMO_EMPLOYEES:
-        if lob != "All" and emp.get("lob") != lob:
-            continue
-        results.append({
-            "employee": emp["name"],
-            "adherence_pct": round(random.uniform(78, 100), 1),
-        })
-    return results

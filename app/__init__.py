@@ -68,7 +68,7 @@ def create_app():
                 db.create_all()
             except Exception:
                 db.session.rollback()
-        # Auto-add missing columns to existing tables
+        # Auto-add missing columns to existing tables (works on both Postgres and SQLite)
         _ensure_columns = [
             ("employees", "external_id_1", "VARCHAR(50)"),
             ("employees", "external_id_2", "VARCHAR(50)"),
@@ -81,14 +81,22 @@ def create_app():
             ("pto_entries", "reviewed_at", "TIMESTAMP"),
             ("users", "oauth_provider", "VARCHAR(30)"),
             ("users", "oauth_id", "VARCHAR(255)"),
+            ("users", "is_demo", "BOOLEAN DEFAULT FALSE"),
         ]
+        dialect = db.engine.dialect.name
         for tbl, col, col_type in _ensure_columns:
             try:
-                r = db.session.execute(db.text(
-                    "SELECT 1 FROM information_schema.columns "
-                    f"WHERE table_name='{tbl}' AND column_name='{col}'"
-                ))
-                if not r.fetchone():
+                if dialect == "sqlite":
+                    r = db.session.execute(db.text(f"PRAGMA table_info({tbl})"))
+                    existing = {row[1] for row in r.fetchall()}
+                    has_col = col in existing
+                else:
+                    r = db.session.execute(db.text(
+                        "SELECT 1 FROM information_schema.columns "
+                        f"WHERE table_name='{tbl}' AND column_name='{col}'"
+                    ))
+                    has_col = r.fetchone() is not None
+                if not has_col:
                     db.session.execute(db.text(
                         f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}"
                     ))
@@ -97,25 +105,6 @@ def create_app():
             except Exception as e:
                 db.session.rollback()
                 log.warning(f"Could not add {tbl}.{col}: {e}")
-
-        # Ensure is_demo column exists on users table
-        try:
-            result = db.session.execute(db.text(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'users' AND column_name = 'is_demo'"
-            ))
-            has_col = result.fetchone() is not None
-            if not has_col:
-                db.session.execute(db.text(
-                    "ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE"
-                ))
-                db.session.commit()
-                log.info("Added is_demo column to users table")
-            else:
-                log.info("is_demo column already exists")
-        except Exception as e:
-            db.session.rollback()
-            log.warning("Could not ensure is_demo column: %s", e)
 
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
