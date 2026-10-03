@@ -104,6 +104,15 @@
     <div id="activityBody" style="font-size:.85rem; color:var(--text-muted);">Loading…</div>
   </div>
 
+  <!-- ═══ Unresolved Shift Notes ═══ -->
+  <div class="card" style="margin-bottom:1.5rem; display:none;" id="shiftNotesCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0; font-size:.95rem;">📋 Open Shift Notes</h3>
+      <a href="/shift-notes/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
+    </div>
+    <div id="shiftNotesBody" style="font-size:.85rem;"></div>
+  </div>
+
   <div class="card-grid">
     <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Forecasting</h3>
@@ -192,6 +201,47 @@
   .catch(() => { el.textContent = 'Unable to load activity.'; });
 
   function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+})();
+
+// ── Unresolved Shift Notes ──
+(function(){
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const card = document.getElementById('shiftNotesCard');
+  const body = document.getElementById('shiftNotesBody');
+  if (!card || !body || !csrf) return;
+
+  const today = new Date().toISOString().slice(0,10);
+  const start = new Date(); start.setDate(start.getDate() - 30);
+
+  fetch('/shift-notes/api/list', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken': csrf},
+    body: JSON.stringify({start_date: start.toISOString().slice(0,10), end_date: today})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) return;
+    const open = (data.notes || []).filter(n => !n.is_resolved).slice(0, 5);
+    if (!open.length) return;
+    card.style.display = '';
+    const catCls = {general:'#6b7280',staffing:'#2563eb',escalation:'#dc2626',system:'#ca8a04'};
+    let html = '';
+    open.forEach(n => {
+      const col = catCls[n.category] || '#6b7280';
+      const d = new Date(n.note_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const shift = n.shift_label ? n.shift_label+' · ' : '';
+      function esc(s){if(!s)return '';const el=document.createElement('div');el.textContent=s;return el.innerHTML;}
+      html += `<div style="display:flex;gap:10px;align-items:start;padding:8px 0;${n !== open[open.length-1] ? 'border-bottom:1px solid var(--border);' : ''}">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-top:6px;flex-shrink:0;"></span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(n.body)}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">${shift}${d} · ${esc(n.author)}</div>
+        </div>
+      </div>`;
+    });
+    body.innerHTML = html;
+  })
+  .catch(() => {});
 })();
 </script>
 {% endblock %}
