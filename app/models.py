@@ -2073,3 +2073,46 @@ class EmployeeDocument(db.Model):
 
     employee = db.relationship("Employee", backref="documents")
     uploader = db.relationship("User", foreign_keys=[uploaded_by])
+
+
+class TrainingModule(db.Model):
+    """A training course or module that can be assigned to employees."""
+    __tablename__ = "training_modules"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    title        = db.Column(db.String(200), nullable=False)
+    description  = db.Column(db.Text, default="")
+    category     = db.Column(db.String(60), default="general")  # general, compliance, safety, product, soft-skills
+    duration_mins = db.Column(db.Integer, default=60)
+    is_required  = db.Column(db.Boolean, default=False)         # mandatory for all employees?
+    is_active    = db.Column(db.Boolean, default=True)
+    created_by   = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+
+    creator = db.relationship("User", foreign_keys=[created_by])
+
+
+class TrainingAssignment(db.Model):
+    """Assigns a training module to an employee with completion tracking."""
+    __tablename__ = "training_assignments"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    module_id    = db.Column(db.Integer, db.ForeignKey("training_modules.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    status       = db.Column(db.String(30), default="assigned")  # assigned, in_progress, completed, overdue
+    due_date     = db.Column(db.Date, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    score        = db.Column(db.Float, nullable=True)            # optional quiz/test score
+    notes        = db.Column(db.Text, default="")
+    assigned_by  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_at  = db.Column(db.DateTime, default=_utcnow)
+
+    module   = db.relationship("TrainingModule", backref="assignments")
+    employee = db.relationship("Employee", backref="training_assignments")
+    assigner = db.relationship("User", foreign_keys=[assigned_by])
+
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "employee_id", name="uq_training_mod_emp"),
+    )

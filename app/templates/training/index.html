@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Training — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Training</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Manage training modules and track employee completion.</p>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px;">
+  <button class="tab-btn active" onclick="showTab('modules',this)">Modules</button>
+  <button class="tab-btn" onclick="showTab('assignments',this)">Assignments</button>
+</div>
+
+<!-- ═══ Modules Tab ═══ -->
+<div id="tab-modules">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+    <button class="btn btn-primary" onclick="openModuleEditor()" style="font-size:.82rem;padding:6px 14px;">+ Add Module</button>
+  </div>
+  <div id="modulesList"></div>
+</div>
+
+<!-- ═══ Assignments Tab ═══ -->
+<div id="tab-assignments" style="display:none;">
+  <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <select id="aFilterModule" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;min-width:160px;">
+      <option value="">All Modules</option>
+    </select>
+    <select id="aFilterEmployee" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;min-width:160px;">
+      <option value="">All Employees</option>
+      {% for e in employees %}
+      <option value="{{ e.id }}">{{ e.last_name }}, {{ e.first_name }}</option>
+      {% endfor %}
+    </select>
+    <select id="aFilterStatus" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+      <option value="">All Statuses</option>
+      <option value="assigned">Assigned</option>
+      <option value="in_progress">In Progress</option>
+      <option value="completed">Completed</option>
+      <option value="overdue">Overdue</option>
+    </select>
+    <button class="btn btn-primary" onclick="openAssignModal()" style="font-size:.82rem;padding:6px 14px;">+ Assign Training</button>
+  </div>
+  <div id="assignmentsList"></div>
+</div>
+
+<!-- Module Editor Modal -->
+<div id="moduleModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:480px;width:92%;max-height:90vh;overflow-y:auto;">
+    <h3 style="font-size:1rem;margin:0 0 16px;" id="moduleModalTitle">Add Module</h3>
+    <input type="hidden" id="modId">
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Title *</label>
+      <input type="text" id="modTitle" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;" placeholder="e.g. HIPAA Compliance Training">
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Category</label>
+        <select id="modCategory" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="general">General</option>
+          <option value="compliance">Compliance</option>
+          <option value="safety">Safety</option>
+          <option value="product">Product</option>
+          <option value="soft-skills">Soft Skills</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Duration (min)</label>
+        <input type="number" id="modDuration" value="60" min="1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Description</label>
+      <textarea id="modDesc" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;resize:vertical;" placeholder="What this training covers"></textarea>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer;">
+        <input type="checkbox" id="modRequired"> Required for all employees
+      </label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-outline" onclick="closeModuleEditor()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveModule()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div id="assignModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:480px;width:92%;max-height:90vh;overflow-y:auto;">
+    <h3 style="font-size:1rem;margin:0 0 16px;">Assign Training</h3>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Module *</label>
+      <select id="assignModule" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;"></select>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Employees *</label>
+      <select id="assignEmployees" multiple size="6" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+        {% for e in employees %}
+        <option value="{{ e.id }}">{{ e.last_name }}, {{ e.first_name }}</option>
+        {% endfor %}
+      </select>
+      <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">Hold Ctrl/Cmd to select multiple</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Due Date</label>
+      <input type="date" id="assignDue" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-outline" onclick="closeAssignModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="assignTraining()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.tab-btn { background:none; border:none; padding:10px 20px; font-size:.88rem; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+.tab-btn:hover { color:var(--text); }
+.tab-btn.active { color:var(--brand-accent); border-bottom-color:var(--brand-accent); }
+.mod-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:8px; transition:border-color .15s; }
+.mod-card:hover { border-color:var(--brand-accent); }
+.cat-pill { display:inline-block; padding:2px 8px; border-radius:8px; font-size:.68rem; font-weight:700; text-transform:uppercase; }
+.cat-general { background:#e5e7eb; color:#374151; }
+.cat-compliance { background:#fee2e2; color:#991b1b; }
+.cat-safety { background:#fef9c3; color:#854d0e; }
+.cat-product { background:#dbeafe; color:#1e40af; }
+.cat-soft-skills { background:#d1fae5; color:#065f46; }
+.stat-assigned { color:#2563eb; }
+.stat-in_progress { color:#d97706; }
+.stat-completed { color:#16a34a; }
+.stat-overdue { color:#dc2626; }
+.status-pill { display:inline-block; padding:2px 8px; border-radius:8px; font-size:.68rem; font-weight:700; text-transform:uppercase; }
+.status-assigned { background:#dbeafe; color:#1e40af; }
+.status-in_progress { background:#fef3c7; color:#92400e; }
+.status-completed { background:#d1fae5; color:#065f46; }
+.status-overdue { background:#fee2e2; color:#991b1b; }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+let allModules = [];
+
+function showTab(tab, btn) {
+  document.getElementById('tab-modules').style.display = tab==='modules' ? '' : 'none';
+  document.getElementById('tab-assignments').style.display = tab==='assignments' ? '' : 'none';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab==='assignments') loadAssignments();
+}
+
+// ── Modules ──
+
+loadModules();
+
+async function loadModules() {
+  const r = await fetch('/training/api/modules', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:'{}'});
+  const d = await r.json();
+  if (!d.success) return;
+  allModules = d.modules;
+  renderModules();
+  // Populate filter dropdown
+  const sel = document.getElementById('aFilterModule');
+  const assignSel = document.getElementById('assignModule');
+  sel.innerHTML = '<option value="">All Modules</option>';
+  assignSel.innerHTML = '';
+  d.modules.forEach(m => {
+    sel.innerHTML += `<option value="${m.id}">${esc(m.title)}</option>`;
+    assignSel.innerHTML += `<option value="${m.id}">${esc(m.title)}</option>`;
+  });
+}
+
+function renderModules() {
+  const el = document.getElementById('modulesList');
+  if (!allModules.length) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 0;">No training modules yet. Create one to get started.</p>'; return; }
+
+  let html = '';
+  allModules.forEach(m => {
+    const pct = m.assigned_count ? Math.round(m.completed_count / m.assigned_count * 100) : 0;
+    html += `<div class="mod-card">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.9rem;font-weight:600;">${esc(m.title)}${m.is_required ? ' <span style="color:#dc2626;font-size:.72rem;">REQUIRED</span>' : ''}</div>
+          ${m.description ? `<div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">${esc(m.description)}</div>` : ''}
+          <div style="font-size:.75rem;color:var(--text-muted);margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span class="cat-pill cat-${m.category}">${esc(m.category)}</span>
+            <span>${m.duration_mins} min</span>
+            <span>${m.assigned_count} assigned</span>
+            <span class="stat-completed">${m.completed_count} completed</span>
+            ${m.assigned_count ? `<span>(${pct}%)</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn btn-outline" style="font-size:.7rem;padding:3px 8px;" onclick='editModule(${JSON.stringify(m)})'>Edit</button>
+          <button class="btn" style="font-size:.7rem;padding:3px 8px;background:#dc2626;color:#fff;" onclick="deleteModule(${m.id})">✕</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function openModuleEditor(m) {
+  document.getElementById('moduleModalTitle').textContent = m ? 'Edit Module' : 'Add Module';
+  document.getElementById('modId').value = m ? m.id : '';
+  document.getElementById('modTitle').value = m ? m.title : '';
+  document.getElementById('modDesc').value = m ? m.description : '';
+  document.getElementById('modCategory').value = m ? m.category : 'general';
+  document.getElementById('modDuration').value = m ? m.duration_mins : 60;
+  document.getElementById('modRequired').checked = m ? m.is_required : false;
+  document.getElementById('moduleModal').style.display = 'flex';
+}
+function editModule(m) { openModuleEditor(m); }
+function closeModuleEditor() { document.getElementById('moduleModal').style.display = 'none'; }
+
+async function saveModule() {
+  const title = document.getElementById('modTitle').value.trim();
+  if (!title) { alert('Title is required'); return; }
+  const payload = {
+    title,
+    description: document.getElementById('modDesc').value.trim(),
+    category: document.getElementById('modCategory').value,
+    duration_mins: parseInt(document.getElementById('modDuration').value) || 60,
+    is_required: document.getElementById('modRequired').checked,
+  };
+  const id = document.getElementById('modId').value;
+  if (id) payload.id = parseInt(id);
+  const r = await fetch('/training/api/modules/save', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify(payload)});
+  const d = await r.json();
+  if (d.success) { closeModuleEditor(); loadModules(); } else alert(d.error||'Error');
+}
+
+async function deleteModule(id) {
+  if (!confirm('Archive this module? It will be hidden from the list.')) return;
+  const r = await fetch('/training/api/modules/delete', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify({id})});
+  const d = await r.json();
+  if (d.success) loadModules();
+}
+
+// ── Assignments ──
+
+async function loadAssignments() {
+  const payload = {};
+  const mod = document.getElementById('aFilterModule').value;
+  const emp = document.getElementById('aFilterEmployee').value;
+  const st = document.getElementById('aFilterStatus').value;
+  if (mod) payload.module_id = parseInt(mod);
+  if (emp) payload.employee_id = parseInt(emp);
+  if (st) payload.status = st;
+
+  const r = await fetch('/training/api/assignments', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify(payload)});
+  const d = await r.json();
+  if (!d.success) return;
+
+  const el = document.getElementById('assignmentsList');
+  if (!d.assignments.length) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 0;">No assignments found.</p>'; return; }
+
+  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.84rem;">';
+  html += '<thead><tr style="border-bottom:2px solid var(--border);"><th style="text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Employee</th><th style="text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Module</th><th style="text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Status</th><th style="text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Due</th><th style="text-align:left;padding:8px 10px;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Score</th><th style="padding:8px 10px;"></th></tr></thead><tbody>';
+  d.assignments.forEach(a => {
+    const due = a.due_date ? new Date(a.due_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 10px;font-weight:500;">${esc(a.employee_name)}</td>
+      <td style="padding:8px 10px;">${esc(a.module_title)} <span class="cat-pill cat-${a.module_category}" style="margin-left:4px;">${esc(a.module_category)}</span></td>
+      <td style="padding:8px 10px;"><span class="status-pill status-${a.status}">${a.status.replace('_',' ')}</span></td>
+      <td style="padding:8px 10px;font-size:.8rem;">${due}</td>
+      <td style="padding:8px 10px;font-size:.8rem;">${a.score !== null ? a.score+'%' : '—'}</td>
+      <td style="padding:8px 10px;text-align:right;">
+        <select onchange="updateStatus(${a.id},this.value)" style="font-size:.75rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);">
+          <option value="assigned"${a.status==='assigned'?' selected':''}>Assigned</option>
+          <option value="in_progress"${a.status==='in_progress'?' selected':''}>In Progress</option>
+          <option value="completed"${a.status==='completed'?' selected':''}>Completed</option>
+          <option value="overdue"${a.status==='overdue'?' selected':''}>Overdue</option>
+        </select>
+        <button class="btn" style="font-size:.68rem;padding:2px 6px;background:#dc2626;color:#fff;margin-left:4px;" onclick="deleteAssignment(${a.id})">✕</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function openAssignModal() { document.getElementById('assignModal').style.display = 'flex'; }
+function closeAssignModal() { document.getElementById('assignModal').style.display = 'none'; }
+
+async function assignTraining() {
+  const modId = parseInt(document.getElementById('assignModule').value);
+  const sel = document.getElementById('assignEmployees');
+  const empIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+  const due = document.getElementById('assignDue').value;
+
+  if (!modId || !empIds.length) { alert('Select a module and at least one employee'); return; }
+
+  const r = await fetch('/training/api/assignments/assign', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify({module_id:modId,employee_ids:empIds,due_date:due})});
+  const d = await r.json();
+  if (d.success) { closeAssignModal(); loadAssignments(); loadModules(); } else alert(d.error||'Error');
+}
+
+async function updateStatus(id, status) {
+  await fetch('/training/api/assignments/update', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify({id,status})});
+  loadAssignments();
+}
+
+async function deleteAssignment(id) {
+  if (!confirm('Remove this assignment?')) return;
+  const r = await fetch('/training/api/assignments/delete', {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify({id})});
+  const d = await r.json();
+  if (d.success) { loadAssignments(); loadModules(); }
+}
+</script>
+{% endblock %}
