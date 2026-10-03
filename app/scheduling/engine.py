@@ -692,7 +692,7 @@ def _resolve_employee_db_id(employee_ext_id):
         return None
 
 
-def _get_availability(employee_name, date_obj, availability_map=None, employee_ext_id=None):
+def _get_availability(employee_name, date_obj, availability_map=None, employee_ext_id=None, _db_id_cache=None):
     """
     Check if an employee is available on a given date and what
     restrictions they have. Merges:
@@ -746,7 +746,9 @@ def _get_availability(employee_name, date_obj, availability_map=None, employee_e
 
     # Check EmployeeAvailability DB table (overrides/supplements accommodations)
     if employee_ext_id:
-        db_id = _resolve_employee_db_id(employee_ext_id)
+        db_id = (_db_id_cache or {}).get(employee_ext_id) if _db_id_cache else None
+        if db_id is None:
+            db_id = _resolve_employee_db_id(employee_ext_id)
         if db_id:
             day_of_week = date_obj.weekday()  # 0=Mon ... 6=Sun
             db_avail = _get_db_availability(db_id, day_of_week)
@@ -1092,13 +1094,26 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
 
     # Sort employees: those with accommodation restrictions first (they have
     # fewer placement options), then unrestricted employees
+
+    # Pre-load all employee DB IDs in one query to avoid N+1
+    _ext_ids = [emp.get("employee_id") for emp in employees if emp.get("employee_id")]
+    _db_id_cache = {}
+    if _ext_ids:
+        try:
+            from app.models import Employee as _Emp
+            _rows = _Emp.query.filter(_Emp.employee_id.in_(_ext_ids)).all()
+            _db_id_cache = {r.employee_id: r.id for r in _rows}
+        except Exception:
+            pass
+
     emp_avails = []
     unassigned = []
     log.info(f"Scheduling {len(employees)} employees for {lob} on {date_obj}")
     skip_reasons = []
     for emp in employees:
         avail = _get_availability(emp["name"], date_obj, avail_map,
-                                  employee_ext_id=emp.get("employee_id"))
+                                  employee_ext_id=emp.get("employee_id"),
+                                  _db_id_cache=_db_id_cache)
         if not avail["available"]:
             reason = _explain_unavailability(emp["name"], date_obj, avail_map,
                                              emp.get("employee_id"))
@@ -1106,8 +1121,11 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             skip_reasons.append(f"{emp['name']}: {reason}")
             unassigned.append(emp["name"])
             continue
-        # Resolve DB id and check for rotation shift
-        db_id = _resolve_employee_db_id(emp.get("employee_id"))
+        # Resolve DB id from cache (or fallback to single query)
+        ext_id = emp.get("employee_id")
+        db_id = _db_id_cache.get(ext_id) if ext_id else None
+        if db_id is None and ext_id:
+            db_id = _resolve_employee_db_id(ext_id)
         rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
         if rot_shift and rot_shift.get("off"):
             log.info(f"  SKIP {emp['name']} (rotation day off)")
