@@ -2020,3 +2020,61 @@ def get_schedule_score():
     except Exception as e:
         log.exception("Score error")
         return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/publish", methods=["POST"])
+@login_required
+def publish_schedule():
+    """Publish a week's schedule — sends in-app notifications to affected agents."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    lob = payload.get("lob")
+    start = payload.get("start_date")
+    end = payload.get("end_date")
+
+    if not start:
+        return jsonify(success=False, error="start_date is required")
+
+    try:
+        start_dt = datetime.datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.datetime.strptime(end or start, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify(success=False, error="Invalid date format")
+
+    from app.models import db, Schedule, Employee, PlanningUnit, Notification
+
+    q = Schedule.query.filter(
+        Schedule.schedule_date >= start_dt,
+        Schedule.schedule_date <= end_dt,
+    )
+    if lob:
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        if pu:
+            q = q.filter_by(planning_unit_id=pu.id)
+
+    schedules = q.all()
+    if not schedules:
+        return jsonify(success=False, error="No schedules found for this period")
+
+    # Collect unique employee IDs
+    emp_ids = set(s.employee_id for s in schedules)
+    notified = 0
+
+    for emp_id in emp_ids:
+        emp = Employee.query.get(emp_id)
+        if not emp or not emp.user_id:
+            continue
+        notif = Notification(
+            user_id=emp.user_id,
+            action="schedule_published",
+            message=f"Your schedule for {start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d')} has been published.",
+            link="/my-schedule/",
+        )
+        db.session.add(notif)
+        notified += 1
+
+    db.session.commit()
+    return jsonify(success=True, notified=notified, total_shifts=len(schedules))

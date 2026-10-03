@@ -541,6 +541,9 @@
     <button class="btn-action btn-export" id="btnExportXlsx" onclick="exportScheduleXlsx()" style="display:none">
       Export Excel
     </button>
+    <button class="btn-action" id="btnPublish" onclick="publishSchedule()" style="display:none; background:#7c3aed; color:#fff;">
+      📢 Publish
+    </button>
     <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">
       Copy Week
     </button>
@@ -1589,6 +1592,7 @@ function clearSchedule() {
     document.getElementById('btnSave').style.display = 'none';
     document.getElementById('btnExport').style.display = 'none';
     document.getElementById('btnExportXlsx').style.display = 'none';
+    document.getElementById('btnPublish').style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
     document.getElementById('resultsContainer').innerHTML = '';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
@@ -1684,6 +1688,29 @@ function exportScheduleXlsx() {
   .catch(e => showToast('Export failed: ' + e, 'error'));
 }
 
+function publishSchedule() {
+  const lob = document.getElementById('lobSelect').value;
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  if (!lob || !start || !end) { showToast('Select LOB and dates first.', 'warning'); return; }
+  if (!confirm('Publish this schedule? All affected agents will be notified.')) return;
+
+  fetch('/scheduling/publish', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+    body: JSON.stringify({lob, start_date:start, end_date:end})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      showToast(`Schedule published! ${d.notified} agent${d.notified!==1?'s':''} notified.`, 'success');
+    } else {
+      showToast(d.error || 'Publish failed', 'error');
+    }
+  })
+  .catch(e => showToast('Publish failed: ' + e, 'error'));
+}
+
 // ═══════════════════════════════════════════════════════════
 // DISPLAY
 // ═══════════════════════════════════════════════════════════
@@ -1694,6 +1721,7 @@ function showResults() {
   document.getElementById('btnSave').style.display = '';
   document.getElementById('btnExport').style.display = '';
   document.getElementById('btnExportXlsx').style.display = '';
+  document.getElementById('btnPublish').style.display = '';
   document.getElementById('btnClear').style.display = '';
   // Show global warnings if any
   const gw = document.getElementById('globalWarnings');
