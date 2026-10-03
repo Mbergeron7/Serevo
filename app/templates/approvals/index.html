@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Approvals — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Approvals</h1>
+  <p style="color:var(--text-muted);margin:4px 0 0;">Review and manage pending requests from your team.</p>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" style="margin-bottom:1.5rem;">
+  <button class="tab active" data-tab="pto" onclick="switchTab('pto')">
+    Time Off <span id="ptoBadge" class="tab-badge" style="display:none;"></span>
+  </button>
+  <button class="tab" data-tab="bids" onclick="switchTab('bids')">
+    Shift Bids <span id="bidsBadge" class="tab-badge" style="display:none;"></span>
+  </button>
+  <button class="tab" data-tab="swaps" onclick="switchTab('swaps')">
+    Shift Swaps <span id="swapsBadge" class="tab-badge" style="display:none;"></span>
+  </button>
+</div>
+
+<!-- Filter -->
+<div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px;">
+  <label style="font-size:.85rem;color:var(--text-muted);">Show:</label>
+  <select id="statusFilter" onchange="loadCurrentTab()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
+    <option value="pending">Pending</option>
+    <option value="all">All</option>
+  </select>
+</div>
+
+<!-- PTO Tab -->
+<div id="tab-pto" class="tab-content">
+  <div id="ptoList" class="approval-list"></div>
+  <div id="ptoEmpty" class="empty-state" style="display:none;">
+    <p>No pending time-off requests.</p>
+  </div>
+</div>
+
+<!-- Bids Tab -->
+<div id="tab-bids" class="tab-content" style="display:none;">
+  <div id="bidsList" class="approval-list"></div>
+  <div id="bidsEmpty" class="empty-state" style="display:none;">
+    <p>No pending shift bids.</p>
+  </div>
+</div>
+
+<!-- Swaps Tab -->
+<div id="tab-swaps" class="tab-content" style="display:none;">
+  <div id="swapsList" class="approval-list"></div>
+  <div id="swapsEmpty" class="empty-state" style="display:none;">
+    <p>No pending shift swap requests.</p>
+  </div>
+</div>
+
+<style>
+.tabs { display:flex; gap:0; border-bottom:2px solid var(--border); }
+.tab {
+  padding:10px 20px; border:none; background:none; color:var(--text-muted);
+  font-size:.9rem; font-weight:500; cursor:pointer; border-bottom:2px solid transparent;
+  margin-bottom:-2px; transition:all .15s;
+}
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--brand-accent); border-bottom-color:var(--brand-accent); font-weight:600; }
+.tab-badge {
+  background:var(--brand-accent); color:#fff; font-size:.7rem; font-weight:700;
+  border-radius:10px; padding:1px 6px; margin-left:4px; vertical-align:top;
+}
+.approval-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:16px 20px; margin-bottom:10px; display:flex; align-items:center;
+  justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+.approval-card .info { flex:1; min-width:200px; }
+.approval-card .info h4 { margin:0 0 4px; font-size:.95rem; }
+.approval-card .info p { margin:0; font-size:.82rem; color:var(--text-muted); }
+.approval-card .actions { display:flex; gap:8px; flex-shrink:0; }
+.btn-approve {
+  padding:6px 16px; border:none; border-radius:6px; font-size:.82rem; font-weight:600;
+  cursor:pointer; background:#059669; color:#fff;
+}
+.btn-approve:hover { background:#047857; }
+.btn-deny {
+  padding:6px 16px; border:1px solid var(--border); border-radius:6px; font-size:.82rem;
+  font-weight:600; cursor:pointer; background:var(--bg); color:var(--text);
+}
+.btn-deny:hover { background:#fecaca; color:#dc2626; border-color:#dc2626; }
+.status-pill {
+  display:inline-block; font-size:.72rem; font-weight:600; padding:2px 8px;
+  border-radius:10px; text-transform:capitalize;
+}
+.status-pill.approved, .status-pill.accepted { background:#d1fae5; color:#065f46; }
+.status-pill.denied, .status-pill.declined { background:#fecaca; color:#991b1b; }
+.status-pill.pending { background:#fef3c7; color:#92400e; }
+.empty-state { text-align:center; padding:3rem; color:var(--text-muted); font-size:.9rem; }
+@media (prefers-color-scheme:dark) {
+  :root:not([data-theme="light"]) .status-pill.approved,
+  :root:not([data-theme="light"]) .status-pill.accepted { background:#064e3b; color:#6ee7b7; }
+  :root:not([data-theme="light"]) .status-pill.denied,
+  :root:not([data-theme="light"]) .status-pill.declined { background:#7f1d1d; color:#fca5a5; }
+  :root:not([data-theme="light"]) .status-pill.pending { background:#78350f; color:#fcd34d; }
+}
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+let currentTab = 'pto';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('tab-' + tab).style.display = '';
+  loadCurrentTab();
+}
+
+function loadCurrentTab() {
+  if (currentTab === 'pto') loadPTO();
+  else if (currentTab === 'bids') loadBids();
+  else loadSwaps();
+}
+
+async function api(url, body) {
+  const res = await fetch(url, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body: JSON.stringify(body||{})
+  });
+  return res.json();
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+}
+
+// ── PTO ────────────────────────────────────
+async function loadPTO() {
+  const status = document.getElementById('statusFilter').value;
+  const data = await api('/approvals/api/pto', {status});
+  const list = document.getElementById('ptoList');
+  const empty = document.getElementById('ptoEmpty');
+  if (!data.success || !data.entries.length) {
+    list.innerHTML = ''; empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = data.entries.map(e => `
+    <div class="approval-card">
+      <div class="info">
+        <h4>${esc(e.employee)} — ${esc(e.time_off_type)}</h4>
+        <p>${fmtDate(e.start_date)} to ${fmtDate(e.end_date)} · ${esc(e.pto_type)}${e.note ? ' · "'+esc(e.note)+'"' : ''}</p>
+      </div>
+      <div class="actions">
+        ${e.status === 'pending' ? `
+          <button class="btn-approve" onclick="decidePTO(${e.id},'approved')">Approve</button>
+          <button class="btn-deny" onclick="decidePTO(${e.id},'denied')">Deny</button>
+        ` : `<span class="status-pill ${e.status}">${e.status}</span>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function decidePTO(id, decision) {
+  await api('/approvals/api/pto/decide', {id, decision});
+  loadPTO();
+  loadCounts();
+}
+
+// ── Bids ────────────────────────────────────
+async function loadBids() {
+  const status = document.getElementById('statusFilter').value;
+  const data = await api('/approvals/api/bids', {status});
+  const list = document.getElementById('bidsList');
+  const empty = document.getElementById('bidsEmpty');
+  if (!data.success || !data.bids.length) {
+    list.innerHTML = ''; empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = data.bids.map(b => `
+    <div class="approval-card">
+      <div class="info">
+        <h4>${esc(b.employee)}</h4>
+        <p>${fmtDate(b.shift_date)} · ${b.shift_start}–${b.shift_end} (${b.hours}h) · Preference: ${b.preference === 1 ? 'High' : b.preference === 2 ? 'Medium' : 'Low'}</p>
+      </div>
+      <div class="actions">
+        ${b.status === 'pending' ? `
+          <button class="btn-approve" onclick="decideBid(${b.id},'accepted')">Accept</button>
+          <button class="btn-deny" onclick="decideBid(${b.id},'declined')">Decline</button>
+        ` : `<span class="status-pill ${b.status}">${b.status}</span>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function decideBid(id, decision) {
+  await api('/approvals/api/bids/decide', {id, decision});
+  loadBids();
+  loadCounts();
+}
+
+// ── Swaps ────────────────────────────────────
+async function loadSwaps() {
+  const sf = document.getElementById('statusFilter').value;
+  const status = sf === 'pending' ? 'needs_approval' : sf;
+  const data = await api('/approvals/api/swaps', {status});
+  const list = document.getElementById('swapsList');
+  const empty = document.getElementById('swapsEmpty');
+  if (!data.success || !data.swaps.length) {
+    list.innerHTML = ''; empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = data.swaps.map(s => `
+    <div class="approval-card">
+      <div class="info">
+        <h4>${esc(s.requester)} ↔ ${esc(s.target)}</h4>
+        <p>${fmtDate(s.requester_date)} ${s.requester_shift} ↔ ${fmtDate(s.target_date)} ${s.target_shift}${s.reason ? ' · "'+esc(s.reason)+'"' : ''}</p>
+      </div>
+      <div class="actions">
+        ${(s.status === 'accepted' || s.status === 'pending') ? `
+          <button class="btn-approve" onclick="decideSwap(${s.id},'approved')">Approve</button>
+          <button class="btn-deny" onclick="decideSwap(${s.id},'declined')">Decline</button>
+        ` : `<span class="status-pill ${s.status}">${s.status}</span>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function decideSwap(id, decision) {
+  await api('/approvals/api/swaps/decide', {id, decision});
+  loadSwaps();
+  loadCounts();
+}
+
+// ── Counts ────────────────────────────────────
+async function loadCounts() {
+  const data = await api('/approvals/api/counts');
+  if (!data.success) return;
+  setBadge('ptoBadge', data.pto);
+  setBadge('bidsBadge', data.bids);
+  setBadge('swapsBadge', data.swaps);
+}
+
+function setBadge(id, count) {
+  const el = document.getElementById(id);
+  if (count > 0) { el.textContent = count; el.style.display = ''; }
+  else { el.style.display = 'none'; }
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// Init
+loadPTO();
+loadCounts();
+</script>
+{% endblock %}
