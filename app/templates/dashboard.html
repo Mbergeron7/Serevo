@@ -95,6 +95,15 @@
   </div>
   {% endif %}
 
+  <!-- ═══ Today's Activity (loaded via AJAX) ═══ -->
+  <div class="card" style="margin-bottom:1.5rem;" id="todayActivity">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0; font-size:.95rem;">Today's Activity</h3>
+      <a href="/attendance/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
+    </div>
+    <div id="activityBody" style="font-size:.85rem; color:var(--text-muted);">Loading…</div>
+  </div>
+
   <div class="card-grid">
     <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
       <h3>Forecasting</h3>
@@ -135,4 +144,54 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const el = document.getElementById('activityBody');
+  if (!el || !csrf) return;
+
+  fetch('/attendance/api/dashboard', {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'X-CSRFToken': csrf},
+    body: JSON.stringify({date: new Date().toISOString().slice(0,10)})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) { el.textContent = 'Unable to load activity.'; return; }
+    const s = data.stats;
+    if (s.total_entries === 0) { el.innerHTML = '<span style="color:var(--text-muted);">No clock activity yet today.</span>'; return; }
+
+    // Recent 5 entries
+    const recent = (data.rows || []).slice(-5).reverse();
+    let html = `<div style="display:flex; gap:1.2rem; flex-wrap:wrap; margin-bottom:14px;">
+      <div><strong style="font-size:1.1rem;">${s.currently_in}</strong> <span>clocked in</span></div>
+      <div><strong style="font-size:1.1rem;">${s.completed}</strong> <span>completed</span></div>
+      <div><strong style="font-size:1.1rem;">${s.total_hours}h</strong> <span>total</span></div>
+      ${s.late > 0 ? `<div style="color:#dc2626;"><strong style="font-size:1.1rem;">${s.late}</strong> <span>late</span></div>` : ''}
+    </div>`;
+
+    if (recent.length) {
+      html += '<div style="font-size:.78rem; color:var(--text-muted); margin-bottom:6px;">Recent punches:</div>';
+      html += '<div style="display:flex; flex-direction:column; gap:4px;">';
+      recent.forEach(r => {
+        const lateTag = r.late_minutes ? ` · <span style="color:#dc2626;">${r.late_minutes}m late</span>` : '';
+        const statusIcon = r.status === 'active' ? '🟢' : '⚪';
+        html += `<div style="display:flex; gap:8px; align-items:center; font-size:.82rem;">
+          <span>${statusIcon}</span>
+          <strong>${esc(r.employee_name)}</strong>
+          <span style="color:var(--text-muted);">In: ${r.clock_in}${r.clock_out ? ' · Out: '+r.clock_out : ''}${lateTag}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  })
+  .catch(() => { el.textContent = 'Unable to load activity.'; });
+
+  function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+})();
+</script>
 {% endblock %}
