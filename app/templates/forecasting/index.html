@@ -881,26 +881,7 @@ function renderDashboard() {
 
   // Show summary cards
   document.getElementById('summaryCards').style.display = 'flex';
-
-  // Compute totals across all LOBs
-  let totalOff = 0, totalAht = 0, totalAhtW = 0, totalReq = 0, totalIntervals = 0;
-  for (const lob of lobs) {
-    const d = forecastData[lob];
-    totalOff += d.totals.total_offered;
-    totalAhtW += d.totals.total_offered * d.totals.avg_aht;
-    totalReq += d.totals.total_person_hours;
-    totalIntervals += d.totals.total_intervals;
-  }
-  const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
-
-  document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
-  document.getElementById('totalOfferedDetail').textContent = `${totalIntervals.toLocaleString()} intervals`;
-  document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
-  document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
-  const sl = document.getElementById('slTarget').value;
-  const asa = document.getElementById('asaTarget').value;
-  document.getElementById('slCard').textContent = sl + '% / ' + asa + ' secs';
-  document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
+  updateSummaryCards();
 
   // LOB tabs
   const tabsEl = document.getElementById('lobTabs');
@@ -921,7 +902,50 @@ function switchLob(lob, btn) {
   document.querySelectorAll('.lob-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   activeLob = lob;
-  renderCharts();
+  if (currentView === 'daily') {
+    loadIntervalData();
+  } else {
+    renderCharts();
+    renderHeatmap();
+  }
+}
+
+function updateSummaryCards() {
+  // For daily view with interval data, compute from intervals
+  if (currentView === 'daily' && intervalData && intervalData.length) {
+    let totalOff = 0, totalAhtW = 0, totalReq = 0;
+    for (const iv of intervalData) {
+      totalOff += iv.offered;
+      totalAhtW += iv.offered * iv.aht;
+      totalReq += iv.agents_required;
+    }
+    const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
+    const intervalMins = parseInt(document.getElementById('intervalSelect').value) || 30;
+    const personHours = totalReq * intervalMins / 60;
+
+    document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
+    document.getElementById('totalOfferedDetail').textContent = `${intervalData.length} intervals`;
+    document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
+    document.getElementById('personHours').textContent = Math.round(personHours).toLocaleString();
+  } else {
+    // For weekly/monthly/yearly, compute from the filtered daily data
+    const daily = getDailyData();
+    let totalOff = 0, totalAhtW = 0, totalReq = 0;
+    for (const d of daily) {
+      totalOff += d.offered;
+      totalAhtW += d.offered * d.aht;
+      totalReq += d.req;
+    }
+    const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
+    // Rough person-hours: agents_required is per-day avg, multiply by ~hours of operation
+    document.getElementById('totalOffered').textContent = Math.round(totalOff).toLocaleString();
+    document.getElementById('totalOfferedDetail').textContent = `${daily.length} days`;
+    document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
+    document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
+  }
+
+  document.getElementById('slCard').textContent = document.getElementById('slTarget').value + '% / ' + document.getElementById('asaTarget').value + ' secs';
+  document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
 }
 
 // ── Build combined daily data ───────────────────
@@ -1005,6 +1029,7 @@ function renderCharts() {
   // Daily view uses interval data (intraday breakdown)
   if (currentView === 'daily' && intervalData && intervalData.length) {
     renderIntervalCharts();
+    updateSummaryCards();
     return;
   }
 
@@ -1013,6 +1038,8 @@ function renderCharts() {
     ['offeredSection','ahtSection','reqSection'].forEach(id => document.getElementById(id).style.display = 'none');
     return;
   }
+
+  updateSummaryCards();
 
   const labels = daily.map(d => d.label || d.date);
 
