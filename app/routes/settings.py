@@ -83,11 +83,13 @@ def google_sheets():
     sheets_key = AppSetting.get("google_sheet_key", "")
     has_creds = bool(AppSetting.get("google_service_account_json", ""))
     sheets_status = AppSetting.get("google_sheets_status", "not configured")
+    employee_sheet_key = AppSetting.get("employee_sheet_key", "")
     return render_template("settings/google_sheets.html",
         user=get_current_user(),
         sheets_key=sheets_key,
         has_creds=has_creds,
         sheets_status=sheets_status,
+        employee_sheet_key=employee_sheet_key,
     )
 
 
@@ -118,6 +120,10 @@ def save_google_sheets():
     AppSetting.set("google_sheet_key", sheet_key)
     if sa_json:
         AppSetting.set("google_service_account_json", sa_json)
+    # Save employee sheet key (for HR system sync)
+    emp_sheet_key = data.get("employee_sheet_key", "").strip()
+    if emp_sheet_key:
+        AppSetting.set("employee_sheet_key", emp_sheet_key)
     AppSetting.set("google_sheets_status", "configured")
     db.session.commit()
 

@@ -87,6 +87,27 @@
 </div>
 {% endif %}
 
+<!-- Google Sheet Sync -->
+<div class="card" style="max-width: 640px; margin-top:1rem;">
+  <h2>Sync from Google Sheet</h2>
+  <p>Import employees from a connected Google Sheet (e.g. your HR system export).
+     Configure the sheet key in Settings → Connections or via the <code>EMPLOYEE_SHEET_KEY</code> environment variable.</p>
+  <div style="display:flex; gap:.5rem; align-items:center; margin-top:.75rem;">
+    <button class="btn btn-outline" id="previewSyncBtn" onclick="previewSync()">
+      Preview
+    </button>
+    <button class="btn btn-primary" id="syncBtn" onclick="runSync()" disabled>
+      Sync Employees
+    </button>
+    <label style="margin-left:1rem; font-size:.9rem;">
+      <input type="checkbox" id="activeOnly" checked> Active &amp; LOA only
+    </label>
+  </div>
+  <div id="syncPreview" style="display:none; margin-top:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+  </div>
+  <div id="syncResult" style="display:none; margin-top:1rem;"></div>
+</div>
+
 <!-- Download Templates -->
 <div class="card" style="margin-top:2rem; max-width:640px;">
   <h2>Download Templates</h2>
@@ -166,6 +187,65 @@ function downloadTemplate(type) {
   a.href = URL.createObjectURL(blob);
   a.download = `serevo_${type}_template.csv`;
   a.click();
+}
+
+// ── Google Sheet Sync ──
+async function previewSync() {
+  const btn = document.getElementById('previewSyncBtn');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try {
+    const resp = await fetch('/data/sync-employees/preview');
+    const data = await resp.json();
+    const div = document.getElementById('syncPreview');
+    div.style.display = '';
+    if (!data.connected) {
+      div.innerHTML = `<p style="color:#dc2626">❌ ${data.error}</p>`;
+      document.getElementById('syncBtn').disabled = true;
+    } else {
+      let html = `<p><strong>${data.total_rows}</strong> rows in sheet</p>`;
+      html += `<p>Statuses: ${Object.entries(data.statuses).map(([k,v]) => `${k}: ${v}`).join(', ')}</p>`;
+      html += `<p><strong>${data.new_employees}</strong> new employees, <strong>${data.existing_employees}</strong> updates</p>`;
+      if (Object.keys(data.active_planning_units).length) {
+        html += `<details><summary>Active by Planning Unit</summary><ul>`;
+        Object.entries(data.active_planning_units).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => {
+          html += `<li>${k}: ${v}</li>`;
+        });
+        html += '</ul></details>';
+      }
+      div.innerHTML = html;
+      document.getElementById('syncBtn').disabled = false;
+    }
+  } catch(err) {
+    document.getElementById('syncPreview').innerHTML = `<p style="color:#dc2626">${err.message}</p>`;
+    document.getElementById('syncPreview').style.display = '';
+  }
+  btn.disabled = false; btn.textContent = 'Preview';
+}
+
+async function runSync() {
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true; btn.textContent = 'Syncing…';
+  const activeOnly = document.getElementById('activeOnly').checked;
+  try {
+    const resp = await fetch('/data/sync-employees', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({active_only: activeOnly}),
+    });
+    const data = await resp.json();
+    const div = document.getElementById('syncResult');
+    div.style.display = '';
+    if (data.success) {
+      div.innerHTML = `<p style="color:var(--brand-accent)">✅ Synced <strong>${data.imported}</strong> employees` +
+        (data.skipped ? ` (${data.skipped} skipped)` : '') + `</p>`;
+    } else {
+      div.innerHTML = `<p style="color:#dc2626">❌ ${data.error}</p>`;
+    }
+  } catch(err) {
+    document.getElementById('syncResult').innerHTML = `<p style="color:#dc2626">${err.message}</p>`;
+    document.getElementById('syncResult').style.display = '';
+  }
+  btn.disabled = false; btn.textContent = 'Sync Employees';
 }
 
 function filterUploads() {

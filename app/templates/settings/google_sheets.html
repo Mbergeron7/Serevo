@@ -70,6 +70,18 @@
     {% endif %}
   </div>
 
+  <hr style="margin:1.5rem 0; border-color:var(--border-color);">
+  <h4>Employee Roster Sheet (optional)</h4>
+  <p style="font-size:.85rem; color:var(--text-muted); margin-bottom:.75rem;">
+    If you have a separate Google Sheet for employee headcount data (e.g. from your HR system),
+    enter its key here. This enables the <strong>Sync from Google Sheet</strong> feature on the Data Import page.
+    Uses the same service account credentials above.
+  </p>
+  <div class="form-group">
+    <label for="employee_sheet_key">Employee Sheet Key</label>
+    <input type="text" id="employee_sheet_key" placeholder="e.g. 1SM4WDQ..." value="{{ employee_sheet_key }}">
+  </div>
+
   <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
     <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
     <button class="btn btn-outline" onclick="testConnection()">Test Connection</button>
@@ -113,13 +125,14 @@ function showResult(type, msg) {
 async function saveConfig() {
   const key = document.getElementById('sheet_key').value.trim();
   const json = document.getElementById('sa_json').value.trim();
+  const empKey = document.getElementById('employee_sheet_key').value.trim();
   if (!key) return showResult('error', 'Sheet key is required.');
 
   try {
     const resp = await fetch('/settings/google-sheets/save', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ sheet_key: key, service_account_json: json }),
+      body: JSON.stringify({ sheet_key: key, service_account_json: json, employee_sheet_key: empKey }),
     });
     const data = await resp.json();
     if (data.success) {

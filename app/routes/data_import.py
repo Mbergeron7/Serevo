@@ -1,12 +1,16 @@
 """
-routes/data_import.py — CSV / Excel bulk upload
-=================================================
+routes/data_import.py — CSV / Excel bulk upload + Google Sheet sync
+===================================================================
 Allows admins to upload CSV or Excel files to populate the database
 tables (employees, forecast, requirements, accommodations, PTO).
+
+Also provides a sync endpoint to import employees from a connected
+Google Sheet (e.g. PeopleWare headcount export).
 """
 
 import io
 import csv
+import os
 import logging
 from datetime import datetime
 
@@ -36,7 +40,9 @@ UPLOAD_TYPES = {
     "employees": {
         "label": "Employees",
         "required": ["Employee ID", "First Name", "Last Name"],
-        "optional": ["Status", "LOB", "All Skills", "Skill Start", "Skill End", "End Date"],
+        "optional": ["Status", "LOB", "All Skills", "Skill Start", "Skill End", "End Date",
+                      "Planning Unit", "Latest Skill Name", "Contract Type", "Email",
+                      "Address Email", "Start Date", "Title"],
     },
     "forecast": {
         "label": "Forecast Data",
@@ -291,7 +297,11 @@ def _import_employees(rows):
             errors.append(f"Row {i}: missing Employee ID or First Name")
             continue
 
-        lob = _get_val(row, "LOB") or _get_val(row, "Latest Skill Name")
+        # LOB resolution: prefer "Planning Unit" (organizational unit),
+        # fall back to "LOB" or "Latest Skill Name" for queue assignment
+        lob = (_get_val(row, "Planning Unit")
+               or _get_val(row, "LOB")
+               or _get_val(row, "Latest Skill Name"))
         unit = _get_or_create_unit(lob) if lob else None
 
         existing = Employee.query.filter_by(employee_id=emp_id).first()
@@ -305,16 +315,36 @@ def _import_employees(rows):
             emp.status = "Active"
         if unit:
             emp.planning_unit_id = unit.id
+
+        # Skills
         skills_val = _get_val(row, "All Skills")
         if skills_val:
             emp.all_skills = skills_val
-        # Parse dates for both new and existing
-        for field, attr in [("Skill Start", "skill_start"), ("Skill End", "skill_end"), ("End Date", "end_date")]:
+
+        # Email — prefer "Address Email" (PeopleWare), fall back to "Email"
+        email_val = _get_val(row, "Address Email") or _get_val(row, "Email")
+        if email_val:
+            emp.email = email_val
+
+        # Contract type (PeopleWare column)
+        ct_val = _get_val(row, "Contract Type")
+        if ct_val:
+            emp.contract_type = ct_val
+
+        # Parse dates
+        for field, attr in [
+            ("Skill Start", "skill_start"),
+            ("Latest Skill Start", "skill_start"),
+            ("Skill End", "skill_end"),
+            ("Latest Skill End", "skill_end"),
+            ("End Date", "end_date"),
+        ]:
             val = _get_val(row, field)
-            if val:
+            if val and val != "4000-01-01":
                 ts = _parse_ts(val)
                 if ts:
                     setattr(emp, attr, ts.date())
+
         if not existing:
             db.session.add(emp)
         imported += 1
@@ -542,3 +572,177 @@ def _import_agent_status(rows):
         imported += 1
     db.session.flush()
     return imported, skipped, errors
+
+
+# ═══════════════════════════════════════════════════════════════
+# GOOGLE SHEET SYNC (employee headcount)
+# ═══════════════════════════════════════════════════════════════
+
+def _open_employee_sheet():
+    """
+    Open the employee headcount Google Sheet (external HR export).
+    Uses EMPLOYEE_SHEET_KEY env var, falling back to AppSetting.
+    Returns (worksheet, error_string).
+    """
+    try:
+        import gspread
+        from oauth2client.service_account import ServiceAccountCredentials
+        scope = ["https://spreadsheets.google.com/feeds",
+                 "https://www.googleapis.com/auth/drive"]
+
+        sheet_key = os.environ.get("EMPLOYEE_SHEET_KEY", "")
+        sa_file = os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json")
+        sa_json = ""
+
+        # Fall back to database settings
+        if not sheet_key:
+            try:
+                from app.models import AppSetting
+                sheet_key = AppSetting.get("employee_sheet_key", "")
+            except Exception:
+                pass
+
+        if not sheet_key:
+            return None, "No employee sheet key configured. Set EMPLOYEE_SHEET_KEY in environment or in Settings → Connections."
+
+        # Try JSON creds from DB first, then file
+        try:
+            from app.models import AppSetting
+            sa_json = AppSetting.get("google_service_account_json", "")
+        except Exception:
+            pass
+
+        if sa_json:
+            import json
+            creds_dict = json.loads(sa_json)
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        elif sa_file and os.path.exists(sa_file):
+            creds = ServiceAccountCredentials.from_json_keyfile_name(sa_file, scope)
+        else:
+            return None, "No service account credentials configured"
+
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(sheet_key)
+        # Try to find the EMPLOYEES tab, fall back to first sheet
+        try:
+            ws = spreadsheet.worksheet("EMPLOYEES")
+        except Exception:
+            ws = spreadsheet.sheet1
+        return ws, None
+    except Exception as e:
+        return None, f"Could not open employee sheet: {e}"
+
+
+@data_import_bp.route("/sync-employees", methods=["POST"])
+@admin_required
+def sync_employees_from_sheet():
+    """
+    Pull employees from the connected PeopleWare Google Sheet and
+    upsert them into the database.
+    """
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    user = get_current_user()
+    active_only = request.json.get("active_only", True) if request.is_json else True
+
+    ws, err = _open_employee_sheet()
+    if err:
+        return jsonify({"success": False, "error": err})
+
+    try:
+        records = ws.get_all_records()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not read sheet: {e}"})
+
+    if not records:
+        return jsonify({"success": False, "error": "Sheet is empty"})
+
+    # Filter to active employees if requested
+    if active_only:
+        records = [r for r in records if str(r.get("Status", "")).strip() in ("Active", "LOA")]
+
+    log.info("Sheet sync started: %d rows (active_only=%s) by %s",
+             len(records), active_only, user.get("email", ""))
+
+    # Convert sheet records to the format _import_employees expects
+    rows = []
+    for rec in records:
+        row = {}
+        for k, v in rec.items():
+            row[str(k).strip()] = str(v).strip() if v else ""
+        rows.append(row)
+
+    from app.models import db, DataUpload
+    upload = DataUpload(
+        filename="peopleware_sheet_sync",
+        upload_type="employees",
+        rows_total=len(rows),
+        status="processing",
+        uploaded_by=user.get("email", ""),
+    )
+    db.session.add(upload)
+    db.session.flush()
+
+    try:
+        imported, skipped, errors = _import_employees(rows)
+        upload.rows_imported = imported
+        upload.rows_skipped = skipped
+        upload.status = "complete"
+        if errors:
+            upload.error_detail = "\n".join(errors[:20])
+        db.session.commit()
+
+        log.info("Sheet sync complete: imported=%d skipped=%d", imported, skipped)
+        return jsonify({
+            "success": True,
+            "imported": imported,
+            "skipped": skipped,
+            "total": len(rows),
+            "errors": errors[:10],
+            "source": "employee_sheet_sync",
+        })
+    except Exception as e:
+        db.session.rollback()
+        log.error("Sheet sync failed: %s", e)
+        return jsonify({"success": False, "error": str(e)})
+
+
+@data_import_bp.route("/sync-employees/preview", methods=["GET"])
+@admin_required
+def preview_sheet_sync():
+    """
+    Preview what the sheet sync would import — returns summary stats
+    without writing anything.
+    """
+    ws, err = _open_employee_sheet()
+    if err:
+        return jsonify({"connected": False, "error": err})
+
+    try:
+        records = ws.get_all_records()
+    except Exception as e:
+        return jsonify({"connected": False, "error": f"Could not read sheet: {e}"})
+
+    from collections import Counter
+    statuses = Counter(str(r.get("Status", "")).strip() for r in records)
+    planning_units = Counter(str(r.get("Planning Unit", "")).strip()
+                             for r in records
+                             if str(r.get("Status", "")).strip() == "Active")
+
+    # Check how many already exist in DB
+    from app.models import Employee
+    existing_ids = {e.employee_id for e in Employee.query.with_entities(Employee.employee_id).all()}
+    sheet_ids = {str(r.get("Employee ID", "")).strip() for r in records}
+    new_count = len(sheet_ids - existing_ids)
+    update_count = len(sheet_ids & existing_ids)
+
+    return jsonify({
+        "connected": True,
+        "total_rows": len(records),
+        "statuses": dict(statuses),
+        "active_planning_units": dict(planning_units),
+        "new_employees": new_count,
+        "existing_employees": update_count,
+    })
