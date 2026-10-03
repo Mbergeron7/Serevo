@@ -139,6 +139,7 @@ def generate():
                                          apply_holiday_adjustments,
                                          compute_requirements_from_forecast,
                                          daily_summary)
+    from app.forecasting.ml_engine import generate_forecast_ml
     try:
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
@@ -171,7 +172,9 @@ def generate():
                 method = auto_result["best_method"]
                 # Will be included in response
 
-            if method == "holt_winters":
+            if method == "ml_gradient_boosting":
+                result = generate_forecast_ml(lob, hist_days, fc_days, sheet)
+            elif method == "holt_winters":
                 result = generate_forecast_holt_winters(lob, hist_days, fc_days, sheet)
             elif method == "weighted_trend":
                 result = generate_forecast_weighted(lob, hist_days, fc_days, sheet)
@@ -373,8 +376,18 @@ def accuracy():
                 "summary": "Demo accuracy — based on sample data",
             }
         else:
-            sheet = _get_sheet()
-            result = compute_accuracy(lob, start_date, end_date, sheet)
+            # Prefer accuracy vs actuals (IntervalActual) when available
+            import os
+            if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+                from app.forecasting.ml_engine import compute_accuracy_vs_actuals
+                result = compute_accuracy_vs_actuals(lob, start_date, end_date)
+                if result.get("summary", {}).get("matched_intervals", 0) == 0:
+                    # Fall back to old method if no actuals exist
+                    sheet = _get_sheet()
+                    result = compute_accuracy(lob, start_date, end_date, sheet)
+            else:
+                sheet = _get_sheet()
+                result = compute_accuracy(lob, start_date, end_date, sheet)
         result["success"] = True
         return jsonify(result)
 

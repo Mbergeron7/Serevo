@@ -961,6 +961,13 @@ def auto_select_method(lob, historical_days=90, sheet=None):
         "holt_winters": lambda: generate_forecast_holt_winters(
             lob, train_days, holdout_days, sheet),
     }
+    # Include ML method if actuals data exists
+    try:
+        from app.forecasting.ml_engine import generate_forecast_ml
+        methods["ml_gradient_boosting"] = lambda: generate_forecast_ml(
+            lob, train_days, holdout_days, sheet)
+    except ImportError:
+        pass
 
     results = {}
     for method_name, gen_fn in methods.items():
