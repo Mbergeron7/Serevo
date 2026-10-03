@@ -157,9 +157,18 @@
 <div class="p-panel" id="pp-balances">
   <div class="p-card">
     <div class="p-card-header">PTO Balances — Current Year
-      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadBalances()">↻ Refresh</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadBalances()">↻ Refresh</button>
+        <button class="btn" style="font-size:.75rem; padding:4px 14px; background:var(--brand-accent); color:#fff;" onclick="openPtoModal()">+ Request Time Off</button>
+      </div>
     </div>
     <div class="p-card-body" id="balancesBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+  <div class="p-card">
+    <div class="p-card-header">My Time Off Requests</div>
+    <div class="p-card-body" id="ptoRequestsBody">
       <p class="empty-msg">Loading…</p>
     </div>
   </div>
@@ -202,6 +211,39 @@
       <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
         <button type="button" class="btn btn-outline" onclick="closeSwapModal()">Cancel</button>
         <button type="submit" class="btn btn-primary">Post Swap</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ PTO Request Modal ═══ -->
+<div id="ptoModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closePtoModal()">
+  <div class="modal">
+    <h3>Request Time Off</h3>
+    <form onsubmit="return submitPtoRequest(event)">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="pto_type_id" required>
+          <option value="">Loading…</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div class="form-group" style="flex:1;">
+          <label>Start Date</label>
+          <input type="date" id="pto_start" required>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>End Date</label>
+          <input type="date" id="pto_end" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note (optional)</label>
+        <textarea id="pto_note" rows="2" style="resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-outline" onclick="closePtoModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
       </div>
     </form>
   </div>
@@ -496,6 +538,71 @@ async function loadBalances() {
   el.innerHTML = html;
 }
 
+// ── PTO Requests ──
+let _ptoTypes = [];
+async function loadPtoRequests() {
+  const data = await api('/api/agent/my-pto-requests');
+  const el = document.getElementById('ptoRequestsBody');
+  if (!data.success) { el.innerHTML = '<p class="empty-msg">Unable to load requests.</p>'; return; }
+  _ptoTypes = data.types || [];
+  const rows = data.requests || [];
+  if (!rows.length) { el.innerHTML = '<p class="empty-msg">No time-off requests this year.</p>'; return; }
+  let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const cls = r.status === 'approved' ? 'pill-approved' : r.status === 'pending' ? 'pill-pending' : 'pill-declined';
+    const cancelBtn = r.status === 'pending' ? `<button class="btn btn-outline" style="font-size:.7rem;padding:2px 8px;color:#dc2626;border-color:#dc2626;" onclick="cancelPto(${r.id})">Cancel</button>` : '';
+    html += `<tr>
+      <td><strong>${esc(r.type)}</strong></td>
+      <td>${esc(r.start_date)} → ${esc(r.end_date)}</td>
+      <td>${r.days}</td>
+      <td><span class="pill ${cls}">${r.status}</span></td>
+      <td style="font-size:.78rem;color:var(--text-muted);">${esc(r.note)}</td>
+      <td>${cancelBtn}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function openPtoModal() {
+  const sel = document.getElementById('pto_type_id');
+  if (_ptoTypes.length) {
+    sel.innerHTML = _ptoTypes.map(t => `<option value="${t.id}">${esc(t.label)}</option>`).join('');
+  } else {
+    sel.innerHTML = '<option value="">No types available</option>';
+  }
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('pto_start').value = today;
+  document.getElementById('pto_end').value = today;
+  document.getElementById('pto_note').value = '';
+  document.getElementById('ptoModal').style.display = 'flex';
+}
+function closePtoModal() { document.getElementById('ptoModal').style.display = 'none'; }
+
+async function submitPtoRequest(e) {
+  e.preventDefault();
+  const data = await api('/api/agent/time-off', {
+    start_date: document.getElementById('pto_start').value,
+    end_date: document.getElementById('pto_end').value,
+    time_off_type_id: document.getElementById('pto_type_id').value,
+    note: document.getElementById('pto_note').value,
+  });
+  if (data.ok) { closePtoModal(); loadBalances(); loadPtoRequests(); }
+  else { alert(data.error || 'Request failed'); }
+  return false;
+}
+
+async function cancelPto(id) {
+  if (!confirm('Cancel this time-off request?')) return;
+  const r = await fetch(`/api/agent/time-off/${id}`, {
+    method: 'DELETE',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+  });
+  const d = await r.json();
+  if (d.ok) { loadBalances(); loadPtoRequests(); }
+  else { alert(d.error || 'Cancel failed'); }
+}
+
 // ── Quality ──
 async function loadQuality() {
   const days = parseInt(document.getElementById('qualityPeriod').value);
@@ -586,6 +693,7 @@ loadSwaps();
 loadVtoOt();
 loadMyBids();
 loadBalances();
+loadPtoRequests();
 loadQuality();
 loadClockStatus();
 loadWeeklyHours();

@@ -817,6 +817,42 @@ def pto_balances():
     return jsonify({"success": True, "balances": balances})
 
 
+@agent_bp.route("/api/agent/my-pto-requests", methods=["POST"])
+@login_required
+def my_pto_requests():
+    """Return the agent's own PTO requests for display on the portal."""
+    user = get_current_user()
+    emp = _get_agent_employee(user)
+    if not emp:
+        return jsonify({"success": True, "requests": []})
+
+    year_start = date(date.today().year, 1, 1)
+    entries = PTOEntry.query.filter(
+        PTOEntry.employee_id == emp.id,
+        PTOEntry.start_date >= year_start,
+    ).order_by(PTOEntry.start_date.desc()).limit(50).all()
+
+    rows = []
+    for e in entries:
+        tot = TimeOffType.query.get(e.time_off_type_id) if e.time_off_type_id else None
+        days = (e.end_date - e.start_date).days + 1 if e.start_date and e.end_date else 0
+        rows.append({
+            "id": e.id,
+            "type": tot.label if tot else "General",
+            "start_date": e.start_date.isoformat() if e.start_date else "",
+            "end_date": e.end_date.isoformat() if e.end_date else "",
+            "days": days,
+            "status": e.approval_status or "pending",
+            "note": e.note or "",
+        })
+
+    # Also return available time-off types for the request form
+    types = TimeOffType.query.filter_by(is_active=True).order_by(TimeOffType.sort_order).all()
+    type_list = [{"id": t.id, "label": t.label, "color": t.color} for t in types]
+
+    return jsonify({"success": True, "requests": rows, "types": type_list})
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Agent Quality Scores
 # ═══════════════════════════════════════════════════════════════
