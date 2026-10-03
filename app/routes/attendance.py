@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, TimeClock, User
+from app.models import db, Employee, TimeClock, User, Schedule
 
 log = logging.getLogger("serevo.attendance")
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")
@@ -160,9 +160,26 @@ def api_dashboard():
 
     entries = TimeClock.query.filter_by(date=target_date).order_by(TimeClock.clock_in).all()
 
+    # Build schedule map for tardiness check
+    sched_map = {}
+    scheds = Schedule.query.filter_by(schedule_date=target_date).all()
+    for s in scheds:
+        if s.shift_start:
+            sched_map[s.employee_id] = s.shift_start
+
     rows = []
     for e in entries:
         emp = Employee.query.get(e.employee_id) if e.employee_id else None
+        # Tardiness: clock_in time vs scheduled shift_start
+        late_minutes = None
+        sched_start_str = ""
+        if e.employee_id in sched_map and e.clock_in:
+            sched_start = sched_map[e.employee_id]
+            sched_start_str = sched_start.strftime("%H:%M")
+            ci_time = e.clock_in.time()
+            diff = (ci_time.hour * 60 + ci_time.minute) - (sched_start.hour * 60 + sched_start.minute)
+            if diff > 0:
+                late_minutes = diff
         rows.append({
             "id": e.id,
             "employee_name": emp.first_name + " " + emp.last_name if emp else "Unknown",
@@ -171,6 +188,8 @@ def api_dashboard():
             "clock_out": e.clock_out.strftime("%H:%M") if e.clock_out else "",
             "total_hours": e.total_hours,
             "status": e.status,
+            "scheduled_start": sched_start_str,
+            "late_minutes": late_minutes,
         })
 
     # Summary stats
@@ -178,6 +197,7 @@ def api_dashboard():
     currently_in = sum(1 for r in rows if r["status"] == "active")
     completed = sum(1 for r in rows if r["status"] == "completed")
     total_hours = sum(r["total_hours"] or 0 for r in rows)
+    late_count = sum(1 for r in rows if r.get("late_minutes"))
 
     return jsonify(
         success=True,
@@ -188,5 +208,6 @@ def api_dashboard():
             "currently_in": currently_in,
             "completed": completed,
             "total_hours": round(total_hours, 1),
+            "late": late_count,
         },
     )
