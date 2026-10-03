@@ -33,6 +33,10 @@ def index():
 @login_required
 def active_announcements():
     """Return active (non-expired) announcements for the portal."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_announcements
+        return jsonify(success=True, announcements=get_demo_announcements())
     now = _utcnow()
     query = Announcement.query.filter(
         db.or_(Announcement.expires_at.is_(None), Announcement.expires_at > now)
@@ -60,6 +64,10 @@ def active_announcements():
 @login_required
 def list_announcements():
     """All announcements for management view."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_announcements
+        return jsonify(success=True, announcements=get_demo_announcements())
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403

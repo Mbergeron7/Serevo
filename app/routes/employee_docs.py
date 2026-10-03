@@ -47,6 +47,10 @@ def list_docs():
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_employee_docs
+        return jsonify(success=True, docs=get_demo_employee_docs())
+
     data = request.get_json(silent=True) or {}
     emp_id = data.get("employee_id")
     category = data.get("category", "")

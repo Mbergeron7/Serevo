@@ -66,7 +66,8 @@ def create_app():
             # Retry once after rollback
             try:
                 db.create_all()
-            except Exception:
+            except Exception as e2:
+                log.warning(f"db.create_all() retry also failed: {e2}")
                 db.session.rollback()
         # Auto-add missing columns to existing tables (works on both Postgres and SQLite)
         _ensure_columns = [
@@ -112,8 +113,8 @@ def create_app():
     try:
         from app.demo_data import seed_demo_user
         seed_demo_user(app)
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(f"seed_demo_user() failed (may be expected on first run): {e}")
 
     # ---- inject brand variables into every template ----
     @app.context_processor
@@ -191,6 +192,11 @@ def create_app():
     app.register_blueprint(wfm_tickets_bp)
 
     # ---- error handlers ----
+    @app.errorhandler(403)
+    def forbidden(e):
+        from flask import render_template
+        return render_template("403.html"), 403
+
     @app.errorhandler(404)
     def not_found(e):
         from flask import render_template

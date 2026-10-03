@@ -1341,3 +1341,188 @@ def get_demo_quality_dashboard(lob="All"):
         "by_category": cats,
         "trend": trend,
     }
+
+
+# ── Demo data for remaining sections ────────────────────────────
+
+
+def get_demo_announcements():
+    """Return list of demo announcements."""
+    today = datetime.date.today()
+    return [
+        {"id": 1, "title": "Office Closed — Thanksgiving", "body": "The office will be closed Thursday and Friday for the Thanksgiving holiday. Regular schedules resume Monday.", "category": "general", "is_pinned": True, "author": "Lisa Tran", "created_at": (today - datetime.timedelta(days=2)).isoformat(), "expires_at": (today + datetime.timedelta(days=5)).isoformat()},
+        {"id": 2, "title": "New Quality Scorecard Rollout", "body": "Starting next week, all LOBs will use the updated quality scorecard. Training materials are available in the Training section.", "category": "policy", "is_pinned": False, "author": "Mike Johnson", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "expires_at": None},
+        {"id": 3, "title": "Parking Lot Maintenance", "body": "Lot B will be closed for repaving Oct 10-12. Please use Lot C during this time.", "category": "general", "is_pinned": False, "author": "Admin", "created_at": (today - datetime.timedelta(days=7)).isoformat(), "expires_at": (today + datetime.timedelta(days=10)).isoformat()},
+        {"id": 4, "title": "Q4 Incentive Program", "body": "Agents hitting 95%+ quality and ≤5% absenteeism qualify for the Q4 bonus. Details on the intranet.", "category": "recognition", "is_pinned": True, "author": "Lisa Tran", "created_at": (today - datetime.timedelta(days=10)).isoformat(), "expires_at": None},
+    ]
+
+
+def get_demo_shift_notes():
+    """Return list of demo shift notes."""
+    today = datetime.date.today()
+    return [
+        {"id": 1, "note_date": today.isoformat(), "shift_label": "Morning", "body": "High call volume expected due to billing cycle close. Extra agents scheduled for Billing queue.", "category": "handoff", "is_resolved": False, "author": "Lisa Tran", "created_at": today.isoformat() + "T07:45:00"},
+        {"id": 2, "note_date": today.isoformat(), "shift_label": "Morning", "body": "CRM system running slow — IT aware, ETA 10am fix.", "category": "issue", "is_resolved": True, "author": "Casey Chen", "created_at": today.isoformat() + "T08:15:00"},
+        {"id": 3, "note_date": (today - datetime.timedelta(days=1)).isoformat(), "shift_label": "Afternoon", "body": "New product launch FAQ added to knowledge base. Agents should review before shift.", "category": "info", "is_resolved": False, "author": "Mike Johnson", "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T13:00:00"},
+        {"id": 4, "note_date": (today - datetime.timedelta(days=1)).isoformat(), "shift_label": "Morning", "body": "Two call-outs on Tech Help Desk. Redistributed to Sales Support overflow.", "category": "staffing", "is_resolved": True, "author": "Lisa Tran", "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T07:30:00"},
+        {"id": 5, "note_date": (today - datetime.timedelta(days=2)).isoformat(), "shift_label": "Evening", "body": "Phone system rebooted at 6pm. All lines restored by 6:15pm.", "category": "issue", "is_resolved": True, "author": "Admin", "created_at": (today - datetime.timedelta(days=2)).isoformat() + "T18:20:00"},
+    ]
+
+
+def get_demo_employee_docs():
+    """Return list of demo employee documents."""
+    today = datetime.date.today()
+    agents = ["Alex Morgan", "Jordan Rivera", "Casey Chen", "Sam Patel", "Taylor Kim"]
+    categories = ["Contract", "Certification", "ID Copy", "Performance Review", "Training Certificate"]
+    docs = []
+    for i, (agent, cat) in enumerate(zip(agents, categories)):
+        docs.append({
+            "id": i + 1,
+            "employee_id": i + 1,
+            "employee_name": agent,
+            "title": f"{cat} — {agent}",
+            "category": cat.lower().replace(" ", "_"),
+            "filename": f"{cat.lower().replace(' ', '_')}_{agent.split()[1].lower()}.pdf",
+            "mime_type": "application/pdf",
+            "file_size": random.randint(50000, 500000),
+            "notes": "",
+            "uploaded_by": "Admin",
+            "created_at": (today - datetime.timedelta(days=30 + i * 10)).isoformat(),
+        })
+    return docs
+
+
+def get_demo_training_modules():
+    """Return list of demo training modules."""
+    return [
+        {"id": 1, "title": "New Hire Orientation", "description": "Company overview, policies, and system access.", "category": "onboarding", "duration_mins": 120, "is_required": True, "assigned_count": 20, "completed_count": 18},
+        {"id": 2, "title": "CRM Advanced Features", "description": "Deep dive into search, macros, and reporting in the CRM.", "category": "systems", "duration_mins": 60, "is_required": False, "assigned_count": 15, "completed_count": 10},
+        {"id": 3, "title": "De-escalation Techniques", "description": "Handling difficult customers and reducing escalations.", "category": "soft_skills", "duration_mins": 45, "is_required": True, "assigned_count": 20, "completed_count": 16},
+        {"id": 4, "title": "HIPAA Compliance", "description": "Annual refresher on data privacy and HIPAA requirements.", "category": "compliance", "duration_mins": 30, "is_required": True, "assigned_count": 20, "completed_count": 20},
+        {"id": 5, "title": "Sales Upselling Workshop", "description": "Techniques for identifying upsell opportunities during calls.", "category": "sales", "duration_mins": 90, "is_required": False, "assigned_count": 7, "completed_count": 3},
+    ]
+
+
+def get_demo_training_assignments():
+    """Return list of demo training assignments."""
+    today = datetime.date.today()
+    agents = [("Alex Morgan", 1), ("Jordan Rivera", 2), ("Casey Chen", 3),
+              ("Sam Patel", 4), ("Taylor Kim", 5)]
+    assignments = []
+    aid = 1
+    for agent_name, emp_id in agents:
+        for mod in get_demo_training_modules()[:3]:
+            status = random.choice(["completed", "completed", "in_progress", "assigned"])
+            assignments.append({
+                "id": aid,
+                "module_id": mod["id"],
+                "module_title": mod["title"],
+                "module_category": mod["category"],
+                "employee_id": emp_id,
+                "employee_name": agent_name,
+                "status": status,
+                "due_date": (today + datetime.timedelta(days=14)).isoformat(),
+                "completed_at": (today - datetime.timedelta(days=random.randint(1, 10))).isoformat() if status == "completed" else "",
+                "score": random.randint(80, 100) if status == "completed" else None,
+                "notes": "",
+                "assigned_at": (today - datetime.timedelta(days=20)).isoformat(),
+            })
+            aid += 1
+    return assignments
+
+
+def get_demo_support_tickets():
+    """Return list of demo support tickets."""
+    today = datetime.date.today()
+    return [
+        {"id": 1, "subject": "Headset not working", "description": "Left ear cup has no audio. Tried restarting.", "category": "equipment", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
+        {"id": 2, "subject": "VPN disconnects frequently", "description": "VPN drops every 20 minutes when working from home.", "category": "it", "priority": "high", "status": "in_progress", "submitted_by": 3, "submitter_name": "Casey Chen", "assigned_to": 99, "assignee_name": "IT Support", "resolution": None, "created_at": (today - datetime.timedelta(days=3)).isoformat(), "updated_at": (today - datetime.timedelta(days=2)).isoformat()},
+        {"id": 3, "subject": "Request for standing desk", "description": "Would like to switch to a standing desk setup.", "category": "facilities", "priority": "low", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "Facilities", "resolution": "Approved — desk arriving next week.", "created_at": (today - datetime.timedelta(days=10)).isoformat(), "updated_at": (today - datetime.timedelta(days=7)).isoformat()},
+        {"id": 4, "subject": "CRM password reset", "description": "Locked out of CRM after too many failed attempts.", "category": "it", "priority": "high", "status": "resolved", "submitted_by": 5, "submitter_name": "Taylor Kim", "assigned_to": 99, "assignee_name": "IT Support", "resolution": "Password reset and account unlocked.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=5)).isoformat()},
+    ]
+
+
+def get_demo_wfm_tickets():
+    """Return list of demo WFM tickets."""
+    today = datetime.date.today()
+    return [
+        {"id": 1, "subject": "Schedule change request — Nov 15", "description": "Need to swap from morning to afternoon shift on Nov 15 for a doctor's appointment.", "category": "schedule_change", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Alex Morgan", "affected_date": (today + datetime.timedelta(days=5)).isoformat(), "internal_note": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
+        {"id": 2, "subject": "Availability update — Fridays off", "description": "Starting next month, I'm no longer available on Fridays due to school.", "category": "availability", "priority": "low", "status": "in_progress", "submitted_by": 4, "submitter_name": "Sam Patel", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "Sam Patel", "affected_date": None, "internal_note": "Need to adjust rotation.", "created_at": (today - datetime.timedelta(days=4)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
+        {"id": 3, "subject": "Overtime request — week of Oct 20", "description": "Willing to pick up extra hours during peak week.", "category": "overtime", "priority": "medium", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved for 10 extra hours.", "affected_agents": "Jordan Rivera", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "internal_note": None, "created_at": (today - datetime.timedelta(days=8)).isoformat(), "updated_at": (today - datetime.timedelta(days=6)).isoformat()},
+    ]
+
+
+def get_demo_attendance_dashboard(date_str=None):
+    """Return demo attendance/time clock dashboard data."""
+    if date_str:
+        day = datetime.datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+    else:
+        day = datetime.date.today()
+    agents = [
+        ("Alex Morgan", "E1001"), ("Jordan Rivera", "E1002"), ("Casey Chen", "E1003"),
+        ("Sam Patel", "E1004"), ("Taylor Kim", "E1005"), ("Drew Nguyen", "E1006"),
+        ("Riley Brooks", "E1007"), ("Priya Sharma", "E1008"), ("Marcus Johnson", "E1009"),
+        ("Ava Williams", "E1010"),
+    ]
+    rows = []
+    for i, (name, eid) in enumerate(agents):
+        sched_hour = 7 + (i % 4)
+        clock_in_hour = sched_hour + random.choice([0, 0, 0, 0, 1])  # mostly on time
+        clock_in_min = random.randint(0, 15)
+        late = max(0, (clock_in_hour - sched_hour) * 60 + clock_in_min)
+        is_done = i < 6
+        total_h = round(random.uniform(7.5, 8.5), 1) if is_done else round(random.uniform(2.0, 5.0), 1)
+        rows.append({
+            "id": i + 1,
+            "employee_name": name,
+            "employee_id_str": eid,
+            "clock_in": f"{clock_in_hour:02d}:{clock_in_min:02d}",
+            "clock_out": f"{clock_in_hour + 8:02d}:{random.randint(0,30):02d}" if is_done else "",
+            "total_hours": total_h,
+            "status": "completed" if is_done else "active",
+            "scheduled_start": f"{sched_hour:02d}:00",
+            "late_minutes": late if late > 0 else None,
+        })
+    currently_in = sum(1 for r in rows if r["status"] == "active")
+    completed = sum(1 for r in rows if r["status"] == "completed")
+    total_hours = round(sum(r["total_hours"] for r in rows), 1)
+    late_count = sum(1 for r in rows if r["late_minutes"] and r["late_minutes"] > 0)
+    return {
+        "date": day.isoformat(),
+        "rows": rows,
+        "stats": {
+            "total_entries": len(rows),
+            "currently_in": currently_in,
+            "completed": completed,
+            "total_hours": total_hours,
+            "late": late_count,
+        },
+    }
+
+
+def get_demo_notifications(user_id=None):
+    """Return list of demo notifications."""
+    today = datetime.date.today()
+    return [
+        {"id": 1, "category": "schedule", "title": "Schedule Published", "message": "Your schedule for next week has been published.", "link": "/my-schedule/", "is_read": False, "created_at": (today - datetime.timedelta(hours=2)).isoformat() + "T10:00:00"},
+        {"id": 2, "category": "pto", "title": "PTO Approved", "message": "Your time-off request for Oct 15 has been approved.", "link": "/my-time-off/", "is_read": False, "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T14:30:00"},
+        {"id": 3, "category": "announcement", "title": "New Announcement", "message": "Q4 Incentive Program details posted.", "link": "/announcements/", "is_read": True, "created_at": (today - datetime.timedelta(days=3)).isoformat() + "T09:00:00"},
+        {"id": 4, "category": "training", "title": "Training Due Soon", "message": "HIPAA Compliance refresher is due in 3 days.", "link": "/training/", "is_read": True, "created_at": (today - datetime.timedelta(days=5)).isoformat() + "T11:00:00"},
+        {"id": 5, "category": "quality", "title": "Quality Evaluation", "message": "You received a new quality evaluation. Score: 92/100.", "link": "/quality/", "is_read": True, "created_at": (today - datetime.timedelta(days=7)).isoformat() + "T16:00:00"},
+    ]
+
+
+def get_demo_audit_log():
+    """Return list of demo audit log entries."""
+    today = datetime.date.today()
+    entries = [
+        {"id": 1, "user_id": 1, "user_name": "Admin", "action": "schedule_published", "detail": "Published schedule for Sales Support, week of Oct 7.", "entity_type": "schedule", "entity_id": "1", "created_at": today.isoformat() + "T08:00:00"},
+        {"id": 2, "user_id": 1, "user_name": "Admin", "action": "employee_added", "detail": "Added new employee: Taylor Kim (E1005).", "entity_type": "employee", "entity_id": "5", "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T10:30:00"},
+        {"id": 3, "user_id": 2, "user_name": "Lisa Tran", "action": "pto_approved", "detail": "Approved PTO for Alex Morgan on Oct 15.", "entity_type": "pto", "entity_id": "10", "created_at": (today - datetime.timedelta(days=2)).isoformat() + "T14:00:00"},
+        {"id": 4, "user_id": 1, "user_name": "Admin", "action": "settings_changed", "detail": "Updated brand accent color.", "entity_type": "settings", "entity_id": None, "created_at": (today - datetime.timedelta(days=3)).isoformat() + "T09:15:00"},
+        {"id": 5, "user_id": 1, "user_name": "Admin", "action": "data_imported", "detail": "Imported 18 forecast intervals for Billing.", "entity_type": "forecast", "entity_id": None, "created_at": (today - datetime.timedelta(days=4)).isoformat() + "T11:45:00"},
+        {"id": 6, "user_id": 2, "user_name": "Lisa Tran", "action": "schedule_generated", "detail": "Generated schedule for Tech Help Desk, week of Oct 14.", "entity_type": "schedule", "entity_id": "2", "created_at": (today - datetime.timedelta(days=5)).isoformat() + "T16:00:00"},
+        {"id": 7, "user_id": 1, "user_name": "Admin", "action": "employee_updated", "detail": "Updated contract for Jordan Rivera to Full-Time.", "entity_type": "employee", "entity_id": "2", "created_at": (today - datetime.timedelta(days=6)).isoformat() + "T13:30:00"},
+        {"id": 8, "user_id": None, "user_name": "System", "action": "data_imported", "detail": "Auto-imported 24 interval actuals from connected system.", "entity_type": "actuals", "entity_id": None, "created_at": (today - datetime.timedelta(days=7)).isoformat() + "T06:00:00"},
+    ]
+    return entries

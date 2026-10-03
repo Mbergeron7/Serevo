@@ -33,6 +33,10 @@ def list_notes():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_shift_notes
+        return jsonify(success=True, notes=get_demo_shift_notes())
+
     data = request.get_json(silent=True) or {}
     try:
         start = date.fromisoformat(data.get("start_date", ""))

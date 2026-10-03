@@ -152,6 +152,12 @@ def api_dashboard():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_attendance_dashboard
+        payload = request.get_json(silent=True) or {}
+        data = get_demo_attendance_dashboard(payload.get("date"))
+        return jsonify(success=True, **data)
+
     payload = request.get_json(silent=True) or {}
     target_date_str = payload.get("date")
     try:

@@ -31,6 +31,10 @@ def index():
 @login_required
 def list_tickets():
     user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_support_tickets
+        return jsonify(success=True, tickets=get_demo_support_tickets())
+
     data = request.get_json(silent=True) or {}
     status_filter = data.get("status")
     category_filter = data.get("category")

@@ -15,8 +15,13 @@ notif_bp = Blueprint("notifications", __name__, url_prefix="/notifications")
 def list_notifications():
     """Return most recent notifications for the current user."""
     try:
-        limit = int(request.json.get("limit", 20)) if request.is_json else 20
         user = get_current_user()
+        if user and user.get("is_demo"):
+            from app.demo_data import get_demo_notifications
+            notifs = get_demo_notifications()
+            unread = sum(1 for n in notifs if not n["is_read"])
+            return jsonify(success=True, notifications=notifs, unread_count=unread)
+        limit = int(request.json.get("limit", 20)) if request.is_json else 20
         notifs = (
             Notification.query
             .filter_by(user_id=user["id"])
@@ -43,6 +48,8 @@ def unread_count():
     """Quick count of unread notifications (for badge)."""
     try:
         user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify({"success": True, "count": 2})
         count = Notification.query.filter_by(
             user_id=user["id"], is_read=False
         ).count()

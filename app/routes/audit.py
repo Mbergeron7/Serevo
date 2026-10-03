@@ -27,6 +27,11 @@ def list_entries():
     if not user or user.get("role") != "admin":
         return jsonify(error="Forbidden"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_audit_log
+        entries = get_demo_audit_log()
+        return jsonify(success=True, entries=entries, total=len(entries), page=1, per_page=50)
+
     data = request.get_json(silent=True) or {}
     days = int(data.get("days", 7))
     action_filter = data.get("action", "")

@@ -54,6 +54,10 @@ def list_tickets():
     if not _has_wfm_access(user):
         return jsonify(success=False, error="No WFM access"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_wfm_tickets
+        return jsonify(success=True, tickets=get_demo_wfm_tickets(), total=3, page=1, per_page=50)
+
     data = request.get_json(silent=True) or {}
     status_filter = data.get("status")
     category_filter = data.get("category")

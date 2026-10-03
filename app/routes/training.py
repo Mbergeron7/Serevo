@@ -39,6 +39,10 @@ def list_modules():
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_training_modules
+        return jsonify(success=True, modules=get_demo_training_modules())
+
     modules = TrainingModule.query.filter(TrainingModule.is_active == True).order_by(TrainingModule.title).all()
     rows = []
     for m in modules:
@@ -118,6 +122,10 @@ def list_assignments():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_training_assignments
+        return jsonify(success=True, assignments=get_demo_training_assignments())
 
     data = request.get_json(silent=True) or {}
     module_id = data.get("module_id")
