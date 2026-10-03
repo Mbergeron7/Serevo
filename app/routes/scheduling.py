@@ -1734,8 +1734,8 @@ def mass_segment_cross_lob_shifts():
                 cov_map[t_str]["required"] += r.required or 0
                 cov_map[t_str]["scheduled"] += r.scheduled or 0
             coverage = sorted(cov_map.values(), key=lambda x: x["time"])
-        except Exception:
-            pass  # coverage data is optional
+        except Exception as e:
+            log.warning("Coverage data unavailable: %s", e)
 
         return jsonify({"success": True, "shifts": results, "coverage": coverage})
 
@@ -1797,8 +1797,8 @@ def bulk_edit():
             if not new_start or not new_end:
                 return jsonify({"success": False, "error": "Start and end times required"})
             for s in shifts:
-                s.start_time = new_start
-                s.end_time = new_end
+                s.shift_start = new_start
+                s.shift_end = new_end
                 s.hours = _time_diff_hours(new_start, new_end)
                 affected += 1
 
@@ -1813,7 +1813,7 @@ def bulk_edit():
             for s in shifts:
                 seg = ShiftSegment(
                     schedule_id=s.id,
-                    segment_type=act_type,
+                    activity_type=act_type,
                     start_time=act_start,
                     end_time=act_end,
                     duration_mins=dur,
@@ -1832,8 +1832,8 @@ def bulk_edit():
         elif action == "add_day_off":
             for s in shifts:
                 s.shift_type = "day_off"
-                s.start_time = None
-                s.end_time = None
+                s.shift_start = None
+                s.shift_end = None
                 s.hours = 0
                 # Remove segments
                 ShiftSegment.query.filter_by(schedule_id=s.id).delete()
