@@ -2020,3 +2020,19 @@ class TimeClock(db.Model):
 
     employee = db.relationship("Employee", backref="time_punches")
     editor   = db.relationship("User", foreign_keys=[edited_by])
+
+
+class Announcement(db.Model):
+    """Team announcements posted by supervisors/admins, visible to agents."""
+    __tablename__ = "announcements"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    title      = db.Column(db.String(200), nullable=False)
+    body       = db.Column(db.Text, nullable=True)
+    category   = db.Column(db.String(40), default="general")  # general, urgent, schedule, policy
+    is_pinned  = db.Column(db.Boolean, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+    author = db.relationship("User", foreign_keys=[created_by])
