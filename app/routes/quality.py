@@ -47,8 +47,14 @@ def api_evaluations():
             q = q.filter(QualityEvaluation.eval_date >= _dt.date.fromisoformat(date_from))
         if date_to:
             q = q.filter(QualityEvaluation.eval_date <= _dt.date.fromisoformat(date_to))
-        evals = q.order_by(QualityEvaluation.eval_date.desc()).limit(200).all()
-        return jsonify({"evaluations": [e.to_dict() for e in evals]})
+        # Pagination
+        page = max(int(data.get("page", 1)), 1)
+        per_page = min(int(data.get("per_page", 50)), 200)
+        q = q.order_by(QualityEvaluation.eval_date.desc())
+        total = q.count()
+        evals = q.offset((page - 1) * per_page).limit(per_page).all()
+        return jsonify({"evaluations": [e.to_dict() for e in evals],
+                        "total": total, "page": page, "per_page": per_page})
     except Exception as e:
         db.session.rollback()
         return jsonify({"evaluations": [], "error": str(e)})

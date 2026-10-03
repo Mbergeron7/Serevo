@@ -70,9 +70,15 @@ def list_tickets():
         query = query.filter_by(category=category_filter)
 
     query = query.order_by(WfmTicket.created_at.desc())
-    tickets = query.limit(200).all()
 
-    return jsonify(success=True, tickets=[t.to_dict() for t in tickets])
+    # Pagination
+    page = max(int(data.get("page", 1)), 1)
+    per_page = min(int(data.get("per_page", 50)), 200)
+    total = query.count()
+    tickets = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify(success=True, tickets=[t.to_dict() for t in tickets],
+                   total=total, page=page, per_page=per_page)
 
 
 # ── API: create ticket ───────────────────────────────────────

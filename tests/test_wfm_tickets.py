@@ -88,6 +88,25 @@ class TestWfmTicketAPI:
         data = resp.get_json()
         assert data["success"] is True
         assert len(data["tickets"]) >= 1
+        assert "total" in data
+        assert "page" in data
+        assert "per_page" in data
+
+    def test_list_tickets_pagination(self, client, admin_user):
+        user, pw = admin_user
+        login(client, user.email, pw)
+        for i in range(3):
+            client.post("/wfm-tickets/api/tickets/create", json={
+                "subject": f"Page test {i}", "description": "Testing pagination",
+            }, content_type="application/json")
+        resp = client.post("/wfm-tickets/api/tickets",
+                           json={"per_page": 2, "page": 1},
+                           content_type="application/json")
+        data = resp.get_json()
+        assert data["success"] is True
+        assert len(data["tickets"]) == 2
+        assert data["total"] >= 3
+        assert data["page"] == 1
 
     def test_agent_sees_only_own_tickets(self, client, admin_user, agent_user, app):
         # Admin creates a ticket
