@@ -142,6 +142,87 @@ def roster():
     )
 
 
+# ── Export ───────────────────────────────────────────────────
+@people_bp.route("/export")
+@login_required
+def export_roster():
+    """Download the employee roster as an Excel file."""
+    import io
+    from flask import send_file
+    user = get_current_user()
+
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_employees
+        employees, _ = get_demo_employees()
+    else:
+        from app.people.manager import get_employees
+        employees, _ = get_employees()
+
+    # Build rows
+    headers = ["Employee ID", "First Name", "Last Name", "Email",
+               "Planning Unit", "Skill Group", "Team Lead", "Status",
+               "Start Date", "Contract"]
+    rows = []
+    for e in employees:
+        rows.append([
+            e.get("Employee ID", ""),
+            e.get("First Name", ""),
+            e.get("Last Name", ""),
+            e.get("Email", ""),
+            e.get("Latest Skill Name", ""),
+            e.get("Skill Group", ""),
+            e.get("Team Lead", ""),
+            e.get("Status", "Active"),
+            e.get("Start Date", ""),
+            e.get("Contract", ""),
+        ])
+
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Employee Roster"
+
+        # Header row
+        header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+        header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        # Data rows
+        data_font = Font(name="Arial", size=10)
+        for r, row in enumerate(rows, 2):
+            for c, val in enumerate(row, 1):
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = data_font
+
+        # Auto-width columns
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 30)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        return send_file(buf, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                         as_attachment=True, download_name="employee_roster.xlsx")
+    except Exception:
+        log.exception("Export failed, falling back to CSV")
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        buf = io.BytesIO(output.getvalue().encode("utf-8"))
+        return send_file(buf, mimetype="text/csv", as_attachment=True,
+                         download_name="employee_roster.csv")
+
+
 # ── Accommodations ───────────────────────────────────────────
 @people_bp.route("/accommodations")
 @login_required
