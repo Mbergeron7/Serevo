@@ -11,6 +11,13 @@
   }
   .fc-banner h1 { font-size: 1.35rem; margin: 0 0 2px; }
   .fc-banner .sub { font-size: .82rem; opacity: .85; }
+  /* ── View toggle ──────────────────────────── */
+  .view-toggle { display: flex; background: rgba(255,255,255,.12); border-radius: 6px; overflow: hidden; }
+  .vt-btn { padding: 5px 14px; border: none; background: transparent; color: rgba(255,255,255,.7);
+    font-size: .78rem; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; }
+  .vt-btn:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .vt-btn.active { background: rgba(255,255,255,.25); color: #fff; }
+
   /* ── Controls row ──────────────────────────── */
   .fc-controls {
     display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
@@ -266,7 +273,13 @@
     <h1>📈 Forecasting</h1>
     <div class="sub">Call volume, AHT &amp; staffing requirements • {{ year }}</div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
+  <div style="display:flex;gap:12px;align-items:center;">
+    <div class="view-toggle" id="viewToggle">
+      <button class="vt-btn active" data-view="daily" onclick="setView('daily',this)">Daily</button>
+      <button class="vt-btn" data-view="weekly" onclick="setView('weekly',this)">Weekly</button>
+      <button class="vt-btn" data-view="monthly" onclick="setView('monthly',this)">Monthly</button>
+      <button class="vt-btn" data-view="yearly" onclick="setView('yearly',this)">Yearly</button>
+    </div>
     <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;">
       {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
     </select>
@@ -436,7 +449,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>
       <h2>Offered Calls</h2>
-      <div class="chart-sub">Daily call volume — historical (grey) vs forecast (blue)</div>
+      <div class="chart-sub" id="offeredSub">Daily call volume — historical (grey) vs forecast (blue)</div>
     </div>
   </div>
   <div class="chart-wrap"><canvas id="offeredChart"></canvas></div>
@@ -447,7 +460,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>
       <h2>AHT</h2>
-      <div class="chart-sub">Average handle time in seconds — historical vs forecast</div>
+      <div class="chart-sub" id="ahtSub">Average handle time in seconds — historical vs forecast</div>
     </div>
   </div>
   <div class="chart-wrap"><canvas id="ahtChart"></canvas></div>
@@ -458,7 +471,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>
       <h2>Staff Requirements <span style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:.72rem;font-weight:600;">Erlang C</span></h2>
-      <div class="chart-sub">Agents required per day based on Erlang C calculation</div>
+      <div class="chart-sub" id="reqSub">Agents required per day based on Erlang C calculation</div>
     </div>
   </div>
   <div class="chart-wrap"><canvas id="reqChart"></canvas></div>
@@ -607,6 +620,19 @@ const ALL_LOBS = {{ all_lobs | tojson }};
 let chartOffered = null, chartAht = null, chartReq = null;
 let forecastData = {};  // {lob: {dates, dailyOffered, dailyAht, dailyReq, isHistoric}}
 let activeLob = null;
+let currentView = 'daily';
+
+function setView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.vt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const viewLabel = {daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[view];
+  document.getElementById('offeredSub').textContent = viewLabel + ' call volume — historical (grey) vs forecast (blue)';
+  document.getElementById('ahtSub').textContent = viewLabel + ' average handle time in seconds — historical vs forecast';
+  document.getElementById('reqSub').textContent = viewLabel + ' agents required based on Erlang C calculation';
+  renderCharts();
+  renderHeatmap();
+}
 
 // ── LOB picker ──────────────────────────────────
 document.getElementById('lobSearch').addEventListener('input', function() {
@@ -788,9 +814,8 @@ function switchLob(lob, btn) {
 }
 
 // ── Build combined daily data ───────────────────
-function getDailyData() {
+function getRawDailyData() {
   const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
-  // Merge all dates
   const dateMap = {};
   for (const lob of lobs) {
     const d = forecastData[lob];
@@ -810,18 +835,74 @@ function getDailyData() {
   }));
 }
 
+function getGroupKey(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  if (currentView === 'weekly') {
+    // ISO week: Monday-based
+    const tmp = new Date(d);
+    const day = tmp.getDay() || 7;
+    tmp.setDate(tmp.getDate() - day + 1); // Monday
+    return tmp.toISOString().slice(0, 10);
+  }
+  if (currentView === 'monthly') return dateStr.slice(0, 7);
+  if (currentView === 'yearly') return dateStr.slice(0, 4);
+  return dateStr; // daily
+}
+
+function getGroupLabel(key) {
+  if (currentView === 'weekly') {
+    const d = new Date(key + 'T12:00:00');
+    return 'Wk ' + d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  }
+  if (currentView === 'monthly') {
+    const [y, m] = key.split('-');
+    return new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString('en-US', {month:'short', year:'numeric'});
+  }
+  if (currentView === 'yearly') return key;
+  // daily
+  const dt = new Date(key + 'T12:00:00');
+  return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+
+function getDailyData() {
+  const raw = getRawDailyData();
+  if (currentView === 'daily') return raw;
+
+  // Aggregate by group
+  const groups = {};
+  const today = new Date().toISOString().slice(0, 10);
+  for (const row of raw) {
+    const key = getGroupKey(row.date);
+    if (!groups[key]) groups[key] = {key, offered: 0, aht_w: 0, aht_off: 0, req: 0, days: 0, is_historic: true};
+    const g = groups[key];
+    g.offered += row.offered;
+    g.aht_w += row.offered * row.aht;
+    g.aht_off += row.offered;
+    g.req += row.req;
+    g.days++;
+    if (row.date > today) g.is_historic = false;
+  }
+  return Object.values(groups).sort((a, b) => a.key.localeCompare(b.key)).map(g => ({
+    date: g.key,
+    label: getGroupLabel(g.key),
+    offered: g.offered,
+    aht: g.aht_off > 0 ? g.aht_w / g.aht_off : 0,
+    req: currentView === 'yearly' ? g.req / Math.max(1, g.days) : g.req / Math.max(1, g.days),
+    is_historic: g.is_historic,
+  }));
+}
+
 // ── Render charts ───────────────────────────────
 function renderCharts() {
   const daily = getDailyData();
   if (!daily.length) return;
 
-  const labels = daily.map(d => d.date);
+  const labels = daily.map(d => d.label || d.date);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Color arrays: grey for historic, blue for forecast
-  const offeredColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
-  const ahtColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.7)' : 'rgba(234,88,12,.7)');
-  const reqColors = daily.map(d => d.date <= today ? 'rgba(156,163,175,.5)' : 'rgba(34,197,94,.6)');
+  // Color arrays: grey for historic, colored for forecast
+  const offeredColors = daily.map(d => d.is_historic ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
+  const reqColors = daily.map(d => d.is_historic ? 'rgba(156,163,175,.5)' : 'rgba(34,197,94,.6)');
 
   // Offered chart
   document.getElementById('offeredSection').style.display = '';
@@ -858,8 +939,8 @@ function renderCharts() {
         pointRadius: 0,
         tension: .3,
         segment: {
-          borderColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.6)' : 'rgba(234,88,12,.8)',
-          backgroundColor: ctx => daily[ctx.p0DataIndex]?.date <= today ? 'rgba(156,163,175,.08)' : 'rgba(234,88,12,.1)',
+          borderColor: ctx => daily[ctx.p0DataIndex]?.is_historic ? 'rgba(156,163,175,.6)' : 'rgba(234,88,12,.8)',
+          backgroundColor: ctx => daily[ctx.p0DataIndex]?.is_historic ? 'rgba(156,163,175,.08)' : 'rgba(234,88,12,.1)',
         }
       }]
     },
@@ -905,12 +986,7 @@ function chartOpts(yLabel, isLine) {
       x: {
         grid: { display: false },
         ticks: {
-          maxTicksLimit: 15,
-          callback: function(val, i) {
-            const d = this.getLabelForValue(val);
-            const dt = new Date(d + 'T12:00:00');
-            return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
-          }
+          maxTicksLimit: currentView === 'yearly' ? 10 : currentView === 'monthly' ? 12 : 15,
         }
       },
       y: {
@@ -922,47 +998,61 @@ function chartOpts(yLabel, isLine) {
 }
 
 // ── Render heatmap ──────────────────────────────
+function aggregateLobByView(daily) {
+  if (currentView === 'daily') return daily.map(r => ({key: r.date, label: getGroupLabel(r.date), val: r.agents_required}));
+  const groups = {};
+  for (const row of daily) {
+    const key = getGroupKey(row.date);
+    if (!groups[key]) groups[key] = {key, total: 0, days: 0};
+    groups[key].total += row.agents_required;
+    groups[key].days++;
+  }
+  return Object.values(groups).sort((a,b) => a.key.localeCompare(b.key)).map(g => ({
+    key: g.key, label: getGroupLabel(g.key), val: g.total / Math.max(1, g.days),
+  }));
+}
+
 function renderHeatmap() {
   const lobs = Object.keys(forecastData);
   if (!lobs.length) return;
 
-  // Collect all dates across all LOBs
-  const allDates = new Set();
+  // Build aggregated keys across all LOBs
+  const allKeys = new Set();
+  const lobAgg = {};
   for (const lob of lobs) {
-    for (const row of forecastData[lob].daily) allDates.add(row.date);
+    const agg = aggregateLobByView(forecastData[lob].daily);
+    lobAgg[lob] = {};
+    for (const r of agg) { lobAgg[lob][r.key] = r; allKeys.add(r.key); }
   }
-  const dates = Array.from(allDates).sort();
+  const keys = Array.from(allKeys).sort();
 
-  // Show last 14 days of data for the heatmap (keeps it readable)
-  const recentDates = dates.slice(-14);
+  // Limit columns for readability
+  const maxCols = currentView === 'yearly' ? keys.length : currentView === 'monthly' ? 12 : currentView === 'weekly' ? 13 : 14;
+  const displayKeys = keys.slice(-maxCols);
 
   document.getElementById('heatmapSection').style.display = '';
   const thead = document.getElementById('heatHead');
   const tbody = document.getElementById('heatBody');
 
   thead.innerHTML = '<tr><th class="row-label">LOB</th>' +
-    recentDates.map(d => {
-      const dt = new Date(d + 'T12:00:00');
-      return `<th>${dt.toLocaleDateString('en-US', {month:'short', day:'numeric'})}</th>`;
-    }).join('') + '<th>Avg</th></tr>';
+    displayKeys.map(k => `<th>${getGroupLabel(k)}</th>`).join('') + '<th>Avg</th></tr>';
 
   // Find global max for color scaling
   let maxReq = 0;
   for (const lob of lobs) {
-    for (const row of forecastData[lob].daily) {
-      if (row.agents_required > maxReq) maxReq = row.agents_required;
+    for (const k of displayKeys) {
+      const r = lobAgg[lob][k];
+      if (r && r.val > maxReq) maxReq = r.val;
     }
   }
 
   let html = '';
   for (const lob of lobs) {
-    const byDate = {};
-    for (const row of forecastData[lob].daily) byDate[row.date] = row;
     let sum = 0, cnt = 0;
     let cells = '';
-    for (const d of recentDates) {
-      const row = byDate[d];
-      const val = row ? Math.round(row.agents_required * 10) / 10 : 0;
+    for (const k of displayKeys) {
+      const r = lobAgg[lob][k];
+      const val = r ? Math.round(r.val * 10) / 10 : 0;
       sum += val; cnt++;
       const cls = heatClass(val, maxReq);
       cells += `<td class="${cls}">${val}</td>`;
@@ -974,12 +1064,11 @@ function renderHeatmap() {
   // Sum row
   let sumCells = '';
   let totalSum = 0, totalCnt = 0;
-  for (const d of recentDates) {
+  for (const k of displayKeys) {
     let dayTotal = 0;
     for (const lob of lobs) {
-      const byDate = {};
-      for (const row of forecastData[lob].daily) byDate[row.date] = row;
-      dayTotal += byDate[d] ? byDate[d].agents_required : 0;
+      const r = lobAgg[lob][k];
+      dayTotal += r ? r.val : 0;
     }
     totalSum += dayTotal; totalCnt++;
     sumCells += `<td style="font-weight:700;">${Math.round(dayTotal * 10) / 10}</td>`;
