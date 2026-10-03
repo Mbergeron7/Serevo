@@ -1047,7 +1047,12 @@ def get_demo_settings_data():
         "fill_in_rules": fill_in_rules,
         "availability": availability,
         "current_year": cur_year,
-        "lob_mappings": [],
+        "lob_mappings": [
+            {"id": 1, "source_name": "SS Sales Combined", "planning_unit_name": "SS Sales"},
+            {"id": 2, "source_name": "CS Tier1 Overflow", "planning_unit_name": "Customer Service"},
+            {"id": 3, "source_name": "Tech_Support_L2", "planning_unit_name": "Tech Support"},
+            {"id": 4, "source_name": "Billing-Collections", "planning_unit_name": "Billing"},
+        ],
     }
 
 
@@ -1102,11 +1107,21 @@ def get_demo_customization():
 def get_demo_contracts():
     """Demo data for Settings > Contracts page."""
     return [
-        {"id": 1, "name": "Full-Time 42.5h", "weekly_hours": 42.5, "days_per_week": 5, "hours_per_day": 8.5, "is_active": True, "employee_count": 12},
-        {"id": 2, "name": "Full-Time 40h", "weekly_hours": 40.0, "days_per_week": 5, "hours_per_day": 8.0, "is_active": True, "employee_count": 5},
-        {"id": 3, "name": "Part-Time 32h", "weekly_hours": 32.0, "days_per_week": 4, "hours_per_day": 8.0, "is_active": True, "employee_count": 3},
-        {"id": 4, "name": "Part-Time 24h", "weekly_hours": 24.0, "days_per_week": 3, "hours_per_day": 8.0, "is_active": True, "employee_count": 2},
-        {"id": 5, "name": "Weekend Only", "weekly_hours": 16.0, "days_per_week": 2, "hours_per_day": 8.0, "is_active": True, "employee_count": 1},
+        {"id": 1, "name": "Full-Time 42.5h", "contract_type": "full_time", "weekly_hours": 42.5, "days_per_week": 5,
+         "daily_hours_min": 8.0, "daily_hours_max": 8.5, "break_minutes": 15, "lunch_minutes": 30,
+         "rest_hours": 11, "overtime_eligible": True, "is_active": True, "employee_count": 12},
+        {"id": 2, "name": "Full-Time 40h", "contract_type": "full_time", "weekly_hours": 40.0, "days_per_week": 5,
+         "daily_hours_min": 7.5, "daily_hours_max": 8.0, "break_minutes": 15, "lunch_minutes": 30,
+         "rest_hours": 11, "overtime_eligible": True, "is_active": True, "employee_count": 5},
+        {"id": 3, "name": "Part-Time 32h", "contract_type": "part_time", "weekly_hours": 32.0, "days_per_week": 4,
+         "daily_hours_min": 7.5, "daily_hours_max": 8.0, "break_minutes": 15, "lunch_minutes": 30,
+         "rest_hours": 11, "overtime_eligible": False, "is_active": True, "employee_count": 3},
+        {"id": 4, "name": "Part-Time 24h", "contract_type": "part_time", "weekly_hours": 24.0, "days_per_week": 3,
+         "daily_hours_min": 7.5, "daily_hours_max": 8.0, "break_minutes": 15, "lunch_minutes": 30,
+         "rest_hours": 11, "overtime_eligible": False, "is_active": True, "employee_count": 2},
+        {"id": 5, "name": "Weekend Only", "contract_type": "part_time", "weekly_hours": 16.0, "days_per_week": 2,
+         "daily_hours_min": 7.5, "daily_hours_max": 8.0, "break_minutes": 15, "lunch_minutes": 0,
+         "rest_hours": 11, "overtime_eligible": False, "is_active": True, "employee_count": 1},
     ]
 
 
