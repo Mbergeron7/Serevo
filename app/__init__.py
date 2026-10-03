@@ -147,6 +147,7 @@ def create_app():
     from app.routes.notifications import notif_bp
     from app.routes.approvals import approvals_bp
     from app.routes.reports import reports_bp
+    from app.routes.search import search_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -164,6 +165,7 @@ def create_app():
     app.register_blueprint(notif_bp)
     app.register_blueprint(approvals_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(search_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

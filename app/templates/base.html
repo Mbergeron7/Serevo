@@ -63,6 +63,15 @@
       {% endif %}
       <span style="margin-left:auto; display:flex; align-items:center; gap:12px;">
         {% if current_user %}
+        <div id="globalSearch" style="position:relative;">
+          <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px 8px;gap:4px;">
+            <span style="font-size:.9rem;color:var(--text-muted);">🔍</span>
+            <input id="searchInput" type="text" placeholder="Search…" autocomplete="off"
+              style="border:none;outline:none;background:transparent;font-size:.82rem;width:140px;color:var(--text-primary);padding:4px 0;">
+            <kbd style="font-size:.6rem;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:1px 4px;line-height:1;">⌘K</kbd>
+          </div>
+          <div id="searchResults" style="display:none;position:absolute;top:calc(100% + 4px);right:0;width:340px;max-height:400px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:1002;"></div>
+        </div>
         <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" style="position:relative;cursor:pointer;font-size:1.1rem;" title="Notifications">
           🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
         </div>
@@ -249,6 +258,64 @@
   }
   _pollBadge();
   setInterval(_pollBadge, 60000);
+
+  // ---- Global Search ----
+  (function(){
+    var input = document.getElementById('searchInput');
+    var panel = document.getElementById('searchResults');
+    if (!input || !panel) return;
+    var _timer = null;
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    var csrfVal = csrf ? csrf.content : '';
+
+    input.addEventListener('input', function(){
+      clearTimeout(_timer);
+      var q = input.value.trim();
+      if (q.length < 2) { panel.style.display='none'; return; }
+      _timer = setTimeout(function(){ doSearch(q); }, 250);
+    });
+
+    input.addEventListener('focus', function(){
+      if (input.value.trim().length >= 2) doSearch(input.value.trim());
+    });
+
+    document.addEventListener('click', function(e){
+      var box = document.getElementById('globalSearch');
+      if (box && !box.contains(e.target)) panel.style.display='none';
+    });
+
+    document.addEventListener('keydown', function(e){
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault(); input.focus(); input.select();
+      }
+      if (e.key === 'Escape') { panel.style.display='none'; input.blur(); }
+    });
+
+    function doSearch(q){
+      fetch('/search/api/query', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':csrfVal},
+        body:JSON.stringify({q:q})
+      })
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if (!d.success || !d.results.length) {
+          panel.innerHTML='<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:.82rem;">No results found</div>';
+          panel.style.display='block'; return;
+        }
+        var html='';
+        d.results.forEach(function(r){
+          html+='<a href="'+r.url+'" style="display:flex;align-items:center;gap:10px;padding:8px 14px;text-decoration:none;color:inherit;border-bottom:1px solid var(--border);" onmouseover="this.style.background=\'var(--hover)\'" onmouseout="this.style.background=\'transparent\'">';
+          html+='<span style="font-size:1.1rem;flex-shrink:0;">'+r.icon+'</span>';
+          html+='<div style="min-width:0;"><div style="font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.title+'</div>';
+          if(r.subtitle) html+='<div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.subtitle+'</div>';
+          html+='</div></a>';
+        });
+        panel.innerHTML=html;
+        panel.style.display='block';
+      }).catch(function(){});
+    }
+  })();
   </script>
   {% endif %}
   {% block scripts %}{% endblock %}
