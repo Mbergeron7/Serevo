@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="{{ brand_accent }}">
   <title>{{ brand_name }} — {{ brand_tagline }}</title>
   <style>
     :root {
@@ -211,5 +215,6 @@
     &copy; 2026 {{ brand_name }}. All rights reserved.
   </footer>
 
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js')}</script>
 </body>
 </html>
