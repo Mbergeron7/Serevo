@@ -958,6 +958,95 @@ def clear_schedule():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Copy Week ─────────────────────────────────────────────
+@scheduling_bp.route("/copy-week", methods=["POST"])
+@login_required
+def copy_week():
+    """
+    Copy an entire week's schedule to a target week.
+    POST JSON: {lob, source_start, target_start}
+    Both dates should be Mondays (start of week). Copies 7 days.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        source_start_str = payload.get("source_start", "")
+        target_start_str = payload.get("target_start", "")
+
+        if not lob or not source_start_str or not target_start_str:
+            return jsonify({"success": False, "error": "LOB, source_start, and target_start required"})
+
+        source_start = datetime.datetime.strptime(source_start_str, "%Y-%m-%d").date()
+        target_start = datetime.datetime.strptime(target_start_str, "%Y-%m-%d").date()
+        source_end = source_start + datetime.timedelta(days=6)
+        target_end = target_start + datetime.timedelta(days=6)
+        day_offset = (target_start - source_start).days
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify({"success": True, "copied": 0, "demo": True,
+                            "message": "Week copied (demo mode)."})
+
+        from app.models import PlanningUnit, ShiftSegment
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if not pu:
+            return jsonify({"success": False, "error": "Planning unit not found"})
+
+        # Delete existing schedules in target range
+        Schedule.query.filter(
+            Schedule.planning_unit_id == pu.id,
+            Schedule.schedule_date >= target_start,
+            Schedule.schedule_date <= target_end,
+        ).delete(synchronize_session=False)
+
+        # Load source schedules with segments
+        source_schedules = Schedule.query.filter(
+            Schedule.planning_unit_id == pu.id,
+            Schedule.schedule_date >= source_start,
+            Schedule.schedule_date <= source_end,
+        ).all()
+
+        copied = 0
+        for sched in source_schedules:
+            new_date = sched.schedule_date + datetime.timedelta(days=day_offset)
+            new_sched = Schedule(
+                employee_id=sched.employee_id,
+                planning_unit_id=sched.planning_unit_id,
+                schedule_date=new_date,
+                shift_start=sched.shift_start,
+                shift_end=sched.shift_end,
+                shift_type=sched.shift_type,
+                hours=sched.hours,
+                status=sched.status,
+            )
+            db.session.add(new_sched)
+            db.session.flush()  # get new_sched.id
+
+            for seg in sched.segments:
+                new_seg = ShiftSegment(
+                    schedule_id=new_sched.id,
+                    activity_type=seg.activity_type,
+                    start_time=seg.start_time,
+                    end_time=seg.end_time,
+                    duration_mins=seg.duration_mins,
+                    sort_order=seg.sort_order,
+                    notes=seg.notes,
+                )
+                db.session.add(new_seg)
+            copied += 1
+
+        db.session.commit()
+        return jsonify({"success": True, "copied": copied,
+                        "message": f"Copied {copied} schedule(s) to target week."})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Copy week error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Employees for LOB (API) ───────────────────────────────
 @scheduling_bp.route("/employees", methods=["POST"])
 @login_required

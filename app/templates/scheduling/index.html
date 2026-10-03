@@ -538,6 +538,9 @@
     <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()" style="display:none">
       Export CSV
     </button>
+    <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">
+      Copy Week
+    </button>
     <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">
       Mass Update
     </button>
@@ -1089,6 +1092,32 @@
 </div>
 
 <!-- ── Loading overlay ────────────────────────────────────── -->
+<!-- ── Copy Week Modal ──────────────────────────────────── -->
+<div class="modal-overlay" id="copyWeekOverlay">
+  <div class="modal-box" style="width:380px">
+    <div class="modal-title">
+      <span>📋 Copy Week</span>
+      <button class="modal-close" onclick="closeCopyWeekModal()">&times;</button>
+    </div>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px;">
+      Copy all schedules (including shift segments) from one week to another within the selected LOB.
+    </p>
+    <div class="form-group">
+      <label>Source Week (Monday)</label>
+      <input type="date" id="copySourceStart" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+    </div>
+    <div class="form-group">
+      <label>Target Week (Monday)</label>
+      <input type="date" id="copyTargetStart" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+    </div>
+    <div id="copyWeekResult" style="margin-top:4px"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn-action" onclick="closeCopyWeekModal()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);">Cancel</button>
+      <button class="btn-action btn-save" id="btnCopyWeekSubmit" onclick="submitCopyWeek()">Copy Schedules</button>
+    </div>
+  </div>
+</div>
+
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-box" id="loadingMsg">Generating schedule…</div>
 </div>
@@ -3968,6 +3997,54 @@ function bulkApply() {
   .catch(e => {
     document.getElementById('bulkApplyBtn').disabled = false;
     document.getElementById('bulkResult').innerHTML = '<span style="color:#dc2626;font-size:.82rem">Failed: ' + e + '</span>';
+  });
+}
+
+/* ── Copy Week ───────────────────────────────────── */
+function openCopyWeekModal() {
+  const src = document.getElementById('cfgStart').value;
+  if (src) document.getElementById('copySourceStart').value = src;
+  document.getElementById('copyTargetStart').value = '';
+  document.getElementById('copyWeekResult').innerHTML = '';
+  document.getElementById('copyWeekOverlay').classList.add('show');
+}
+function closeCopyWeekModal() {
+  document.getElementById('copyWeekOverlay').classList.remove('show');
+}
+function submitCopyWeek() {
+  const lob = document.getElementById('cfgLOB').value;
+  const sourceStart = document.getElementById('copySourceStart').value;
+  const targetStart = document.getElementById('copyTargetStart').value;
+  if (!lob) { showToast('Please select a LOB first.', 'error'); return; }
+  if (!sourceStart || !targetStart) { showToast('Please select both source and target dates.', 'error'); return; }
+  if (sourceStart === targetStart) { showToast('Source and target weeks must be different.', 'error'); return; }
+
+  const btn = document.getElementById('btnCopyWeekSubmit');
+  const result = document.getElementById('copyWeekResult');
+  btn.disabled = true;
+  btn.textContent = 'Copying…';
+  result.innerHTML = '';
+
+  fetch('/scheduling/copy-week', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob, source_start: sourceStart, target_start: targetStart})
+  })
+  .then(r => r.json())
+  .then(d => {
+    btn.disabled = false;
+    btn.textContent = 'Copy Schedules';
+    if (d.success) {
+      showToast(d.message || 'Week copied successfully!', 'success');
+      closeCopyWeekModal();
+    } else {
+      result.innerHTML = '<span style="color:#dc2626;font-size:.82rem">' + (d.error || 'Copy failed') + '</span>';
+    }
+  })
+  .catch(e => {
+    btn.disabled = false;
+    btn.textContent = 'Copy Schedules';
+    result.innerHTML = '<span style="color:#dc2626;font-size:.82rem">Failed: ' + e + '</span>';
   });
 }
 </script>
