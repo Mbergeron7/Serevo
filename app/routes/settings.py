@@ -1922,7 +1922,7 @@ def master_reset():
                         "error": "Type RESET to confirm."})
 
     from app.models import (
-        db, Employee, Accommodation, PTOEntry,
+        db, User, Employee, Accommodation, PTOEntry,
         PlanningUnit, ForecastInterval, RequirementInterval,
         Schedule, ShiftSegment, APIConnection, DataUpload, DataSource,
         AppSetting, SegmentCode, ShiftTemplate, RotationPattern,
@@ -1931,17 +1931,28 @@ def master_reset():
         AdherenceException, AlertConfig, EmployeeAvailability,
         IntervalActual, LobMapping, AgentStatusEvent,
         Activity, Contract, DayModel,
-        EmployeePlanningUnit,
+        EmployeePlanningUnit, EmployeeWorkTimePattern,
         EmployeeContract, Selection, SelectionMember,
         ShiftSequence, ShiftSequenceRow, EmployeeShiftSequence,
         DayType, PlanningCalendar, CalendarEntry,
+        CoachingSession, QualityEvaluation, AnalyticsIntegration,
+        ShiftPost, ShiftBid, ShiftSwapRequest, VTOOTPost, VTOOTSignup,
+        WeekTimePattern, WorkTimePatternModel,
     )
 
     log.info("=== MASTER RESET initiated ===")
 
+    # Unlink users from employee records so employees can be deleted
+    try:
+        User.query.update({User.employee_id: None})
+        db.session.flush()
+    except Exception as e:
+        log.warning(f"Reset: error unlinking user→employee: {e}")
+        db.session.rollback()
+
     # Order matters — delete children before parents
     tables_to_clear = [
-        # Child tables first
+        # Child tables first (all FK refs to employees)
         ShiftSegment,
         Accommodation,
         PTOEntry,
@@ -1950,11 +1961,19 @@ def master_reset():
         EmployeeAvailability,
         EmployeePlanningUnit,
         EmployeeContract,
+        EmployeeWorkTimePattern,
         EmployeeShiftSequence,
         SelectionMember,
         AdherenceException,
         AgentStatusEvent,
         IntervalActual,
+        CoachingSession,
+        QualityEvaluation,
+        ShiftBid,
+        ShiftSwapRequest,
+        VTOOTSignup,
+        VTOOTPost,
+        ShiftPost,
         # Main data tables
         Schedule,
         ForecastInterval,
@@ -1988,6 +2007,9 @@ def master_reset():
         DayModel,
         Activity,
         Contract,
+        WeekTimePattern,
+        WorkTimePatternModel,
+        AnalyticsIntegration,
     ]
 
     counts = {}
