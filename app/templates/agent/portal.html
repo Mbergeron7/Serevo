@@ -57,14 +57,32 @@
 </div>
 
 <div class="p-tabs">
-  <button class="active" onclick="switchTab('shifts', this)">📋 Open Shifts</button>
+  <button class="active" onclick="switchTab('schedule', this)">📅 My Schedule</button>
+  <button onclick="switchTab('shifts', this)">📋 Open Shifts</button>
   <button onclick="switchTab('swaps', this)">🔄 Shift Swaps</button>
   <button onclick="switchTab('vto', this)">🕐 VTO / OT</button>
   <button onclick="switchTab('mybids', this)">⭐ My Bids</button>
 </div>
 
+<!-- ═══ My Schedule Panel ═══ -->
+<div class="p-panel active" id="pp-schedule">
+  <div class="p-card">
+    <div class="p-card-header">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="btn btn-outline" style="font-size:.75rem; padding:4px 10px;" onclick="changeWeek(-1)">← Prev</button>
+        <span id="schedWeekLabel" style="font-weight:700; font-size:.85rem;"></span>
+        <button class="btn btn-outline" style="font-size:.75rem; padding:4px 10px;" onclick="changeWeek(1)">Next →</button>
+      </div>
+      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="changeWeek(0)">Today</button>
+    </div>
+    <div class="p-card-body" id="schedBody">
+      <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Open Shifts Panel ═══ -->
-<div class="p-panel active" id="pp-shifts">
+<div class="p-panel" id="pp-shifts">
   <div class="p-card">
     <div class="p-card-header">Available Open Shifts
       <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="loadOpenShifts()">↻ Refresh</button>
@@ -142,6 +160,71 @@
 {% block scripts %}
 <script>
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// ── My Schedule ──
+let schedWeekStart = null;
+function initWeek() {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? 6 : day - 1; // Mon-based
+  d.setDate(d.getDate() - diff);
+  schedWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+initWeek();
+
+function fmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function changeWeek(dir) {
+  if (dir === 0) { initWeek(); }
+  else { schedWeekStart.setDate(schedWeekStart.getDate() + dir * 7); }
+  loadSchedule();
+}
+
+async function loadSchedule() {
+  const start = fmtDate(schedWeekStart);
+  const endD = new Date(schedWeekStart);
+  endD.setDate(endD.getDate() + 6);
+  const end = fmtDate(endD);
+  document.getElementById('schedWeekLabel').textContent = start + '  to  ' + end;
+  const el = document.getElementById('schedBody');
+  el.innerHTML = '<p class="empty-msg">Loading…</p>';
+  try {
+    const r = await fetch('/api/agent/schedule?start=' + start + '&end=' + end);
+    const data = await r.json();
+    const scheds = data.schedules || [];
+    if (!scheds.length) {
+      el.innerHTML = '<p class="empty-msg">No shifts scheduled this week.</p>';
+      return;
+    }
+    let html = '<table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Status</th><th>LOB</th></tr></thead><tbody>';
+    const today = fmtDate(new Date());
+    scheds.forEach(s => {
+      const dt = new Date(s.date + 'T00:00:00');
+      const dayName = DAY_NAMES[dt.getDay()];
+      const isToday = s.date === today;
+      const rowStyle = isToday ? ' style="background:rgba(59,130,246,.08); font-weight:600;"' : '';
+      const startT = s.start || '';
+      const endT = s.end || '';
+      const shift = (s.status === 'off' || s.status === 'pto') ? '—' : (startT + ' – ' + endT);
+      const statusCls = s.status === 'scheduled' ? 'pill-approved' : s.status === 'pto' ? 'pill-pending' : 'pill-declined';
+      html += '<tr' + rowStyle + '>';
+      html += '<td>' + esc(s.date) + '</td>';
+      html += '<td>' + dayName + '</td>';
+      html += '<td>' + shift + '</td>';
+      html += '<td>' + (s.hours || 0) + 'h</td>';
+      html += '<td><span class="pill ' + statusCls + '">' + esc(s.status) + '</span></td>';
+      html += '<td>' + esc(s.lob || '') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(err) {
+    el.innerHTML = '<p class="empty-msg">Error loading schedule.</p>';
+  }
+}
 
 function switchTab(id, btn) {
   document.querySelectorAll('.p-panel').forEach(p => p.classList.remove('active'));
@@ -318,6 +401,7 @@ async function cancelVtoOt(postId) {
 }
 
 // ── Init ──
+loadSchedule();
 loadOpenShifts();
 loadSwaps();
 loadVtoOt();
