@@ -29,23 +29,29 @@ def index():
     else:
         from app.models import ForecastInterval
         today = date.today()
-        emp_count = Employee.query.count()
-        pu_count = PlanningUnit.query.filter_by(is_active=True).count()
-        live_stats = {
-            "total_employees": emp_count,
-            "planning_units": pu_count,
-            "on_today": Schedule.query.filter_by(schedule_date=today).count(),
-            "pto_today": PTOEntry.query.filter(
-                PTOEntry.start_date <= today,
-                PTOEntry.end_date >= today,
-            ).count(),
-        }
-        # Setup progress for getting-started checklist
-        setup = {
-            "has_units": pu_count > 0,
-            "has_employees": emp_count > 0,
-            "has_forecast": ForecastInterval.query.first() is not None,
-            "has_schedules": Schedule.query.first() is not None,
-        }
+        try:
+            emp_count = Employee.query.count()
+            pu_count = PlanningUnit.query.filter_by(is_active=True).count()
+            live_stats = {
+                "total_employees": emp_count,
+                "planning_units": pu_count,
+                "on_today": Schedule.query.filter_by(schedule_date=today).count(),
+                "pto_today": PTOEntry.query.filter(
+                    PTOEntry.start_date <= today,
+                    PTOEntry.end_date >= today,
+                ).count(),
+            }
+            # Setup progress for getting-started checklist
+            setup = {
+                "has_units": pu_count > 0,
+                "has_employees": emp_count > 0,
+                "has_forecast": ForecastInterval.query.first() is not None,
+                "has_schedules": Schedule.query.first() is not None,
+            }
+        except Exception:
+            import logging
+            logging.getLogger("serevo.dashboard").exception("Failed to load dashboard stats")
+            live_stats = {"total_employees": 0, "planning_units": 0, "on_today": 0, "pto_today": 0}
+            setup = {"has_units": False, "has_employees": False, "has_forecast": False, "has_schedules": False}
     return render_template("dashboard.html", user=user, demo_stats=demo_stats,
                            live_stats=live_stats, setup=setup if not demo_stats else None)

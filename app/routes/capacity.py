@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, jsonify)
+                   url_for, jsonify, flash)
 from app.auth import login_required, get_current_user
 from app.capacity import planning as cp
 from config import cfg
@@ -565,7 +565,11 @@ def plan_view():
 
     except Exception as e:
         log.exception("Capacity plan view error")
-        return f"Capacity plan error: {str(e)}", 500
+        flash("Could not load capacity plan. Please check your data sources.", "error")
+        return render_template("capacity/plan.html",
+            user=user, plan=[], year=year, years=years, now="",
+            all_lobs=[], sel_lobs=[],
+            shrinkage=30, occupancy=85, answer_rate=92)
 
 
 # ── Capacity Summary (numeric) + Headcount ─────────────────────
@@ -667,7 +671,8 @@ def summary_view():
                                lobs_in_deficit=lobs_in_deficit)
     except Exception as e:
         log.exception("Capacity summary error")
-        return f"Capacity summary error: {str(e)}", 500
+        flash("Could not load capacity summary. Please check your data sources.", "error")
+        return redirect(url_for("capacity.panel"))
 
 
 
