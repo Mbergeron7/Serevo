@@ -134,9 +134,92 @@
   .lob-tab.active { background: var(--surface); color: var(--text);
     box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
+  /* ── Reforecast section ──────────────────── */
+  .reforecast-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+  }
+  .reforecast-section h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .reforecast-section .chart-sub { font-size: .78rem; color: var(--text-muted); margin-bottom: 14px; }
+
+  .refc-toggle {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    padding: 14px 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 20px; user-select: none;
+  }
+  .refc-toggle:hover { border-color: var(--brand-accent); }
+  .refc-toggle h2 { margin: 0; font-size: 1.1rem; flex: 1; }
+  .refc-toggle .badge {
+    background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff;
+    font-size: .65rem; font-weight: 700; padding: 3px 10px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .refc-toggle .arrow { font-size: 1.1rem; color: var(--text-muted); transition: transform .2s; }
+  .refc-toggle.open .arrow { transform: rotate(180deg); }
+
+  .refc-body { display: none; }
+  .refc-body.open { display: block; }
+
+  .refc-controls {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .refc-controls .setting-group select,
+  .refc-controls .setting-group input { min-width: 150px; }
+
+  .refc-summary-cards {
+    display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .refc-scard {
+    flex: 1; min-width: 140px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px;
+  }
+  .refc-scard .label { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; }
+  .refc-scard .value { font-size: 1.3rem; font-weight: 800; }
+  .refc-scard .detail { font-size: .72rem; color: var(--text-muted); margin-top: 2px; }
+  .refc-scard.up .value { color: #ef4444; }
+  .refc-scard.down .value { color: #22c55e; }
+  .refc-scard.neutral .value { color: var(--text); }
+
+  /* Alerts */
+  .alert-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .alert-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-radius: 8px; font-size: .85rem;
+  }
+  .alert-item.critical { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+  .alert-item.warning { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+  .alert-item.info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .alert-item.critical { background: #4a1515; color: #fca5a5; }
+    :root:not([data-theme="light"]) .alert-item.warning { background: #4a3010; color: #fcd34d; }
+    :root:not([data-theme="light"]) .alert-item.info { background: #1e3a5f; color: #93c5fd; }
+  }
+  :root[data-theme="dark"] .alert-item.critical { background: #4a1515; color: #fca5a5; }
+  :root[data-theme="dark"] .alert-item.warning { background: #4a3010; color: #fcd34d; }
+  :root[data-theme="dark"] .alert-item.info { background: #1e3a5f; color: #93c5fd; }
+  .alert-severity { font-weight: 800; text-transform: uppercase; font-size: .7rem; letter-spacing: .04em; }
+  .alert-msg { flex: 1; }
+
+  /* Reforecast interval table */
+  .refc-table-wrap { max-height: 400px; overflow: auto; margin-bottom: 16px; }
+  .refc-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .refc-table th { padding: 6px 10px; text-align: right; font-weight: 700;
+    border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0;
+    background: var(--surface); }
+  .refc-table th:first-child { text-align: left; }
+  .refc-table td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  .refc-table td:first-child { text-align: left; font-weight: 600; }
+  .refc-table tr.actual-row { background: var(--bg); opacity: .7; }
+  .refc-table tr.cutoff-row { border-bottom: 3px solid var(--brand-accent); }
+  .refc-change-up { color: #ef4444; font-weight: 600; }
+  .refc-change-down { color: #22c55e; font-weight: 600; }
+
   @media (max-width: 768px) {
     .fc-controls { flex-direction: column; }
     .lob-picker { width: 100%; max-height: 200px; }
+    .refc-controls { flex-direction: column; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -297,6 +380,128 @@
       <thead id="heatHead"></thead>
       <tbody id="heatBody"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- ═══ Mid-Day Reforecast ═══ -->
+<div class="refc-toggle" id="refcToggle" onclick="toggleReforecast()">
+  <h2>⚡ Mid-Day Reforecast</h2>
+  <span class="badge">Live Adjustment</span>
+  <span class="arrow">▼</span>
+</div>
+
+<div class="refc-body" id="refcBody">
+  <!-- Controls -->
+  <div class="refc-controls">
+    <div class="setting-group">
+      <label>LOB</label>
+      <select id="refcLob">
+        {% for lob in all_lobs %}
+        <option value="{{ lob }}">{{ lob }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Strategy</label>
+      <select id="refcStrategy">
+        <option value="blended">Blended (Recommended)</option>
+        <option value="ratio">Ratio Scaling</option>
+        <option value="delta">Delta Shift</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Alert Threshold %</label>
+      <input type="number" id="refcThreshold" value="10" min="1" max="50" step="1">
+    </div>
+    <button class="btn-action" id="btnReforecast" onclick="runReforecast()">
+      Run Reforecast
+    </button>
+    <button class="btn-secondary" onclick="runAllReforecasts()">
+      All LOBs
+    </button>
+    <button class="btn-secondary" onclick="checkAlerts()">
+      Check Alerts
+    </button>
+  </div>
+
+  <!-- Alerts panel -->
+  <div class="alert-list" id="refcAlerts" style="display:none;"></div>
+
+  <!-- Summary cards -->
+  <div class="refc-summary-cards" id="refcSummary" style="display:none;">
+    <div class="refc-scard neutral" id="refcTrendCard">
+      <div class="label">Trend Factor</div>
+      <div class="value" id="refcTrendVal">—</div>
+      <div class="detail" id="refcTrendDetail"></div>
+    </div>
+    <div class="refc-scard neutral" id="refcOrigCard">
+      <div class="label">Original Forecast</div>
+      <div class="value" id="refcOrigVal">—</div>
+      <div class="detail" id="refcOrigDetail"></div>
+    </div>
+    <div class="refc-scard neutral" id="refcNewCard">
+      <div class="label">Reforecast Total</div>
+      <div class="value" id="refcNewVal">—</div>
+      <div class="detail" id="refcNewDetail"></div>
+    </div>
+    <div class="refc-scard neutral" id="refcChangeCard">
+      <div class="label">Volume Change</div>
+      <div class="value" id="refcChangeVal">—</div>
+    </div>
+    <div class="refc-scard neutral" id="refcStaffCard">
+      <div class="label">Staff Impact</div>
+      <div class="value" id="refcStaffVal">—</div>
+      <div class="detail" id="refcStaffDetail"></div>
+    </div>
+  </div>
+
+  <!-- Reforecast comparison chart -->
+  <div class="reforecast-section" id="refcChartSection" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div>
+        <h2>Original vs Reforecast</h2>
+        <div class="chart-sub">Solid = actuals received · Dashed = reforecast adjustment · Grey = original forecast</div>
+      </div>
+      <div style="font-size:.75rem;color:var(--text-muted);">
+        Cutoff: <strong id="refcCutoffLabel">—</strong>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="refcChart"></canvas></div>
+  </div>
+
+  <!-- Staffing comparison chart -->
+  <div class="reforecast-section" id="refcStaffChartSection" style="display:none;">
+    <h2>Staffing: Original vs Reforecast</h2>
+    <div class="chart-sub">Agents required per interval — original (grey) vs reforecast (teal)</div>
+    <div class="chart-wrap"><canvas id="refcStaffChart"></canvas></div>
+  </div>
+
+  <!-- Interval detail table -->
+  <div class="reforecast-section" id="refcTableSection" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div>
+        <h2>Interval Detail</h2>
+        <div class="chart-sub">Green rows = actual data received · Below cutoff = reforecast projection</div>
+      </div>
+      <button class="btn-secondary" onclick="exportRefcCSV()" style="padding:5px 14px;font-size:.75rem;">Export CSV</button>
+    </div>
+    <div class="refc-table-wrap">
+      <table class="refc-table" id="refcTable">
+        <thead>
+          <tr>
+            <th style="text-align:left">Time</th>
+            <th>Orig Offered</th>
+            <th>Refc Offered</th>
+            <th>Δ Offered</th>
+            <th>Orig AHT</th>
+            <th>Refc AHT</th>
+            <th>Orig Agents</th>
+            <th>Refc Agents</th>
+          </tr>
+        </thead>
+        <tbody id="refcTableBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -704,5 +909,316 @@ document.addEventListener('DOMContentLoaded', () => {
 document.getElementById('yearSelect').addEventListener('change', function() {
   window.location.href = '/forecasting/?year=' + this.value;
 });
+
+// ══════════════════════════════════════════════
+// ══ Mid-Day Reforecast
+// ══════════════════════════════════════════════
+let refcChartVolume = null, refcChartStaff = null;
+let lastRefcResult = null;
+
+function toggleReforecast() {
+  const toggle = document.getElementById('refcToggle');
+  const body = document.getElementById('refcBody');
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+async function runReforecast() {
+  const lob = document.getElementById('refcLob').value;
+  const strategy = document.getElementById('refcStrategy').value;
+  const btn = document.getElementById('btnReforecast');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running…';
+  showStatus(`Running reforecast for ${lob}…`, 'info');
+
+  try {
+    const resp = await fetch('/forecasting/reforecast', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+      body: JSON.stringify({ lob, strategy })
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+      showStatus(data.error || 'Reforecast failed.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Run Reforecast';
+      return;
+    }
+
+    lastRefcResult = data;
+    renderReforecastResult(data);
+    showStatus(`Reforecast complete for ${lob} using ${strategy} strategy.`, 'success');
+  } catch (e) {
+    showStatus('Error running reforecast: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Run Reforecast';
+}
+
+async function runAllReforecasts() {
+  const strategy = document.getElementById('refcStrategy').value;
+  showStatus('Running reforecast for all LOBs…', 'info');
+
+  try {
+    const resp = await fetch('/forecasting/reforecast/all', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+      body: JSON.stringify({ strategy })
+    });
+    const data = await resp.json();
+
+    if (data.results) {
+      const ok = data.results.filter(r => r.success);
+      const fail = data.results.filter(r => !r.success);
+      let msg = `Reforecast complete: ${ok.length} succeeded`;
+      if (fail.length) msg += `, ${fail.length} failed`;
+      showStatus(msg, ok.length > 0 ? 'success' : 'error');
+
+      // Show the first successful result
+      if (ok.length) {
+        lastRefcResult = ok[0];
+        renderReforecastResult(ok[0]);
+        document.getElementById('refcLob').value = ok[0].lob;
+      }
+    }
+  } catch (e) {
+    showStatus('Error: ' + e.message, 'error');
+  }
+}
+
+async function checkAlerts() {
+  const threshold = parseFloat(document.getElementById('refcThreshold').value) || 10;
+  showStatus('Checking variance alerts…', 'info');
+
+  try {
+    const resp = await fetch('/forecasting/reforecast/alerts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+      body: JSON.stringify({ threshold_pct: threshold })
+    });
+    const data = await resp.json();
+    renderAlerts(data.alerts || []);
+    if (!data.alerts || !data.alerts.length) {
+      showStatus('No variance alerts — all LOBs are within threshold.', 'success');
+    } else {
+      showStatus(`${data.alerts.length} alert(s) found.`, 'info');
+    }
+  } catch (e) {
+    showStatus('Error checking alerts: ' + e.message, 'error');
+  }
+}
+
+function renderAlerts(alerts) {
+  const el = document.getElementById('refcAlerts');
+  if (!alerts.length) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'flex';
+  el.innerHTML = alerts.map(a => `
+    <div class="alert-item ${a.severity}">
+      <span class="alert-severity">${a.severity}</span>
+      <span class="alert-msg">${a.message}</span>
+    </div>
+  `).join('');
+}
+
+function renderReforecastResult(data) {
+  // Summary cards
+  document.getElementById('refcSummary').style.display = 'flex';
+  const trend = data.trend;
+  const summary = data.summary;
+
+  // Trend
+  const trendPct = ((trend.ratio - 1) * 100).toFixed(1);
+  document.getElementById('refcTrendVal').textContent = trend.ratio.toFixed(3) + 'x';
+  document.getElementById('refcTrendDetail').textContent =
+    `${trend.intervals_compared} intervals compared · ${trendPct > 0 ? '+' : ''}${trendPct}%`;
+  setCardDirection('refcTrendCard', parseFloat(trendPct));
+
+  // Original
+  document.getElementById('refcOrigVal').textContent = Math.round(summary.original_total).toLocaleString();
+  document.getElementById('refcOrigDetail').textContent = `${Math.round(summary.original_agents_total)} agents`;
+
+  // Reforecast
+  document.getElementById('refcNewVal').textContent = Math.round(summary.reforecast_total).toLocaleString();
+  document.getElementById('refcNewDetail').textContent = `${Math.round(summary.reforecast_agents_total)} agents`;
+
+  // Change
+  const changePct = summary.change_pct;
+  document.getElementById('refcChangeVal').textContent = `${changePct > 0 ? '+' : ''}${changePct}%`;
+  setCardDirection('refcChangeCard', changePct);
+
+  // Staff impact
+  const agentsDelta = summary.agents_change;
+  document.getElementById('refcStaffVal').textContent =
+    `${agentsDelta > 0 ? '+' : ''}${Math.round(agentsDelta * 10) / 10}`;
+  document.getElementById('refcStaffDetail').textContent = 'agents (net change)';
+  setCardDirection('refcStaffCard', agentsDelta);
+
+  // Cutoff label
+  document.getElementById('refcCutoffLabel').textContent = data.cutoff_time;
+
+  // Charts
+  renderRefcCharts(data);
+
+  // Table
+  renderRefcTable(data);
+}
+
+function setCardDirection(cardId, val) {
+  const card = document.getElementById(cardId);
+  card.classList.remove('up', 'down', 'neutral');
+  if (val > 0.5) card.classList.add('up');
+  else if (val < -0.5) card.classList.add('down');
+  else card.classList.add('neutral');
+}
+
+function renderRefcCharts(data) {
+  const intervals = data.intervals;
+  const labels = intervals.map(i => i.time);
+  const cutoff = data.cutoff_time;
+
+  // Volume chart
+  document.getElementById('refcChartSection').style.display = '';
+  if (refcChartVolume) refcChartVolume.destroy();
+
+  const origOffered = intervals.map(i => i.original_offered);
+  const refcOffered = intervals.map(i => i.reforecast_offered);
+
+  refcChartVolume = new Chart(document.getElementById('refcChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Original Forecast',
+          data: origOffered,
+          borderColor: 'rgba(156,163,175,.7)',
+          backgroundColor: 'rgba(156,163,175,.05)',
+          borderWidth: 2,
+          borderDash: [5, 3],
+          pointRadius: 0,
+          fill: false,
+          tension: .2,
+        },
+        {
+          label: 'Reforecast',
+          data: refcOffered,
+          borderColor: intervals.map(i => i.is_actual ? 'rgba(34,197,94,.9)' : 'rgba(59,130,246,.9)'),
+          backgroundColor: 'rgba(59,130,246,.05)',
+          borderWidth: 2.5,
+          pointRadius: intervals.map(i => i.time === cutoff ? 6 : 0),
+          pointBackgroundColor: 'rgba(239,68,68,1)',
+          fill: false,
+          tension: .2,
+          segment: {
+            borderColor: ctx => {
+              const idx = ctx.p0DataIndex;
+              return intervals[idx]?.is_actual ? 'rgba(34,197,94,.9)' : 'rgba(59,130,246,.9)';
+            },
+            borderDash: ctx => intervals[ctx.p0DataIndex]?.is_actual ? [] : [4, 2],
+          }
+        },
+      ]
+    },
+    options: {
+      ...chartOpts('Offered Calls', true),
+      plugins: {
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            afterLabel: function(ctx) {
+              if (ctx.datasetIndex === 1) {
+                const i = intervals[ctx.dataIndex];
+                return i.is_actual ? '(Actual)' : '(Projected)';
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Staff chart
+  document.getElementById('refcStaffChartSection').style.display = '';
+  if (refcChartStaff) refcChartStaff.destroy();
+
+  refcChartStaff = new Chart(document.getElementById('refcStaffChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Original Agents',
+          data: intervals.map(i => i.original_agents),
+          backgroundColor: 'rgba(156,163,175,.4)',
+          borderWidth: 0,
+          borderRadius: 2,
+        },
+        {
+          label: 'Reforecast Agents',
+          data: intervals.map(i => i.reforecast_agents),
+          backgroundColor: intervals.map(i =>
+            i.is_actual ? 'rgba(34,197,94,.5)' : 'rgba(13,148,136,.6)'
+          ),
+          borderWidth: 0,
+          borderRadius: 2,
+        },
+      ]
+    },
+    options: {
+      ...chartOpts('Agents', false),
+      plugins: {
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function renderRefcTable(data) {
+  document.getElementById('refcTableSection').style.display = '';
+  const tbody = document.getElementById('refcTableBody');
+  const cutoff = data.cutoff_time;
+
+  tbody.innerHTML = data.intervals.map(i => {
+    const delta = i.reforecast_offered - i.original_offered;
+    const deltaClass = delta > 0.5 ? 'refc-change-up' : delta < -0.5 ? 'refc-change-down' : '';
+    const rowClass = i.is_actual ? 'actual-row' : '';
+    const cutoffClass = i.time === cutoff ? 'cutoff-row' : '';
+    return `<tr class="${rowClass} ${cutoffClass}">
+      <td>${i.time}${i.is_actual ? ' ✓' : ''}</td>
+      <td>${i.original_offered.toFixed(1)}</td>
+      <td>${i.reforecast_offered.toFixed(1)}</td>
+      <td class="${deltaClass}">${delta > 0 ? '+' : ''}${delta.toFixed(1)}</td>
+      <td>${i.original_aht.toFixed(0)}s</td>
+      <td>${i.reforecast_aht.toFixed(0)}s</td>
+      <td>${i.original_agents}</td>
+      <td>${i.reforecast_agents}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportRefcCSV() {
+  if (!lastRefcResult) return;
+  const rows = [['Time','Original Offered','Reforecast Offered','Delta','Original AHT','Reforecast AHT','Original Agents','Reforecast Agents','Is Actual']];
+  for (const i of lastRefcResult.intervals) {
+    rows.push([i.time, i.original_offered, i.reforecast_offered,
+      (i.reforecast_offered - i.original_offered).toFixed(1),
+      i.original_aht, i.reforecast_aht, i.original_agents, i.reforecast_agents, i.is_actual]);
+  }
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reforecast_${lastRefcResult.lob}_${lastRefcResult.date || 'today'}.csv`;
+  a.click();
+}
 </script>
 {% endblock %}

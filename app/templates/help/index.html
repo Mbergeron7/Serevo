@@ -165,6 +165,28 @@
 
       <h3>Importing Data</h3>
       <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts.</p>
+
+      <h3>Forecast Methods</h3>
+      <p>Choose from five forecasting methods:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Auto (Best Fit)</strong> — Automatically selects the best method based on your data</li>
+        <li><strong>Weighted Trend</strong> — Applies recency-weighted trends to historical patterns</li>
+        <li><strong>Moving Average</strong> — Smooths recent history into a forward projection</li>
+        <li><strong>Holt-Winters</strong> — Captures seasonal patterns for cyclical workloads</li>
+        <li><strong>ML (Gradient Boosting)</strong> — Machine learning model trained on your data with day-of-week, seasonality, and lag features</li>
+      </ul>
+
+      <h3>Mid-Day Reforecast</h3>
+      <p>When today's actual volumes differ from the original forecast, the <strong>Mid-Day Reforecast</strong> tool adjusts the remaining intervals in real time. Open the reforecast panel at the bottom of the Forecasting page.</p>
+      <p><strong>How it works:</strong> The system compares actual data received so far today against the original forecast, computes a trend factor, and applies it to remaining intervals to give you a revised projection.</p>
+      <p><strong>Three strategies:</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Blended (Recommended)</strong> — 70% ratio scaling + 30% time-weighted adjustment using the most recent intervals. Best for most situations.</li>
+        <li><strong>Ratio Scaling</strong> — Multiplies remaining intervals by the overall actual-to-forecast ratio. Good when the trend is consistent.</li>
+        <li><strong>Delta Shift</strong> — Adds the average absolute difference to remaining intervals. Useful when volumes shift by a fixed amount.</li>
+      </ul>
+      <p><strong>Variance Alerts:</strong> Click <em>Check Alerts</em> to scan all LOBs for significant deviations. Alerts are classified as <span style="color:#ef4444;font-weight:600;">Critical</span> (≥25%), <span style="color:#f59e0b;font-weight:600;">Warning</span> (≥15%), or <span style="color:#3b82f6;font-weight:600;">Info</span> (≥10%). Adjust the threshold to suit your operation.</p>
+      <p><strong>Export:</strong> Use the <em>Export CSV</em> button in the interval detail table to download the reforecast data for offline analysis or sharing.</p>
     </div>
   </div>
 

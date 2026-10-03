@@ -678,3 +678,108 @@ def forecast_api_data():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ═══════════════════════════════════════════════════════════════
+# MID-DAY REFORECASTING
+# ═══════════════════════════════════════════════════════════════
+
+@forecasting_bp.route("/reforecast", methods=["POST"])
+@login_required
+def run_reforecast():
+    """
+    Generate a mid-day reforecast for a LOB.
+
+    POST JSON:
+      lob: string (required)
+      strategy: "ratio" | "delta" | "blended" (default "blended")
+      date: "YYYY-MM-DD" (default today)
+
+    Returns reforecast with original vs adjusted intervals and
+    recomputed staffing requirements.
+    """
+    from app.forecasting.reforecast import reforecast as do_reforecast
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        strategy = payload.get("strategy", "blended")
+        date_str = payload.get("date")
+
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        if strategy not in ("ratio", "delta", "blended"):
+            strategy = "blended"
+
+        target_date = None
+        if date_str:
+            try:
+                target_date = datetime.date.fromisoformat(date_str)
+            except (ValueError, TypeError):
+                pass
+
+        result = do_reforecast(lob, strategy, target_date)
+        return jsonify(result)
+
+    except Exception as e:
+        log.exception("Reforecast error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@forecasting_bp.route("/reforecast/all", methods=["POST"])
+@login_required
+def run_reforecast_all():
+    """
+    Run reforecasting for all active LOBs.
+
+    POST JSON:
+      strategy: "ratio" | "delta" | "blended" (default "blended")
+
+    Returns results per LOB.
+    """
+    from app.forecasting.reforecast import reforecast_all_lobs
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        strategy = payload.get("strategy", "blended")
+
+        results = reforecast_all_lobs(strategy)
+        successful = [r for r in results if r.get("success")]
+        return jsonify({
+            "success": True,
+            "results": results,
+            "summary": f"{len(successful)} of {len(results)} LOBs reforecast",
+        })
+
+    except Exception as e:
+        log.exception("Reforecast all error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@forecasting_bp.route("/reforecast/alerts", methods=["POST"])
+@login_required
+def reforecast_alerts():
+    """
+    Check for LOBs where actuals deviate significantly from forecast.
+
+    POST JSON:
+      threshold_pct: float (default 10.0)
+
+    Returns list of variance alerts sorted by severity.
+    """
+    from app.forecasting.reforecast import get_variance_alerts
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        threshold = float(payload.get("threshold_pct", 10.0))
+
+        alerts = get_variance_alerts(threshold)
+        return jsonify({
+            "success": True,
+            "alerts": alerts,
+            "count": len(alerts),
+        })
+
+    except Exception as e:
+        log.exception("Reforecast alerts error")
+        return jsonify({"success": False, "error": str(e)})
+
