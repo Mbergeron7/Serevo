@@ -79,6 +79,8 @@ def create_app():
             ("pto_entries", "requested_by", "INTEGER REFERENCES users(id)"),
             ("pto_entries", "reviewed_by", "INTEGER REFERENCES users(id)"),
             ("pto_entries", "reviewed_at", "TIMESTAMP"),
+            ("users", "oauth_provider", "VARCHAR(30)"),
+            ("users", "oauth_id", "VARCHAR(255)"),
         ]
         for tbl, col, col_type in _ensure_columns:
             try:
@@ -135,7 +137,9 @@ def create_app():
         user = get_current_user()
         # Override is_demo if the logged-in user is a demo account
         is_user_demo = bool(user and user.get("is_demo"))
-        return {"current_user": user, "is_demo": is_user_demo or cfg.is_demo}
+        from app.routes.oauth import is_oauth_enabled
+        return {"current_user": user, "is_demo": is_user_demo or cfg.is_demo,
+                "oauth_enabled": is_oauth_enabled()}
 
     # ---- register blueprints ----
     from app.routes.auth import auth_bp
@@ -150,6 +154,7 @@ def create_app():
     from app.routes.manual_entry import manual_entry_bp
     from app.routes.agent import agent_bp
     from app.routes.quality import quality_bp
+    from app.routes.oauth import oauth_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -163,6 +168,7 @@ def create_app():
     app.register_blueprint(manual_entry_bp)
     app.register_blueprint(agent_bp)
     app.register_blueprint(quality_bp)
+    app.register_blueprint(oauth_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

@@ -28,6 +28,8 @@ class User(db.Model):
     role          = db.Column(db.String(20), nullable=False, default="supervisor")  # supervisor | admin | agent
     is_demo       = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
+    oauth_provider = db.Column(db.String(30), nullable=True)   # "google", "microsoft", etc.
+    oauth_id       = db.Column(db.String(255), nullable=True)  # provider's unique user ID
     employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
     created_at    = db.Column(db.DateTime, default=_utcnow)
     updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
