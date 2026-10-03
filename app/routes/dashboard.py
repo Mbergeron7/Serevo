@@ -4,8 +4,11 @@ Dashboard — the landing page after login.
 Stub for now; will be built out with real data views.
 """
 
+from datetime import date
+
 from flask import Blueprint, render_template, redirect
 from app.auth import login_required, get_current_user
+from app.models import Employee, PlanningUnit, Schedule, PTOEntry
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -18,7 +21,19 @@ def index():
     if user and user.get("is_agent"):
         return redirect("/my-schedule/")
     demo_stats = None
+    live_stats = None
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_dashboard_stats
         demo_stats = get_demo_dashboard_stats()
-    return render_template("dashboard.html", user=user, demo_stats=demo_stats)
+    else:
+        today = date.today()
+        live_stats = {
+            "total_employees": Employee.query.count(),
+            "planning_units": PlanningUnit.query.filter_by(is_active=True).count(),
+            "on_today": Schedule.query.filter_by(schedule_date=today).count(),
+            "pto_today": PTOEntry.query.filter(
+                PTOEntry.start_date <= today,
+                PTOEntry.end_date >= today,
+            ).count(),
+        }
+    return render_template("dashboard.html", user=user, demo_stats=demo_stats, live_stats=live_stats)

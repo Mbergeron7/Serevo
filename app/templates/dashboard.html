@@ -5,31 +5,53 @@
 {% block content %}
 <div class="dashboard">
   <h1>Welcome back, {{ current_user.name.split(' ')[0] if current_user else '' }}</h1>
-  <p class="subtitle">{{ brand_name }} dashboard — more modules coming soon.</p>
+  <p class="subtitle">Your workforce management hub.</p>
 
-  {% if demo_stats %}
+  {% set stats = demo_stats or live_stats %}
+  {% if stats and stats.total_employees > 0 %}
   <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
     <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.total_employees }}</div>
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.total_employees }}</div>
       <div style="font-size:.8rem; color:var(--text-muted);">Employees</div>
     </div>
     <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.on_today }}</div>
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.on_today }}</div>
       <div style="font-size:.8rem; color:var(--text-muted);">Scheduled Today</div>
     </div>
     <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.planning_units }}</div>
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.planning_units }}</div>
       <div style="font-size:.8rem; color:var(--text-muted);">LOBs</div>
     </div>
     <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ demo_stats.pto_today }}</div>
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.pto_today }}</div>
       <div style="font-size:.8rem; color:var(--text-muted);">On PTO Today</div>
     </div>
   </div>
   {% else %}
-  <div class="card" style="text-align:center; padding:2rem; color:var(--text-muted);">
-    <p style="font-size:1.1rem; margin-bottom:.5rem;">No data loaded yet</p>
-    <p style="font-size:.85rem;">Import employee and schedule data to see your dashboard stats.</p>
+  <div class="card" style="padding:2.5rem;">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div style="font-size:2rem; margin-bottom:.5rem;">🚀</div>
+      <p style="font-size:1.1rem; font-weight:600; margin-bottom:.5rem; color:var(--text-primary);">Getting Started</p>
+      <p style="font-size:.85rem; color:var(--text-muted);">Set up your workspace in a few steps to start managing your workforce.</p>
+    </div>
+    <ol style="list-style:none; padding:0; margin:0; max-width:480px; margin:0 auto;">
+      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">1</span>
+        <a href="/settings/planning-units" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Set up Planning Units</a>
+      </li>
+      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">2</span>
+        <span style="font-size:.95rem;"><a href="/people/" style="color:var(--brand-accent); font-weight:600; text-decoration:none;">Add Employees</a> <span style="color:var(--text-muted); font-size:.85rem;">or <a href="/data/" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span></span>
+      </li>
+      <li style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);">
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">3</span>
+        <a href="/forecasting/" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Enter Forecast Data</a>
+      </li>
+      <li style="display:flex; align-items:center; gap:12px; padding:12px 0;">
+        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">4</span>
+        <a href="/scheduling/" style="color:var(--brand-accent); font-weight:600; text-decoration:none; font-size:.95rem;">Generate Schedules</a>
+      </li>
+    </ol>
   </div>
   {% endif %}
 

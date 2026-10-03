@@ -157,6 +157,14 @@
   </div>
 </div>
 
+{% if not all_lobs %}
+<div class="card" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+  <div style="font-size:2rem; margin-bottom:.5rem;">📊</div>
+  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No planning units configured yet</p>
+  <p style="font-size:.85rem; margin-bottom:1rem;">Create planning units (LOBs) before entering forecast data.</p>
+  <a href="/settings/planning-units" class="btn btn-primary">Set Up Planning Units</a>
+</div>
+{% else %}
 <!-- ═══ Status bar ═══ -->
 <div id="statusBar" class="fc-status" style="display:none"></div>
 
@@ -292,6 +300,7 @@
   </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

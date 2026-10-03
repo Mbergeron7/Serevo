@@ -308,10 +308,14 @@
 </div>
 
 {% else %}
-<div class="no-data">
-  No employee data on file yet.<br>
-  <button class="btn btn-primary" style="margin-top:12px;" onclick="openEmpModal()">+ Add Your First Employee</button>
-  <p style="margin-top:8px;">Or use <a href="/data/">Data Import</a> for bulk CSV/Excel uploads.</p>
+<div class="card" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+  <div style="font-size:2rem; margin-bottom:.5rem;">👥</div>
+  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No employees yet</p>
+  <p style="font-size:.85rem; margin-bottom:1rem;">Add employees manually or import a roster from a CSV or Excel file.</p>
+  <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap;">
+    <button class="btn btn-primary" onclick="openEmpModal()">+ Add Employee</button>
+    <a href="/data/" class="btn btn-outline">Import CSV</a>
+  </div>
 </div>
 {% endif %}
 

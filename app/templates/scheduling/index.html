@@ -471,6 +471,17 @@
   <p class="subtitle">Generate shift assignments, edit schedules &amp; analyze coverage</p>
 </div>
 
+{% if not lobs %}
+<div class="card" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+  <div style="font-size:2rem; margin-bottom:.5rem;">📅</div>
+  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No planning units or employees yet</p>
+  <p style="font-size:.85rem; margin-bottom:1rem;">Set up planning units and add employees before generating schedules.</p>
+  <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap;">
+    <a href="/settings/planning-units" class="btn btn-primary">Set Up Planning Units</a>
+    <a href="/people/" class="btn btn-outline">Add Employees</a>
+  </div>
+</div>
+{% else %}
 <!-- ── Scheduling inputs ──────────────────────────────────── -->
 <div class="inputs-bar">
   <span class="inputs-label">Inputs the generator uses</span>
@@ -1084,6 +1095,7 @@
 
 <!-- ── Toast ──────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
