@@ -49,7 +49,9 @@
       <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
       <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
       <a href="/audit-log/"{% if request.path.startswith('/audit-log') %} class="active"{% endif %}>Audit Log</a>
+      <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
       <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
+      <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
       {% elif current_user and current_user.is_supervisor %}
       {# Supervisor nav — admin pages (read-only) + agent portal #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
@@ -68,11 +70,15 @@
       <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
       <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
       <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
+      <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
+      <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
       {% else %}
       {# Agent nav — portal only #}
       <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
       <a href="/my-time-off/"{% if request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Time Off</a>
       <a href="/portal/"{% if request.path.startswith('/portal') %} class="active"{% endif %}>Self-Service</a>
+      <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
+      <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
       {% endif %}
       <span style="margin-left:auto; display:flex; align-items:center; gap:12px;">
         {% if current_user %}

@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% block title %}Help Guide — {{ brand_name }}{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:24px 16px;">
+  <div style="margin-bottom:24px;">
+    <h1 style="margin:0;font-size:1.5rem;">Help Guide</h1>
+    <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">Everything you need to set up and use {{ brand_name }}</p>
+  </div>
+
+  <!-- Search -->
+  <div style="margin-bottom:20px;">
+    <input id="helpSearch" type="text" placeholder="Search help topics…" oninput="filterHelp()" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--surface);color:var(--text-primary);box-sizing:border-box;">
+  </div>
+
+  <!-- Quick links -->
+  <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+    <a href="#getting-started" class="help-chip" onclick="openSection('getting-started')">Getting Started</a>
+    <a href="#user-roles" class="help-chip" onclick="openSection('user-roles')">User Roles</a>
+    <a href="#dashboard" class="help-chip" onclick="openSection('dashboard')">Dashboard</a>
+    <a href="#people" class="help-chip" onclick="openSection('people')">People</a>
+    <a href="#scheduling" class="help-chip" onclick="openSection('scheduling')">Scheduling</a>
+    <a href="#forecasting" class="help-chip" onclick="openSection('forecasting')">Forecasting</a>
+    <a href="#capacity" class="help-chip" onclick="openSection('capacity')">Capacity</a>
+    <a href="#realtime" class="help-chip" onclick="openSection('realtime')">Real-Time</a>
+    <a href="#attendance" class="help-chip" onclick="openSection('attendance')">Attendance</a>
+    <a href="#quality" class="help-chip" onclick="openSection('quality')">Quality</a>
+    <a href="#approvals" class="help-chip" onclick="openSection('approvals')">Approvals</a>
+    <a href="#reports" class="help-chip" onclick="openSection('reports')">Reports</a>
+    <a href="#payroll" class="help-chip" onclick="openSection('payroll')">Payroll</a>
+    <a href="#training" class="help-chip" onclick="openSection('training')">Training</a>
+    <a href="#settings" class="help-chip" onclick="openSection('settings')">Settings</a>
+    <a href="#support" class="help-chip" onclick="openSection('support')">Support</a>
+  </div>
+
+  <!-- Sections -->
+  <div id="helpSections">
+
+  <!-- GETTING STARTED -->
+  <div class="help-section" id="getting-started" data-keywords="setup login first time account password">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Getting Started</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>First-Time Setup</h3>
+      <p>When you first access {{ brand_name }}, you'll see the setup page if no admin account exists yet. Create your admin account by entering your email and a strong password. This becomes the primary administrator account.</p>
+
+      <h3>Logging In</h3>
+      <p>Navigate to your {{ brand_name }} URL and enter your email and password. If your organization has Google or Microsoft sign-in enabled, you can use the social login buttons instead.</p>
+      <p>Sessions last 8 hours. After that, you'll need to sign in again.</p>
+
+      <h3>Navigation</h3>
+      <p>The top navigation bar shows all available sections based on your role. Admins see all sections. Supervisors see most sections. Agents see only their personal portal (My Schedule, My Time Off, Self-Service).</p>
+      <p>Use the search bar (or press <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd>) to quickly find employees, pages, or actions.</p>
+
+      <h3>Notifications</h3>
+      <p>Click the bell icon in the top right to see your notifications. These include PTO requests, schedule changes, and system alerts. Notifications are automatically marked as read when you open them.</p>
+    </div>
+  </div>
+
+  <!-- USER ROLES -->
+  <div class="help-section" id="user-roles" data-keywords="admin supervisor agent permissions access roles">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>User Roles &amp; Permissions</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Admin</h3>
+      <p>Full access to all features: manage users, configure settings, view all data, generate reports, manage schedules, handle approvals, and access the audit log. Admins can create and manage other user accounts.</p>
+
+      <h3>Supervisor</h3>
+      <p>View access to most management sections (Dashboard, People, Scheduling, Forecasting, Capacity, Real-Time, Attendance, Quality, Approvals, Reports, Payroll, Shift Notes, Documents, Training, Announcements). Supervisors can also access the agent portal for their own schedule. Some edit operations may be restricted compared to admins.</p>
+
+      <h3>Agent</h3>
+      <p>Access is limited to the personal portal: My Schedule (view assigned shifts), My Time Off (request PTO), and Self-Service (update personal info, view announcements, clock in/out). Agents cannot access management pages.</p>
+
+      <h3>Managing Users</h3>
+      <p>Go to <strong>Settings → Users</strong> to add, edit, or deactivate user accounts. When creating a user, choose the appropriate role. You can link a user account to an employee record so agents can see their own schedule and data.</p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="help-section" id="dashboard" data-keywords="dashboard home overview kpi metrics summary">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Dashboard</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>The Dashboard is the home page for admins and supervisors. It shows at-a-glance metrics for your workforce.</p>
+
+      <h3>KPI Cards</h3>
+      <p>The top row displays key metrics: total active employees, employees scheduled today, pending PTO requests, open shifts, and more. These update in real time as data changes.</p>
+
+      <h3>Charts</h3>
+      <p>Below the KPI cards, you'll find charts showing headcount trends, attendance rates, and other workforce analytics over time. Hover over data points for details.</p>
+
+      <h3>Recent Activity</h3>
+      <p>The activity feed shows the latest changes across the system — new hires, schedule updates, approved PTO, and other events.</p>
+    </div>
+  </div>
+
+  <!-- PEOPLE -->
+  <div class="help-section" id="people" data-keywords="people roster employees add edit delete profile status team lead">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>People (Roster)</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Viewing the Roster</h3>
+      <p>The People page shows all employees in a sortable, filterable table. Use the filters at the top to narrow by name, line of business (LOB), status, or team lead. Click column headers to sort.</p>
+
+      <h3>Pagination</h3>
+      <p>Choose how many employees to show per page (25, 50, 100, or All) using the page size selector. Use the Previous/Next buttons to navigate through pages.</p>
+
+      <h3>Adding an Employee</h3>
+      <p>Click <strong>+ Add Employee</strong>. Fill in at least the first name, last name, employee ID, and status. You can also set contract type, weekly hours, skills, LOB, team lead, and more. Click Save.</p>
+
+      <h3>Editing an Employee</h3>
+      <p>Click on any employee row to open their profile. Click the edit button to modify their details. Changes are saved immediately.</p>
+
+      <h3>Employee Profile</h3>
+      <p>Each employee has a profile page showing their details, schedule history, PTO history, documents, training assignments, and accommodations.</p>
+
+      <h3>PTO &amp; Accommodations</h3>
+      <p>Access PTO management and accommodations tracking from the People submenu. You can view, add, and manage time-off entries and accommodation records for each employee.</p>
+    </div>
+  </div>
+
+  <!-- SCHEDULING -->
+  <div class="help-section" id="scheduling" data-keywords="scheduling shifts roster generate publish auto schedule">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Scheduling</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Viewing Schedules</h3>
+      <p>The Scheduling page displays employee schedules in a calendar view. Switch between daily and weekly views. Filter by LOB or team lead to focus on specific groups.</p>
+
+      <h3>Creating Schedules</h3>
+      <p>Click on empty cells to create new shift assignments. Select the employee, choose a day model (shift template), and set the date. You can create individual shifts or bulk-generate schedules.</p>
+
+      <h3>Schedule Generation</h3>
+      <p>Use the "Generate" feature to automatically create schedules based on demand forecasts, employee availability, skills, and contract rules. Review the generated schedule before publishing.</p>
+
+      <h3>Publishing</h3>
+      <p>Generated schedules start in draft mode. Click "Publish" to make them visible to agents. Published schedules appear in each agent's My Schedule portal.</p>
+
+      <h3>Day Models</h3>
+      <p>Day models define shift templates (start time, end time, break duration). Set these up in <strong>Settings → Day Models</strong> before creating schedules.</p>
+    </div>
+  </div>
+
+  <!-- FORECASTING -->
+  <div class="help-section" id="forecasting" data-keywords="forecasting demand volume contact forecast predict">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Forecasting</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Overview</h3>
+      <p>The Forecasting module helps predict future workload demand. Upload historical volume data to generate forecasts that feed into capacity planning and schedule generation.</p>
+
+      <h3>Viewing Forecasts</h3>
+      <p>Select a planning unit (LOB) and date range to view forecast data. Charts show predicted vs. actual volumes by interval.</p>
+
+      <h3>Importing Data</h3>
+      <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts.</p>
+    </div>
+  </div>
+
+  <!-- CAPACITY -->
+  <div class="help-section" id="capacity" data-keywords="capacity planning staffing headcount long range google sheets">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Capacity Planning</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Capacity Panel</h3>
+      <p>The Capacity Panel shows current staffing levels against requirements. View by planning unit to see where you're overstaffed or understaffed.</p>
+
+      <h3>Capacity Summary</h3>
+      <p>The summary view aggregates capacity data across all planning units, showing overall staffing health and trends.</p>
+
+      <h3>Long-Range Planning</h3>
+      <p>Use long-range planning to project headcount needs weeks or months ahead. This connects to your forecast data to estimate future staffing requirements.</p>
+
+      <h3>Google Sheets Integration</h3>
+      <p>Capacity data can be pulled from connected Google Sheets. Set up the integration in <strong>Settings → Google Sheets</strong> by entering your sheet key and ensuring the service account has access.</p>
+    </div>
+  </div>
+
+  <!-- REAL-TIME -->
+  <div class="help-section" id="realtime" data-keywords="realtime adherence vto ot overtime voluntary time off">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Real-Time Management</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Real-Time Dashboard</h3>
+      <p>Monitor workforce activity in real time. See who's logged in, on break, or off-schedule. Track adherence to scheduled activities.</p>
+
+      <h3>VTO / OT Management</h3>
+      <p>Manage voluntary time off (VTO) and overtime (OT) offers. When volumes are lower than expected, offer VTO. When volumes spike, offer OT to available agents.</p>
+    </div>
+  </div>
+
+  <!-- ATTENDANCE -->
+  <div class="help-section" id="attendance" data-keywords="attendance clock in out time punch absent late">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Attendance</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Time Clock</h3>
+      <p>Employees can clock in and out from the agent portal. Admins and supervisors can view all clock punches and make corrections.</p>
+
+      <h3>Attendance Records</h3>
+      <p>View attendance data by date range. See who was absent, late, or left early. Filter by employee, date, or status.</p>
+
+      <h3>Editing Punches</h3>
+      <p>Admins can edit clock punches to correct errors. All edits are tracked in the audit log with the original and corrected times.</p>
+    </div>
+  </div>
+
+  <!-- QUALITY -->
+  <div class="help-section" id="quality" data-keywords="quality scores qa review evaluation performance">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Quality</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Quality Scores</h3>
+      <p>Track quality evaluation scores for each employee. Add scores by category (customer satisfaction, accuracy, professionalism, etc.).</p>
+
+      <h3>Quality Reviews</h3>
+      <p>Create quality review entries with scores, notes, and feedback. Link reviews to specific dates and employees for tracking trends over time.</p>
+    </div>
+  </div>
+
+  <!-- APPROVALS -->
+  <div class="help-section" id="approvals" data-keywords="approvals pto requests approve deny pending time off">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Approvals</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Pending Requests</h3>
+      <p>The Approvals page shows all pending PTO and time-off requests. Review each request to see the employee, dates, type, and any conflicts with the schedule.</p>
+
+      <h3>Approving / Denying</h3>
+      <p>Click on a request to review details. Choose to approve or deny. Add an optional note explaining the decision. The employee is notified of the outcome.</p>
+
+      <h3>History</h3>
+      <p>View past approvals and denials. Filter by date range, employee, or status to review decision history.</p>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div class="help-section" id="reports" data-keywords="reports export csv analytics summary attendance report">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Reports</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Summary Reports</h3>
+      <p>View KPI summaries showing active employees, average hours, PTO usage, and other workforce metrics over a selected time period.</p>
+
+      <h3>Attendance Reports</h3>
+      <p>Detailed attendance data showing clock-in/out times, total hours, absences, and tardiness for each employee.</p>
+
+      <h3>CSV Export</h3>
+      <p>Click the export button to download any report as a CSV file. Choose between summary and attendance exports. The CSV includes all visible data and can be opened in Excel or Google Sheets.</p>
+    </div>
+  </div>
+
+  <!-- PAYROLL -->
+  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Payroll</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Payroll Overview</h3>
+      <p>The Payroll section aggregates scheduled hours, overtime, and time-off data for each pay period. Use this to prepare payroll submissions.</p>
+
+      <h3>Pay Period Selection</h3>
+      <p>Select the pay period dates to calculate total hours for each employee. The system automatically accounts for scheduled shifts, clock punches, and approved time off.</p>
+    </div>
+  </div>
+
+  <!-- TRAINING -->
+  <div class="help-section" id="training" data-keywords="training modules courses assign progress completion">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Training</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Training Modules</h3>
+      <p>Create training modules with a title, description, category, and estimated duration. Mark modules as required if they're mandatory for all employees.</p>
+
+      <h3>Assigning Training</h3>
+      <p>Assign modules to individual employees or bulk-assign to groups. Set a due date to track completion timelines.</p>
+
+      <h3>Tracking Progress</h3>
+      <p>View completion status for all assignments. Filter by status (assigned, in progress, completed, overdue) to identify who needs follow-up.</p>
+    </div>
+  </div>
+
+  <!-- OTHER SECTIONS -->
+  <div class="help-section" id="other-sections" data-keywords="shift notes documents announcements team calendar data import">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Other Sections</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Shift Notes</h3>
+      <p>Leave notes for the next shift. Supervisors and admins can post notes that are visible to incoming staff. Useful for handoffs and important updates.</p>
+
+      <h3>Employee Documents</h3>
+      <p>Upload and manage documents for each employee (contracts, certifications, ID copies). Documents are stored securely and linked to employee profiles.</p>
+
+      <h3>Announcements</h3>
+      <p>Post announcements visible to all agents on their portal. Pin important announcements to keep them at the top. Set expiration dates for time-limited notices.</p>
+
+      <h3>Team Calendar</h3>
+      <p>A shared calendar view showing team schedules, PTO, and events. Useful for seeing coverage at a glance.</p>
+
+      <h3>Data Import</h3>
+      <p>Import employee data, schedules, and contact volumes from CSV files or connected systems. Use the manual entry form for individual records.</p>
+
+      <h3>Audit Log</h3>
+      <p>Admin-only. View a chronological record of all significant actions: user logins, data changes, schedule publications, and configuration updates. Filter by action type, entity, or date range.</p>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="help-section" id="settings" data-keywords="settings configuration branding users skills contracts day models api google sheets oauth">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Settings</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>General / Customization</h3>
+      <p>Set your organization's brand name, accent color, tagline, and support email. These appear throughout the application.</p>
+
+      <h3>Users</h3>
+      <p>Add, edit, and manage user accounts. Set roles (admin, supervisor, agent) and link users to employee records. Deactivate accounts when people leave.</p>
+
+      <h3>Planning Units</h3>
+      <p>Define your lines of business (LOBs) or workload groups. Planning units are used throughout scheduling, forecasting, and capacity planning.</p>
+
+      <h3>Day Models</h3>
+      <p>Create shift templates defining start time, end time, and break duration. Day models are assigned to employees when building schedules.</p>
+
+      <h3>Contracts</h3>
+      <p>Define contract types (Full-Time, Part-Time, etc.) with weekly hour targets. Contracts help enforce scheduling rules.</p>
+
+      <h3>Skills</h3>
+      <p>Manage the skills inventory. Assign skills to employees for skill-based scheduling and routing.</p>
+
+      <h3>Activities</h3>
+      <p>Define activities that employees perform (calls, emails, chat, training, meetings). Used in scheduling and real-time adherence.</p>
+
+      <h3>Google Sheets Integration</h3>
+      <p>Connect Google Sheets for capacity data. Enter the sheet key and share the sheet with the service account email shown on the settings page.</p>
+
+      <h3>API Connections</h3>
+      <p>Configure connections to external systems for data import. Set up API keys and endpoints for automated data feeds.</p>
+
+      <h3>OAuth / Social Login</h3>
+      <p>Enable Google and/or Microsoft sign-in for your users. Set up OAuth client credentials in <strong>Settings → API Connections</strong>.</p>
+    </div>
+  </div>
+
+  <!-- AGENT PORTAL -->
+  <div class="help-section" id="agent-portal" data-keywords="agent portal my schedule time off self service clock in">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Agent Portal (Self-Service)</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>My Schedule</h3>
+      <p>View your upcoming shifts in a weekly calendar. See start/end times, activities, and any special notes for each shift.</p>
+
+      <h3>My Time Off</h3>
+      <p>Request time off by selecting dates and a reason. View the status of your requests (pending, approved, denied). See your remaining PTO balance.</p>
+
+      <h3>Self-Service Portal</h3>
+      <p>View announcements, clock in/out for your shift, and access personal information. The portal is your one-stop for everything you need as an agent.</p>
+
+      <h3>Clock In / Clock Out</h3>
+      <p>Use the time clock button to record your start and end times. You can add notes to your punches (e.g., "arrived early for training").</p>
+    </div>
+  </div>
+
+  <!-- SUPPORT -->
+  <div class="help-section" id="support" data-keywords="support ticket help issue bug feature request">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Support &amp; Troubleshooting</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <h3>Submitting a Support Ticket</h3>
+      <p>Go to <strong>Support Tickets</strong> from the navigation menu. Click "New Ticket" and fill in the subject, description, category, and priority. Your ticket will be reviewed by an admin.</p>
+
+      <h3>Tracking Your Tickets</h3>
+      <p>View the status of your submitted tickets on the Support page. You can filter by status and category. Click a ticket to see its details and any admin responses.</p>
+
+      <h3>Common Issues</h3>
+      <p><strong>Can't log in:</strong> Make sure you're using the correct email address. If you've forgotten your password, contact your admin to reset it.</p>
+      <p><strong>Missing data:</strong> Check that data has been imported for the date range you're viewing. Go to Data Import to verify.</p>
+      <p><strong>Schedule not showing:</strong> Schedules must be published before agents can see them. Ask your supervisor if schedules have been published for your dates.</p>
+      <p><strong>Permission denied:</strong> You may not have the required role for that action. Contact your admin if you need elevated access.</p>
+    </div>
+  </div>
+
+  </div><!-- helpSections -->
+</div>
+
+<style>
+.help-chip{padding:5px 14px;background:var(--surface);border:1px solid var(--border);border-radius:16px;font-size:.82rem;color:var(--text-primary);text-decoration:none;transition:all .15s;white-space:nowrap;}
+.help-chip:hover{background:var(--brand-accent);color:#fff;border-color:var(--brand-accent);}
+.help-section{border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;background:var(--surface);}
+.help-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;user-select:none;}
+.help-header:hover{background:var(--bg);}
+.help-header h2{margin:0;font-size:1rem;font-weight:600;}
+.help-chevron{font-size:.9rem;color:var(--text-muted);transition:transform .2s;}
+.help-section.open .help-chevron{transform:rotate(90deg);}
+.help-body{display:none;padding:0 16px 16px;font-size:.9rem;line-height:1.7;color:var(--text-secondary);}
+.help-section.open .help-body{display:block;}
+.help-body h3{font-size:.92rem;margin:16px 0 6px;color:var(--text-primary);}
+.help-body p{margin:0 0 8px;}
+.help-body kbd{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:.8rem;}
+</style>
+<script>
+function toggleSection(header){
+  header.parentElement.classList.toggle('open');
+}
+function openSection(id){
+  const el = document.getElementById(id);
+  if(el && !el.classList.contains('open')) el.classList.add('open');
+  el && el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function filterHelp(){
+  const q = document.getElementById('helpSearch').value.toLowerCase();
+  document.querySelectorAll('.help-section').forEach(s=>{
+    const text = (s.textContent + ' ' + (s.dataset.keywords||'')).toLowerCase();
+    s.style.display = !q || text.includes(q) ? '' : 'none';
+    if(q && text.includes(q) && !s.classList.contains('open')) s.classList.add('open');
+    if(!q) s.classList.remove('open');
+  });
+}
+</script>
+{% endblock %}

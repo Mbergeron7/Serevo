@@ -2116,3 +2116,67 @@ class TrainingAssignment(db.Model):
     __table_args__ = (
         db.UniqueConstraint("module_id", "employee_id", name="uq_training_mod_emp"),
     )
+
+
+# ── Support Tickets ──────────────────────────────────────────
+
+class SupportTicket(db.Model):
+    """Support tickets submitted by any user for issue tracking."""
+    __tablename__ = "support_tickets"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    subject     = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    category    = db.Column(db.String(60), default="general")  # general, bug, feature, access, data
+    priority    = db.Column(db.String(20), default="medium")   # low, medium, high, urgent
+    status      = db.Column(db.String(20), default="open")     # open, in_progress, resolved, closed
+    submitted_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    assigned_to  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    resolution   = db.Column(db.Text, nullable=True)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+    updated_at   = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    submitter = db.relationship("User", foreign_keys=[submitted_by], backref="submitted_tickets")
+    assignee  = db.relationship("User", foreign_keys=[assigned_to], backref="assigned_tickets")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "subject": self.subject,
+            "description": self.description,
+            "category": self.category,
+            "priority": self.priority,
+            "status": self.status,
+            "submitted_by": self.submitted_by,
+            "submitter_name": self.submitter.display_name if self.submitter else "Unknown",
+            "assigned_to": self.assigned_to,
+            "assignee_name": self.assignee.display_name if self.assignee else None,
+            "resolution": self.resolution,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class TicketComment(db.Model):
+    """Comments on support tickets for back-and-forth communication."""
+    __tablename__ = "ticket_comments"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    ticket_id  = db.Column(db.Integer, db.ForeignKey("support_tickets.id", ondelete="CASCADE"),
+                           nullable=False, index=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    body       = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    ticket = db.relationship("SupportTicket", backref=db.backref("comments", order_by="TicketComment.created_at"))
+    user   = db.relationship("User", backref="ticket_comments")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticket_id": self.ticket_id,
+            "user_id": self.user_id,
+            "user_name": self.user.display_name if self.user else "Unknown",
+            "body": self.body,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

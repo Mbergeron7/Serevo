@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}Support Tickets — {{ brand_name }}{% endblock %}
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:24px 16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h1 style="margin:0;font-size:1.5rem;">Support Tickets</h1>
+      <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">Submit and track issues or feature requests</p>
+    </div>
+    <button onclick="openNewTicket()" style="padding:8px 20px;background:var(--brand-accent);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem;">+ New Ticket</button>
+  </div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <select id="statusFilter" onchange="loadTickets()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);color:var(--text-primary);">
+      <option value="all">All Statuses</option>
+      <option value="open" selected>Open</option>
+      <option value="in_progress">In Progress</option>
+      <option value="resolved">Resolved</option>
+      <option value="closed">Closed</option>
+    </select>
+    <select id="categoryFilter" onchange="loadTickets()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);color:var(--text-primary);">
+      <option value="all">All Categories</option>
+      <option value="general">General</option>
+      <option value="bug">Bug Report</option>
+      <option value="feature">Feature Request</option>
+      <option value="access">Access Issue</option>
+      <option value="data">Data Issue</option>
+    </select>
+  </div>
+
+  <!-- Ticket list -->
+  <div id="ticketList" style="display:flex;flex-direction:column;gap:8px;"></div>
+  <div id="noTickets" style="display:none;text-align:center;padding:60px 20px;color:var(--text-muted);">
+    <p style="font-size:1.2rem;margin-bottom:8px;">No tickets found</p>
+    <p style="font-size:.85rem;">Click "New Ticket" to submit one.</p>
+  </div>
+</div>
+
+<!-- New Ticket Modal -->
+<div id="newTicketModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;font-size:1.2rem;">New Support Ticket</h2>
+      <button onclick="closeModal('newTicketModal')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Subject *</label>
+        <input id="ticketSubject" type="text" placeholder="Brief summary of the issue" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);box-sizing:border-box;">
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Category</label>
+          <select id="ticketCategory" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);">
+            <option value="general">General</option>
+            <option value="bug">Bug Report</option>
+            <option value="feature">Feature Request</option>
+            <option value="access">Access Issue</option>
+            <option value="data">Data Issue</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Priority</label>
+          <select id="ticketPriority" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Description *</label>
+        <textarea id="ticketDescription" rows="5" placeholder="Describe the issue in detail. Include steps to reproduce if applicable." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;resize:vertical;background:var(--bg);color:var(--text-primary);box-sizing:border-box;"></textarea>
+      </div>
+      <button onclick="submitTicket()" style="padding:10px 20px;background:var(--brand-accent);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem;">Submit Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Ticket Modal -->
+<div id="viewTicketModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:640px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 id="viewTicketTitle" style="margin:0;font-size:1.2rem;"></h2>
+      <button onclick="closeModal('viewTicketModal')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+    </div>
+    <div id="viewTicketBody"></div>
+  </div>
+</div>
+
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const isAdmin = {{ 'true' if user.get('role') == 'admin' else 'false' }};
+
+const priorityColors = {low:'#6b7280',medium:'#2563eb',high:'#d97706',urgent:'#dc2626'};
+const statusColors = {open:'#16a34a',in_progress:'#2563eb',resolved:'#6b7280',closed:'#9ca3af'};
+const categoryLabels = {general:'General',bug:'Bug Report',feature:'Feature Request',access:'Access Issue',data:'Data Issue'};
+
+function openNewTicket(){ document.getElementById('newTicketModal').style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+
+async function loadTickets(){
+  const status = document.getElementById('statusFilter').value;
+  const category = document.getElementById('categoryFilter').value;
+  const resp = await fetch('/support/api/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({status,category})});
+  const data = await resp.json();
+  const list = document.getElementById('ticketList');
+  const empty = document.getElementById('noTickets');
+  if(!data.tickets||!data.tickets.length){ list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  list.innerHTML = data.tickets.map(t=>`
+    <div onclick="viewTicket(${t.id})" style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:.95rem;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">#${t.id} — ${esc(t.subject)}</div>
+        <div style="font-size:.8rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap;">
+          <span>${esc(t.submitter_name)}</span>
+          <span>${categoryLabels[t.category]||t.category}</span>
+          <span>${new Date(t.created_at).toLocaleDateString()}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${priorityColors[t.priority]||'#666'}22;color:${priorityColors[t.priority]||'#666'};">${t.priority}</span>
+        <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${statusColors[t.status]||'#666'}22;color:${statusColors[t.status]||'#666'};">${t.status.replace('_',' ')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function submitTicket(){
+  const subject = document.getElementById('ticketSubject').value.trim();
+  const description = document.getElementById('ticketDescription').value.trim();
+  const category = document.getElementById('ticketCategory').value;
+  const priority = document.getElementById('ticketPriority').value;
+  if(!subject||!description){showToast('Subject and description are required','error');return;}
+  const resp = await fetch('/support/api/tickets/create',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({subject,description,category,priority})});
+  const data = await resp.json();
+  if(data.success){
+    showToast('Ticket submitted successfully','success');
+    closeModal('newTicketModal');
+    document.getElementById('ticketSubject').value='';
+    document.getElementById('ticketDescription').value='';
+    loadTickets();
+  } else { showToast(data.error||'Failed to submit','error'); }
+}
+
+async function viewTicket(id){
+  const resp = await fetch('/support/api/tickets/'+id,{headers:{'X-CSRFToken':csrfToken}});
+  const data = await resp.json();
+  if(!data.success) return;
+  const t = data.ticket;
+  const comments = data.comments||[];
+  document.getElementById('viewTicketTitle').textContent = '#'+t.id+' — '+t.subject;
+
+  let html = `
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${statusColors[t.status]||'#666'}22;color:${statusColors[t.status]||'#666'};">${t.status.replace('_',' ')}</span>
+      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${priorityColors[t.priority]||'#666'}22;color:${priorityColors[t.priority]||'#666'};">${t.priority}</span>
+      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:var(--bg);color:var(--text-muted);">${categoryLabels[t.category]||t.category}</span>
+    </div>
+    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;">
+      Submitted by <strong>${esc(t.submitter_name)}</strong> on ${new Date(t.created_at).toLocaleString()}
+      ${t.assignee_name ? ' · Assigned to <strong>'+esc(t.assignee_name)+'</strong>' : ''}
+    </div>
+    <div style="padding:12px;background:var(--bg);border-radius:8px;font-size:.9rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;">${esc(t.description)}</div>`;
+
+  if(t.resolution){
+    html += `<div style="padding:12px;background:#16a34a11;border:1px solid #16a34a33;border-radius:8px;font-size:.9rem;margin-bottom:16px;">
+      <strong style="color:#16a34a;">Resolution:</strong><br>${esc(t.resolution)}</div>`;
+  }
+
+  // Admin controls
+  if(isAdmin){
+    html += `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <select id="adminStatus" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
+        <option value="open" ${t.status==='open'?'selected':''}>Open</option>
+        <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
+        <option value="resolved" ${t.status==='resolved'?'selected':''}>Resolved</option>
+        <option value="closed" ${t.status==='closed'?'selected':''}>Closed</option>
+      </select>
+      <select id="adminPriority" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
+        <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+        <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
+        <option value="high" ${t.priority==='high'?'selected':''}>High</option>
+        <option value="urgent" ${t.priority==='urgent'?'selected':''}>Urgent</option>
+      </select>
+      <button onclick="updateTicketAdmin(${t.id})" style="padding:6px 14px;background:var(--brand-accent);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;">Update</button>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Resolution Note</label>
+      <textarea id="adminResolution" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:var(--bg);color:var(--text-primary);box-sizing:border-box;">${esc(t.resolution||'')}</textarea>
+    </div>`;
+  }
+
+  // Comments
+  html += `<h3 style="font-size:.95rem;margin:16px 0 8px;">Comments</h3>`;
+  if(comments.length){
+    html += comments.map(c=>`
+      <div style="padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:8px;">
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px;"><strong>${esc(c.user_name)}</strong> · ${new Date(c.created_at).toLocaleString()}</div>
+        <div style="font-size:.88rem;white-space:pre-wrap;">${esc(c.body)}</div>
+      </div>`).join('');
+  } else { html += `<p style="color:var(--text-muted);font-size:.85rem;">No comments yet.</p>`; }
+
+  html += `<div style="display:flex;gap:8px;margin-top:12px;">
+    <textarea id="commentBody" rows="2" placeholder="Add a comment…" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:var(--bg);color:var(--text-primary);"></textarea>
+    <button onclick="addComment(${t.id})" style="padding:8px 14px;background:var(--brand-accent);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:.85rem;align-self:flex-end;">Send</button>
+  </div>`;
+
+  document.getElementById('viewTicketBody').innerHTML = html;
+  document.getElementById('viewTicketModal').style.display='flex';
+}
+
+async function updateTicketAdmin(id){
+  const status = document.getElementById('adminStatus').value;
+  const priority = document.getElementById('adminPriority').value;
+  const resolution = document.getElementById('adminResolution').value.trim();
+  const resp = await fetch('/support/api/tickets/update',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({id,status,priority,resolution})});
+  const data = await resp.json();
+  if(data.success){showToast('Ticket updated','success');viewTicket(id);loadTickets();}
+  else showToast(data.error||'Update failed','error');
+}
+
+async function addComment(ticketId){
+  const body = document.getElementById('commentBody').value.trim();
+  if(!body){showToast('Comment cannot be empty','error');return;}
+  const resp = await fetch('/support/api/tickets/comment',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:ticketId,body})});
+  const data = await resp.json();
+  if(data.success){showToast('Comment added','success');viewTicket(ticketId);}
+  else showToast(data.error||'Failed to add comment','error');
+}
+
+function esc(s){ if(!s)return''; const d=document.createElement('div');d.textContent=s;return d.innerHTML; }
+
+loadTickets();
+</script>
+{% endblock %}
