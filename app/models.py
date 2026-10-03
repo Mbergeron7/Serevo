@@ -1302,7 +1302,7 @@ class AgentStatusEvent(db.Model):
 
 class Activity(db.Model):
     """Schedulable activities — the building blocks of day models.
-    Maps to PeopleWare 'Activities' concept. Each activity has a type
+    Maps to WFM platform 'Activities' concept. Each activity has a type
     (presence = on-phone/productive, absence = break/lunch, meeting, training)
     and a linked segment code for color/labeling in the schedule view."""
     __tablename__ = "activities"
@@ -1341,7 +1341,7 @@ class Activity(db.Model):
 class Contract(db.Model):
     """Contract templates defining work hours, break rules, and scheduling
     constraints. Employees reference a contract instead of having hours
-    scattered across their profile. Maps to PeopleWare 'Contracts'."""
+    scattered across their profile. Maps to WFM platform 'Contracts'."""
     __tablename__ = "contracts"
 
     id                  = db.Column(db.Integer, primary_key=True)
@@ -1391,7 +1391,7 @@ class Contract(db.Model):
 
 class DayModel(db.Model):
     """A day model defines a specific shift shape for a day — start/end time,
-    activities placed within it. PeopleWare equivalent: 'Day models'.
+    activities placed within it. WFM platform equivalent: 'Day models'.
     A day model references a shift template for its time window and adds
     activity placements (breaks, lunches, meetings) at specific offsets."""
     __tablename__ = "day_models"
@@ -1437,7 +1437,7 @@ class DayModel(db.Model):
 
 class WeekTimePattern(db.Model):
     """A week time pattern assigns a day model to each day of the week.
-    PeopleWare equivalent: 'Week time patterns'. Used to define what
+    WFM platform equivalent: 'Week time patterns'. Used to define what
     a typical work week looks like — which day model applies Mon-Sun."""
     __tablename__ = "week_time_patterns"
 
@@ -1465,7 +1465,7 @@ class WeekTimePattern(db.Model):
 
 class WorkTimePatternModel(db.Model):
     """Groups one or more week time patterns into a schedulable model.
-    PeopleWare equivalent: 'Work time pattern models'. Assigned to a
+    WFM platform equivalent: 'Work time pattern models'. Assigned to a
     planning unit to tell the scheduler which shift shapes to use."""
     __tablename__ = "work_time_pattern_models"
 

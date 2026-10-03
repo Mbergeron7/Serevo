@@ -1025,7 +1025,7 @@ def employees_for_lob():
 
 # ── Import schedules from connected WFM system ───────────────
 @scheduling_bp.route("/import/wfm", methods=["POST"])
-@scheduling_bp.route("/import/peopleware", methods=["POST"])  # backwards compat
+@scheduling_bp.route("/import/wfm-api", methods=["POST"])  # backwards compat
 @login_required
 def import_wfm():
     """POST JSON: {lob?, start_date, end_date}

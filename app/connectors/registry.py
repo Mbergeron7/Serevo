@@ -8,7 +8,7 @@ from app.connectors.wfm_legacy import WFMLegacyConnector
 # Provider name (matches APIConnection.provider) → connector class
 REGISTRY = {
     "wfm_legacy": WFMLegacyConnector,
-    "injixo": WFMLegacyConnector,         # backwards compat for existing connections
+    "injixo": WFMLegacyConnector,         # backwards compat — legacy provider key in existing DB rows
 }
 
 

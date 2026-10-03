@@ -5,7 +5,7 @@ Allows admins to upload CSV or Excel files to populate the database
 tables (employees, forecast, requirements, accommodations, PTO).
 
 Also provides a sync endpoint to import employees from a connected
-Google Sheet (e.g. PeopleWare headcount export).
+Google Sheet (e.g. HR system headcount export).
 """
 
 import io
@@ -321,12 +321,12 @@ def _import_employees(rows):
         if skills_val:
             emp.all_skills = skills_val
 
-        # Email — prefer "Address Email" (PeopleWare), fall back to "Email"
+        # Email — prefer "Address Email" (HR system), fall back to "Email"
         email_val = _get_val(row, "Address Email") or _get_val(row, "Email")
         if email_val:
             emp.email = email_val
 
-        # Contract type (PeopleWare column)
+        # Contract type (HR system column)
         ct_val = _get_val(row, "Contract Type")
         if ct_val:
             emp.contract_type = ct_val
@@ -637,7 +637,7 @@ def _open_employee_sheet():
 @admin_required
 def sync_employees_from_sheet():
     """
-    Pull employees from the connected PeopleWare Google Sheet and
+    Pull employees from the connected HR Google Sheet and
     upsert them into the database.
     """
     dg = _demo_guard()
@@ -676,7 +676,7 @@ def sync_employees_from_sheet():
 
     from app.models import db, DataUpload
     upload = DataUpload(
-        filename="peopleware_sheet_sync",
+        filename="hr_sheet_sync",
         upload_type="employees",
         rows_total=len(rows),
         status="processing",

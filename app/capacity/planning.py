@@ -23,8 +23,8 @@ from zoneinfo import ZoneInfo
 log = logging.getLogger("serevo.capacity")
 
 # ── API endpoints ────────────────────────────────────────────────
-API_NEW    = os.environ.get("WFM_API_NEW",    os.environ.get("PW_API_NEW", "https://api.peopleware.com"))
-API_LEGACY = os.environ.get("WFM_API_LEGACY", os.environ.get("PW_API_LEGACY", "https://legacy-api.peopleware.com/v1"))
+API_NEW    = os.environ.get("WFM_API_NEW",    os.environ.get("WFM_API_NEW", "https://api.example.com"))
+API_LEGACY = os.environ.get("WFM_API_LEGACY", os.environ.get("WFM_API_LEGACY", "https://legacy-api.example.com/v1"))
 
 WFM_TOKEN      = os.environ.get("WFM_API_TOKEN", os.environ.get("PW_API_TOKEN", ""))
 WFM_UTC_OFFSET = int(os.environ.get("WFM_UTC_OFFSET", os.environ.get("PW_UTC_OFFSET", "-4")))
@@ -73,9 +73,9 @@ def _connection_token():
     try:
         import json as _json
         from app.models import APIConnection
-        # Try wfm_legacy first, then injixo for backwards compat
+        # Try wfm_legacy first, then legacy WFM key for backwards compat
         conn = (APIConnection.query
-                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),
+                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),  # "injixo" kept for DB backwards compat
                         APIConnection.is_active == True)
                 .order_by(APIConnection.updated_at.desc()).first())
         if conn and conn.credentials:

@@ -29,8 +29,8 @@ log = logging.getLogger("serevo.connectors.wfm_legacy")
 
 # ── Constants ────────────────────────────────────────────────────
 # Default API base URLs — overridden per-connection via base_url + credentials
-LEGACY_BASE = "https://legacy-api.peopleware.com/v1"
-NEW_BASE = "https://api.peopleware.com"
+LEGACY_BASE = "https://legacy-api.example.com/v1"
+NEW_BASE = "https://api.example.com"
 MAX_WORKERS = 10
 TIMEOUT = 15
 

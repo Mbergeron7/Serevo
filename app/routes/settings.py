@@ -55,7 +55,7 @@ PROVIDERS = {
         "auth_types": ["bearer", "api_key"],
         "fields": ["base_url", "api_key"],
     },
-    "injixo": {
+    "wfm_legacy": {
         "label": "WFM Platform (Legacy API)",
         "auth_types": ["bearer", "api_key"],
         "fields": ["base_url", "api_key"],

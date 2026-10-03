@@ -362,7 +362,7 @@ def get_source():
     global _INSTANCE
     if _INSTANCE is None:
         mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
-        if mode in ("api", "peopleware"):  # peopleware kept for backwards compat
+        if mode in ("api", "peopleware"):  # "peopleware" value kept for backwards compat with existing configs
             _INSTANCE = APISource()
         elif mode == "postgres":
             _INSTANCE = PostgresSource()
