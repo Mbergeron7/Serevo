@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Payroll Export — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Payroll Export</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Review and export timesheet data for payroll processing.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <label style="font-size:.82rem;color:var(--text-muted);">From:</label>
+      <input type="date" id="startDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+      <label style="font-size:.82rem;color:var(--text-muted);">To:</label>
+      <input type="date" id="endDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+    </div>
+    <button class="btn btn-primary" onclick="loadPayroll()" style="font-size:.82rem;padding:6px 16px;">Load</button>
+    <button class="btn btn-outline" onclick="exportCSV()" style="font-size:.82rem;padding:6px 16px;">⬇ Export CSV</button>
+  </div>
+</div>
+
+<!-- Summary Cards -->
+<div id="summaryCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+  <div class="s-card"><div class="s-label">Employees</div><div class="s-val" id="sumEmployees">—</div></div>
+  <div class="s-card"><div class="s-label">Total Hours</div><div class="s-val" id="sumHours">—</div></div>
+  <div class="s-card"><div class="s-label">Regular Hours</div><div class="s-val" id="sumRegular">—</div></div>
+  <div class="s-card"><div class="s-label">Overtime Hours</div><div class="s-val" id="sumOT">—</div></div>
+  <div class="s-card"><div class="s-label">PTO Days</div><div class="s-val" id="sumPTO">—</div></div>
+</div>
+
+<!-- Data Table -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+  <div style="overflow-x:auto;">
+    <table id="payrollTable" style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead>
+        <tr style="background:var(--bg);">
+          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('employee_id')">ID ↕</th>
+          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('name')">Name ↕</th>
+          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Dept</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Days</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('total_hours')">Total Hrs ↕</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Regular</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">OT</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Scheduled</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Variance</th>
+          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">PTO</th>
+        </tr>
+      </thead>
+      <tbody id="payrollBody">
+        <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text-muted);">Select a date range and click Load.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+.s-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; text-align:center; }
+.s-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600; letter-spacing:.3px; margin-bottom:2px; }
+.s-val { font-size:1.5rem; font-weight:700; color:var(--text); }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+let payrollRows = [];
+let sortKey = 'name', sortAsc = true;
+
+// Default to last 14 days
+(function() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 13);
+  document.getElementById('startDate').value = start.toISOString().slice(0,10);
+  document.getElementById('endDate').value = end.toISOString().slice(0,10);
+  loadPayroll();
+})();
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+async function loadPayroll() {
+  const start_date = document.getElementById('startDate').value;
+  const end_date = document.getElementById('endDate').value;
+  if (!start_date || !end_date) return;
+
+  const res = await fetch('/payroll/api/summary', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({start_date, end_date})
+  });
+  const d = await res.json();
+  if (!d.success) { alert(d.error || 'Error loading'); return; }
+
+  payrollRows = d.rows;
+  const t = d.totals;
+  document.getElementById('sumEmployees').textContent = t.total_employees;
+  document.getElementById('sumHours').textContent = t.total_hours.toLocaleString(undefined, {maximumFractionDigits:1});
+  document.getElementById('sumRegular').textContent = t.total_regular.toLocaleString(undefined, {maximumFractionDigits:1});
+  document.getElementById('sumOT').textContent = t.total_overtime.toLocaleString(undefined, {maximumFractionDigits:1});
+  document.getElementById('sumPTO').textContent = t.total_pto_days;
+  renderTable();
+}
+
+function renderTable() {
+  const rows = [...payrollRows].sort((a,b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('payrollBody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text-muted);">No timesheet data for this period.</td></tr>'; return; }
+
+  let html = '';
+  rows.forEach(r => {
+    const varColor = r.variance > 0 ? '#059669' : r.variance < 0 ? '#dc2626' : '';
+    const otStyle = r.overtime_hours > 0 ? 'color:#d97706;font-weight:700;' : '';
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 12px;">${esc(r.employee_id)}</td>
+      <td style="padding:8px 12px;font-weight:600;">${esc(r.name)}</td>
+      <td style="padding:8px 12px;color:var(--text-muted);">${esc(r.department)}</td>
+      <td style="padding:8px 12px;text-align:right;">${r.days_worked}</td>
+      <td style="padding:8px 12px;text-align:right;font-weight:700;">${r.total_hours}</td>
+      <td style="padding:8px 12px;text-align:right;">${r.regular_hours}</td>
+      <td style="padding:8px 12px;text-align:right;${otStyle}">${r.overtime_hours}</td>
+      <td style="padding:8px 12px;text-align:right;color:var(--text-muted);">${r.scheduled_hours}</td>
+      <td style="padding:8px 12px;text-align:right;${varColor ? 'color:'+varColor+';font-weight:600;' : ''}">${r.variance > 0 ? '+' : ''}${r.variance}h</td>
+      <td style="padding:8px 12px;text-align:right;">${r.pto_days || '—'}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+  renderTable();
+}
+
+async function exportCSV() {
+  const start_date = document.getElementById('startDate').value;
+  const end_date = document.getElementById('endDate').value;
+  if (!start_date || !end_date) { alert('Please select a date range first'); return; }
+
+  const res = await fetch('/payroll/api/export-csv', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({start_date, end_date})
+  });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `payroll_${start_date}_${end_date}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}
