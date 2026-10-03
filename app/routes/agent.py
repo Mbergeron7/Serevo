@@ -260,9 +260,7 @@ def cancel_time_off(entry_id):
 def api_my_schedule():
     user = get_current_user()
     emp = _get_agent_employee(user)
-    if not emp:
-        return jsonify({"employee": "Preview Agent", "start": date.today().isoformat(),
-                        "end": (date.today() + timedelta(days=6)).isoformat(), "schedules": []})
+    is_demo = _is_demo()
 
     start_str = request.args.get("start", date.today().isoformat())
     end_str = request.args.get("end")
@@ -277,6 +275,38 @@ def api_my_schedule():
             end = start + timedelta(days=6)
     else:
         end = start + timedelta(days=6)
+
+    if is_demo or not emp:
+        # Generate demo schedule data — weekdays get shifts
+        demo_schedules = []
+        d = start
+        shifts = [("08:00", "16:30"), ("09:00", "17:30"), ("10:00", "18:30"),
+                  ("07:00", "15:30"), ("11:00", "19:30")]
+        lobs = ["Customer Service", "Tech Support", "Billing"]
+        while d <= end:
+            if d.weekday() < 5:  # Mon–Fri
+                sh = shifts[d.weekday()]
+                demo_schedules.append({
+                    "id": 9000 + (d - start).days,
+                    "employee": "Demo Agent",
+                    "employee_id": "DEMO-001",
+                    "date": d.isoformat(),
+                    "start": sh[0],
+                    "end": sh[1],
+                    "type": "full",
+                    "hours": 8.5,
+                    "status": "scheduled",
+                    "segments": [],
+                    "team_lead": "",
+                    "lob": lobs[d.weekday() % len(lobs)],
+                })
+            d += timedelta(days=1)
+        return jsonify({
+            "employee": "Demo Agent",
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "schedules": demo_schedules,
+        })
 
     schedules = (
         Schedule.query
