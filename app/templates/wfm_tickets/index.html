@@ -1,240 +1,606 @@
 {% extends "base.html" %}
 {% block title %}WFM Tickets — {{ brand_name }}{% endblock %}
+{% block head %}
+<style>
+/* ── WFM Tickets Styles ── */
+.wfm-wrap{max-width:1400px;margin:0 auto;padding:20px 16px;}
+.wfm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
+.wfm-header h1{margin:0;font-size:1.4rem;display:flex;align-items:center;gap:8px;}
+.wfm-header h1 .icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:var(--brand-accent);border-radius:50%;color:#fff;font-size:.85rem;}
+.wfm-header p{margin:4px 0 0;color:var(--text-muted);font-size:.82rem;}
+.wfm-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{padding:8px 16px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.82rem;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.btn-primary{background:var(--brand-accent);color:#fff;}
+.btn-outline{background:var(--surface);border:1px solid var(--border);color:var(--text-primary);}
+
+/* Tabs */
+.wfm-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px;overflow-x:auto;}
+.wfm-tab{padding:10px 18px;cursor:pointer;font-weight:600;font-size:.85rem;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:color .15s,border-color .15s;background:none;border-top:none;border-left:none;border-right:none;}
+.wfm-tab:hover{color:var(--text-primary);}
+.wfm-tab.active{color:var(--brand-accent);border-bottom-color:var(--brand-accent);}
+.wfm-tab .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:10px;font-size:.7rem;font-weight:700;margin-left:6px;background:var(--brand-accent)22;color:var(--brand-accent);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* KPI tiles */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.kpi{padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;text-align:center;}
+.kpi .val{font-size:1.6rem;font-weight:700;color:var(--text-primary);}
+.kpi .lbl{font-size:.75rem;color:var(--text-muted);margin-top:2px;}
+
+/* Toolbar row */
+.toolbar{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+.toolbar input[type="text"],.toolbar select{padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);}
+.toolbar input[type="text"]{min-width:200px;}
+.toolbar .spacer{flex:1;}
+.toolbar .refresh-info{font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+
+/* Table */
+.ticket-table{width:100%;border-collapse:collapse;font-size:.82rem;}
+.ticket-table th{padding:8px 10px;text-align:left;font-weight:600;color:var(--text-muted);border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
+.ticket-table th:hover{color:var(--text-primary);}
+.ticket-table th .sort-arrow{font-size:.65rem;margin-left:3px;opacity:.4;}
+.ticket-table th.sorted .sort-arrow{opacity:1;color:var(--brand-accent);}
+.ticket-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.ticket-table tr:hover td{background:var(--brand-accent)05;}
+.ticket-table tr.clickable{cursor:pointer;}
+
+/* Aging indicators */
+.age-ok{color:var(--text-muted);}
+.age-amber{color:#d97706;font-weight:600;}
+.age-red{color:#dc2626;font-weight:700;}
+
+/* Status / priority pills */
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600;white-space:nowrap;}
+.pill-open{background:#16a34a22;color:#16a34a;}
+.pill-in_progress{background:#2563eb22;color:#2563eb;}
+.pill-resolved{background:#6b728022;color:#6b7280;}
+.pill-closed{background:#9ca3af22;color:#9ca3af;}
+.pill-low{background:#6b728022;color:#6b7280;}
+.pill-medium{background:#2563eb22;color:#2563eb;}
+.pill-high{background:#d9760622;color:#d97706;}
+.pill-urgent{background:#dc262622;color:#dc2626;}
+
+/* Quick assign */
+.quick-assign{padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:.78rem;background:var(--surface);color:var(--text-primary);cursor:pointer;}
+
+/* Pagination */
+.pagination{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:.82rem;color:var(--text-muted);}
+.pagination button{padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);cursor:pointer;font-size:.8rem;}
+.pagination button:disabled{opacity:.4;cursor:default;}
+
+/* Charts */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+@media(max-width:800px){.chart-grid{grid-template-columns:1fr;}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.chart-card h3{margin:0 0 12px;font-size:.9rem;}
+.chart-card canvas{width:100%!important;max-height:280px;}
+
+/* Workload table */
+.workload-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px;}
+.workload-table th,.workload-table td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);}
+.workload-table th{font-weight:600;color:var(--text-muted);}
+
+/* Date range */
+.date-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.date-range input[type="date"]{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);}
+.range-btn{padding:5px 12px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;cursor:pointer;background:var(--surface);color:var(--text-primary);}
+.range-btn.active{background:var(--brand-accent);color:#fff;border-color:var(--brand-accent);}
+
+/* History */
+.history-entry{padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:.82rem;}
+.history-entry .meta{color:var(--text-muted);font-size:.78rem;margin-bottom:2px;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:48px 20px;color:var(--text-muted);}
+.empty-state p{margin:4px 0;}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;}
+.modal-box{background:var(--surface);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.modal-header h2{margin:0;font-size:1.15rem;}
+.modal-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);}
+.form-group{margin-bottom:12px;}
+.form-group label{font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.88rem;background:var(--bg);color:var(--text-primary);box-sizing:border-box;}
+.form-row{display:flex;gap:12px;}
+.form-row>div{flex:1;}
+
+/* Responsive table wrapper */
+.table-wrap{overflow-x:auto;}
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="max-width:1100px;margin:0 auto;padding:24px 16px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+<div class="wfm-wrap">
+  <!-- Header -->
+  <div class="wfm-header">
     <div>
-      <h1 style="margin:0;font-size:1.5rem;">
-        <span style="display:inline-flex;align-items:center;gap:8px;">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:var(--brand-accent);border-radius:50%;color:#fff;font-size:.85rem;">&#10003;</span>
-          WFM Tickets
-        </span>
-      </h1>
-      <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">
-        {% if is_analyst %}Manage WFM requests from team leads{% else %}Submit schedule changes, OT requests, and other WFM needs{% endif %}
-      </p>
+      <h1><span class="icon">&#10003;</span> WFM Tickets</h1>
+      <p>{% if is_analyst %}Manage WFM requests from team leads{% else %}Submit schedule changes, OT requests, and other WFM needs{% endif %}</p>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div class="wfm-actions">
       {% if is_analyst %}
-      <button onclick="openAccessPanel()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem;color:var(--text-primary);">Manage Access</button>
+      <button class="btn btn-outline" onclick="downloadCSV()">Export CSV</button>
+      <button class="btn btn-outline" onclick="openModal('accessModal')">Manage Access</button>
       {% endif %}
-      <button onclick="openNewTicket()" style="padding:8px 20px;background:var(--brand-accent);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem;">+ New Request</button>
+      <button class="btn btn-primary" onclick="openModal('newTicketModal')">+ New Request</button>
     </div>
   </div>
 
-  <!-- Filters -->
-  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-    <select id="statusFilter" onchange="loadTickets()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);color:var(--text-primary);">
-      <option value="all">All Statuses</option>
-      <option value="open" selected>Open</option>
-      <option value="in_progress">In Progress</option>
-      <option value="resolved">Resolved</option>
-      <option value="closed">Closed</option>
-    </select>
-    <select id="categoryFilter" onchange="loadTickets()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);color:var(--text-primary);">
-      <option value="all">All Categories</option>
-      <option value="schedule_change">Schedule Change</option>
-      <option value="overtime">Overtime</option>
-      <option value="time_off_exception">Time Off Exception</option>
-      <option value="shift_swap">Shift Swap</option>
-      <option value="headcount">Headcount</option>
-      <option value="forecast_adjustment">Forecast Adjustment</option>
-      <option value="general">General</option>
-    </select>
+  <!-- Tabs -->
+  <div class="wfm-tabs">
+    <button class="wfm-tab active" data-tab="dashboard">Dashboard <span class="badge" id="dashBadge">0</span></button>
+    {% if is_analyst %}
+    <button class="wfm-tab" data-tab="analytics">Analytics</button>
+    <button class="wfm-tab" data-tab="archive">Archive</button>
+    <button class="wfm-tab" data-tab="recycle">Recycle Bin</button>
+    <button class="wfm-tab" data-tab="history">History</button>
+    {% endif %}
   </div>
 
-  <!-- Ticket list -->
-  <div id="ticketList" style="display:flex;flex-direction:column;gap:8px;"></div>
-  <div id="noTickets" style="display:none;text-align:center;padding:60px 20px;color:var(--text-muted);">
-    <p style="font-size:1.2rem;margin-bottom:8px;">No tickets found</p>
-    <p style="font-size:.85rem;">Click "+ New Request" to submit one.</p>
+  <!-- ════════════════ DASHBOARD TAB ════════════════ -->
+  <div class="tab-panel active" id="tab-dashboard">
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Search tickets…" oninput="debounceLoad()">
+      <select id="statusFilter" onchange="loadTickets()">
+        <option value="all">All Statuses</option>
+        <option value="open" selected>Open</option>
+        <option value="in_progress">In Progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+      </select>
+      <select id="categoryFilter" onchange="loadTickets()">
+        <option value="all">All Categories</option>
+        <option value="schedule_change">Schedule Change</option>
+        <option value="overtime">Overtime</option>
+        <option value="time_off_exception">Time Off Exception</option>
+        <option value="shift_swap">Shift Swap</option>
+        <option value="headcount">Headcount</option>
+        <option value="forecast_adjustment">Forecast Adjustment</option>
+        <option value="general">General</option>
+      </select>
+      <div class="spacer"></div>
+      <div class="refresh-info">
+        <span id="refreshCountdown"></span>
+        <button class="btn btn-outline" onclick="loadTickets()" style="padding:5px 10px;">Refresh</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="ticket-table" id="ticketTable">
+        <thead>
+          <tr>
+            <th data-col="id" onclick="sortTable('id')">ID <span class="sort-arrow">▾</span></th>
+            <th data-col="subject" onclick="sortTable('subject')">Subject <span class="sort-arrow">▾</span></th>
+            <th data-col="category" onclick="sortTable('category')">Category <span class="sort-arrow">▾</span></th>
+            <th data-col="priority" onclick="sortTable('priority')">Priority <span class="sort-arrow">▾</span></th>
+            <th data-col="status" onclick="sortTable('status')">Status <span class="sort-arrow">▾</span></th>
+            <th data-col="submitter_name" onclick="sortTable('submitter_name')">Submitted By <span class="sort-arrow">▾</span></th>
+            <th data-col="created_at" onclick="sortTable('created_at')">Created <span class="sort-arrow">▾</span></th>
+            <th data-col="age">Age <span class="sort-arrow">▾</span></th>
+            {% if is_analyst %}<th>Assigned To</th>{% endif %}
+            {% if is_analyst %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody id="ticketBody"></tbody>
+      </table>
+    </div>
+    <div id="noTickets" class="empty-state" style="display:none;">
+      <p style="font-size:1.1rem;">No tickets found</p>
+      <p style="font-size:.85rem;">Click "+ New Request" to submit one.</p>
+    </div>
+    <div class="pagination" id="paginationRow" style="display:none;">
+      <span id="pageInfo"></span>
+      <div style="display:flex;gap:6px;">
+        <button onclick="changePage(-1)" id="prevBtn" disabled>← Prev</button>
+        <button onclick="changePage(1)" id="nextBtn" disabled>Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ ANALYTICS TAB ════════════════ -->
+  {% if is_analyst %}
+  <div class="tab-panel" id="tab-analytics">
+    <div class="date-range">
+      <button class="range-btn active" onclick="setRange(7,this)">7 days</button>
+      <button class="range-btn" onclick="setRange(30,this)">30 days</button>
+      <button class="range-btn" onclick="setRange(90,this)">90 days</button>
+      <button class="range-btn" onclick="setRange(0,this)">All Time</button>
+      <input type="date" id="analyticsFrom" onchange="loadAnalytics()">
+      <span style="color:var(--text-muted);">to</span>
+      <input type="date" id="analyticsTo" onchange="loadAnalytics()">
+    </div>
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Ticket Volume</h3>
+        <canvas id="volumeChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Status Breakdown</h3>
+        <canvas id="statusChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Category Breakdown</h3>
+        <canvas id="categoryChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Team Workload</h3>
+        <div id="workloadTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ ARCHIVE TAB ════════════════ -->
+  <div class="tab-panel" id="tab-archive">
+    <div class="table-wrap">
+      <table class="ticket-table">
+        <thead>
+          <tr><th>ID</th><th>Subject</th><th>Category</th><th>Status</th><th>Submitted By</th><th>Created</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="archiveBody"></tbody>
+      </table>
+    </div>
+    <div id="noArchive" class="empty-state" style="display:none;"><p>No archived tickets.</p></div>
+  </div>
+
+  <!-- ════════════════ RECYCLE BIN TAB ════════════════ -->
+  <div class="tab-panel" id="tab-recycle">
+    <div class="table-wrap">
+      <table class="ticket-table">
+        <thead>
+          <tr><th>ID</th><th>Subject</th><th>Category</th><th>Status</th><th>Submitted By</th><th>Created</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="recycleBody"></tbody>
+      </table>
+    </div>
+    <div id="noRecycle" class="empty-state" style="display:none;"><p>Recycle bin is empty.</p></div>
+  </div>
+
+  <!-- ════════════════ HISTORY TAB ════════════════ -->
+  <div class="tab-panel" id="tab-history">
+    <div class="toolbar" style="margin-bottom:12px;">
+      <input type="text" id="historySearch" placeholder="Filter by ticket ID…" oninput="debounceHistory()">
+    </div>
+    <div id="historyList"></div>
+    <div id="noHistory" class="empty-state" style="display:none;"><p>No history entries found.</p></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ════════════════ NEW TICKET MODAL ════════════════ -->
+<div class="modal-overlay" id="newTicketModal">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h2>New WFM Request</h2>
+      <button class="modal-close" onclick="closeModal('newTicketModal')">&times;</button>
+    </div>
+    <div class="form-group">
+      <label>Subject *</label>
+      <input id="ticketSubject" type="text" placeholder="e.g. Schedule change for John Smith — Oct 15">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Category</label>
+        <select id="ticketCategory">
+          <option value="schedule_change">Schedule Change</option>
+          <option value="overtime">Overtime</option>
+          <option value="time_off_exception">Time Off Exception</option>
+          <option value="shift_swap">Shift Swap</option>
+          <option value="headcount">Headcount</option>
+          <option value="forecast_adjustment">Forecast Adjustment</option>
+          <option value="general">General</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <select id="ticketPriority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Affected Agent(s)</label>
+        <input id="ticketAgents" type="text" placeholder="e.g. John Smith, Jane Doe">
+      </div>
+      <div class="form-group">
+        <label>Affected Date</label>
+        <input id="ticketDate" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Description *</label>
+      <textarea id="ticketDescription" rows="5" placeholder="Describe what you need from WFM…"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="submitTicket()" style="width:100%;padding:10px;">Submit Request</button>
   </div>
 </div>
 
-<!-- New Ticket Modal -->
-<div id="newTicketModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="margin:0;font-size:1.2rem;">New WFM Request</h2>
-      <button onclick="closeModal('newTicketModal')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <div>
-        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Subject *</label>
-        <input id="ticketSubject" type="text" placeholder="e.g. Schedule change for John Smith — Oct 15" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);box-sizing:border-box;">
-      </div>
-      <div style="display:flex;gap:12px;">
-        <div style="flex:1;">
-          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Category</label>
-          <select id="ticketCategory" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);">
-            <option value="schedule_change">Schedule Change</option>
-            <option value="overtime">Overtime</option>
-            <option value="time_off_exception">Time Off Exception</option>
-            <option value="shift_swap">Shift Swap</option>
-            <option value="headcount">Headcount</option>
-            <option value="forecast_adjustment">Forecast Adjustment</option>
-            <option value="general">General</option>
-          </select>
-        </div>
-        <div style="flex:1;">
-          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Priority</label>
-          <select id="ticketPriority" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:12px;">
-        <div style="flex:1;">
-          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Affected Agent(s)</label>
-          <input id="ticketAgents" type="text" placeholder="e.g. John Smith, Jane Doe" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);box-sizing:border-box;">
-        </div>
-        <div style="flex:1;">
-          <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Affected Date</label>
-          <input id="ticketDate" type="date" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--bg);color:var(--text-primary);box-sizing:border-box;">
-        </div>
-      </div>
-      <div>
-        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Description *</label>
-        <textarea id="ticketDescription" rows="5" placeholder="Describe what you need from WFM. Include any relevant details like shift times, reasons, etc." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;resize:vertical;background:var(--bg);color:var(--text-primary);box-sizing:border-box;"></textarea>
-      </div>
-      <button onclick="submitTicket()" style="padding:10px 20px;background:var(--brand-accent);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem;">Submit Request</button>
-    </div>
-  </div>
-</div>
-
-<!-- View Ticket Modal -->
-<div id="viewTicketModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 id="viewTicketTitle" style="margin:0;font-size:1.2rem;"></h2>
-      <button onclick="closeModal('viewTicketModal')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+<!-- ════════════════ VIEW TICKET MODAL ════════════════ -->
+<div class="modal-overlay" id="viewTicketModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="viewTicketTitle"></h2>
+      <button class="modal-close" onclick="closeModal('viewTicketModal')">&times;</button>
     </div>
     <div id="viewTicketBody"></div>
   </div>
 </div>
 
-<!-- WFM Access Panel Modal (admin only) -->
-<div id="accessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.2);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="margin:0;font-size:1.2rem;">Manage WFM Access</h2>
-      <button onclick="closeModal('accessModal')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+<!-- ════════════════ ACCESS MANAGEMENT MODAL ════════════════ -->
+<div class="modal-overlay" id="accessModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-header">
+      <h2>Manage WFM Access</h2>
+      <button class="modal-close" onclick="closeModal('accessModal')">&times;</button>
     </div>
     <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px;">Grant the WFM checkmark to team leads so they can submit WFM tickets. Admins and supervisors have access automatically.</p>
     <div id="accessList" style="display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 const isAnalyst = {{ 'true' if is_analyst else 'false' }};
+const analystList = {{ analysts|tojson }};
 
-const priorityColors = {low:'#6b7280',medium:'#2563eb',high:'#d97706',urgent:'#dc2626'};
-const statusColors = {open:'#16a34a',in_progress:'#2563eb',resolved:'#6b7280',closed:'#9ca3af'};
 const categoryLabels = {
-  schedule_change:'Schedule Change', overtime:'Overtime', time_off_exception:'Time Off Exception',
-  shift_swap:'Shift Swap', headcount:'Headcount', forecast_adjustment:'Forecast Adjustment', general:'General'
+  schedule_change:'Schedule Change',overtime:'Overtime',time_off_exception:'Time Off Exception',
+  shift_swap:'Shift Swap',headcount:'Headcount',forecast_adjustment:'Forecast Adjustment',general:'General'
 };
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
-function esc(s){ if(!s)return''; const d=document.createElement('div');d.textContent=s;return d.innerHTML; }
-function openNewTicket(){ document.getElementById('newTicketModal').style.display='flex'; }
-function closeModal(id){ document.getElementById(id).style.display='none'; }
+/* ── Tabs ── */
+document.querySelectorAll('.wfm-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.wfm-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='analytics') loadAnalytics();
+    if(btn.dataset.tab==='archive') loadArchive();
+    if(btn.dataset.tab==='recycle') loadRecycle();
+    if(btn.dataset.tab==='history') loadHistory();
+  });
+});
 
-// ── Load tickets ────────────────────────────────────────────
+/* ── Modals ── */
+function openModal(id){document.getElementById(id).style.display='flex';if(id==='accessModal')loadAccessPanel();}
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+/* ── State ── */
+let currentPage=1, totalTickets=0, perPage=50;
+let sortCol='created_at', sortDir='desc';
+let allTickets=[];
+let refreshTimer=null, refreshCountdown=120;
+let debounceTimer=null;
+
+function debounceLoad(){clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>{currentPage=1;loadTickets();},300);}
+let historyDebounce=null;
+function debounceHistory(){clearTimeout(historyDebounce);historyDebounce=setTimeout(loadHistory,300);}
+
+/* ── Load tickets ── */
 async function loadTickets(){
-  const status = document.getElementById('statusFilter').value;
-  const category = document.getElementById('categoryFilter').value;
-  const resp = await fetch('/wfm-tickets/api/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({status,category})});
-  const data = await resp.json();
-  const list = document.getElementById('ticketList');
-  const empty = document.getElementById('noTickets');
-  if(!data.tickets||!data.tickets.length){ list.innerHTML=''; empty.style.display='block'; return; }
+  const status=document.getElementById('statusFilter').value;
+  const category=document.getElementById('categoryFilter').value;
+  const search=document.getElementById('searchInput').value.trim();
+  const body={status,category,page:currentPage,per_page:perPage};
+  if(search)body.search=search;
+  try{
+    const resp=await fetch('/wfm-tickets/api/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
+    const data=await resp.json();
+    if(!data.success)return;
+    allTickets=data.tickets||[];
+    totalTickets=data.total||0;
+    document.getElementById('dashBadge').textContent=totalTickets;
+    renderTable();
+    resetRefresh();
+  }catch(e){console.error(e);}
+}
+
+function renderTable(){
+  const tbody=document.getElementById('ticketBody');
+  const empty=document.getElementById('noTickets');
+  const pag=document.getElementById('paginationRow');
+
+  // Client-side sort
+  const sorted=[...allTickets].sort((a,b)=>{
+    let va=a[sortCol],vb=b[sortCol];
+    if(sortCol==='age'){va=ageDays(a);vb=ageDays(b);}
+    if(va==null)va='';if(vb==null)vb='';
+    if(typeof va==='string')va=va.toLowerCase();
+    if(typeof vb==='string')vb=vb.toLowerCase();
+    if(va<vb)return sortDir==='asc'?-1:1;
+    if(va>vb)return sortDir==='asc'?1:-1;
+    return 0;
+  });
+
+  if(!sorted.length){tbody.innerHTML='';empty.style.display='block';pag.style.display='none';return;}
   empty.style.display='none';
-  list.innerHTML = data.tickets.map(t=>`
-    <div onclick="viewTicket(${t.id})" style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:.95rem;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">#${t.id} — ${esc(t.subject)}</div>
-        <div style="font-size:.8rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap;">
-          <span>${esc(t.submitter_name)}</span>
-          <span>${categoryLabels[t.category]||t.category}</span>
-          ${t.affected_date ? '<span>📅 '+t.affected_date+'</span>' : ''}
-          <span>${new Date(t.created_at).toLocaleDateString()}</span>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;flex-shrink:0;">
-        <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${priorityColors[t.priority]||'#666'}22;color:${priorityColors[t.priority]||'#666'};">${t.priority}</span>
-        <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${statusColors[t.status]||'#666'}22;color:${statusColors[t.status]||'#666'};">${t.status.replace('_',' ')}</span>
-      </div>
-    </div>
-  `).join('');
-}
 
-// ── Submit new ticket ───────────────────────────────────────
-async function submitTicket(){
-  const subject = document.getElementById('ticketSubject').value.trim();
-  const description = document.getElementById('ticketDescription').value.trim();
-  const category = document.getElementById('ticketCategory').value;
-  const priority = document.getElementById('ticketPriority').value;
-  const affected_agents = document.getElementById('ticketAgents').value.trim();
-  const affected_date = document.getElementById('ticketDate').value;
-  if(!subject||!description){showToast('Subject and description are required','error');return;}
-  const body = {subject,description,category,priority};
-  if(affected_agents) body.affected_agents = affected_agents;
-  if(affected_date) body.affected_date = affected_date;
-  const resp = await fetch('/wfm-tickets/api/tickets/create',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
-  const data = await resp.json();
-  if(data.success){
-    showToast('Request submitted successfully','success');
-    closeModal('newTicketModal');
-    document.getElementById('ticketSubject').value='';
-    document.getElementById('ticketDescription').value='';
-    document.getElementById('ticketAgents').value='';
-    document.getElementById('ticketDate').value='';
-    loadTickets();
-  } else { showToast(data.error||'Failed to submit','error'); }
-}
+  tbody.innerHTML=sorted.map(t=>{
+    const age=ageDays(t);
+    const ageCls=t.status==='closed'||t.status==='resolved'?'age-ok':age>=5?'age-red':age>=3?'age-amber':'age-ok';
+    const created=new Date(t.created_at).toLocaleDateString();
+    let assignCell='';
+    if(isAnalyst){
+      const opts=analystList.map(a=>`<option value="${a.id}" ${t.assigned_to===a.id?'selected':''}>${esc(a.name)}</option>`).join('');
+      assignCell=`<td><select class="quick-assign" onchange="quickAssign(${t.id},this.value)"><option value="">Unassigned</option>${opts}</select></td>`;
+    }
+    let actionCell='';
+    if(isAnalyst){
+      actionCell=`<td style="white-space:nowrap;">
+        <button class="btn btn-outline" style="padding:3px 8px;font-size:.75rem;" onclick="event.stopPropagation();archiveTicket(${t.id})">Archive</button>
+        <button class="btn btn-outline" style="padding:3px 8px;font-size:.75rem;color:#dc2626;border-color:#dc262644;" onclick="event.stopPropagation();deleteTicket(${t.id})">Delete</button>
+      </td>`;
+    }
+    return `<tr class="clickable" onclick="viewTicket(${t.id})">
+      <td>#${t.id}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.subject)}</td>
+      <td>${categoryLabels[t.category]||t.category}</td>
+      <td><span class="pill pill-${t.priority}">${t.priority}</span></td>
+      <td><span class="pill pill-${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${esc(t.submitter_name)}</td>
+      <td>${created}</td>
+      <td class="${ageCls}">${age}d</td>
+      ${assignCell}${actionCell}
+    </tr>`;
+  }).join('');
 
-// ── View ticket detail ──────────────────────────────────────
-async function viewTicket(id){
-  const resp = await fetch('/wfm-tickets/api/tickets/'+id,{headers:{'X-CSRFToken':csrfToken}});
-  const data = await resp.json();
-  if(!data.success) return;
-  const t = data.ticket;
-  const comments = data.comments||[];
-  document.getElementById('viewTicketTitle').textContent = '#'+t.id+' — '+t.subject;
-
-  let html = `
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${statusColors[t.status]||'#666'}22;color:${statusColors[t.status]||'#666'};">${t.status.replace('_',' ')}</span>
-      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:${priorityColors[t.priority]||'#666'}22;color:${priorityColors[t.priority]||'#666'};">${t.priority}</span>
-      <span style="padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:600;background:var(--bg);color:var(--text-muted);">${categoryLabels[t.category]||t.category}</span>
-    </div>
-    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;">
-      Submitted by <strong>${esc(t.submitter_name)}</strong> on ${new Date(t.created_at).toLocaleString()}
-      ${t.assignee_name ? ' · Assigned to <strong>'+esc(t.assignee_name)+'</strong>' : ''}
-    </div>`;
-
-  // Affected agents / date info
-  if(t.affected_agents || t.affected_date){
-    html += `<div style="display:flex;gap:16px;margin-bottom:12px;font-size:.85rem;flex-wrap:wrap;">`;
-    if(t.affected_agents) html += `<div><strong>Affected:</strong> ${esc(t.affected_agents)}</div>`;
-    if(t.affected_date) html += `<div><strong>Date:</strong> ${t.affected_date}</div>`;
-    html += `</div>`;
+  // Pagination
+  const totalPages=Math.ceil(totalTickets/perPage);
+  if(totalPages>1){
+    pag.style.display='flex';
+    document.getElementById('pageInfo').textContent=`Page ${currentPage} of ${totalPages} (${totalTickets} tickets)`;
+    document.getElementById('prevBtn').disabled=currentPage<=1;
+    document.getElementById('nextBtn').disabled=currentPage>=totalPages;
+  }else{
+    pag.style.display=totalTickets>0?'flex':'none';
+    document.getElementById('pageInfo').textContent=`${totalTickets} ticket${totalTickets!==1?'s':''}`;
+    document.getElementById('prevBtn').disabled=true;
+    document.getElementById('nextBtn').disabled=true;
   }
 
-  html += `<div style="padding:12px;background:var(--bg);border-radius:8px;font-size:.9rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;">${esc(t.description)}</div>`;
+  // Update sort arrows
+  document.querySelectorAll('.ticket-table th').forEach(th=>{
+    th.classList.toggle('sorted',th.dataset.col===sortCol);
+    const arrow=th.querySelector('.sort-arrow');
+    if(arrow)arrow.textContent=th.dataset.col===sortCol?(sortDir==='asc'?'▴':'▾'):'▾';
+  });
+}
+
+function ageDays(t){
+  const created=new Date(t.created_at);
+  const now=new Date();
+  return Math.floor((now-created)/(1000*60*60*24));
+}
+
+function sortTable(col){
+  if(sortCol===col)sortDir=sortDir==='asc'?'desc':'asc';
+  else{sortCol=col;sortDir=col==='created_at'?'desc':'asc';}
+  renderTable();
+}
+
+function changePage(delta){currentPage+=delta;loadTickets();}
+
+/* ── Auto-refresh ── */
+function resetRefresh(){
+  refreshCountdown=120;
+  clearInterval(refreshTimer);
+  refreshTimer=setInterval(()=>{
+    refreshCountdown--;
+    const el=document.getElementById('refreshCountdown');
+    if(el)el.textContent=`Auto-refresh in ${refreshCountdown}s`;
+    if(refreshCountdown<=0){loadTickets();}
+  },1000);
+}
+
+/* ── Quick assign ── */
+async function quickAssign(ticketId,assigneeId){
+  const resp=await fetch('/wfm-tickets/api/tickets/quick-assign',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:ticketId,assigned_to:assigneeId||null})});
+  const data=await resp.json();
+  if(data.success)showToast('Assigned','success');
+  else showToast(data.error||'Failed','error');
+}
+
+/* ── Archive / Delete ── */
+async function archiveTicket(id){
+  if(!confirm('Archive this ticket?'))return;
+  const resp=await fetch('/wfm-tickets/api/tickets/archive',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:id})});
+  const data=await resp.json();
+  if(data.success){showToast('Ticket archived','success');loadTickets();}
+  else showToast(data.error||'Failed','error');
+}
+async function deleteTicket(id){
+  if(!confirm('Move this ticket to recycle bin?'))return;
+  const resp=await fetch('/wfm-tickets/api/tickets/delete',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:id})});
+  const data=await resp.json();
+  if(data.success){showToast('Ticket moved to recycle bin','success');loadTickets();}
+  else showToast(data.error||'Failed','error');
+}
+async function restoreTicket(id){
+  const resp=await fetch('/wfm-tickets/api/tickets/restore',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:id})});
+  const data=await resp.json();
+  if(data.success){showToast('Ticket restored','success');loadArchive();loadRecycle();loadTickets();}
+  else showToast(data.error||'Failed','error');
+}
+async function permanentDelete(id){
+  if(!confirm('Permanently delete this ticket? This cannot be undone.'))return;
+  const resp=await fetch('/wfm-tickets/api/tickets/permanent-delete',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:id})});
+  const data=await resp.json();
+  if(data.success){showToast('Ticket permanently deleted','success');loadRecycle();}
+  else showToast(data.error||'Failed','error');
+}
+
+/* ── Submit ticket ── */
+async function submitTicket(){
+  const subject=document.getElementById('ticketSubject').value.trim();
+  const description=document.getElementById('ticketDescription').value.trim();
+  const category=document.getElementById('ticketCategory').value;
+  const priority=document.getElementById('ticketPriority').value;
+  const affected_agents=document.getElementById('ticketAgents').value.trim();
+  const affected_date=document.getElementById('ticketDate').value;
+  if(!subject||!description){showToast('Subject and description are required','error');return;}
+  const body={subject,description,category,priority};
+  if(affected_agents)body.affected_agents=affected_agents;
+  if(affected_date)body.affected_date=affected_date;
+  const resp=await fetch('/wfm-tickets/api/tickets/create',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
+  const data=await resp.json();
+  if(data.success){
+    showToast('Request submitted','success');
+    closeModal('newTicketModal');
+    ['ticketSubject','ticketDescription','ticketAgents','ticketDate'].forEach(id=>document.getElementById(id).value='');
+    loadTickets();
+  }else showToast(data.error||'Failed','error');
+}
+
+/* ── View ticket detail ── */
+async function viewTicket(id){
+  const resp=await fetch('/wfm-tickets/api/tickets/'+id,{headers:{'X-CSRFToken':csrfToken}});
+  const data=await resp.json();
+  if(!data.success)return;
+  const t=data.ticket;
+  const comments=data.comments||[];
+  document.getElementById('viewTicketTitle').textContent='#'+t.id+' — '+t.subject;
+
+  let html=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <span class="pill pill-${t.status}">${t.status.replace('_',' ')}</span>
+    <span class="pill pill-${t.priority}">${t.priority}</span>
+    <span class="pill" style="background:var(--bg);color:var(--text-muted);">${categoryLabels[t.category]||t.category}</span>
+  </div>
+  <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;">
+    Submitted by <strong>${esc(t.submitter_name)}</strong> on ${new Date(t.created_at).toLocaleString()}
+    ${t.assignee_name?' · Assigned to <strong>'+esc(t.assignee_name)+'</strong>':''}
+    ${t.closed_at?' · Closed '+new Date(t.closed_at).toLocaleString():''}
+  </div>`;
+
+  if(t.affected_agents||t.affected_date){
+    html+=`<div style="display:flex;gap:16px;margin-bottom:12px;font-size:.85rem;flex-wrap:wrap;">`;
+    if(t.affected_agents)html+=`<div><strong>Affected:</strong> ${esc(t.affected_agents)}</div>`;
+    if(t.affected_date)html+=`<div><strong>Date:</strong> ${t.affected_date}</div>`;
+    html+=`</div>`;
+  }
+
+  html+=`<div style="padding:12px;background:var(--bg);border-radius:8px;font-size:.9rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;">${esc(t.description)}</div>`;
 
   if(t.resolution){
-    html += `<div style="padding:12px;background:#16a34a11;border:1px solid #16a34a33;border-radius:8px;font-size:.9rem;margin-bottom:16px;">
+    html+=`<div style="padding:12px;background:#16a34a11;border:1px solid #16a34a33;border-radius:8px;font-size:.9rem;margin-bottom:16px;">
       <strong style="color:#16a34a;">Resolution:</strong><br>${esc(t.resolution)}</div>`;
   }
 
-  // Analyst controls
   if(isAnalyst){
-    html += `<div style="padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px;border:1px solid var(--border);">
+    const assignOpts=analystList.map(a=>`<option value="${a.id}" ${t.assigned_to===a.id?'selected':''}>${esc(a.name)}</option>`).join('');
+    html+=`<div style="padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px;border:1px solid var(--border);">
       <h4 style="margin:0 0 10px;font-size:.85rem;color:var(--text-muted);">WFM Analyst Controls</h4>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <select id="analystStatus" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
@@ -249,100 +615,285 @@ async function viewTicket(id){
           <option value="high" ${t.priority==='high'?'selected':''}>High</option>
           <option value="urgent" ${t.priority==='urgent'?'selected':''}>Urgent</option>
         </select>
-        <button onclick="updateTicketAnalyst(${t.id})" style="padding:6px 14px;background:var(--brand-accent);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;">Update</button>
+        <select id="analystAssign" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
+          <option value="">Unassigned</option>${assignOpts}
+        </select>
+        <button onclick="updateTicketAnalyst(${t.id})" class="btn btn-primary" style="padding:6px 14px;font-size:.82rem;">Update</button>
       </div>
-      <div style="margin-bottom:10px;">
-        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Resolution Note</label>
-        <textarea id="analystResolution" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:var(--surface);color:var(--text-primary);box-sizing:border-box;">${esc(t.resolution||'')}</textarea>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label>Resolution Note</label>
+        <textarea id="analystResolution" rows="2" style="font-size:.85rem;">${esc(t.resolution||'')}</textarea>
       </div>
-      <div>
-        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;">Internal Note (WFM only — not visible to submitter)</label>
-        <textarea id="analystInternal" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:#fef9c311;color:var(--text-primary);box-sizing:border-box;border-color:#d9760633;">${esc(t.internal_note||'')}</textarea>
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Internal Note (WFM only)</label>
+        <textarea id="analystInternal" rows="2" style="font-size:.85rem;background:#fef9c311;border-color:#d9760633;">${esc(t.internal_note||'')}</textarea>
       </div>
     </div>`;
   }
 
   // Comments
-  html += `<h3 style="font-size:.95rem;margin:16px 0 8px;">Comments</h3>`;
+  html+=`<h3 style="font-size:.95rem;margin:16px 0 8px;">Comments</h3>`;
   if(comments.length){
-    html += comments.map(c=>{
-      const internalBadge = c.is_internal ? ' <span style="font-size:.7rem;padding:1px 6px;background:#d9760622;color:#d97706;border-radius:4px;font-weight:600;">INTERNAL</span>' : '';
+    html+=comments.map(c=>{
+      const ib=c.is_internal?' <span style="font-size:.7rem;padding:1px 6px;background:#d9760622;color:#d97706;border-radius:4px;font-weight:600;">INTERNAL</span>':'';
       return `<div style="padding:10px 12px;background:${c.is_internal?'#fef9c311':'var(--bg)'};border-radius:8px;margin-bottom:8px;${c.is_internal?'border:1px dashed #d9760633;':''}">
-        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px;"><strong>${esc(c.user_name)}</strong> · ${new Date(c.created_at).toLocaleString()}${internalBadge}</div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px;"><strong>${esc(c.user_name)}</strong> · ${new Date(c.created_at).toLocaleString()}${ib}</div>
         <div style="font-size:.88rem;white-space:pre-wrap;">${esc(c.body)}</div>
       </div>`;
     }).join('');
-  } else { html += `<p style="color:var(--text-muted);font-size:.85rem;">No comments yet.</p>`; }
+  }else html+=`<p style="color:var(--text-muted);font-size:.85rem;">No comments yet.</p>`;
 
-  html += `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+  html+=`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
     <textarea id="commentBody" rows="2" placeholder="Add a comment…" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:var(--bg);color:var(--text-primary);"></textarea>
     <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-end;">
-      ${isAnalyst ? '<label style="font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="commentInternal"> Internal only</label>' : ''}
-      <button onclick="addComment(${t.id})" style="padding:8px 14px;background:var(--brand-accent);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:.85rem;">Send</button>
+      ${isAnalyst?'<label style="font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="commentInternal"> Internal only</label>':''}
+      <button onclick="addComment(${t.id})" class="btn btn-primary" style="padding:8px 14px;font-size:.85rem;">Send</button>
     </div>
   </div>`;
 
-  document.getElementById('viewTicketBody').innerHTML = html;
+  document.getElementById('viewTicketBody').innerHTML=html;
   document.getElementById('viewTicketModal').style.display='flex';
 }
 
-// ── Analyst: update ticket ──────────────────────────────────
 async function updateTicketAnalyst(id){
-  const status = document.getElementById('analystStatus').value;
-  const priority = document.getElementById('analystPriority').value;
-  const resolution = document.getElementById('analystResolution').value.trim();
-  const internal_note = document.getElementById('analystInternal').value.trim();
-  const resp = await fetch('/wfm-tickets/api/tickets/update',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({id,status,priority,resolution,internal_note})});
-  const data = await resp.json();
+  const body={
+    id,
+    status:document.getElementById('analystStatus').value,
+    priority:document.getElementById('analystPriority').value,
+    assigned_to:document.getElementById('analystAssign').value||null,
+    resolution:document.getElementById('analystResolution').value.trim(),
+    internal_note:document.getElementById('analystInternal').value.trim()
+  };
+  const resp=await fetch('/wfm-tickets/api/tickets/update',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
+  const data=await resp.json();
   if(data.success){showToast('Ticket updated','success');viewTicket(id);loadTickets();}
   else showToast(data.error||'Update failed','error');
 }
 
-// ── Add comment ─────────────────────────────────────────────
 async function addComment(ticketId){
-  const body = document.getElementById('commentBody').value.trim();
+  const body=document.getElementById('commentBody').value.trim();
   if(!body){showToast('Comment cannot be empty','error');return;}
-  const internalEl = document.getElementById('commentInternal');
-  const is_internal = internalEl ? internalEl.checked : false;
-  const resp = await fetch('/wfm-tickets/api/tickets/comment',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:ticketId,body,is_internal})});
-  const data = await resp.json();
+  const intEl=document.getElementById('commentInternal');
+  const is_internal=intEl?intEl.checked:false;
+  const resp=await fetch('/wfm-tickets/api/tickets/comment',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({ticket_id:ticketId,body,is_internal})});
+  const data=await resp.json();
   if(data.success){showToast('Comment added','success');viewTicket(ticketId);}
   else showToast(data.error||'Failed','error');
 }
 
-// ── WFM Access Management (admin only) ──────────────────────
-async function openAccessPanel(){
-  document.getElementById('accessModal').style.display='flex';
-  const resp = await fetch('/wfm-tickets/api/users/wfm-list',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:'{}'});
-  const data = await resp.json();
-  if(!data.success) return;
-  const list = document.getElementById('accessList');
-  list.innerHTML = data.users.map(u=>{
-    const autoAccess = u.role === 'admin' || u.role === 'supervisor';
-    const badge = autoAccess ? '<span style="font-size:.7rem;padding:1px 6px;background:var(--brand-accent)22;color:var(--brand-accent);border-radius:4px;font-weight:600;">'+u.role+'</span>' : '';
-    const toggle = autoAccess
-      ? '<span style="font-size:.75rem;color:var(--text-muted);">Auto</span>'
-      : `<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
-          <input type="checkbox" ${u.wfm_access?'checked':''} onchange="toggleAccess(${u.id},this.checked)" style="cursor:pointer;">
-          <span style="font-size:.75rem;color:var(--text-muted);">WFM</span>
-        </label>`;
+/* ── CSV Download ── */
+function downloadCSV(){window.location.href='/wfm-tickets/api/tickets/download-csv';}
+
+/* ── Analytics ── */
+let volumeChartInst=null, statusChartInst=null, categoryChartInst=null;
+
+function setRange(days,btn){
+  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const to=new Date();
+  const toStr=to.toISOString().slice(0,10);
+  document.getElementById('analyticsTo').value=toStr;
+  if(days>0){
+    const from=new Date(to);from.setDate(from.getDate()-days);
+    document.getElementById('analyticsFrom').value=from.toISOString().slice(0,10);
+  }else{
+    document.getElementById('analyticsFrom').value='';
+  }
+  loadAnalytics();
+}
+
+async function loadAnalytics(){
+  const from=document.getElementById('analyticsFrom').value;
+  const to=document.getElementById('analyticsTo').value;
+  const body={};if(from)body.from=from;if(to)body.to=to;
+  try{
+    const resp=await fetch('/wfm-tickets/api/tickets/analytics',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
+    const data=await resp.json();
+    if(!data.success)return;
+    const a=data.analytics;
+    renderKPIs(a);
+    renderVolumeChart(a.volume_by_day);
+    renderStatusChart(a.status);
+    renderCategoryChart(a.category_breakdown);
+    renderWorkload(a.workload);
+  }catch(e){console.error(e);}
+}
+
+function renderKPIs(a){
+  const kpis=[
+    {val:a.total,lbl:'Total Tickets'},
+    {val:a.status.open,lbl:'Open'},
+    {val:a.status.in_progress,lbl:'In Progress'},
+    {val:a.status.resolved+a.status.closed,lbl:'Resolved/Closed'},
+    {val:a.closure_rate+'%',lbl:'Closure Rate'},
+    {val:a.avg_resolution_hours!=null?a.avg_resolution_hours+'h':'—',lbl:'Avg Resolution'},
+    {val:a.top_request_type?(categoryLabels[a.top_request_type]||a.top_request_type):'—',lbl:'Top Category'},
+  ];
+  document.getElementById('kpiRow').innerHTML=kpis.map(k=>`<div class="kpi"><div class="val">${k.val}</div><div class="lbl">${k.lbl}</div></div>`).join('');
+}
+
+function renderVolumeChart(volumeByDay){
+  const labels=Object.keys(volumeByDay);
+  const values=Object.values(volumeByDay);
+  // 7-day moving average
+  const ma=values.map((_,i)=>{
+    const start=Math.max(0,i-6);
+    const slice=values.slice(start,i+1);
+    return Math.round(slice.reduce((s,v)=>s+v,0)/slice.length*10)/10;
+  });
+  if(volumeChartInst)volumeChartInst.destroy();
+  volumeChartInst=new Chart(document.getElementById('volumeChart'),{
+    type:'line',
+    data:{labels:labels.map(d=>d.slice(5)),datasets:[
+      {label:'Daily Volume',data:values,borderColor:'#2563eb',backgroundColor:'#2563eb22',fill:true,tension:.3,pointRadius:2},
+      {label:'7-day Avg',data:ma,borderColor:'#d97706',borderDash:[5,3],pointRadius:0,tension:.3}
+    ]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+}
+
+function renderStatusChart(status){
+  const labels=['Open','In Progress','Resolved','Closed'];
+  const values=[status.open,status.in_progress,status.resolved,status.closed];
+  const colors=['#16a34a','#2563eb','#6b7280','#9ca3af'];
+  if(statusChartInst)statusChartInst.destroy();
+  statusChartInst=new Chart(document.getElementById('statusChart'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:0}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}
+  });
+}
+
+function renderCategoryChart(cats){
+  const labels=Object.keys(cats).map(c=>categoryLabels[c]||c);
+  const openVals=Object.values(cats).map(v=>v.open);
+  const closedVals=Object.values(cats).map(v=>v.closed);
+  if(categoryChartInst)categoryChartInst.destroy();
+  categoryChartInst=new Chart(document.getElementById('categoryChart'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Open',data:openVals,backgroundColor:'#2563eb'},
+      {label:'Closed',data:closedVals,backgroundColor:'#9ca3af'}
+    ]},
+    options:{responsive:true,indexAxis:'y',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,beginAtZero:true},y:{stacked:true}}}
+  });
+}
+
+function renderWorkload(workload){
+  const el=document.getElementById('workloadTable');
+  const names=Object.keys(workload);
+  if(!names.length){el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;">No assigned tickets.</p>';return;}
+  let html=`<table class="workload-table"><thead><tr><th>Analyst</th><th>Open</th><th>In Progress</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead><tbody>`;
+  names.forEach(n=>{
+    const w=workload[n];
+    const total=w.open+w.in_progress+w.resolved+w.closed;
+    html+=`<tr><td><strong>${esc(n)}</strong></td><td>${w.open}</td><td>${w.in_progress}</td><td>${w.resolved}</td><td>${w.closed}</td><td>${total}</td></tr>`;
+  });
+  html+=`</tbody></table>`;
+  el.innerHTML=html;
+}
+
+/* ── Archive tab ── */
+async function loadArchive(){
+  const resp=await fetch('/wfm-tickets/api/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({archived:true,status:'all'})});
+  const data=await resp.json();
+  const tickets=data.tickets||[];
+  const tbody=document.getElementById('archiveBody');
+  const empty=document.getElementById('noArchive');
+  if(!tickets.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=tickets.map(t=>`<tr>
+    <td>#${t.id}</td><td>${esc(t.subject)}</td><td>${categoryLabels[t.category]||t.category}</td>
+    <td><span class="pill pill-${t.status}">${t.status.replace('_',' ')}</span></td>
+    <td>${esc(t.submitter_name)}</td><td>${new Date(t.created_at).toLocaleDateString()}</td>
+    <td><button class="btn btn-outline" style="padding:3px 8px;font-size:.75rem;" onclick="restoreTicket(${t.id})">Restore</button></td>
+  </tr>`).join('');
+}
+
+/* ── Recycle Bin tab ── */
+async function loadRecycle(){
+  const resp=await fetch('/wfm-tickets/api/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({deleted:true,status:'all'})});
+  const data=await resp.json();
+  const tickets=data.tickets||[];
+  const tbody=document.getElementById('recycleBody');
+  const empty=document.getElementById('noRecycle');
+  if(!tickets.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=tickets.map(t=>`<tr>
+    <td>#${t.id}</td><td>${esc(t.subject)}</td><td>${categoryLabels[t.category]||t.category}</td>
+    <td><span class="pill pill-${t.status}">${t.status.replace('_',' ')}</span></td>
+    <td>${esc(t.submitter_name)}</td><td>${new Date(t.created_at).toLocaleDateString()}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-outline" style="padding:3px 8px;font-size:.75rem;" onclick="restoreTicket(${t.id})">Restore</button>
+      <button class="btn btn-outline" style="padding:3px 8px;font-size:.75rem;color:#dc2626;border-color:#dc262644;" onclick="permanentDelete(${t.id})">Perm. Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+/* ── History tab ── */
+async function loadHistory(){
+  const searchVal=(document.getElementById('historySearch')||{}).value||'';
+  const body={limit:500};
+  if(searchVal.trim()){
+    const num=parseInt(searchVal.trim().replace('#',''));
+    if(!isNaN(num))body.ticket_id=num;
+  }
+  const resp=await fetch('/wfm-tickets/api/tickets/history',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
+  const data=await resp.json();
+  const entries=data.history||[];
+  const el=document.getElementById('historyList');
+  const empty=document.getElementById('noHistory');
+  if(!entries.length){el.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  const actionLabels={created:'Created',status_change:'Status Changed',priority_change:'Priority Changed',assigned:'Assigned',archived:'Archived',restored:'Restored',deleted:'Deleted',commented:'Commented'};
+  el.innerHTML=entries.map(e=>{
+    let detail='';
+    if(e.field&&(e.old_value||e.new_value)){
+      detail=` — <strong>${e.field}</strong>: ${esc(e.old_value||'—')} → ${esc(e.new_value||'—')}`;
+    }
+    return `<div class="history-entry">
+      <div class="meta">Ticket #${e.ticket_id} · ${new Date(e.created_at).toLocaleString()} · ${esc(e.user_name||'System')}</div>
+      <div><strong>${actionLabels[e.action]||e.action}</strong>${detail}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Access Panel ── */
+async function loadAccessPanel(){
+  const resp=await fetch('/wfm-tickets/api/users/wfm-list',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:'{}'});
+  const data=await resp.json();
+  if(!data.success)return;
+  document.getElementById('accessList').innerHTML=data.users.map(u=>{
+    const auto=u.role==='admin'||u.role==='supervisor';
+    const badge=auto?` <span style="font-size:.7rem;padding:1px 6px;background:var(--brand-accent)22;color:var(--brand-accent);border-radius:4px;font-weight:600;">${u.role}</span>`:'';
+    const toggle=auto?'<span style="font-size:.75rem;color:var(--text-muted);">Auto</span>'
+      :`<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+         <input type="checkbox" ${u.wfm_access?'checked':''} onchange="toggleAccess(${u.id},this.checked)" style="cursor:pointer;">
+         <span style="font-size:.75rem;color:var(--text-muted);">WFM</span>
+       </label>`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;background:var(--bg);">
-      <div>
-        <span style="font-weight:600;font-size:.9rem;">${esc(u.display_name)}</span> ${badge}
-        <div style="font-size:.75rem;color:var(--text-muted);">${esc(u.email)}</div>
-      </div>
+      <div><span style="font-weight:600;font-size:.9rem;">${esc(u.display_name)}</span>${badge}
+        <div style="font-size:.75rem;color:var(--text-muted);">${esc(u.email)}</div></div>
       ${toggle}
     </div>`;
   }).join('');
 }
 
-async function toggleAccess(userId, grant){
-  const resp = await fetch('/wfm-tickets/api/users/wfm-access',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({user_id:userId,grant})});
-  const data = await resp.json();
-  if(data.success) showToast(grant?'WFM access granted':'WFM access revoked','success');
+async function toggleAccess(userId,grant){
+  const resp=await fetch('/wfm-tickets/api/users/wfm-access',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({user_id:userId,grant})});
+  const data=await resp.json();
+  if(data.success)showToast(grant?'WFM access granted':'WFM access revoked','success');
   else showToast(data.error||'Failed','error');
 }
 
+/* ── Init ── */
 loadTickets();
+// Set default analytics range to 7 days
+(function(){
+  const to=new Date();
+  document.getElementById('analyticsTo') && (document.getElementById('analyticsTo').value=to.toISOString().slice(0,10));
+  const from=new Date(to);from.setDate(from.getDate()-7);
+  document.getElementById('analyticsFrom') && (document.getElementById('analyticsFrom').value=from.toISOString().slice(0,10));
+})();
 </script>
 {% endblock %}

@@ -2265,14 +2265,19 @@ class WfmTicket(db.Model):
     affected_date   = db.Column(db.Date, nullable=True)   # date the request applies to
     resolution   = db.Column(db.Text, nullable=True)
     internal_note = db.Column(db.Text, nullable=True)     # WFM-only internal notes
+    closed_at    = db.Column(db.DateTime, nullable=True)
+    closed_by    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    is_archived  = db.Column(db.Boolean, default=False, nullable=False)
+    is_deleted   = db.Column(db.Boolean, default=False, nullable=False)
     created_at   = db.Column(db.DateTime, default=_utcnow)
     updated_at   = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
-    submitter = db.relationship("User", foreign_keys=[submitted_by], backref="wfm_tickets_submitted")
-    assignee  = db.relationship("User", foreign_keys=[assigned_to], backref="wfm_tickets_assigned")
+    submitter  = db.relationship("User", foreign_keys=[submitted_by], backref="wfm_tickets_submitted")
+    assignee   = db.relationship("User", foreign_keys=[assigned_to], backref="wfm_tickets_assigned")
+    closer     = db.relationship("User", foreign_keys=[closed_by])
 
-    def to_dict(self):
-        return {
+    def to_dict(self, strip_internal=False):
+        d = {
             "id": self.id,
             "subject": self.subject,
             "description": self.description,
@@ -2287,9 +2292,15 @@ class WfmTicket(db.Model):
             "affected_date": self.affected_date.isoformat() if self.affected_date else None,
             "resolution": self.resolution,
             "internal_note": self.internal_note,
+            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
+            "closed_by_name": self.closer.display_name if self.closer else None,
+            "is_archived": self.is_archived,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if strip_internal:
+            d.pop("internal_note", None)
+        return d
 
 
 class WfmTicketComment(db.Model):
@@ -2315,5 +2326,35 @@ class WfmTicketComment(db.Model):
             "user_name": self.user.display_name if self.user else "Unknown",
             "body": self.body,
             "is_internal": self.is_internal,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WfmTicketHistory(db.Model):
+    """Audit log of changes to WFM tickets."""
+    __tablename__ = "wfm_ticket_history"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    ticket_id  = db.Column(db.Integer, db.ForeignKey("wfm_tickets.id", ondelete="CASCADE"),
+                           nullable=False, index=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    action     = db.Column(db.String(50), nullable=False)  # created, status_change, assigned, archived, restored, etc.
+    field      = db.Column(db.String(50), nullable=True)
+    old_value  = db.Column(db.Text, nullable=True)
+    new_value  = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    ticket = db.relationship("WfmTicket", backref=db.backref("history", order_by="WfmTicketHistory.created_at.desc()"))
+    user   = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticket_id": self.ticket_id,
+            "user_name": self.user.display_name if self.user else "Unknown",
+            "action": self.action,
+            "field": self.field,
+            "old_value": self.old_value,
+            "new_value": self.new_value,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
