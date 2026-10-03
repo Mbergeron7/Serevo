@@ -109,7 +109,9 @@ def upload():
 
     filename = file.filename.lower()
     try:
-        if filename.endswith((".xlsx", ".xls")):
+        if filename.endswith(".xls") and not filename.endswith(".xlsx"):
+            return jsonify({"success": False, "error": "Legacy .xls format is not supported. Please save as .xlsx or .csv."})
+        if filename.endswith(".xlsx"):
             rows = _parse_excel(file)
         elif filename.endswith(".csv"):
             rows = _parse_csv(file)
@@ -151,9 +153,17 @@ def _find_col(headers, target):
 
 
 def _get_val(row, target):
-    """Get a value from a row dict, case-insensitive."""
+    """Get a value from a row dict, case-insensitive. Normalises Excel types."""
     for k, v in row.items():
         if k.strip().lower().replace("_", " ") == target.lower().replace("_", " "):
+            if v is None or v == "":
+                return ""
+            # Excel datetime cells → ISO string
+            if isinstance(v, datetime):
+                return v.strftime("%Y-%m-%d %H:%M:%S")
+            # Excel numeric cells → drop trailing .0 for IDs
+            if isinstance(v, float) and v == int(v):
+                return str(int(v))
             return str(v).strip()
     return ""
 
@@ -285,29 +295,27 @@ def _import_employees(rows):
         unit = _get_or_create_unit(lob) if lob else None
 
         existing = Employee.query.filter_by(employee_id=emp_id).first()
-        if existing:
-            existing.first_name = first
-            existing.last_name = last
-            existing.status = _get_val(row, "Status") or "Active"
-            existing.planning_unit_id = unit.id if unit else existing.planning_unit_id
-            existing.all_skills = _get_val(row, "All Skills") or existing.all_skills
-        else:
-            emp = Employee(
-                employee_id=emp_id,
-                first_name=first,
-                last_name=last,
-                status=_get_val(row, "Status") or "Active",
-                planning_unit_id=unit.id if unit else None,
-                all_skills=_get_val(row, "All Skills"),
-            )
-            # Parse dates
-            for field, attr in [("Skill Start", "skill_start"), ("Skill End", "skill_end"), ("End Date", "end_date")]:
-                val = _get_val(row, field)
-                if val:
-                    try:
-                        setattr(emp, attr, datetime.strptime(val[:10], "%Y-%m-%d").date())
-                    except ValueError:
-                        pass
+        emp = existing or Employee(employee_id=emp_id)
+        emp.first_name = first
+        emp.last_name = last
+        status_val = _get_val(row, "Status")
+        if status_val:
+            emp.status = status_val
+        elif not existing:
+            emp.status = "Active"
+        if unit:
+            emp.planning_unit_id = unit.id
+        skills_val = _get_val(row, "All Skills")
+        if skills_val:
+            emp.all_skills = skills_val
+        # Parse dates for both new and existing
+        for field, attr in [("Skill Start", "skill_start"), ("Skill End", "skill_end"), ("End Date", "end_date")]:
+            val = _get_val(row, field)
+            if val:
+                ts = _parse_ts(val)
+                if ts:
+                    setattr(emp, attr, ts.date())
+        if not existing:
             db.session.add(emp)
         imported += 1
 
@@ -316,68 +324,57 @@ def _import_employees(rows):
 
 
 def _import_forecast(rows):
+    """Forecast intervals. Upserts on (LOB, Timestamp)."""
     from app.models import db, ForecastInterval
     imported, skipped = 0, 0
     errors = []
     for i, row in enumerate(rows, start=2):
         ts_str  = _get_val(row, "Timestamp")
         lob     = _get_val(row, "LOB")
-        offered = _get_val(row, "Offered")
-        aht     = _get_val(row, "AHT")
         if not ts_str or not lob:
             skipped += 1
             continue
         unit = _get_or_create_unit(lob)
-        try:
-            ts = datetime.strptime(ts_str[:16], "%Y-%m-%d %H:%M")
-        except ValueError:
-            try:
-                ts = datetime.strptime(ts_str[:10], "%Y-%m-%d")
-            except ValueError:
-                skipped += 1
-                errors.append(f"Row {i}: bad timestamp '{ts_str}'")
-                continue
-        fi = ForecastInterval(
-            planning_unit_id=unit.id,
-            timestamp=ts,
-            offered=float(offered or 0),
-            aht=float(aht or 0),
-            source="upload",
-        )
-        db.session.add(fi)
+        ts = _parse_ts(ts_str)
+        if not ts:
+            skipped += 1
+            errors.append(f"Row {i}: bad timestamp '{ts_str}'")
+            continue
+        rec = ForecastInterval.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
+        if not rec:
+            rec = ForecastInterval(planning_unit_id=unit.id, timestamp=ts, source="upload")
+            db.session.add(rec)
+        rec.offered = _num(_get_val(row, "Offered"))
+        rec.aht = _num(_get_val(row, "AHT"))
+        rec.source = "upload"
         imported += 1
     db.session.flush()
     return imported, skipped, errors
 
 
 def _import_requirements(rows):
+    """Requirement intervals. Upserts on (LOB, Timestamp)."""
     from app.models import db, RequirementInterval
     imported, skipped = 0, 0
     errors = []
     for i, row in enumerate(rows, start=2):
         ts_str = _get_val(row, "Timestamp")
         lob    = _get_val(row, "LOB")
-        agents = _get_val(row, "Agents Required")
         if not ts_str or not lob:
             skipped += 1
             continue
         unit = _get_or_create_unit(lob)
-        try:
-            ts = datetime.strptime(ts_str[:16], "%Y-%m-%d %H:%M")
-        except ValueError:
-            try:
-                ts = datetime.strptime(ts_str[:10], "%Y-%m-%d")
-            except ValueError:
-                skipped += 1
-                errors.append(f"Row {i}: bad timestamp '{ts_str}'")
-                continue
-        ri = RequirementInterval(
-            planning_unit_id=unit.id,
-            timestamp=ts,
-            agents_required=float(agents or 0),
-            source="upload",
-        )
-        db.session.add(ri)
+        ts = _parse_ts(ts_str)
+        if not ts:
+            skipped += 1
+            errors.append(f"Row {i}: bad timestamp '{ts_str}'")
+            continue
+        rec = RequirementInterval.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
+        if not rec:
+            rec = RequirementInterval(planning_unit_id=unit.id, timestamp=ts, source="upload")
+            db.session.add(rec)
+        rec.agents_required = _num(_get_val(row, "Agents Required"))
+        rec.source = "upload"
         imported += 1
     db.session.flush()
     return imported, skipped, errors
@@ -410,9 +407,15 @@ def _import_accommodations(rows):
             val = _get_val(row, day)
             if val:
                 setattr(accom, day.lower(), val)
-        accom.shift_start = _get_val(row, "Shift Start")
-        accom.shift_end = _get_val(row, "Shift End")
-        accom.notes = _get_val(row, "Notes")
+        ss = _get_val(row, "Shift Start")
+        if ss:
+            accom.shift_start = ss
+        se = _get_val(row, "Shift End")
+        if se:
+            accom.shift_end = se
+        notes = _get_val(row, "Notes")
+        if notes:
+            accom.notes = notes
         imported += 1
     db.session.flush()
     return imported, skipped, errors
