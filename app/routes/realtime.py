@@ -339,6 +339,7 @@ def adherence_timeline():
                     lob if lob != "All" else None, date_obj, sheet=sheet
                 )
             except Exception:
+                log.warning("Failed to generate shifts for adherence", exc_info=True)
                 shifts = []
 
         # Find the matching employee's shift
@@ -526,6 +527,7 @@ def _build_db_actuals(employee_id, date_obj, shift_start, shift_end):
             result.append({"type": typ, "start": s, "end": e})
         return result
     except Exception:
+        log.warning("Failed to parse status intervals", exc_info=True)
         return []
 
 
@@ -600,6 +602,7 @@ def leaderboard():
                     lob if lob != "All" else None, date_obj, sheet=sheet
                 )
             except Exception:
+                log.warning("Failed to generate shifts for leaderboard", exc_info=True)
                 shifts = []
 
         import random

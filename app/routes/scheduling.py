@@ -67,18 +67,22 @@ def index():
         try:
             selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
         except Exception:
+            log.warning("Failed to load selections", exc_info=True)
             selections = []
         try:
             skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
         except Exception:
+            log.warning("Failed to load skills", exc_info=True)
             skills = []
         try:
             shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
         except Exception:
+            log.warning("Failed to load shift sequences", exc_info=True)
             shift_sequences = []
         try:
             segment_codes = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()]
         except Exception:
+            log.warning("Failed to load segment codes", exc_info=True)
             segment_codes = []
 
     return render_template("scheduling/index.html",

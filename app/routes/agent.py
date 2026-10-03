@@ -3,8 +3,11 @@ Agent Self-Service Portal — Phase 6
 Routes for /my-schedule/, /my-time-off/, etc.
 """
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+
+log = logging.getLogger("serevo.agent")
 from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, TimeOffType,
@@ -159,6 +162,7 @@ def my_time_off():
     try:
         types = TimeOffType.query.filter_by(is_active=True).order_by(TimeOffType.sort_order).all()
     except Exception:
+        log.warning("Failed to load time-off types", exc_info=True)
         types = []
 
     today = date.today()

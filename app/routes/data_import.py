@@ -600,7 +600,7 @@ def _open_employee_sheet():
                 from app.models import AppSetting
                 sheet_key = AppSetting.get("employee_sheet_key", "")
             except Exception:
-                pass
+                log.warning("Failed to read employee_sheet_key from DB settings", exc_info=True)
 
         if not sheet_key:
             return None, "No employee sheet key configured. Set EMPLOYEE_SHEET_KEY in environment or in Settings → Connections."
@@ -610,7 +610,7 @@ def _open_employee_sheet():
             from app.models import AppSetting
             sa_json = AppSetting.get("google_service_account_json", "")
         except Exception:
-            pass
+            log.warning("Failed to read google_service_account_json from DB settings", exc_info=True)
 
         if sa_json:
             import json

@@ -100,7 +100,7 @@ def panel():
             if len(fc_all) > 4:
                 status["forecast_updated"] = fc_all[3][1] if len(fc_all[3]) > 1 else None
         except Exception:
-            pass
+            log.warning("Failed to read FORECAST RAW worksheet", exc_info=True)
         try:
             rq_ws = sheet.worksheet("REQUIREMENTS RAW")
             rq_all = rq_ws.get_all_values()
@@ -108,7 +108,7 @@ def panel():
             if len(rq_all) > 4:
                 status["req_updated"] = rq_all[3][1] if len(rq_all[3]) > 1 else None
         except Exception:
-            pass
+            log.warning("Failed to read REQUIREMENTS RAW worksheet", exc_info=True)
         try:
             em_ws = sheet.worksheet("EMPLOYEES")
             em_all = em_ws.get_all_values()
@@ -116,7 +116,7 @@ def panel():
             if len(em_all) > 1:
                 status["emp_updated"] = "on file"
         except Exception:
-            pass
+            log.warning("Failed to read EMPLOYEES worksheet", exc_info=True)
 
     # Employee count from Serevo's own roster (API pulls land here)
     try:
@@ -127,7 +127,7 @@ def panel():
             latest = Employee.query.order_by(Employee.updated_at.desc()).first() if hasattr(Employee, "updated_at") else None
             status["emp_updated"] = latest.updated_at.strftime("%Y-%m-%d %H:%M") if latest and latest.updated_at else "in database"
     except Exception:
-        pass
+        log.warning("Failed to query employee count from DB", exc_info=True)
 
     return render_template("capacity/panel.html",
         user=user,
@@ -231,7 +231,7 @@ def refresh():
                     fc_ws.clear()
                     fc_ws.update("A1", [["LOB", "Date", "Timestamp", "Offered", "AHT"]])
                 except Exception:
-                    pass
+                    log.warning("Failed to clear/reset FORECAST RAW worksheet", exc_info=True)
 
             for lob_name, wid in cp.WORKLOADS.items():
                 for day in all_days:
@@ -253,7 +253,7 @@ def refresh():
                     rq_ws.clear()
                     rq_ws.update("A1", [["LOB", "Date", "Timestamp", "Agents Required"]])
                 except Exception:
-                    pass
+                    log.warning("Failed to clear/reset REQUIREMENTS RAW worksheet", exc_info=True)
 
             planning_units = cp.fetch_planning_units()
             for pu in planning_units:
