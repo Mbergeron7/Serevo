@@ -29,51 +29,58 @@
     </button>
     <div class="nav-links">
       {% block nav %}
-      {% if current_user and current_user.is_admin %}
-      {# Admin nav — full access #}
+      {% if current_user and (current_user.is_admin or current_user.is_supervisor) %}
+      {# Admin / Supervisor nav — grouped dropdowns #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
-      <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>People</a>
-      <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
-      <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
-      <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
-      <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
-      <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
-      <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
-      <a href="/approvals/"{% if request.path.startswith('/approvals') %} class="active"{% endif %}>Approvals</a>
+
+      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/forecasting') or request.path.startswith('/capacity') or request.path.startswith('/realtime') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">Operations <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
+          <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
+          <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
+          <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown{% if request.path.startswith('/people') or request.path.startswith('/attendance') or request.path.startswith('/quality') or request.path.startswith('/training') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">People <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>Roster</a>
+          <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
+          <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
+          <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown{% if request.path.startswith('/approvals') or request.path.startswith('/shift-notes') or request.path.startswith('/wfm-tickets') or request.path.startswith('/payroll') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">Tools <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/approvals/"{% if request.path.startswith('/approvals') %} class="active"{% endif %}>Approvals</a>
+          <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
+          <a href="/wfm-tickets/"{% if request.path.startswith('/wfm-tickets') %} class="active"{% endif %}>WFM Tickets</a>
+          <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown{% if request.path.startswith('/data') or request.path.startswith('/reports') or request.path.startswith('/employee-docs') or request.path.startswith('/announcements') or request.path.startswith('/audit-log') or request.path.startswith('/settings') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">Admin <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
+          <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
+          <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
+          <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
+          <a href="/audit-log/"{% if request.path.startswith('/audit-log') %} class="active"{% endif %}>Audit Log</a>
+          {% if current_user.is_admin %}
+          <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
+          {% endif %}
+        </div>
+      </div>
+
       <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
-      <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
-      <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
-      <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
-      <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
-      <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
-      <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
-      <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
-      <a href="/audit-log/"{% if request.path.startswith('/audit-log') %} class="active"{% endif %}>Audit Log</a>
-      <a href="/wfm-tickets/"{% if request.path.startswith('/wfm-tickets') %} class="active"{% endif %}>WFM Tickets</a>
-      <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
-      <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
-      <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
-      {% elif current_user and current_user.is_supervisor %}
-      {# Supervisor nav — admin pages (read-only) + agent portal #}
-      <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
-      <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>People</a>
-      <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
-      <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
-      <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
-      <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
-      <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
-      <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
-      <a href="/approvals/"{% if request.path.startswith('/approvals') %} class="active"{% endif %}>Approvals</a>
-      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
-      <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
-      <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
-      <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
-      <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
-      <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
-      <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
-      <a href="/wfm-tickets/"{% if request.path.startswith('/wfm-tickets') %} class="active"{% endif %}>WFM Tickets</a>
       <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
       <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
+
       {% else %}
       {# Agent nav — portal only #}
       <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
@@ -135,6 +142,19 @@
     {% if brand_email %}<p><a href="mailto:{{ brand_email }}">{{ brand_email }}</a></p>{% endif %}
   </footer>
 
+  <script>
+  /* ── Mobile nav dropdown toggle ── */
+  document.querySelectorAll('.nav-dropdown-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      if (window.innerWidth > 768) return;
+      e.preventDefault();
+      var dd = btn.closest('.nav-dropdown');
+      var wasOpen = dd.classList.contains('open');
+      document.querySelectorAll('.nav-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+      if (!wasOpen) dd.classList.add('open');
+    });
+  });
+  </script>
   <script src="{{ url_for('static', filename='js/table-utils.js') }}"></script>
   <script>
   /* ── Global Toast Notification System ── */

@@ -94,6 +94,67 @@ nav .nav-links a {
 nav .nav-links a:hover,
 nav .nav-links a.active { color: var(--brand-accent); text-decoration: none; }
 
+/* ── Nav dropdowns ── */
+.nav-dropdown {
+  position: relative;
+}
+.nav-dropdown-btn {
+  background: none;
+  border: none;
+  font-size: .875rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.nav-dropdown-btn:hover,
+.nav-dropdown.has-active > .nav-dropdown-btn {
+  color: var(--brand-accent);
+}
+.nav-dropdown-btn .caret {
+  font-size: .65rem;
+  transition: transform .2s;
+}
+.nav-dropdown:hover .nav-dropdown-btn .caret {
+  transform: rotate(180deg);
+}
+.nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  min-width: 180px;
+  padding: 6px 0;
+  z-index: 1000;
+}
+.nav-dropdown:hover .nav-dropdown-menu {
+  display: block;
+}
+.nav-dropdown-menu a {
+  display: block;
+  padding: 8px 16px;
+  font-size: .85rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-dropdown-menu a:hover {
+  background: var(--hover, rgba(0,0,0,.04));
+  color: var(--brand-accent);
+}
+.nav-dropdown-menu a.active {
+  color: var(--brand-accent);
+  font-weight: 600;
+}
+
 nav .user-name {
   margin-left: auto;
   font-size: .875rem;
@@ -472,14 +533,44 @@ footer {
   nav.open .nav-links {
     display: flex;
   }
-  nav .nav-links a {
+  nav .nav-links > a {
     padding: 10px 0;
     width: 100%;
     border-bottom: 1px solid var(--border);
     font-size: .95rem;
   }
-  nav .nav-links a:last-child {
+  nav .nav-links > a:last-child {
     border-bottom: none;
+  }
+  /* Mobile dropdowns: inline toggle instead of hover */
+  .nav-dropdown {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-dropdown-btn {
+    padding: 10px 0;
+    width: 100%;
+    font-size: .95rem;
+    justify-content: space-between;
+  }
+  .nav-dropdown:hover .nav-dropdown-menu {
+    display: none;
+  }
+  .nav-dropdown.open .nav-dropdown-menu {
+    display: block;
+  }
+  .nav-dropdown-menu {
+    position: static;
+    transform: none;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding: 0 0 4px 16px;
+    min-width: 0;
+  }
+  .nav-dropdown-menu a {
+    padding: 8px 0;
+    font-size: .9rem;
   }
   nav .user-name {
     margin-left: 0;
