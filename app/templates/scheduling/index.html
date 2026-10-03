@@ -1305,18 +1305,62 @@ function generateSchedule() {
   })
   .then(r => r.json())
   .then(data => {
-    document.getElementById('btnGenerate').disabled = false;
-    hideLoading();
-    if (!data.success) { showToast('Error: ' + (data.error || 'Unknown'), 'error'); return; }
-    scheduleData = data;
-    scheduleSource = 'generated';
-    showResults();
+    if (!data.success) {
+      document.getElementById('btnGenerate').disabled = false;
+      hideLoading();
+      showToast('Error: ' + (data.error || 'Unknown'), 'error');
+      return;
+    }
+    if (data.poll && data.job_id) {
+      // Async mode — poll for results
+      showLoading('Generating schedule — this may take a minute…');
+      _pollGenerateJob(data.job_id, 0);
+    } else {
+      // Sync result (demo mode)
+      document.getElementById('btnGenerate').disabled = false;
+      hideLoading();
+      scheduleData = data;
+      scheduleSource = 'generated';
+      showResults();
+    }
   })
   .catch(e => {
     document.getElementById('btnGenerate').disabled = false;
     hideLoading();
     showToast('Generation failed: ' + e, 'error');
   });
+}
+
+function _pollGenerateJob(jobId, attempt) {
+  fetch('/scheduling/generate/status?job_id=' + encodeURIComponent(jobId))
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'running') {
+        // Still working — poll again (2s intervals, up to 5 min)
+        if (attempt > 150) {
+          document.getElementById('btnGenerate').disabled = false;
+          hideLoading();
+          showToast('Schedule generation timed out. Try a shorter date range.', 'error');
+          return;
+        }
+        setTimeout(() => _pollGenerateJob(jobId, attempt + 1), 2000);
+        return;
+      }
+      document.getElementById('btnGenerate').disabled = false;
+      hideLoading();
+      if (!data.success) {
+        showToast('Error: ' + (data.error || 'Unknown'), 'error');
+        return;
+      }
+      scheduleData = data;
+      scheduleSource = 'generated';
+      showResults();
+    })
+    .catch(e => {
+      document.getElementById('btnGenerate').disabled = false;
+      hideLoading();
+      showToast('Generation failed: ' + e, 'error');
+    });
 }
 
 // ═══════════════════════════════════════════════════════════

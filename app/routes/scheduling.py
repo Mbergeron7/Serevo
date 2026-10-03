@@ -9,6 +9,8 @@ import io
 import csv
 import logging
 import datetime
+import threading
+import uuid
 
 from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
@@ -19,6 +21,10 @@ from app.models import db, Schedule, ShiftSegment, Employee
 log = logging.getLogger("serevo.scheduling")
 
 scheduling_bp = Blueprint("scheduling", __name__, url_prefix="/scheduling")
+
+# ── In-memory job store for async schedule generation ──────
+_schedule_jobs = {}  # job_id -> {status, result, error, started_at}
+_jobs_lock = threading.Lock()
 
 
 
@@ -119,148 +125,227 @@ def generate():
 
         user = get_current_user()
         emp_ids = payload.get("employee_ids") or None  # list or None
+
+        # Demo mode runs synchronously (fast, no DB)
         if user and user.get("is_demo"):
-            from app.demo_data import plan_demo_day, get_demo_requirements
-            days = []
-            d = start_date
-            total_shifts = 0
-            total_hours = 0.0
-            cov_sum, cov_days = 0.0, 0
-            never = {}
-            demo_emp_filter = set(str(e) for e in emp_ids) if emp_ids else None
-            while d <= end_date:
-                all_scheds, warnings = plan_demo_day(d, lob)
-                if demo_emp_filter:
-                    all_scheds = [s for s in all_scheds
-                                  if str(s.get("employee_id", "")) in demo_emp_filter]
-                shifts_out = [s for s in all_scheds if s["status"] == "scheduled"]
-                unassigned = [s["employee"] for s in all_scheds if s["status"] != "scheduled"]
-                for s in all_scheds:
-                    never.setdefault(s["employee"], True)
-                    if s["status"] == "scheduled":
-                        never[s["employee"]] = False
-                reqs, _ = get_demo_requirements(lob, d)
-                coverage = []
-                for r in reqs:
-                    t = r["time"][11:16]
-                    tm = int(t[:2]) * 60 + int(t[3:])
-                    sched = sum(1 for s in shifts_out
-                                if (int(s["start"][:2]) * 60 + int(s["start"][3:])) <= tm <
-                                   (int(s["end"][:2]) * 60 + int(s["end"][3:])))
-                    req = r["agents_required"]
-                    coverage.append({"time": t, "required": req, "scheduled": sched,
-                                     "gap": sched - req,
-                                     "coverage_pct": round(sched / req * 100, 1) if req else (100.0 if sched else 0)})
-                understaffed = sum(1 for c in coverage if c["gap"] < 0)
-                avg_pct = round(sum(c["coverage_pct"] for c in coverage) / len(coverage), 1) if coverage else 0
-                summary = {"avg_coverage_pct": avg_pct,
-                           "peak_required": max((c["required"] for c in coverage), default=0),
-                           "peak_gap": min((c["gap"] for c in coverage), default=0),
-                           "understaffed_intervals": understaffed, "total_intervals": len(coverage)}
-                day_hours = sum(s.get("hours", 0) for s in shifts_out)
-                total_shifts += len(shifts_out)
-                total_hours += day_hours
-                if coverage:
-                    cov_sum += avg_pct; cov_days += 1
-                days.append({
-                    "date": d.isoformat(),
-                    "date_label": d.strftime("%a %b %d"),
-                    "day_of_week": d.strftime("%a"),
-                    "shifts": shifts_out, "unassigned": unassigned,
-                    "coverage": coverage, "summary": summary, "warnings": warnings,
-                })
-                d += datetime.timedelta(days=1)
-            global_warnings = []
-            never_names = sorted(n for n, v in never.items() if v)
-            if never_names:
-                global_warnings.append(
-                    f"{len(never_names)} employee(s) were never scheduled across the entire range: "
-                    + ", ".join(never_names) + ". Check their PTO, accommodations, and availability settings.")
-            result = {
-                "lob": lob, "start_date": start_str, "end_date": end_str,
-                "days": days,
-                "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
-                           "total_days": len(days),
-                           "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
-                "warnings": global_warnings,
+            result = _generate_demo_schedule(lob, start_date, end_date, emp_ids)
+            result["success"] = True
+            return jsonify(result)
+
+        # Live mode: run in background thread to avoid Render worker timeout
+        mode = (payload.get("mode") or "overwrite").strip().lower()
+        job_id = str(uuid.uuid4())[:12]
+
+        with _jobs_lock:
+            # Clean up old jobs (keep last 20)
+            if len(_schedule_jobs) > 20:
+                oldest = sorted(_schedule_jobs.keys(),
+                                key=lambda k: _schedule_jobs[k].get("started_at", ""))
+                for old_key in oldest[:len(oldest) - 10]:
+                    _schedule_jobs.pop(old_key, None)
+            _schedule_jobs[job_id] = {
+                "status": "running",
+                "result": None,
+                "error": None,
+                "started_at": datetime.datetime.utcnow().isoformat(),
             }
-        else:
-            # mode: "overwrite" (default) — generate everything fresh; saved
-            #       schedules are replaced when the user clicks Save.
-            #       "fill"      — keep saved schedules in the range and only
-            #       generate for employees/days that have none.
-            mode = (payload.get("mode") or "overwrite").strip().lower()
-            sheet = _get_sheet()
 
-            existing_by_day = {}
-            if mode == "fill":
-                from app.models import PlanningUnit
-                pu = PlanningUnit.query.filter(
-                    db.func.lower(PlanningUnit.name) == lob.lower()
-                ).first()
-                if pu:
-                    saved = Schedule.query.filter(
-                        Schedule.planning_unit_id == pu.id,
-                        Schedule.schedule_date >= start_date,
-                        Schedule.schedule_date <= end_date,
-                    ).all()
-                    for s in saved:
-                        existing_by_day.setdefault(s.schedule_date, []).append(s.to_dict())
+        from flask import current_app
+        app = current_app._get_current_object()
 
-            if not existing_by_day:
-                result = generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
-            else:
-                # Generate day by day, excluding employees who already have a saved shift
-                from app.scheduling.engine import generate_shifts, analyze_coverage, coverage_summary, DAYS_OF_WEEK
-                from app.people.manager import get_employees
-                all_emps, _ = get_employees(sheet)
-                lob_ids = [str(e.get("Employee ID", "")) for e in all_emps
-                           if (e.get("Latest Skill Name") or "").strip().lower() == lob.lower()]
-                if emp_ids:
-                    lob_ids = [i for i in lob_ids if i in {str(x) for x in emp_ids}]
+        def _bg_generate():
+            with app.app_context():
+                try:
+                    result = _do_generate(lob, start_date, end_date,
+                                          shift_hrs, emp_ids, mode)
+                    result["success"] = True
+                    with _jobs_lock:
+                        _schedule_jobs[job_id]["status"] = "done"
+                        _schedule_jobs[job_id]["result"] = result
+                except Exception as e:
+                    log.exception("Background schedule generation failed")
+                    with _jobs_lock:
+                        _schedule_jobs[job_id]["status"] = "error"
+                        _schedule_jobs[job_id]["error"] = str(e)
 
-                days, total_shifts, total_hours, cov_sum, cov_days = [], 0, 0.0, 0.0, 0
-                d = start_date
-                while d <= end_date:
-                    kept = existing_by_day.get(d, [])
-                    kept_ids = {str(k["employee_id"]) for k in kept}
-                    todo = [i for i in lob_ids if i not in kept_ids]
-                    new_shifts, unassigned, warnings = ([], [], [])
-                    if todo:
-                        new_shifts, unassigned, warnings = generate_shifts(lob, d, shift_hrs, sheet, todo)
-                    for k in kept:
-                        k["saved"] = True
-                    shifts = kept + new_shifts
-                    shifts.sort(key=lambda s: (s["start"], s["employee"]))
-                    coverage = analyze_coverage(lob, d, shifts, sheet)
-                    summary = coverage_summary(coverage)
-                    total_shifts += len(shifts)
-                    total_hours += sum(float(s.get("hours") or 0) for s in shifts)
-                    if summary["total_intervals"] > 0:
-                        cov_sum += summary["avg_coverage_pct"]; cov_days += 1
-                    if kept:
-                        warnings.insert(0, f"Kept {len(kept)} saved shift(s)")
-                    days.append({
-                        "date": d.strftime("%Y-%m-%d"),
-                        "date_label": d.strftime("%a %b %d"),
-                        "day_of_week": DAYS_OF_WEEK[d.weekday()],
-                        "shifts": shifts, "unassigned": unassigned,
-                        "coverage": coverage, "summary": summary, "warnings": warnings,
-                    })
-                    d += datetime.timedelta(days=1)
-                result = {
-                    "lob": lob, "start_date": start_str, "end_date": end_str, "days": days,
-                    "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
-                               "total_days": len(days),
-                               "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
-                    "warnings": [],
-                }
-        result["success"] = True
-        return jsonify(result)
+        t = threading.Thread(target=_bg_generate, daemon=True)
+        t.start()
+
+        return jsonify({"success": True, "poll": True, "job_id": job_id,
+                        "message": "Schedule generation started…"})
 
     except Exception as e:
         log.error(f"Schedule generation error: {e}")
         return jsonify({"success": False, "error": str(e)})
+
+
+@scheduling_bp.route("/generate/status", methods=["GET"])
+@login_required
+def generate_status():
+    """Poll for async schedule generation results."""
+    job_id = request.args.get("job_id", "")
+    if not job_id:
+        return jsonify({"success": False, "error": "Missing job_id"})
+
+    with _jobs_lock:
+        job = _schedule_jobs.get(job_id)
+
+    if not job:
+        return jsonify({"success": False, "error": "Job not found"})
+
+    if job["status"] == "running":
+        return jsonify({"success": True, "status": "running"})
+    elif job["status"] == "error":
+        # Clean up
+        with _jobs_lock:
+            _schedule_jobs.pop(job_id, None)
+        return jsonify({"success": False, "error": job["error"]})
+    else:
+        # Done — return the full result and clean up
+        result = job["result"]
+        with _jobs_lock:
+            _schedule_jobs.pop(job_id, None)
+        return jsonify(result)
+
+
+def _generate_demo_schedule(lob, start_date, end_date, emp_ids):
+    """Generate schedule for demo users (synchronous, fast)."""
+    from app.demo_data import plan_demo_day, get_demo_requirements
+    days = []
+    d = start_date
+    total_shifts = 0
+    total_hours = 0.0
+    cov_sum, cov_days = 0.0, 0
+    never = {}
+    demo_emp_filter = set(str(e) for e in emp_ids) if emp_ids else None
+    while d <= end_date:
+        all_scheds, warnings = plan_demo_day(d, lob)
+        if demo_emp_filter:
+            all_scheds = [s for s in all_scheds
+                          if str(s.get("employee_id", "")) in demo_emp_filter]
+        shifts_out = [s for s in all_scheds if s["status"] == "scheduled"]
+        unassigned = [s["employee"] for s in all_scheds if s["status"] != "scheduled"]
+        for s in all_scheds:
+            never.setdefault(s["employee"], True)
+            if s["status"] == "scheduled":
+                never[s["employee"]] = False
+        reqs, _ = get_demo_requirements(lob, d)
+        coverage = []
+        for r in reqs:
+            t = r["time"][11:16]
+            tm = int(t[:2]) * 60 + int(t[3:])
+            sched = sum(1 for s in shifts_out
+                        if (int(s["start"][:2]) * 60 + int(s["start"][3:])) <= tm <
+                           (int(s["end"][:2]) * 60 + int(s["end"][3:])))
+            req = r["agents_required"]
+            coverage.append({"time": t, "required": req, "scheduled": sched,
+                             "gap": sched - req,
+                             "coverage_pct": round(sched / req * 100, 1) if req else (100.0 if sched else 0)})
+        understaffed = sum(1 for c in coverage if c["gap"] < 0)
+        avg_pct = round(sum(c["coverage_pct"] for c in coverage) / len(coverage), 1) if coverage else 0
+        summary = {"avg_coverage_pct": avg_pct,
+                   "peak_required": max((c["required"] for c in coverage), default=0),
+                   "peak_gap": min((c["gap"] for c in coverage), default=0),
+                   "understaffed_intervals": understaffed, "total_intervals": len(coverage)}
+        day_hours = sum(s.get("hours", 0) for s in shifts_out)
+        total_shifts += len(shifts_out)
+        total_hours += day_hours
+        if coverage:
+            cov_sum += avg_pct; cov_days += 1
+        days.append({
+            "date": d.isoformat(),
+            "date_label": d.strftime("%a %b %d"),
+            "day_of_week": d.strftime("%a"),
+            "shifts": shifts_out, "unassigned": unassigned,
+            "coverage": coverage, "summary": summary, "warnings": warnings,
+        })
+        d += datetime.timedelta(days=1)
+    global_warnings = []
+    never_names = sorted(n for n, v in never.items() if v)
+    if never_names:
+        global_warnings.append(
+            f"{len(never_names)} employee(s) were never scheduled across the entire range: "
+            + ", ".join(never_names) + ". Check their PTO, accommodations, and availability settings.")
+    return {
+        "lob": lob, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
+        "days": days,
+        "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
+                   "total_days": len(days),
+                   "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
+        "warnings": global_warnings,
+    }
+
+
+def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode):
+    """Run schedule generation (called from background thread)."""
+    from app.scheduling.engine import generate_schedule_range
+
+    sheet = _get_sheet()
+
+    existing_by_day = {}
+    if mode == "fill":
+        from app.models import PlanningUnit
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if pu:
+            saved = Schedule.query.filter(
+                Schedule.planning_unit_id == pu.id,
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+            ).all()
+            for s in saved:
+                existing_by_day.setdefault(s.schedule_date, []).append(s.to_dict())
+
+    if not existing_by_day:
+        return generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
+
+    # Generate day by day, excluding employees who already have a saved shift
+    from app.scheduling.engine import generate_shifts, analyze_coverage, coverage_summary, DAYS_OF_WEEK
+    from app.people.manager import get_employees
+    all_emps, _ = get_employees(sheet)
+    lob_ids = [str(e.get("Employee ID", "")) for e in all_emps
+               if (e.get("Latest Skill Name") or "").strip().lower() == lob.lower()]
+    if emp_ids:
+        lob_ids = [i for i in lob_ids if i in {str(x) for x in emp_ids}]
+
+    days, total_shifts, total_hours, cov_sum, cov_days = [], 0, 0.0, 0.0, 0
+    d = start_date
+    while d <= end_date:
+        kept = existing_by_day.get(d, [])
+        kept_ids = {str(k["employee_id"]) for k in kept}
+        todo = [i for i in lob_ids if i not in kept_ids]
+        new_shifts, unassigned, warnings = ([], [], [])
+        if todo:
+            new_shifts, unassigned, warnings = generate_shifts(lob, d, shift_hrs, sheet, todo)
+        for k in kept:
+            k["saved"] = True
+        shifts = kept + new_shifts
+        shifts.sort(key=lambda s: (s["start"], s["employee"]))
+        coverage = analyze_coverage(lob, d, shifts, sheet)
+        summary = coverage_summary(coverage)
+        total_shifts += len(shifts)
+        total_hours += sum(float(s.get("hours") or 0) for s in shifts)
+        if summary["total_intervals"] > 0:
+            cov_sum += summary["avg_coverage_pct"]; cov_days += 1
+        if kept:
+            warnings.insert(0, f"Kept {len(kept)} saved shift(s)")
+        days.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "date_label": d.strftime("%a %b %d"),
+            "day_of_week": DAYS_OF_WEEK[d.weekday()],
+            "shifts": shifts, "unassigned": unassigned,
+            "coverage": coverage, "summary": summary, "warnings": warnings,
+        })
+        d += datetime.timedelta(days=1)
+    return {
+        "lob": lob, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
+        "days": days,
+        "totals": {"total_shifts": total_shifts, "total_hours": round(total_hours, 1),
+                   "total_days": len(days),
+                   "avg_coverage_pct": round(cov_sum / cov_days, 1) if cov_days else 0},
+        "warnings": [],
+    }
 
 
 
