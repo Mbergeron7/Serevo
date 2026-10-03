@@ -32,6 +32,7 @@ def index():
         try:
             emp_count = Employee.query.count()
             pu_count = PlanningUnit.query.filter_by(is_active=True).count()
+            from app.models import TimeClock
             live_stats = {
                 "total_employees": emp_count,
                 "planning_units": pu_count,
@@ -40,6 +41,7 @@ def index():
                     PTOEntry.start_date <= today,
                     PTOEntry.end_date >= today,
                 ).count(),
+                "clocked_in": TimeClock.query.filter_by(status="active").count(),
             }
             # Setup progress for getting-started checklist
             setup = {

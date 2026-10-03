@@ -26,6 +26,10 @@
       <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.pto_today }}</div>
       <div style="font-size:.8rem; color:var(--text-muted);">On PTO Today</div>
     </div>
+    <div class="card" style="flex:1; min-width:140px; text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.clocked_in or 0 }}</div>
+      <div style="font-size:.8rem; color:var(--text-muted);">Clocked In Now</div>
+    </div>
   </div>
   {% else %}
   <div class="card" style="padding:2.5rem;">
