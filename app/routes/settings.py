@@ -456,6 +456,32 @@ def save_user():
             return jsonify({"success": False, "error": "A user with that email already exists"})
         if not password or len(password) < 6:
             return jsonify({"success": False, "error": "Password must be at least 6 characters"})
+
+        # Auto-create an employee profile if no existing one was selected
+        from app.models import Employee
+        if not employee_id:
+            display = name or email.split("@")[0].title()
+            parts = display.split(None, 1)
+            first = parts[0] if parts else display
+            last = parts[1] if len(parts) > 1 else ""
+            # Generate a unique employee_id from email prefix
+            emp_id_base = email.split("@")[0].replace(".", "").replace("-", "")[:12].upper()
+            emp_id_str = emp_id_base
+            counter = 1
+            while Employee.query.filter_by(employee_id=emp_id_str).first():
+                emp_id_str = f"{emp_id_base}{counter}"
+                counter += 1
+            emp = Employee(
+                employee_id=emp_id_str,
+                first_name=first,
+                last_name=last,
+                email=email,
+                status="Active",
+            )
+            db.session.add(emp)
+            db.session.flush()  # get emp.id
+            employee_id = emp.id
+
         user = User(
             email=email,
             password_hash=generate_password_hash(password).decode("utf-8"),
