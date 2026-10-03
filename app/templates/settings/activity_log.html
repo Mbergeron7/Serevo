@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Activity Log — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .log-controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .log-controls select, .log-controls input {
+    padding:7px 10px; border:1px solid var(--border); border-radius:6px;
+    font-size:.85rem; background:var(--bg); color:var(--text);
+  }
+  .log-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  .log-table th {
+    text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--text-muted); padding:8px 12px; border-bottom:2px solid var(--border);
+    font-weight:700;
+  }
+  .log-table td { padding:8px 12px; border-bottom:1px solid var(--border); }
+  .log-action {
+    font-size:.72rem; font-weight:600; padding:2px 8px; border-radius:4px;
+    display:inline-block; text-transform:uppercase; letter-spacing:.03em;
+  }
+  .action-schedule { background:#dbeafe; color:#1d4ed8; }
+  .action-employee { background:#d1fae5; color:#065f46; }
+  .action-settings { background:#fef3c7; color:#92400e; }
+  .action-data { background:#e0e7ff; color:#4338ca; }
+  .action-auth { background:#fce7f3; color:#9d174d; }
+  .action-default { background:var(--bg); color:var(--text-muted); }
+  .log-pagination { display:flex; gap:8px; align-items:center; justify-content:center; margin-top:16px; }
+  .log-pagination button {
+    padding:6px 14px; border:1px solid var(--border); border-radius:6px;
+    background:var(--bg); color:var(--text); font-size:.82rem; cursor:pointer;
+  }
+  .log-pagination button:disabled { opacity:.4; cursor:not-allowed; }
+  .log-empty { text-align:center; padding:40px 16px; color:var(--text-muted); font-size:.9rem; }
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme="light"]) .action-schedule { background:#1e3a5f; color:#93c5fd; }
+    :root:not([data-theme="light"]) .action-employee { background:#064e3b; color:#6ee7b7; }
+    :root:not([data-theme="light"]) .action-settings { background:#78350f; color:#fde68a; }
+    :root:not([data-theme="light"]) .action-data { background:#312e81; color:#a5b4fc; }
+    :root:not([data-theme="light"]) .action-auth { background:#831843; color:#f9a8d4; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Activity Log</h1>
+  <p class="subtitle">Track all actions performed across the platform</p>
+</div>
+
+<div class="card" style="padding:20px;">
+  <div class="log-controls">
+    <select id="actionFilter" onchange="loadLog(1)">
+      <option value="">All actions</option>
+      <option value="schedule_generated">Schedule Generated</option>
+      <option value="schedule_saved">Schedule Saved</option>
+      <option value="schedule_published">Schedule Published</option>
+      <option value="pto_approved">PTO Approved</option>
+      <option value="pto_denied">PTO Denied</option>
+      <option value="employee_added">Employee Added</option>
+      <option value="employee_updated">Employee Updated</option>
+      <option value="settings_changed">Settings Changed</option>
+      <option value="data_imported">Data Imported</option>
+      <option value="login">Login</option>
+    </select>
+    <span id="logCount" style="font-size:.8rem; color:var(--text-muted);"></span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+  <div id="logEmpty" class="log-empty" style="display:none;">
+    No activity recorded yet. Actions will appear here as users interact with the platform.
+  </div>
+  <div class="log-pagination" id="logPagination" style="display:none;">
+    <button id="logPrev" onclick="loadLog(currentPage-1)">← Previous</button>
+    <span id="logPageInfo" style="font-size:.82rem; color:var(--text-muted);"></span>
+    <button id="logNext" onclick="loadLog(currentPage+1)">Next →</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var currentPage = 1;
+
+function loadLog(page) {
+  currentPage = page || 1;
+  var action = document.getElementById('actionFilter').value;
+  fetch('/settings/activity-log/data', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({page: currentPage, per_page: 50, action: action})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    var body = document.getElementById('logBody');
+    var empty = document.getElementById('logEmpty');
+    var pag = document.getElementById('logPagination');
+    var count = document.getElementById('logCount');
+
+    if (!d.success || !d.entries.length) {
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      pag.style.display = 'none';
+      count.textContent = '0 entries';
+      return;
+    }
+    empty.style.display = 'none';
+    count.textContent = d.total + ' entries';
+
+    var actionClasses = {
+      schedule_generated: 'action-schedule', schedule_saved: 'action-schedule',
+      schedule_published: 'action-schedule',
+      employee_added: 'action-employee', employee_updated: 'action-employee',
+      settings_changed: 'action-settings',
+      data_imported: 'action-data',
+      login: 'action-auth', logout: 'action-auth',
+    };
+
+    body.innerHTML = d.entries.map(function(e) {
+      var cls = actionClasses[e.action] || 'action-default';
+      var dt = new Date(e.created_at);
+      var time = dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      var label = e.action.replace(/_/g, ' ');
+      return '<tr>'
+        + '<td style="white-space:nowrap;font-size:.8rem;color:var(--text-muted);">' + time + '</td>'
+        + '<td style="font-weight:500;">' + (e.user_name || 'System') + '</td>'
+        + '<td><span class="log-action ' + cls + '">' + label + '</span></td>'
+        + '<td style="font-size:.82rem;color:var(--text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (e.detail || '—') + '</td>'
+        + '</tr>';
+    }).join('');
+
+    if (d.pages > 1) {
+      pag.style.display = 'flex';
+      document.getElementById('logPrev').disabled = currentPage <= 1;
+      document.getElementById('logNext').disabled = currentPage >= d.pages;
+      document.getElementById('logPageInfo').textContent = 'Page ' + currentPage + ' of ' + d.pages;
+    } else {
+      pag.style.display = 'none';
+    }
+  });
+}
+
+loadLog(1);
+</script>
+{% endblock %}

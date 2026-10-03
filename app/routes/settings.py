@@ -2042,3 +2042,43 @@ def master_reset():
         "message": f"Reset complete. {total} records cleared across {len(counts)} tables.",
         "details": counts,
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# ACTIVITY LOG
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/activity-log")
+@admin_required
+def activity_log():
+    return render_template("settings/activity_log.html", user=get_current_user())
+
+
+@settings_bp.route("/activity-log/data", methods=["POST"])
+@admin_required
+def activity_log_data():
+    """Return paginated audit log entries."""
+    try:
+        from app.models import AuditLog
+        payload = request.get_json(silent=True) or {}
+        page = int(payload.get("page", 1))
+        per_page = min(int(payload.get("per_page", 50)), 100)
+        action_filter = payload.get("action", "")
+
+        q = AuditLog.query.order_by(AuditLog.created_at.desc())
+        if action_filter:
+            q = q.filter(AuditLog.action == action_filter)
+
+        total = q.count()
+        entries = q.offset((page - 1) * per_page).limit(per_page).all()
+
+        return jsonify({
+            "success": True,
+            "entries": [e.to_dict() for e in entries],
+            "total": total,
+            "page": page,
+            "pages": (total + per_page - 1) // per_page,
+        })
+    except Exception as e:
+        log.exception("Activity log error")
+        return jsonify({"success": False, "error": str(e)})
