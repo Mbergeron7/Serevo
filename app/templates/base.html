@@ -48,6 +48,7 @@
       <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
       <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
       <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
+      <a href="/audit-log/"{% if request.path.startswith('/audit-log') %} class="active"{% endif %}>Audit Log</a>
       <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
       {% elif current_user and current_user.is_supervisor %}
       {# Supervisor nav — admin pages (read-only) + agent portal #}

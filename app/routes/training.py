@@ -85,6 +85,11 @@ def save_module():
     mod.is_required = bool(data.get("is_required", False))
 
     db.session.commit()
+    try:
+        from app.audit import audit_log
+        audit_log("update" if mod_id else "create", "training", mod.id, f"Module: {title}")
+    except Exception:
+        pass
     return jsonify(success=True, id=mod.id)
 
 
@@ -189,6 +194,11 @@ def assign_training():
         created += 1
 
     db.session.commit()
+    try:
+        from app.audit import audit_log
+        audit_log("assign", "training", module_id, f"Assigned {created} employees to '{mod.title}'")
+    except Exception:
+        pass
     return jsonify(success=True, created=created)
 
 

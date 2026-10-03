@@ -155,6 +155,7 @@ def create_app():
     from app.routes.shift_notes import shift_notes_bp
     from app.routes.employee_docs import employee_docs_bp
     from app.routes.training import training_bp
+    from app.routes.audit import audit_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -180,6 +181,7 @@ def create_app():
     app.register_blueprint(shift_notes_bp)
     app.register_blueprint(employee_docs_bp)
     app.register_blueprint(training_bp)
+    app.register_blueprint(audit_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

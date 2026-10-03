@@ -510,6 +510,13 @@ def save_user():
         except Exception:
             db.session.rollback()
 
+    try:
+        from app.audit import audit_log
+        act = "update" if user_id else "create"
+        audit_log(act, "user", user.id, f"{act.title()} user: {email} ({role})")
+    except Exception:
+        pass
+
     return jsonify({"success": True, "id": user.id})
 
 

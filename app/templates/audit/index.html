@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Audit Log</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Track all system activity and changes.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <select id="daysSelect" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
+      <option value="1">Last 24 hours</option>
+      <option value="7" selected>Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+    <select id="actionFilter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
+      <option value="">All Actions</option>
+      <option value="login">Login</option>
+      <option value="create">Create</option>
+      <option value="update">Update</option>
+      <option value="delete">Delete</option>
+      <option value="export">Export</option>
+      <option value="import">Import</option>
+      <option value="assign">Assign</option>
+      <option value="schedule_generated">Schedule Generated</option>
+      <option value="pto_approved">PTO Approved</option>
+      <option value="pto_denied">PTO Denied</option>
+    </select>
+    <select id="targetFilter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
+      <option value="">All Types</option>
+      <option value="user">Users</option>
+      <option value="employee">Employees</option>
+      <option value="schedule">Schedules</option>
+      <option value="pto">PTO</option>
+      <option value="training">Training</option>
+      <option value="document">Documents</option>
+    </select>
+    <button onclick="loadEntries(1)" style="padding:6px 14px;background:var(--brand-accent,#6366f1);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;">Filter</button>
+  </div>
+</div>
+
+<div id="logTable" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+  <div style="padding:20px;color:var(--text-muted);text-align:center;">Loading…</div>
+</div>
+
+<div id="pagination" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:.85rem;color:var(--text-muted);"></div>
+
+<style>
+.audit-tbl { width:100%; border-collapse:collapse; font-size:.85rem; }
+.audit-tbl th { text-align:left; padding:10px 12px; border-bottom:2px solid var(--border); font-weight:600; font-size:.78rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:.3px; }
+.audit-tbl td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+.audit-tbl tr:last-child td { border-bottom:none; }
+.action-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:.75rem; font-weight:600; }
+.action-login { background:#dbeafe; color:#1e40af; }
+.action-create { background:#d1fae5; color:#065f46; }
+.action-update { background:#fef3c7; color:#92400e; }
+.action-delete { background:#fee2e2; color:#991b1b; }
+.action-export { background:#e0e7ff; color:#3730a3; }
+.action-import { background:#fce7f3; color:#9d174d; }
+.action-assign { background:#ccfbf1; color:#134e4a; }
+.action-schedule_generated { background:#ede9fe; color:#5b21b6; }
+.action-pto_approved { background:#d1fae5; color:#065f46; }
+.action-pto_denied { background:#fee2e2; color:#991b1b; }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+let currentPage = 1;
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function actionPill(action) {
+  const cls = 'action-pill action-' + (action || 'update');
+  return `<span class="${cls}">${esc(action)}</span>`;
+}
+
+async function loadEntries(page) {
+  currentPage = page || 1;
+  const days = document.getElementById('daysSelect').value;
+  const action = document.getElementById('actionFilter').value;
+  const entity_type = document.getElementById('targetFilter').value;
+
+  const res = await fetch('/audit-log/api/entries', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({days: parseInt(days), action, entity_type, page: currentPage})
+  });
+  const d = await res.json();
+  if (!d.success) return;
+
+  if (!d.entries.length) {
+    document.getElementById('logTable').innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">No audit entries for this period.</div>';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  let html = '<table class="audit-tbl"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead><tbody>';
+  d.entries.forEach(e => {
+    const dt = e.created_at ? new Date(e.created_at).toLocaleString() : '';
+    const entityLabel = e.entity_type ? (e.entity_id ? `${esc(e.entity_type)} #${e.entity_id}` : esc(e.entity_type)) : '—';
+    html += `<tr>
+      <td style="white-space:nowrap;color:var(--text-muted);font-size:.8rem;">${dt}</td>
+      <td>${esc(e.user_name)}</td>
+      <td>${actionPill(e.action)}</td>
+      <td>${entityLabel}</td>
+      <td style="max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(e.detail)}">${esc(e.detail || '')}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('logTable').innerHTML = html;
+
+  const totalPages = Math.ceil(d.total / d.per_page);
+  let pHtml = `<span>Showing ${(d.page-1)*d.per_page+1}–${Math.min(d.page*d.per_page, d.total)} of ${d.total}</span><div>`;
+  if (d.page > 1) pHtml += `<button onclick="loadEntries(${d.page-1})" style="padding:4px 10px;margin-right:4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);cursor:pointer;">← Prev</button>`;
+  if (d.page < totalPages) pHtml += `<button onclick="loadEntries(${d.page+1})" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);cursor:pointer;">Next →</button>`;
+  pHtml += '</div>';
+  document.getElementById('pagination').innerHTML = pHtml;
+}
+
+loadEntries(1);
+</script>
+{% endblock %}

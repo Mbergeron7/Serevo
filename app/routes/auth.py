@@ -62,6 +62,11 @@ def login():
                 session["user_id"] = user.id
                 session.permanent = True
                 log.info("Login success: user_id=%s email=%s role=%s", user.id, email, user.role)
+                try:
+                    from app.audit import audit_log
+                    audit_log("login", "user", user.id, f"Login: {email}")
+                except Exception:
+                    pass
                 next_page = request.args.get("next") or url_for("dashboard.index")
                 return redirect(next_page)
 
