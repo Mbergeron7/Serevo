@@ -149,6 +149,7 @@ def create_app():
     from app.routes.reports import reports_bp
     from app.routes.search import search_bp
     from app.routes.team_calendar import team_cal_bp
+    from app.routes.attendance import attendance_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -168,6 +169,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(team_cal_bp)
+    app.register_blueprint(attendance_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

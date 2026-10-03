@@ -1999,3 +1999,24 @@ class AuditLog(db.Model):
             "entity_id": self.entity_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class TimeClock(db.Model):
+    """Tracks employee clock-in / clock-out punches."""
+    __tablename__ = "time_clock"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    clock_in      = db.Column(db.DateTime, nullable=False)
+    clock_out     = db.Column(db.DateTime, nullable=True)
+    clock_in_note = db.Column(db.String(200), nullable=True)
+    clock_out_note = db.Column(db.String(200), nullable=True)
+    status        = db.Column(db.String(20), default="active")  # active, completed, edited
+    total_hours   = db.Column(db.Float, nullable=True)
+    date          = db.Column(db.Date, nullable=False, index=True)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+    edited_by     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    edited_at     = db.Column(db.DateTime, nullable=True)
+
+    employee = db.relationship("Employee", backref="time_punches")
+    editor   = db.relationship("User", foreign_keys=[edited_by])

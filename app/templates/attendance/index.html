@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block head %}
+<style>
+  .att-controls { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1.5rem; }
+  .att-controls input[type="date"] { padding:.4rem .8rem; border:1px solid #ccc; border-radius:6px; font-size:.9rem; }
+  .att-controls button { padding:.4rem .8rem; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; }
+  .stats-row { display:flex; gap:1.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+  .stats-row .stat { background:#f7f7f7; border-radius:8px; padding:.6rem 1rem; min-width:120px; }
+  .stats-row .stat strong { display:block; font-size:1.3rem; }
+  .stats-row .stat span { font-size:.8rem; color:#666; }
+  .att-table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  .att-table th, .att-table td { border:1px solid #e0e0e0; padding:.5rem .7rem; text-align:left; }
+  .att-table th { background:#f7f7f7; font-weight:600; }
+  .badge-active { background:#d4edda; color:#155724; padding:2px 8px; border-radius:10px; font-size:.8rem; }
+  .badge-completed { background:#e2e3e5; color:#383d41; padding:2px 8px; border-radius:10px; font-size:.8rem; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      .att-controls input[type="date"], .att-controls button { background:#2a2a2a; border-color:#444; color:#eee; }
+      .stats-row .stat { background:#2a2a2a; }
+      .stats-row .stat span { color:#aaa; }
+      .att-table th { background:#2a2a2a; color:#eee; }
+      .att-table td { border-color:#444; }
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Attendance</h1>
+<p style="color:#666; margin-bottom:1rem;">Daily clock-in / clock-out records for all employees.</p>
+
+<div class="att-controls">
+  <label>Date: <input type="date" id="attDate" value="{{ today }}"></label>
+  <button onclick="loadAttendance()">Load</button>
+  <button onclick="document.getElementById('attDate').value=new Date().toISOString().slice(0,10); loadAttendance();">Today</button>
+</div>
+
+<div class="stats-row" id="attStats"></div>
+
+<div id="attGrid">
+  <p style="color:#888;">Loading...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+  window.loadAttendance = function() {
+    const dt = document.getElementById('attDate').value;
+    fetch('/attendance/api/dashboard', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({date: dt})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { document.getElementById('attGrid').innerHTML = '<p>Error</p>'; return; }
+      renderStats(data.stats);
+      renderTable(data.rows);
+    });
+  };
+
+  function renderStats(s) {
+    document.getElementById('attStats').innerHTML = `
+      <div class="stat"><strong>${s.total_entries}</strong><span>Total Punches</span></div>
+      <div class="stat"><strong>${s.currently_in}</strong><span>Currently In</span></div>
+      <div class="stat"><strong>${s.completed}</strong><span>Completed</span></div>
+      <div class="stat"><strong>${s.total_hours}h</strong><span>Total Hours</span></div>
+    `;
+  }
+
+  function renderTable(rows) {
+    if (!rows.length) {
+      document.getElementById('attGrid').innerHTML = '<p style="color:#888;">No attendance records for this date.</p>';
+      return;
+    }
+    let html = '<table class="att-table"><thead><tr><th>Employee</th><th>ID</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(r => {
+      const badge = r.status === 'active' ? 'badge-active' : 'badge-completed';
+      html += `<tr>
+        <td>${esc(r.employee_name)}</td>
+        <td>${esc(r.employee_id_str)}</td>
+        <td>${r.clock_in}</td>
+        <td>${r.clock_out || '—'}</td>
+        <td>${r.total_hours != null ? r.total_hours.toFixed(1) + 'h' : '—'}</td>
+        <td><span class="${badge}">${r.status}</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('attGrid').innerHTML = html;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  // Set default date
+  document.getElementById('attDate').value = new Date().toISOString().slice(0, 10);
+  loadAttendance();
+})();
+</script>
+{% endblock %}

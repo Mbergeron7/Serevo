@@ -56,6 +56,16 @@
   <span class="agent-info">{{ employee.full_name }} · {{ employee.employee_id }}</span>
 </div>
 
+<!-- ═══ Clock In / Out ═══ -->
+<div class="p-card" style="margin-bottom:16px;">
+  <div class="p-card-body" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+    <span id="clockStatus" style="font-weight:600; font-size:.9rem;">Loading clock status...</span>
+    <button id="btnClockIn" class="btn" style="background:#059669; color:#fff; padding:6px 16px; display:none;" onclick="doClock('in')">Clock In</button>
+    <button id="btnClockOut" class="btn" style="background:#dc2626; color:#fff; padding:6px 16px; display:none;" onclick="doClock('out')">Clock Out</button>
+    <span id="clockElapsed" style="font-size:.82rem; color:var(--text-muted);"></span>
+  </div>
+</div>
+
 <div class="p-tabs">
   <button class="active" onclick="switchTab('schedule', this)">📅 My Schedule</button>
   <button onclick="switchTab('shifts', this)">📋 Open Shifts</button>
@@ -528,5 +538,39 @@ loadVtoOt();
 loadMyBids();
 loadBalances();
 loadQuality();
+loadClockStatus();
+
+// ── Clock In / Out ─────────────────────────────
+function loadClockStatus() {
+  fetch('/attendance/api/status', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'})
+  .then(r=>r.json()).then(d=>{
+    if (!d.success) return;
+    const st = document.getElementById('clockStatus');
+    const btnIn = document.getElementById('btnClockIn');
+    const btnOut = document.getElementById('btnClockOut');
+    const el = document.getElementById('clockElapsed');
+    if (d.clocked_in) {
+      st.textContent = 'You are clocked in';
+      st.style.color = '#059669';
+      btnIn.style.display = 'none';
+      btnOut.style.display = '';
+      el.textContent = d.elapsed_hours.toFixed(1) + 'h elapsed';
+    } else {
+      st.textContent = d.employee_found === false ? 'No employee record linked' : 'You are clocked out';
+      st.style.color = d.employee_found === false ? '#dc2626' : '';
+      btnIn.style.display = d.employee_found === false ? 'none' : '';
+      btnOut.style.display = 'none';
+      el.textContent = '';
+    }
+  });
+}
+window.doClock = function(action) {
+  const url = action === 'in' ? '/attendance/api/clock-in' : '/attendance/api/clock-out';
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'})
+  .then(r=>r.json()).then(d=>{
+    if (d.success) { loadClockStatus(); }
+    else { alert(d.error || 'Clock action failed'); }
+  });
+};
 </script>
 {% endblock %}
