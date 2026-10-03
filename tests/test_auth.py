@@ -37,9 +37,10 @@ class TestLogin:
         login(client, user.email, pw)
         resp = client.get("/logout", follow_redirects=False)
         assert resp.status_code == 302
-        # After logout, protected pages should redirect
+        # After logout, root shows landing page (not dashboard)
         resp2 = client.get("/", follow_redirects=False)
-        assert resp2.status_code == 302
+        assert resp2.status_code == 200
+        assert b"Smarter scheduling" in resp2.data
 
 
 class TestSetup:
@@ -85,10 +86,10 @@ class TestSetup:
 
 
 class TestAccessControl:
-    def test_dashboard_requires_login(self, client):
+    def test_root_shows_landing_for_visitors(self, client):
         resp = client.get("/", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/login" in resp.headers.get("Location", "")
+        assert resp.status_code == 200
+        assert b"Smarter scheduling" in resp.data
 
     def test_people_requires_login(self, client):
         resp = client.get("/people/", follow_redirects=False)

@@ -3,9 +3,15 @@ from tests.conftest import login
 
 
 class TestDashboard:
-    def test_dashboard_requires_login(self, client):
+    def test_landing_page_for_visitors(self, client):
         resp = client.get("/")
-        assert resp.status_code in (302, 401)
+        assert resp.status_code == 200
+        assert b"Smarter scheduling" in resp.data
+        assert b"Try the Demo" in resp.data
+
+    def test_landing_page_has_login_link(self, client):
+        resp = client.get("/")
+        assert b"/login" in resp.data
 
     def test_dashboard_loads_for_admin(self, client, admin_user):
         user, pw = admin_user

@@ -7,7 +7,7 @@ and a getting-started guide when no data has been loaded yet.
 
 from datetime import date
 
-from flask import Blueprint, render_template, redirect
+from flask import Blueprint, render_template, redirect, session
 from app.auth import login_required, get_current_user
 from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest
 
@@ -15,9 +15,12 @@ dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/")
-@login_required
 def index():
     user = get_current_user()
+    # Show landing page for visitors who aren't logged in
+    if not user:
+        from flask import current_app
+        return render_template("landing.html")
     # Agents go straight to their schedule
     if user and user.get("is_agent"):
         return redirect("/my-schedule/")
