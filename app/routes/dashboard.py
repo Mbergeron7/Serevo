@@ -9,7 +9,7 @@ from datetime import date
 
 from flask import Blueprint, render_template, redirect
 from app.auth import login_required, get_current_user
-from app.models import Employee, PlanningUnit, Schedule, PTOEntry
+from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -48,10 +48,32 @@ def index():
                 "has_forecast": ForecastInterval.query.first() is not None,
                 "has_schedules": Schedule.query.first() is not None,
             }
+            # Pending approvals for admin/supervisor
+            pending = {}
+            if user and user.get("role") in ("admin", "supervisor"):
+                pending = {
+                    "pto": PTOEntry.query.filter_by(approval_status="pending").count(),
+                    "bids": ShiftBid.query.filter_by(status="pending").count(),
+                    "swaps": ShiftSwapRequest.query.filter(
+                        ShiftSwapRequest.status.in_(["pending", "accepted"])
+                    ).count(),
+                }
+            # Upcoming PTO (next 7 days)
+            from datetime import timedelta
+            week_end = today + timedelta(days=7)
+            upcoming_pto = PTOEntry.query.filter(
+                PTOEntry.start_date >= today,
+                PTOEntry.start_date <= week_end,
+                PTOEntry.approval_status == "approved",
+            ).count()
         except Exception:
             import logging
             logging.getLogger("serevo.dashboard").exception("Failed to load dashboard stats")
             live_stats = {"total_employees": 0, "planning_units": 0, "on_today": 0, "pto_today": 0}
             setup = {"has_units": False, "has_employees": False, "has_forecast": False, "has_schedules": False}
+            pending = {}
+            upcoming_pto = 0
     return render_template("dashboard.html", user=user, demo_stats=demo_stats,
-                           live_stats=live_stats, setup=setup if not demo_stats else None)
+                           live_stats=live_stats, setup=setup if not demo_stats else None,
+                           pending=pending if not demo_stats else {},
+                           upcoming_pto=upcoming_pto if not demo_stats else 0)
