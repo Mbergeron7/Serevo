@@ -17,5 +17,9 @@ psycopg2-binary>=2.9
 flask-bcrypt>=1.0
 flask-wtf>=1.2
 
+# ML forecasting
+scikit-learn>=1.4
+pandas>=2.1
+
 # Testing
 pytest>=8.0
