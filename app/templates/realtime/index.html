@@ -221,6 +221,7 @@
   <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing</button>
   <button class="view-tab" data-view="optimizer" onclick="showView('optimizer')">⚡ Optimizer</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
+  <button class="view-tab" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents</button>
 </div>
 
 <!-- ═══════════ INTRADAY (live monitor) ═══════════ -->
@@ -330,6 +331,150 @@
     <div class="report-card">
       <h3>Top Performers This Week</h3>
       <div id="topPerformers" style="padding:14px 18px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ LIVE AGENTS ═══════════ -->
+<div id="view-liveagents" class="view-panel">
+  <style>
+    .la-controls { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; padding:10px 0; }
+    .la-refresh-btn { background:var(--brand-accent); color:#fff; border:none; border-radius:6px; padding:6px 16px; cursor:pointer; font-size:.82rem; font-weight:600; }
+    .la-refresh-btn:hover { filter:brightness(.9); }
+    .la-countdown { color:var(--brand-accent); font-weight:600; font-size:.82rem; }
+    .la-summary { font-size:.78rem; color:var(--text-muted); }
+    .la-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(420px, 1fr)); gap:14px; }
+    .la-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .la-card-hdr { background:var(--brand-accent); color:#fff; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; }
+    .la-card-hdr .la-lob { font-size:.88rem; font-weight:600; }
+    .la-card-hdr .la-counts { font-size:.75rem; display:flex; gap:8px; }
+    .la-cnt { background:rgba(255,255,255,.2); border-radius:10px; padding:1px 7px; }
+    .la-agent-list { max-height:340px; overflow-y:auto; }
+    .la-sort-hdr { display:flex; gap:8px; padding:4px 10px; background:var(--bg); border-bottom:1px solid var(--border); }
+    .la-sort-btn { font-size:.7rem; font-weight:600; cursor:pointer; color:var(--text-muted); background:none; border:none; padding:2px 4px; border-radius:3px; flex:1; text-align:left; }
+    .la-sort-btn:hover { background:var(--border); }
+    .la-sort-btn.active { color:var(--brand-accent); }
+    .la-sort-btn.dur { text-align:right; flex:0 0 50px; }
+    .la-sort-btn.st { flex:0 0 110px; }
+    .la-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-bottom:1px solid var(--border); }
+    .la-row:last-child { border-bottom:none; }
+    .la-row.la-over { background:rgba(220,53,69,.12); }
+    .la-row.la-over .la-dur { color:#c62828; font-weight:700; }
+    .la-row.la-warn { background:rgba(255,152,0,.10); }
+    .la-row.la-warn .la-dur { color:#e65100; font-weight:700; }
+    .la-name { font-size:.84rem; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
+    .la-adh { flex:0 0 100px; text-align:center; }
+    .la-badge { font-size:.68rem; font-weight:600; border-radius:10px; padding:2px 7px; color:#fff; flex:0 0 130px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
+    .la-dur { font-size:.7rem; color:var(--text-muted); min-width:44px; text-align:right; flex-shrink:0; }
+    .la-empty { padding:18px; text-align:center; color:var(--text-muted); font-size:.82rem; }
+    .la-lob-tag { font-size:.65rem; color:var(--text-muted); margin-left:4px; }
+    .la-card.la-offline .la-card-hdr { background:#455a64; }
+    .la-card.la-unsched .la-card-hdr { background:#e65100; }
+    .la-card.la-preshift .la-card-hdr { background:#283593; }
+    .la-ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-bottom:1px solid var(--border); font-size:.82rem; }
+    .la-ps-row:last-child { border-bottom:none; }
+    .la-ps-name { flex:1; font-weight:500; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .la-ps-lob { font-size:.7rem; color:var(--text-muted); flex:0 0 110px; }
+    .la-ps-time { font-size:.7rem; color:var(--text-muted); flex:0 0 50px; text-align:right; }
+    .la-badge-nys { font-size:.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#1565c0; color:#fff; white-space:nowrap; }
+    .la-badge-abs { font-size:.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#c62828; color:#fff; white-space:nowrap; }
+    .la-adh-badge { font-size:.62rem; border-radius:8px; padding:1px 5px; margin-left:4px; font-weight:600; vertical-align:middle; }
+    .la-adh-due { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
+    .la-adh-unsch { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+    .la-adh-ok { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+    .la-filter-wrap { position:relative; display:inline-block; }
+    .la-filter-btn { background:var(--brand-accent); color:#fff; border:none; border-radius:5px; padding:5px 12px; cursor:pointer; font-size:.82rem; }
+    .la-filter-btn:hover { filter:brightness(.9); }
+    .la-filter-drop { display:none; position:absolute; top:110%; left:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:9999; min-width:220px; max-height:380px; overflow-y:auto; }
+    .la-filter-drop.open { display:block; }
+    .la-filter-actions { display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid var(--border); }
+    .la-filter-action { font-size:.75rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:2px 8px; cursor:pointer; }
+    .la-filter-action:hover { background:var(--border); }
+    .la-filter-item { display:flex; align-items:center; gap:8px; padding:6px 12px; cursor:pointer; font-size:.82rem; }
+    .la-filter-item:hover { background:var(--bg); }
+    .la-filter-item input { width:13px; height:13px; accent-color:var(--brand-accent); cursor:pointer; }
+    /* Agent detail panel */
+    #la-panel { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:var(--surface); box-shadow:-4px 0 20px rgba(0,0,0,.2); z-index:10000; transition:right .3s ease; display:flex; flex-direction:column; }
+    #la-panel.open { right:0; }
+    .la-panel-hdr { background:var(--brand-accent); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .la-panel-hdr h3 { margin:0; font-size:1rem; }
+    .la-panel-close { background:none; border:none; color:#fff; font-size:1.3rem; cursor:pointer; padding:0 4px; }
+    .la-panel-body { flex:1; overflow-y:auto; padding:14px 16px; }
+    .la-panel-sec { margin-bottom:18px; }
+    .la-panel-sec h4 { font-size:.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+    .la-shift-bar { display:flex; align-items:center; gap:8px; font-size:.85rem; }
+    .la-shift-time { font-weight:600; }
+    .la-seg-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); font-size:.82rem; }
+    .la-seg-activity { flex:1; }
+    .la-seg-time { font-size:.75rem; color:var(--text-muted); min-width:110px; }
+    .la-seg-adh { font-size:.72rem; font-weight:600; border-radius:8px; padding:1px 7px; }
+    .la-adh-ok2 { background:#d4edda; color:#155724; }
+    .la-adh-missed { background:#f8d7da; color:#721c24; }
+    .la-adh-active { background:#cce5ff; color:#004085; }
+    .la-adh-upcoming { background:var(--bg); color:var(--text-muted); }
+    .la-tl-row { display:flex; align-items:center; gap:8px; padding:3px 0; font-size:.78rem; }
+    .la-tl-time { font-weight:600; min-width:45px; color:var(--text-muted); }
+    .la-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:9999; }
+    .la-overlay.open { display:block; }
+    @media(max-width:600px) {
+      .la-grid { grid-template-columns:1fr; }
+      #la-panel { width:100%; right:-100%; }
+    }
+  </style>
+
+  <div class="la-controls">
+    <button class="la-refresh-btn" id="laRefreshBtn" onclick="laManualRefresh()">🔄 Refresh Now</button>
+    <span style="color:var(--text-muted)">|</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;font-size:.8rem;color:var(--text-muted)">
+      <input type="checkbox" id="laAutoToggle" onchange="laToggleAuto(this.checked)" style="accent-color:var(--brand-accent);width:13px;height:13px"> Auto-refresh
+    </label>
+    <span class="la-countdown" id="laCountdown" style="display:none"></span>
+    <span style="color:var(--text-muted)">|</span>
+    <div class="la-filter-wrap">
+      <button class="la-filter-btn" onclick="laToggleLobDrop()">🔽 LOBs <span id="laLobCount"></span></button>
+      <div class="la-filter-drop" id="laLobDrop">
+        <div class="la-filter-actions">
+          <button class="la-filter-action" onclick="laSelectAllLobs()">All</button>
+          <button class="la-filter-action" onclick="laSelectNoneLobs()">None</button>
+        </div>
+        <div id="laLobList"></div>
+      </div>
+    </div>
+    <span style="color:var(--text-muted)">|</span>
+    <div class="la-filter-wrap" id="laStatusWrap">
+      <button class="la-filter-btn" onclick="laToggleStatusDrop()">🔽 Status <span id="laStatusCount"></span></button>
+      <div class="la-filter-drop" id="laStatusDrop">
+        <div class="la-filter-actions">
+          <button class="la-filter-action" onclick="laSelectAllStatuses()">All</button>
+          <button class="la-filter-action" onclick="laSelectNoneStatuses()">None</button>
+        </div>
+        <div id="laStatusList"></div>
+      </div>
+    </div>
+    <span style="color:var(--text-muted)">|</span>
+    <span class="la-summary" id="laStatusSummary"></span>
+  </div>
+
+  <div id="laGrid" class="la-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)">
+      Click <strong>Load</strong> or switch to this tab to see live agent statuses.
+    </div>
+  </div>
+
+  <!-- Agent detail slide-out -->
+  <div class="la-overlay" id="laOverlay" onclick="laClosePanel()"></div>
+  <div id="la-panel">
+    <div class="la-panel-hdr">
+      <div>
+        <h3 id="laPanelName">Agent Schedule</h3>
+        <div id="laPanelLob" style="font-size:.78rem;opacity:.8"></div>
+      </div>
+      <button class="la-panel-close" onclick="laClosePanel()">✕</button>
+    </div>
+    <div class="la-panel-body" id="laPanelBody">
+      <div style="text-align:center;padding:40px;color:var(--text-muted)">
+        <span class="spinner"></span> Loading…
+      </div>
     </div>
   </div>
 </div>
@@ -989,6 +1134,342 @@ function _findOOA(scheduled, actual, s_mins, e_mins) {
     }
   }
   return periods;
+}
+
+// ═══════════ LIVE AGENTS JS ═══════════
+
+const LA_STATUS_COLORS = {
+  "Ready":"#28a745","On-call":"#1565c0","Cool-Down":"#f9a825",
+  "On Break":"#ef6c00","Lunch":"#e65100","Unavailable":"#c62828",
+  "No-Answer":"#b71c1c","Rejected":"#880e4f","Offline":"#607d8b",
+  "No-Mic":"#546e7a","ooq Meeting":"#00838f","ooq Training":"#2e7d32",
+  "ooq Coaching":"#1b5e20","ooq After Shift":"#4e342e",
+  "ooq System Issue":"#d84315","ooq Personal":"#6a1b9a",
+};
+const LA_DEFAULT_COLOR = "#78909c";
+const LA_OVER_LIMITS = {
+  "On Break":{warn:12,over:15},"Lunch":{warn:25,over:30},"ooq Personal":{warn:8,over:10},
+};
+const LA_OFFLINE = new Set(["Offline","No-Mic"]);
+
+let la_lastData = {};
+const la_sortState = {};
+let la_allLobs = [], la_selectedLobs = null;
+let la_allStatuses = [], la_selectedStatuses = null;
+let la_countdown = null, la_secondsLeft = 60;
+let la_loaded = false;
+
+function laFmtDur(m) {
+  if (m==null||isNaN(m)) return "";
+  m = Math.round(m);
+  return m<60 ? m+"m" : Math.floor(m/60)+"h"+String(m%60).padStart(2,"0")+"m";
+}
+function laRowClass(a) {
+  const L = LA_OVER_LIMITS[a.status];
+  if (!L) return "";
+  return a.minutes_in_status>=L.over?"la-over":a.minutes_in_status>=L.warn?"la-warn":"";
+}
+function laOverIcon(a) {
+  const L = LA_OVER_LIMITS[a.status];
+  return (L&&a.minutes_in_status>=L.over)?'<span style="font-size:.7rem;margin-left:2px">⚠️</span>':"";
+}
+function laAdherenceBadge(a) {
+  if (a.not_scheduled) return '<span class="la-adh-badge" style="background:#607d8b;color:#fff">📋 Not Scheduled</span>';
+  if (a.pre_shift&&a.shift_start) return `<span class="la-adh-badge la-adh-due">⏳ Pre-Shift</span>`;
+  if (a.shift_done&&a.shift_end) return `<span class="la-adh-badge la-adh-unsch">⏰ Over Shift</span>`;
+  if (a.sched_now==="break") {
+    return a.status==="On Break"?'<span class="la-adh-badge la-adh-ok">✓ Sched</span>':'<span class="la-adh-badge la-adh-due">📋 Break due</span>';
+  }
+  if (a.sched_now==="lunch") {
+    return a.status==="Lunch"?'<span class="la-adh-badge la-adh-ok">✓ Sched</span>':'<span class="la-adh-badge la-adh-due">📋 Lunch due</span>';
+  }
+  if (a.status==="On Break") return '<span class="la-adh-badge la-adh-unsch">⚠ Non-adherent</span>';
+  if (a.status==="Lunch") return '<span class="la-adh-badge la-adh-unsch">⚠ Non-adherent</span>';
+  return "";
+}
+function laShiftBadge(a) {
+  if (a.shift_done===null||a.shift_done===undefined) return "";
+  if (a.shift_done) return `<span class="la-adh-badge la-adh-ok">✓ Done ${a.shift_end||""}</span>`;
+  return "";
+}
+
+function laSortAgents(agents, col, dir) {
+  const s = [...agents];
+  s.sort((a,b)=>{
+    let av,bv;
+    if(col==="name"){av=a.name;bv=b.name;}
+    else if(col==="status"){av=a.status;bv=b.status;}
+    else{av=a.minutes_in_status;bv=b.minutes_in_status;}
+    if(av<bv)return dir==="asc"?-1:1;
+    if(av>bv)return dir==="asc"?1:-1;
+    return 0;
+  });
+  return s;
+}
+function laSetSort(lobKey,col) {
+  const cur=la_sortState[lobKey]||{col:"status",dir:"asc"};
+  const dir=cur.col===col?(cur.dir==="asc"?"desc":"asc"):"asc";
+  la_sortState[lobKey]={col,dir};
+  if(la_lastData[lobKey]) {
+    const card=document.querySelector(`[data-la-lob="${CSS.escape(lobKey)}"]`);
+    const isOff=lobKey==="__offline__";
+    if(card) card.outerHTML=laBuildCard(lobKey,la_lastData[lobKey],isOff);
+  }
+}
+function laBuildCard(lob, agents, showLobTag) {
+  const state=la_sortState[lob]||{col:"status",dir:"asc"};
+  const sorted=laSortAgents(agents,state.col,state.dir);
+  const isOff=lob==="__offline__",isUn=lob==="__unscheduled__";
+  const displayName=isOff?"⚫ Offline":isUn?"🔶 Unscheduled":lob;
+  const ready=agents.filter(a=>a.status==="Ready").length;
+  const oncall=agents.filter(a=>a.status==="On-call").length;
+  function arrow(c){if(state.col!==c)return " ↕";return state.dir==="asc"?" ↑":" ↓";}
+
+  let rows="";
+  for(const a of sorted) {
+    const color=LA_STATUS_COLORS[a.status]||LA_DEFAULT_COLOR;
+    const dur=laFmtDur(a.minutes_in_status);
+    const rc=laRowClass(a);
+    const icon=laOverIcon(a);
+    const adh=(isOff||isUn)?laShiftBadge(a):laAdherenceBadge(a);
+    const lobTag=showLobTag&&a.lob?`<span class="la-lob-tag">${a.lob}</span>`:"";
+    rows+=`<div class="la-row${rc?' '+rc:''}">
+      <span class="la-name" title="${a.name}" data-uid="${a.user_id}" data-aname="${a.name}" data-alob="${showLobTag&&a.lob?a.lob:lob}" onclick="laOpenPanel(this)">👤 ${a.name}${lobTag}</span>
+      <span class="la-adh">${adh}</span>
+      <span class="la-badge" style="background:${color}">${a.status}</span>
+      <span class="la-dur">${dur}${icon}</span>
+    </div>`;
+  }
+  const lobAttr=lob.replace(/"/g,"&quot;");
+  const cardCls=isOff?"la-card la-offline":isUn?"la-card la-unsched":"la-card";
+  return `<div class="${cardCls}" data-la-lob="${lobAttr}">
+    <div class="la-card-hdr">
+      <span class="la-lob">${displayName}</span>
+      <span class="la-counts">
+        <span class="la-cnt" title="Total">${agents.length}</span>
+        ${isOff?'':'<span class="la-cnt" style="background:rgba(40,167,69,.5)">✓'+ready+'</span><span class="la-cnt" style="background:rgba(21,101,192,.5)">📞'+oncall+'</span>'}
+      </span>
+    </div>
+    <div class="la-sort-hdr">
+      <button class="la-sort-btn${state.col==='name'?' active':''}" onclick="laSetSort('${lobAttr}','name')">Name${arrow('name')}</button>
+      <button class="la-sort-btn" style="flex:0 0 100px;text-align:center;cursor:default;font-size:.7rem" disabled>Adherence</button>
+      <button class="la-sort-btn${state.col==='status'?' active':''}" style="flex:0 0 130px;text-align:center;font-size:.7rem" onclick="laSetSort('${lobAttr}','status')">Status${arrow('status')}</button>
+      <button class="la-sort-btn dur${state.col==='duration'?' active':''}" onclick="laSetSort('${lobAttr}','duration')">Time${arrow('duration')}</button>
+    </div>
+    <div class="la-agent-list">${rows||'<div class="la-empty">No agents logged in</div>'}</div>
+  </div>`;
+}
+function laBuildPreShift(agents) {
+  if(!agents||!agents.length) return "";
+  const absent=agents.filter(a=>a.indicator==="absent").length;
+  const nys=agents.filter(a=>a.indicator==="not_yet_started").length;
+  let rows="";
+  for(const a of agents) {
+    const badge=a.indicator==="absent"
+      ?`<span class="la-badge-abs" title="${a.mins_late}m past start">⚠ Absent</span>`
+      :`<span class="la-badge-nys" title="Starts at ${a.shift_start}">⏳ Not Started</span>`;
+    const time=a.indicator==="absent"?`${a.shift_start} +${a.mins_late}m`:a.shift_start;
+    rows+=`<div class="la-ps-row">
+      <span class="la-ps-name" title="${a.name}">👤 ${a.name}</span>
+      <span class="la-ps-lob">${a.lob}</span>
+      ${badge}
+      <span class="la-ps-time">${time}</span>
+    </div>`;
+  }
+  return `<div class="la-card la-preshift" data-la-lob="__preshift__">
+    <div class="la-card-hdr">
+      <span class="la-lob">📋 Scheduled — Not Logged In</span>
+      <span class="la-counts">
+        <span class="la-cnt">${agents.length}</span>
+        <span class="la-cnt" style="background:rgba(198,40,40,.5)">⚠${absent}</span>
+        <span class="la-cnt" style="background:rgba(21,101,192,.5)">⏳${nys}</span>
+      </span>
+    </div>
+    <div class="la-agent-list">${rows}</div>
+  </div>`;
+}
+
+async function laLoadAgents(showSpinner) {
+  if(showSpinner) {
+    document.getElementById("laGrid").innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)"><span class="spinner"></span> Loading…</div>';
+  }
+  try {
+    const resp=await fetch("/realtime/api/live-agents",{method:"POST",headers:{"Content-Type":"application/json","X-CSRFToken":document.querySelector('meta[name=csrf-token]')?.content||""},body:JSON.stringify({})});
+    const data=await resp.json();
+    la_lastData={};
+    if(data.error){document.getElementById("laGrid").innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:#c62828">${data.error}</div>`;return;}
+
+    const lobs=Object.keys(data.by_lob).sort();
+    let html="";
+    let statusCount={};
+    const offlineAgents=[],unschedAgents=[];
+    const preShift=data.pre_shift||[];
+
+    for(const lob of lobs) {
+      const agents=data.by_lob[lob];
+      if(!agents||!agents.length) continue;
+      const online=agents.filter(a=>!LA_OFFLINE.has(a.status)&&!a.not_scheduled);
+      const offline=agents.filter(a=>LA_OFFLINE.has(a.status));
+      const unsched=agents.filter(a=>a.not_scheduled&&!LA_OFFLINE.has(a.status));
+      offline.forEach(a=>offlineAgents.push({...a,lob}));
+      unsched.forEach(a=>unschedAgents.push({...a,lob}));
+      agents.forEach(a=>{statusCount[a.status]=(statusCount[a.status]||0)+1;});
+      if(online.length>0){la_lastData[lob]=online;html+=laBuildCard(lob,online,false);}
+    }
+    if(unschedAgents.length>0){la_lastData["__unscheduled__"]=unschedAgents;html+=laBuildCard("__unscheduled__",unschedAgents,true);}
+    if(offlineAgents.length>0){la_lastData["__offline__"]=offlineAgents;html+=laBuildCard("__offline__",offlineAgents,true);}
+    if(preShift.length>0) html+=laBuildPreShift(preShift);
+
+    if(!html){document.getElementById("laGrid").innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)">No agents currently active.</div>';return;}
+    document.getElementById("laGrid").innerHTML=html;
+
+    // Status summary
+    const parts=Object.entries(statusCount).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<span style="color:${LA_STATUS_COLORS[s]||LA_DEFAULT_COLOR};font-weight:600">${s}: ${c}</span>`);
+    document.getElementById("laStatusSummary").innerHTML=parts.join(" · ");
+
+    // Update filter lists
+    la_allLobs=lobs.filter(l=>l!=="__offline__"&&l!=="__unscheduled__"&&data.by_lob[l]&&data.by_lob[l].length>0);
+    if(offlineAgents.length>0) la_allLobs.push("__offline__");
+    if(unschedAgents.length>0) la_allLobs.push("__unscheduled__");
+    if(preShift.length>0) la_allLobs.push("__preshift__");
+    la_allStatuses=Object.keys(statusCount).sort();
+    laRebuildLobList();
+    laRebuildStatusList();
+    laApplyLobFilter();
+    laApplyStatusFilter();
+  } catch(e) { console.error("Live agents error:",e); }
+}
+
+// LOB Filter
+function laIsLobSel(l){return la_selectedLobs===null||la_selectedLobs.has(l);}
+function laToggleLobDrop(){document.getElementById("laLobDrop").classList.toggle("open");}
+document.addEventListener("click",e=>{const w=document.querySelector("#laLobDrop")?.closest(".la-filter-wrap");if(w&&!w.contains(e.target))document.getElementById("laLobDrop").classList.remove("open");});
+function laRebuildLobList(){
+  const list=document.getElementById("laLobList");list.innerHTML="";
+  const labels={"__offline__":"⚫ Offline","__unscheduled__":"🔶 Unscheduled","__preshift__":"📋 Not Logged In"};
+  for(const l of la_allLobs){
+    const checked=laIsLobSel(l);const label=labels[l]||l;
+    const d=document.createElement("div");d.className="la-filter-item";
+    d.innerHTML=`<input type="checkbox" ${checked?"checked":""} onchange="laToggleLob('${l.replace(/'/g,"\\'")}',this.checked)"><label style="cursor:pointer;flex:1">${label}</label>`;
+    list.appendChild(d);
+  }
+  laUpdateLobCount();
+}
+function laUpdateLobCount(){
+  const t=la_allLobs.length;const s=la_selectedLobs===null?t:[...la_selectedLobs].filter(l=>la_allLobs.includes(l)).length;
+  document.getElementById("laLobCount").textContent=s===t?"(All)":`(${s}/${t})`;
+}
+function laToggleLob(l,c){
+  if(la_selectedLobs===null)la_selectedLobs=new Set(la_allLobs);
+  if(c)la_selectedLobs.add(l);else la_selectedLobs.delete(l);
+  if(la_selectedLobs.size>=la_allLobs.length)la_selectedLobs=null;
+  laUpdateLobCount();laApplyLobFilter();
+}
+function laSelectAllLobs(){la_selectedLobs=null;laRebuildLobList();laApplyLobFilter();}
+function laSelectNoneLobs(){la_selectedLobs=new Set();laRebuildLobList();laApplyLobFilter();}
+function laApplyLobFilter(){document.querySelectorAll("[data-la-lob]").forEach(c=>{c.style.display=laIsLobSel(c.dataset.laLob)?"":"none";});}
+
+// Status Filter
+function laIsStatusSel(s){return la_selectedStatuses===null||la_selectedStatuses.has(s);}
+function laToggleStatusDrop(){document.getElementById("laStatusDrop").classList.toggle("open");}
+document.addEventListener("click",e=>{const w=document.getElementById("laStatusWrap");if(w&&!w.contains(e.target))document.getElementById("laStatusDrop").classList.remove("open");},true);
+function laRebuildStatusList(){
+  const list=document.getElementById("laStatusList");list.innerHTML="";
+  for(const s of la_allStatuses){
+    const checked=laIsStatusSel(s);const color=LA_STATUS_COLORS[s]||LA_DEFAULT_COLOR;
+    const d=document.createElement("div");d.className="la-filter-item";
+    d.innerHTML=`<input type="checkbox" ${checked?"checked":""} onchange="laToggleStatus('${s.replace(/'/g,"\\'")}',this.checked)"><label style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>${s}</label>`;
+    list.appendChild(d);
+  }
+  laUpdateStatusCount();
+}
+function laUpdateStatusCount(){
+  const t=la_allStatuses.length;const s=la_selectedStatuses===null?t:[...la_selectedStatuses].filter(x=>la_allStatuses.includes(x)).length;
+  document.getElementById("laStatusCount").textContent=s===t?"(All)":`(${s}/${t})`;
+}
+function laToggleStatus(s,c){
+  if(la_selectedStatuses===null)la_selectedStatuses=new Set(la_allStatuses);
+  if(c)la_selectedStatuses.add(s);else la_selectedStatuses.delete(s);
+  if(la_selectedStatuses.size>=la_allStatuses.length)la_selectedStatuses=null;
+  laUpdateStatusCount();laApplyStatusFilter();
+}
+function laSelectAllStatuses(){la_selectedStatuses=null;laRebuildStatusList();laApplyStatusFilter();}
+function laSelectNoneStatuses(){la_selectedStatuses=new Set();laRebuildStatusList();laApplyStatusFilter();}
+function laApplyStatusFilter(){
+  document.querySelectorAll(".la-card").forEach(card=>{
+    const lob=card.dataset.laLob;
+    if(lob==="__offline__"||lob==="__unscheduled__"||lob==="__preshift__")return;
+    card.querySelectorAll(".la-row").forEach(row=>{
+      const badge=row.querySelector(".la-badge");
+      const st=badge?badge.textContent.trim():"";
+      row.style.display=laIsStatusSel(st)?"":"none";
+    });
+    const vis=card.querySelectorAll('.la-row:not([style*="display: none"]):not([style*="display:none"])');
+    card.style.display=(laIsLobSel(lob)&&vis.length>0)?"":"none";
+  });
+}
+
+// Auto-refresh
+function laStartCountdown(){
+  la_secondsLeft=60;
+  const el=document.getElementById("laCountdown");el.style.display="inline";
+  la_countdown=setInterval(()=>{
+    la_secondsLeft--;el.textContent="(next in "+la_secondsLeft+"s)";
+    if(la_secondsLeft<=0){clearInterval(la_countdown);laLoadAgents(false).then(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();});}
+  },1000);
+}
+function laStopCountdown(){if(la_countdown)clearInterval(la_countdown);document.getElementById("laCountdown").style.display="none";}
+function laToggleAuto(on){if(on)laStartCountdown();else laStopCountdown();}
+function laManualRefresh(){
+  const btn=document.getElementById("laRefreshBtn");btn.textContent="⏳ Refreshing…";btn.disabled=true;laStopCountdown();
+  laLoadAgents(true).then(()=>{btn.textContent="🔄 Refresh Now";btn.disabled=false;if(document.getElementById("laAutoToggle").checked)laStartCountdown();});
+}
+
+// Agent detail panel
+function laOpenPanel(el){
+  const uid=el.dataset.uid,name=el.dataset.aname,lob=el.dataset.alob;
+  document.getElementById("laPanelName").textContent=name;
+  document.getElementById("laPanelLob").textContent=lob;
+  document.getElementById("laPanelBody").innerHTML='<div style="text-align:center;padding:40px;color:var(--text-muted)"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("la-panel").classList.add("open");
+  document.getElementById("laOverlay").classList.add("open");
+  fetch("/realtime/api/agent-detail",{method:"POST",headers:{"Content-Type":"application/json","X-CSRFToken":document.querySelector('meta[name=csrf-token]')?.content||""},body:JSON.stringify({uid})})
+    .then(r=>r.json()).then(d=>{if(d.error){document.getElementById("laPanelBody").innerHTML=`<div style="color:#c62828;padding:20px">${d.error}</div>`;return;}laRenderPanel(d);})
+    .catch(e=>{document.getElementById("laPanelBody").innerHTML=`<div style="color:#c62828;padding:20px">Failed: ${e}</div>`;});
+}
+function laClosePanel(){document.getElementById("la-panel").classList.remove("open");document.getElementById("laOverlay").classList.remove("open");}
+const LA_ADH_CLS={ok:"la-adh-ok2",missed:"la-adh-missed",active:"la-adh-active",upcoming:"la-adh-upcoming"};
+function laRenderPanel(d){
+  if(d.segments)d.segments.sort((a,b)=>a.start.localeCompare(b.start));
+  if(d.timeline)d.timeline.sort((a,b)=>a.time.localeCompare(b.time));
+  const sc=LA_STATUS_COLORS[d.current_status]||LA_DEFAULT_COLOR;
+  let h=`<div class="la-panel-sec"><h4>Current Status</h4><div class="la-shift-bar"><span class="la-badge" style="background:${sc}">${d.current_status}</span><span style="font-size:.82rem;color:var(--text-muted)">since ${d.current_since}</span></div></div>`;
+  if(d.shift_start||d.shift_end) h+=`<div class="la-panel-sec"><h4>Shift</h4><div class="la-shift-bar"><span class="la-shift-time">${d.shift_start||"—"}</span><span style="color:var(--text-muted)">→</span><span class="la-shift-time">${d.shift_end||"—"}</span></div></div>`;
+  if(d.segments&&d.segments.length>0){
+    h+=`<div class="la-panel-sec"><h4>Schedule Blocks</h4>`;
+    for(const s of d.segments){const cls=LA_ADH_CLS[s.adh_class]||"la-adh-upcoming";h+=`<div class="la-seg-row"><span class="la-seg-activity">${s.activity}</span><span class="la-seg-time">${s.start} – ${s.end}</span><span class="la-seg-adh ${cls}">${s.adherence}</span></div>`;}
+    h+=`</div>`;
+  } else h+=`<div class="la-panel-sec"><h4>Schedule Blocks</h4><div style="color:var(--text-muted);font-size:.82rem">No blocks scheduled today</div></div>`;
+  if(d.timeline&&d.timeline.length>0){
+    h+=`<div class="la-panel-sec"><h4>Status Timeline</h4>`;
+    for(const t of [...d.timeline].reverse().slice(0,30)){const c=LA_STATUS_COLORS[t.status]||LA_DEFAULT_COLOR;h+=`<div class="la-tl-row"><span class="la-tl-time">${t.time}</span><span class="la-badge" style="background:${c};font-size:.65rem;padding:1px 6px">${t.status}</span></div>`;}
+    h+=`</div>`;
+  }
+  document.getElementById("laPanelBody").innerHTML=h;
+}
+
+// Auto-load when switching to Live Agents tab
+const _origShowView = typeof showView === 'function' ? showView : null;
+if (_origShowView) {
+  // Monkey-patch showView to trigger live agents load
+  const __showView = showView;
+  showView = function(name) {
+    __showView(name);
+    if (name === 'liveagents' && !la_loaded) {
+      la_loaded = true;
+      laLoadAgents(true);
+    }
+  };
 }
 
 // Deep link (#interval etc.) + auto-load

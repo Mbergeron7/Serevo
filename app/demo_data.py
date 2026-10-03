@@ -1730,3 +1730,241 @@ def get_demo_employee_doc_detail(doc_id):
         doc = docs.get(1, {})
         doc = dict(doc, id=doc_id)
     return doc
+
+
+# ── Live Agent Status demo data ─────────────────────────────
+
+_LIVE_STATUSES = [
+    "Ready", "On-call", "Cool-Down", "On Break", "Lunch",
+    "Unavailable", "Offline", "ooq Meeting", "ooq Training",
+    "ooq Coaching", "ooq Personal",
+]
+
+_LIVE_STATUS_WEIGHTS = [20, 30, 8, 6, 4, 3, 5, 4, 3, 2, 2]
+
+
+def get_demo_live_agents():
+    """Generate realistic live agent status data for the Live Agents dashboard.
+
+    Returns dict: {by_lob: {lobName: [agents]}, pre_shift: [agents]}
+    """
+    now = datetime.datetime.now()
+    today = now.date()
+    rng = random.Random(now.hour * 60 + now.minute // 5)  # changes every 5 min
+
+    schedules = get_demo_schedules(today)
+    sched_by_eid = {}
+    for s in schedules:
+        sched_by_eid[s["employee_id"]] = s
+
+    by_lob = {}
+    pre_shift = []
+
+    for emp in DEMO_EMPLOYEES:
+        eid = emp["Employee ID"]
+        name = f"{emp['First Name']} {emp['Last Name']}"
+        lob = emp["Latest Skill Name"]
+        sched = sched_by_eid.get(eid)
+
+        if not sched or sched.get("status") == "off":
+            continue  # day off, skip entirely
+
+        shift_start = sched.get("start", "")
+        shift_end = sched.get("end", "")
+
+        if not shift_start or not shift_end:
+            continue
+
+        sh, sm = map(int, shift_start.split(":"))
+        eh, em = map(int, shift_end.split(":"))
+        shift_start_mins = sh * 60 + sm
+        shift_end_mins = eh * 60 + em
+        now_mins = now.hour * 60 + now.minute
+
+        # Determine schedule-now block
+        sched_now = ""
+        for seg in sched.get("segments", []):
+            seg_start = seg.get("start", "")
+            seg_end = seg.get("end", "")
+            if seg_start and seg_end:
+                ss = int(seg_start.split(":")[0]) * 60 + int(seg_start.split(":")[1])
+                se = int(seg_end.split(":")[0]) * 60 + int(seg_end.split(":")[1])
+                if ss <= now_mins < se:
+                    activity = seg.get("type", seg.get("activity", ""))
+                    if "break" in activity.lower():
+                        sched_now = "break"
+                    elif "lunch" in activity.lower():
+                        sched_now = "lunch"
+                    break
+
+        # Pre-shift: not started yet
+        if now_mins < shift_start_mins:
+            mins_until = shift_start_mins - now_mins
+            if mins_until <= 30:  # show agents starting within 30 min
+                pre_shift.append({
+                    "name": name,
+                    "user_id": eid,
+                    "lob": lob,
+                    "shift_start": shift_start,
+                    "shift_end": shift_end,
+                    "indicator": "not_yet_started",
+                    "mins_late": 0,
+                })
+            continue
+
+        # Absent: shift started but not logged in (simulate ~6% no-show)
+        if now_mins >= shift_start_mins + 15:
+            r = rng.random()
+            if r < 0.06:
+                mins_late = now_mins - shift_start_mins
+                pre_shift.append({
+                    "name": name,
+                    "user_id": eid,
+                    "lob": lob,
+                    "shift_start": shift_start,
+                    "shift_end": shift_end,
+                    "indicator": "absent",
+                    "mins_late": mins_late,
+                })
+                continue
+
+        # Past shift end — left early or shift done
+        shift_done = now_mins >= shift_end_mins
+        not_scheduled = False
+
+        # Pick a status weighted by time-of-day realism
+        status = rng.choices(_LIVE_STATUSES, weights=_LIVE_STATUS_WEIGHTS, k=1)[0]
+
+        # If on break/lunch, bias duration
+        if status == "On Break":
+            mins_in = rng.randint(1, 18)
+        elif status == "Lunch":
+            mins_in = rng.randint(1, 35)
+        elif status == "On-call":
+            mins_in = rng.randint(1, 45)
+        elif status == "Ready":
+            mins_in = rng.randint(0, 12)
+        elif status == "Offline":
+            # If shift done, show as offline with shift_done flag
+            if shift_done:
+                mins_in = now_mins - shift_end_mins
+            else:
+                mins_in = rng.randint(1, 8)
+        else:
+            mins_in = rng.randint(1, 25)
+
+        since_h = (now.hour * 60 + now.minute - mins_in) // 60
+        since_m = (now.hour * 60 + now.minute - mins_in) % 60
+        current_since = f"{since_h:02d}:{since_m:02d}"
+
+        # If shift done, some agents leave (show as offline)
+        if shift_done and rng.random() < 0.6:
+            status = "Offline"
+            mins_in = now_mins - shift_end_mins
+            current_since = shift_end
+            since_h, since_m = eh, em
+
+        agent = {
+            "name": name,
+            "user_id": eid,
+            "status": status,
+            "minutes_in_status": mins_in,
+            "current_since": current_since,
+            "lob": lob,
+            "shift_start": shift_start,
+            "shift_end": shift_end,
+            "shift_done": shift_done if not (status == "Offline" and shift_done) else True,
+            "sched_now": sched_now,
+            "not_scheduled": not_scheduled,
+            "pre_shift": now_mins < shift_start_mins + 5 and now_mins >= shift_start_mins,
+        }
+
+        by_lob.setdefault(lob, []).append(agent)
+
+    return {"by_lob": by_lob, "pre_shift": pre_shift}
+
+
+def get_demo_agent_detail(user_id):
+    """Generate demo agent detail data for the slide-out panel."""
+    now = datetime.datetime.now()
+    today = now.date()
+    rng = random.Random(hash(user_id) + now.hour)
+
+    emp = None
+    for e in DEMO_EMPLOYEES:
+        if e["Employee ID"] == user_id:
+            emp = e
+            break
+    if not emp:
+        return {"error": "Agent not found"}
+
+    name = f"{emp['First Name']} {emp['Last Name']}"
+    schedules = get_demo_schedules(today)
+    sched = None
+    for s in schedules:
+        if s["employee_id"] == user_id:
+            sched = s
+            break
+
+    shift_start = sched.get("start", "") if sched else ""
+    shift_end = sched.get("end", "") if sched else ""
+
+    # Current status
+    status = rng.choices(_LIVE_STATUSES[:6], weights=_LIVE_STATUS_WEIGHTS[:6], k=1)[0]
+    mins_in = rng.randint(1, 20)
+    since_h = (now.hour * 60 + now.minute - mins_in) // 60
+    since_m = (now.hour * 60 + now.minute - mins_in) % 60
+
+    # Schedule segments
+    segments = []
+    if sched and sched.get("segments"):
+        for seg in sched["segments"]:
+            activity = seg.get("type", seg.get("activity", "On-call"))
+            start = seg.get("start", "")
+            end = seg.get("end", "")
+            if not start or not end:
+                continue
+            ss = int(start.split(":")[0]) * 60 + int(start.split(":")[1])
+            se = int(end.split(":")[0]) * 60 + int(end.split(":")[1])
+            now_mins = now.hour * 60 + now.minute
+            if now_mins >= se:
+                adh_class = "ok"
+                adherence = "✓ Met"
+            elif now_mins >= ss:
+                adh_class = "active"
+                adherence = "● Active"
+            else:
+                adh_class = "upcoming"
+                adherence = "Upcoming"
+            segments.append({
+                "activity": activity.replace("_", " ").title(),
+                "start": start,
+                "end": end,
+                "adh_class": adh_class,
+                "adherence": adherence,
+            })
+
+    # Status timeline
+    timeline = []
+    if shift_start:
+        sh, sm = map(int, shift_start.split(":"))
+        cursor = sh * 60 + sm
+        statuses_seq = ["Ready", "On-call", "Ready", "On-call", "On Break",
+                        "Ready", "On-call", "Lunch", "Ready", "On-call"]
+        for st in statuses_seq:
+            if cursor >= now.hour * 60 + now.minute:
+                break
+            timeline.append({
+                "time": f"{cursor // 60:02d}:{cursor % 60:02d}",
+                "status": st,
+            })
+            cursor += rng.randint(5, 45)
+
+    return {
+        "current_status": status,
+        "current_since": f"{since_h:02d}:{since_m:02d}",
+        "shift_start": shift_start,
+        "shift_end": shift_end,
+        "segments": segments,
+        "timeline": timeline,
+    }

@@ -1281,6 +1281,99 @@ def vto_ot_cancel():
     return jsonify(success=True)
 
 
+# ── Live Agents API ──────────────────────────────────────────
+
+@realtime_bp.route("/api/live-agents", methods=["POST"])
+@login_required
+def api_live_agents():
+    """Return live agent status data grouped by LOB."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_live_agents
+        data = get_demo_live_agents()
+        return jsonify(data)
+
+    # Real data: pull from AgentStatusEvent model
+    try:
+        from app.models import db, Employee, AgentStatusEvent, PlanningUnit
+        import datetime as dt
+
+        now = dt.datetime.now()
+        today = now.date()
+
+        # Get all active employees with their LOBs
+        employees = Employee.query.filter_by(status="Active").all()
+
+        by_lob = {}
+        pre_shift = []
+
+        for emp in employees:
+            pu = emp.planning_unit
+            lob = pu.name if pu else "Unassigned"
+
+            # Get the latest status event for this employee
+            latest_event = (AgentStatusEvent.query
+                           .filter_by(employee_id=emp.id)
+                           .filter(AgentStatusEvent.start_ts >= dt.datetime.combine(today, dt.time.min))
+                           .order_by(AgentStatusEvent.start_ts.desc())
+                           .first())
+
+            if not latest_event:
+                continue
+
+            # Calculate minutes in status
+            if latest_event.end_ts:
+                mins_in = (latest_event.end_ts - latest_event.start_ts).total_seconds() / 60
+            else:
+                mins_in = (now - latest_event.start_ts).total_seconds() / 60
+
+            agent = {
+                "name": emp.full_name,
+                "user_id": emp.employee_id,
+                "status": latest_event.status or "Unknown",
+                "minutes_in_status": round(mins_in),
+                "current_since": latest_event.start_ts.strftime("%H:%M"),
+                "lob": lob,
+                "shift_start": "",
+                "shift_end": "",
+                "shift_done": False,
+                "sched_now": "",
+                "not_scheduled": False,
+                "pre_shift": False,
+            }
+
+            by_lob.setdefault(lob, []).append(agent)
+
+        return jsonify({"by_lob": by_lob, "pre_shift": pre_shift})
+
+    except Exception as e:
+        log.exception("live-agents error")
+        return jsonify(error=str(e)), 500
+
+
+@realtime_bp.route("/api/agent-detail", methods=["POST"])
+@login_required
+def api_agent_detail():
+    """Return detailed schedule + timeline for one agent."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+
+    payload = request.get_json(silent=True) or {}
+    uid = payload.get("uid") or request.args.get("uid", "")
+    if not uid:
+        return jsonify(error="Missing uid"), 400
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_agent_detail
+        return jsonify(get_demo_agent_detail(uid))
+
+    return jsonify(error="Agent detail not available for live data yet"), 501
+
+
 @realtime_bp.route("/vto-ot/delete", methods=["POST"])
 @login_required
 def vto_ot_delete():
