@@ -925,6 +925,96 @@ def export_csv():
         return jsonify({"success": False, "error": str(e)})
 
 
+@scheduling_bp.route("/export-xlsx", methods=["POST"])
+@login_required
+def export_xlsx():
+    """Export schedule to Excel (.xlsx) with formatting."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        start_str = payload.get("start_date", "")
+        end_str = payload.get("end_date", "")
+
+        if not lob or not start_str or not end_str:
+            return jsonify({"success": False, "error": "LOB and date range required"})
+
+        start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
+
+        from app.models import PlanningUnit
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if not pu:
+            return jsonify({"success": False, "error": "No planning unit found"})
+
+        schedules = Schedule.query.filter(
+            Schedule.planning_unit_id == pu.id,
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Schedule"
+
+        # Header styling
+        hdr_font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+        hdr_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        hdr_align = Alignment(horizontal="center", vertical="center")
+        thin = Side(style="thin", color="D9D9D9")
+        cell_border = Border(bottom=thin)
+
+        headers = ["Date", "Day", "Employee", "Employee ID", "Shift Start",
+                    "Shift End", "Hours", "Type", "Status"]
+        for col, h in enumerate(headers, 1):
+            c = ws.cell(row=1, column=col, value=h)
+            c.font = hdr_font
+            c.fill = hdr_fill
+            c.alignment = hdr_align
+
+        row = 2
+        for s in schedules:
+            d = s.to_dict()
+            sched_date = s.schedule_date
+            ws.cell(row=row, column=1, value=sched_date.strftime("%Y-%m-%d"))
+            ws.cell(row=row, column=2, value=sched_date.strftime("%a"))
+            ws.cell(row=row, column=3, value=d["employee"])
+            ws.cell(row=row, column=4, value=d["employee_id"])
+            ws.cell(row=row, column=5, value=d["start"])
+            ws.cell(row=row, column=6, value=d["end"])
+            ws.cell(row=row, column=7, value=d["hours"])
+            ws.cell(row=row, column=8, value=d["type"])
+            ws.cell(row=row, column=9, value=d["status"])
+            for col in range(1, 10):
+                ws.cell(row=row, column=col).border = cell_border
+                ws.cell(row=row, column=col).font = Font(name="Arial", size=10)
+            row += 1
+
+        # Auto-width
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 25)
+
+        # Freeze header
+        ws.freeze_panes = "A2"
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"schedule_{lob}_{start_str}_to_{end_str}.xlsx"
+        return Response(
+            output.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except Exception as e:
+        log.exception("Excel export error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Clear saved schedules ────────────────────────────────────
 @scheduling_bp.route("/clear", methods=["POST"])
 @login_required
