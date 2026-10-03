@@ -2,6 +2,12 @@
 {% block title %}My Time Off — {{ brand_name }}{% endblock %}
 
 {% block content %}
+{% if not employee %}
+<div class="page-header">
+  <h1>My Time Off</h1>
+  <p class="subtitle">Your account is not linked to an employee record yet. Please ask your administrator to link your account in Settings &rarr; Users.</p>
+</div>
+{% else %}
 <div class="agent-header">
   <div>
     <h1>My Time Off</h1>
@@ -115,6 +121,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

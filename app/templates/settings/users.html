@@ -11,7 +11,7 @@
   .user-info .email { font-size:.8rem; color:var(--text-muted); }
   .user-role { font-size:.75rem; font-weight:600; padding:3px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
   .role-admin { background:var(--brand-accent-light); color:var(--brand-accent); }
-  .role-viewer { background:var(--bg); color:var(--text-muted); border:1px solid var(--border); }
+  .role-supervisor { background:var(--bg); color:var(--text-muted); border:1px solid var(--border); }
   .role-agent { background:#dbeafe; color:#1d4ed8; }
   .user-status { font-size:.75rem; }
   .user-actions { display:flex; gap:6px; flex-wrap:wrap; }
@@ -52,12 +52,12 @@
     <div class="form-group">
       <label for="userRole">Role</label>
       <select id="userRole" onchange="toggleEmployeeLink()">
-        <option value="viewer">Viewer (Supervisor)</option>
+        <option value="supervisor">Supervisor</option>
         <option value="admin">Admin</option>
         <option value="agent">Agent (Self-Service Only)</option>
       </select>
     </div>
-    <div class="form-group" id="employeeLinkGroup" style="display:none;">
+    <div class="form-group" id="employeeLinkGroup">
       <label for="userEmployee">Link to Employee</label>
       <select id="userEmployee">
         <option value="">— Select employee —</option>
@@ -65,7 +65,7 @@
         <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.employee_id }})</option>
         {% endfor %}
       </select>
-      <small style="color:var(--text-muted);">Agent accounts see only their own schedule and time-off requests.</small>
+      <small style="color:var(--text-muted);">Links this account to an employee record for schedule and time-off access in the portal.</small>
     </div>
     <div class="form-group">
       <label for="userPassword">Password <span id="pwHint" style="font-weight:400;color:var(--text-muted);"></span></label>
@@ -119,8 +119,7 @@
 {% block scripts %}
 <script>
 function toggleEmployeeLink() {
-  var g = document.getElementById('employeeLinkGroup');
-  g.style.display = document.getElementById('userRole').value === 'agent' ? '' : 'none';
+  // Employee link is always visible — all roles can be linked to an employee
 }
 
 function showAddUser() {
@@ -129,7 +128,7 @@ function showAddUser() {
   document.getElementById('userName').value = '';
   document.getElementById('userEmail').value = '';
   document.getElementById('userEmail').disabled = false;
-  document.getElementById('userRole').value = 'viewer';
+  document.getElementById('userRole').value = 'supervisor';
   document.getElementById('userEmployee').value = '';
   document.getElementById('userPassword').value = '';
   document.getElementById('userConfirm').value = '';

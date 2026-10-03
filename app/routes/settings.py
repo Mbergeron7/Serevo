@@ -407,24 +407,22 @@ def save_user():
     user_id = data.get("id")
     email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip()
-    role = data.get("role", "viewer")
+    role = data.get("role", "supervisor")
     password = data.get("password", "")
     is_demo = bool(data.get("is_demo", False))
 
     if not email:
         return jsonify({"success": False, "error": "Email is required"})
-    if role not in ("viewer", "admin", "agent"):
-        role = "viewer"
+    if role not in ("supervisor", "admin", "agent"):
+        role = "supervisor"
 
-    # For agent role, resolve linked employee
+    # Resolve linked employee for any role
     employee_id = data.get("employee_id")
-    if role == "agent" and employee_id:
+    if employee_id:
         from app.models import Employee
         emp = Employee.query.get(employee_id)
         if not emp:
             return jsonify({"success": False, "error": "Selected employee not found"})
-    elif role == "agent" and not employee_id:
-        employee_id = None  # Can link later
 
     if user_id:
         # Edit existing
@@ -437,7 +435,7 @@ def save_user():
             if len(password) < 6:
                 return jsonify({"success": False, "error": "Password must be at least 6 characters"})
             user.password_hash = generate_password_hash(password).decode("utf-8")
-        # Link employee for agent role
+        # Link employee record
         try:
             user.employee_id = int(employee_id) if employee_id else None
         except Exception:

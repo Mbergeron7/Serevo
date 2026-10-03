@@ -2,7 +2,7 @@
 Authentication routes — login / logout / initial setup.
 
 Phase 2: DB-backed password auth with bcrypt. Demo mode still auto-seeds
-two accounts (viewer / admin) so the app works out of the box.
+two accounts (supervisor / admin) so the app works out of the box.
 """
 
 import logging
@@ -30,10 +30,10 @@ def _ensure_demo_accounts():
             role="admin",
         )
         demo_viewer = User(
-            email="viewer@demo.serevo.app",
+            email="supervisor@demo.serevo.app",
             password_hash=generate_password_hash("demo").decode("utf-8"),
-            display_name="Demo Viewer",
-            role="viewer",
+            display_name="Demo Supervisor",
+            role="supervisor",
         )
         db.session.add_all([demo_admin, demo_viewer])
         db.session.commit()

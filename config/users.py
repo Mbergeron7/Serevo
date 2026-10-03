@@ -10,7 +10,7 @@ import os
 # Demo accounts — override via env vars for client deployments
 ALLOWED_USERS = [
     u.strip() for u in
-    os.environ.get("ALLOWED_USERS", "viewer@demo.serevo.app,admin@demo.serevo.app").split(",")
+    os.environ.get("ALLOWED_USERS", "supervisor@demo.serevo.app,admin@demo.serevo.app").split(",")
     if u.strip()
 ]
 
@@ -21,7 +21,7 @@ ADMIN_USERS = [
 ]
 
 USER_NAMES = {
-    "viewer@demo.serevo.app": "Demo Viewer",
+    "supervisor@demo.serevo.app": "Demo Supervisor",
     "admin@demo.serevo.app":  "Demo Admin",
 }
 

@@ -10,7 +10,7 @@ from flask import session, redirect, url_for, request
 
 
 # Demo accounts are identified by email — no database column needed.
-DEMO_EMAILS = {"demo@serevo.app", "admin@demo.serevo.app", "viewer@demo.serevo.app"}
+DEMO_EMAILS = {"demo@serevo.app", "admin@demo.serevo.app", "supervisor@demo.serevo.app"}
 
 
 def _is_demo_user(user_obj):
@@ -44,6 +44,7 @@ def get_current_user():
             "email": u.email,
             "name": u.display_name or u.email.split("@")[0].title(),
             "is_admin": u.role == "admin",
+            "is_supervisor": u.role == "supervisor",
             "is_agent": u.role == "agent",
             "role": u.role,
             "employee_id": emp_id,
@@ -90,7 +91,7 @@ def agent_required(f):
 
 
 def supervisor_required(f):
-    """Allow admin or viewer roles (supervisors), not agents."""
+    """Allow admin or supervisor roles, not agents."""
     @wraps(f)
     def decorated(*args, **kwargs):
         user = get_current_user()

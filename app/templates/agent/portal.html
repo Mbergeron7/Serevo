@@ -45,6 +45,12 @@
 {% endblock %}
 
 {% block content %}
+{% if not employee %}
+<div class="page-header">
+  <h1>Self-Service Portal</h1>
+  <p class="subtitle">Your account is not linked to an employee record yet. Please ask your administrator to link your account in Settings &rarr; Users.</p>
+</div>
+{% else %}
 <div class="portal-header">
   <h1>Self-Service Portal</h1>
   <span class="agent-info">{{ employee.full_name }} · {{ employee.employee_id }}</span>
@@ -130,6 +136,7 @@
   </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

@@ -27,13 +27,8 @@
     </button>
     <div class="nav-links">
       {% block nav %}
-      {% if current_user and current_user.is_agent %}
-      {# Agent nav — limited to their own data #}
-      <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
-      <a href="/my-time-off/"{% if request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Time Off</a>
-      <a href="/portal/"{% if request.path.startswith('/portal') %} class="active"{% endif %}>Self-Service</a>
-      {% else %}
-      {# Supervisor / admin nav #}
+      {% if current_user and current_user.is_admin %}
+      {# Admin nav — full access #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
       <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>People</a>
       <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
@@ -41,11 +36,24 @@
       <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
       <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
       <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
-      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>Agent Portal</a>
-      {% if current_user and current_user.is_admin %}
+      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
       <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
       <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
-      {% endif %}
+      {% elif current_user and current_user.is_supervisor %}
+      {# Supervisor nav — admin pages (read-only) + agent portal #}
+      <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
+      <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>People</a>
+      <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
+      <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
+      <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
+      <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
+      <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
+      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
+      {% else %}
+      {# Agent nav — portal only #}
+      <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
+      <a href="/my-time-off/"{% if request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Time Off</a>
+      <a href="/portal/"{% if request.path.startswith('/portal') %} class="active"{% endif %}>Self-Service</a>
       {% endif %}
       <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
       <a href="/logout">Sign out</a>

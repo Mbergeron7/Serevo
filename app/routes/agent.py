@@ -78,9 +78,11 @@ class _DemoSchedule:
 def my_schedule():
     user = get_current_user()
     emp = _get_agent_employee(user)
-    is_preview = not emp
-    if is_preview:
+    is_demo = user.get("is_demo") and not emp
+    if is_demo:
         emp = _PreviewEmployee()
+    elif not emp:
+        return render_template("agent/my_schedule.html", employee=None, days=[], week_start=date.today(), week_end=date.today(), prev_week="", next_week="", today=date.today())
 
     # Default to current week (Mon–Sun)
     today = date.today()
@@ -95,7 +97,7 @@ def my_schedule():
 
     week_end = week_start + timedelta(days=6)
 
-    if is_preview:
+    if is_demo:
         schedules = []
     else:
         schedules = (
@@ -113,7 +115,7 @@ def my_schedule():
         d = week_start + timedelta(days=i)
         day_schedules = [s for s in schedules if s.schedule_date == d]
         # Add demo shifts for preview (Mon–Fri)
-        if is_preview and d.weekday() < 5:
+        if is_demo and d.weekday() < 5:
             day_schedules = [_DemoSchedule(d, "09:00", "17:00")]
         days.append({
             "date": d,
@@ -147,9 +149,11 @@ def my_schedule():
 def my_time_off():
     user = get_current_user()
     emp = _get_agent_employee(user)
-    is_preview = not emp
-    if is_preview:
+    is_demo = user.get("is_demo") and not emp
+    if is_demo:
         emp = _PreviewEmployee()
+    elif not emp:
+        return render_template("agent/my_time_off.html", employee=None, requests=[], types=[])
 
     # Get time-off types for the dropdown
     try:
@@ -159,7 +163,7 @@ def my_time_off():
 
     today = date.today()
 
-    if is_preview:
+    if is_demo:
         upcoming = [_DemoPTO(today + timedelta(days=14), today + timedelta(days=16), "Vacation", "approved")]
         past = [_DemoPTO(today - timedelta(days=30), today - timedelta(days=30), "Personal", "approved")]
     else:
@@ -292,21 +296,17 @@ def api_my_schedule():
 
 
 def _demo_guard():
+    """Block writes only for demo accounts. Real admins/supervisors with employee links can make changes."""
     user = get_current_user()
     if user and user.get("is_demo"):
         return jsonify(ok=True, demo=True, message="Changes are not saved in demo mode.")
-    # Admins previewing the portal can't make agent changes
-    if user and not user.get("is_agent"):
-        return jsonify(ok=True, demo=True, message="Preview mode — changes are not saved.")
     return None
 
 
 def _is_demo():
+    """True only for actual demo accounts — real admins/supervisors see their own data."""
     user = get_current_user()
     if user and user.get("is_demo"):
-        return True
-    # Admins/viewers previewing the portal get demo data too
-    if user and not user.get("is_agent"):
         return True
     return False
 
@@ -321,8 +321,11 @@ def portal():
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
-        # Allow admins/viewers/demo users to preview
-        emp = _PreviewEmployee()
+        if user.get("is_demo"):
+            emp = _PreviewEmployee()
+        else:
+            # Real user without employee link — show message
+            return render_template("agent/portal.html", employee=None)
     return render_template("agent/portal.html", employee=emp)
 
 
