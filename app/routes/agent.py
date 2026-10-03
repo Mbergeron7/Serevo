@@ -5,7 +5,7 @@ Routes for /my-schedule/, /my-time-off/, etc.
 
 from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for
-from app.auth import login_required, agent_required, get_current_user
+from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, TimeOffType,
     ShiftPost, ShiftBid, ShiftSwapRequest, VTOOTPost, VTOOTSignup,
@@ -23,18 +23,26 @@ def _get_agent_employee(user):
     return Employee.query.get(user["employee_id"])
 
 
+class _PreviewEmployee:
+    """Dummy employee object so admins/demo users can preview the portal."""
+    id = 0
+    employee_id = "PREVIEW"
+    full_name = "Preview Agent"
+    email = ""
+    skill_name = "General"
+
+
 # ───────────────────────────────────────────────────────
 # My Schedule
 # ───────────────────────────────────────────────────────
 
 @agent_bp.route("/my-schedule/")
 @login_required
-@agent_required
 def my_schedule():
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
-        return redirect("/")
+        emp = _PreviewEmployee()
 
     # Default to current week (Mon–Sun)
     today = date.today()
@@ -92,12 +100,11 @@ def my_schedule():
 
 @agent_bp.route("/my-time-off/")
 @login_required
-@agent_required
 def my_time_off():
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
-        return redirect("/")
+        emp = _PreviewEmployee()
 
     # Get time-off types for the dropdown
     try:
@@ -130,9 +137,11 @@ def my_time_off():
 
 @agent_bp.route("/api/agent/time-off", methods=["POST"])
 @login_required
-@agent_required
 def submit_time_off():
     """Agent submits a new time-off request."""
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
@@ -170,7 +179,6 @@ def submit_time_off():
 
 @agent_bp.route("/api/agent/time-off/<int:entry_id>", methods=["DELETE"])
 @login_required
-@agent_required
 def cancel_time_off(entry_id):
     """Agent cancels a pending time-off request."""
     user = get_current_user()
@@ -198,12 +206,12 @@ def cancel_time_off(entry_id):
 
 @agent_bp.route("/api/agent/schedule")
 @login_required
-@agent_required
 def api_my_schedule():
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
-        return jsonify({"error": "Employee not found"}), 404
+        return jsonify({"employee": "Preview Agent", "start": date.today().isoformat(),
+                        "end": (date.today() + timedelta(days=6)).isoformat(), "schedules": []})
 
     start_str = request.args.get("start", date.today().isoformat())
     end_str = request.args.get("end")
@@ -240,12 +248,20 @@ def _demo_guard():
     user = get_current_user()
     if user and user.get("is_demo"):
         return jsonify(ok=True, demo=True, message="Changes are not saved in demo mode.")
+    # Admins previewing the portal can't make agent changes
+    if user and not user.get("is_agent"):
+        return jsonify(ok=True, demo=True, message="Preview mode — changes are not saved.")
     return None
 
 
 def _is_demo():
     user = get_current_user()
-    return user and user.get("is_demo")
+    if user and user.get("is_demo"):
+        return True
+    # Admins/viewers previewing the portal get demo data too
+    if user and not user.get("is_agent"):
+        return True
+    return False
 
 
 # ───────────────────────────────────────────────────────
@@ -254,12 +270,12 @@ def _is_demo():
 
 @agent_bp.route("/portal/")
 @login_required
-@agent_required
 def portal():
     user = get_current_user()
     emp = _get_agent_employee(user)
     if not emp:
-        return redirect("/")
+        # Allow admins/viewers/demo users to preview
+        emp = _PreviewEmployee()
     return render_template("agent/portal.html", employee=emp)
 
 
@@ -269,7 +285,6 @@ def portal():
 
 @agent_bp.route("/api/agent/open-shifts", methods=["POST"])
 @login_required
-@agent_required
 def list_open_shifts():
     """Return open shift posts for agents to bid on."""
     if _is_demo():
@@ -287,7 +302,6 @@ def list_open_shifts():
 
 @agent_bp.route("/api/agent/bid", methods=["POST"])
 @login_required
-@agent_required
 def submit_bid():
     """Agent bids on an open shift."""
     dg = _demo_guard()
@@ -318,7 +332,6 @@ def submit_bid():
 
 @agent_bp.route("/api/agent/my-bids", methods=["POST"])
 @login_required
-@agent_required
 def my_bids():
     """Return the agent's current bids."""
     if _is_demo():
@@ -343,7 +356,6 @@ def my_bids():
 
 @agent_bp.route("/api/agent/bid/<int:bid_id>", methods=["DELETE"])
 @login_required
-@agent_required
 def cancel_bid(bid_id):
     dg = _demo_guard()
     if dg:
@@ -364,7 +376,6 @@ def cancel_bid(bid_id):
 
 @agent_bp.route("/api/agent/swap-request", methods=["POST"])
 @login_required
-@agent_required
 def submit_swap():
     """Agent requests to swap one of their shifts."""
     dg = _demo_guard()
@@ -394,7 +405,6 @@ def submit_swap():
 
 @agent_bp.route("/api/agent/swaps", methods=["POST"])
 @login_required
-@agent_required
 def list_swaps():
     """Return swap requests relevant to this agent."""
     if _is_demo():
@@ -420,7 +430,6 @@ def list_swaps():
 
 @agent_bp.route("/api/agent/swap/<int:swap_id>/accept", methods=["POST"])
 @login_required
-@agent_required
 def accept_swap(swap_id):
     """Target agent accepts a swap request (still needs manager approval)."""
     dg = _demo_guard()
@@ -451,7 +460,6 @@ def accept_swap(swap_id):
 
 @agent_bp.route("/api/agent/swap/<int:swap_id>/cancel", methods=["POST"])
 @login_required
-@agent_required
 def cancel_swap(swap_id):
     dg = _demo_guard()
     if dg:
@@ -472,7 +480,6 @@ def cancel_swap(swap_id):
 
 @agent_bp.route("/api/agent/vto-ot", methods=["POST"])
 @login_required
-@agent_required
 def list_vto_ot():
     """Return open VTO/OT opportunities."""
     if _is_demo():
@@ -495,7 +502,6 @@ def list_vto_ot():
 
 @agent_bp.route("/api/agent/vto-ot/signup", methods=["POST"])
 @login_required
-@agent_required
 def signup_vto_ot():
     """Agent signs up for a VTO/OT opportunity."""
     dg = _demo_guard()
@@ -528,7 +534,6 @@ def signup_vto_ot():
 
 @agent_bp.route("/api/agent/vto-ot/cancel", methods=["POST"])
 @login_required
-@agent_required
 def cancel_vto_ot():
     dg = _demo_guard()
     if dg:
@@ -556,7 +561,6 @@ def cancel_vto_ot():
 
 @agent_bp.route("/api/agent/upcoming-shifts", methods=["POST"])
 @login_required
-@agent_required
 def upcoming_shifts():
     """Return agent's shifts in the next 4 weeks for swap selection."""
     if _is_demo():

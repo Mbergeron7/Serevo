@@ -41,6 +41,7 @@
       <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
       <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
       <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
+      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>Agent Portal</a>
       {% if current_user and current_user.is_admin %}
       <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
       <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
