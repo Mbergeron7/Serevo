@@ -188,15 +188,15 @@
 {% elif employees %}
 
 <div class="filter-bar">
-  <input type="text" id="filterName" placeholder="Search by name…" oninput="filterTable()">
-  <select id="filterLOB" onchange="filterTable()">
+  <input type="text" id="filterName" placeholder="Search by name…" oninput="currentPage=1;filterTable()">
+  <select id="filterLOB" onchange="currentPage=1;filterTable()">
     <option value="">All LOBs</option>
     {% set lobs = employees | map(attribute='Latest Skill Name') | unique | sort %}
     {% for lob in lobs %}
       {% if lob %}<option value="{{ lob }}">{{ lob }}</option>{% endif %}
     {% endfor %}
   </select>
-  <select id="filterStatus" onchange="filterTable()">
+  <select id="filterStatus" onchange="currentPage=1;filterTable()">
     <option value="">All Statuses</option>
     <option value="active">Active</option>
     <option value="on leave">On Leave</option>
@@ -204,7 +204,7 @@
     <option value="terminated">Terminated</option>
     <option value="inactive">Inactive</option>
   </select>
-  <select id="filterTL" onchange="filterTable()">
+  <select id="filterTL" onchange="currentPage=1;filterTable()">
     <option value="">All Team Leads</option>
     {% set tls = employees | map(attribute='Team Lead') | unique | sort %}
     {% for tl in tls %}
@@ -291,6 +291,19 @@
         {% endfor %}
       </tbody>
     </table>
+    <div id="paginationControls" class="pagination-controls" style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;font-size:.85rem;color:#666;">
+      <span id="pageInfo"></span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" id="prevPage" onclick="changePage(-1)">← Prev</button>
+        <button class="btn btn-sm" id="nextPage" onclick="changePage(1)">Next →</button>
+      </div>
+      <select id="pageSizeSelect" onchange="changePageSize(this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:.85rem;">
+        <option value="25">25 / page</option>
+        <option value="50" selected>50 / page</option>
+        <option value="100">100 / page</option>
+        <option value="0">Show all</option>
+      </select>
+    </div>
   </div>
 </div>
 
@@ -510,24 +523,77 @@ function applyContract() {
   document.getElementById('emp_hours_per_day').value = dMax || 8;
 }
 
+// ── Pagination state ──
+let currentPage = 1;
+let pageSize = 50;
+
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
   const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
   const statusQ = document.getElementById('filterStatus').value.toLowerCase();
   const tlQ     = document.getElementById('filterTL') ? document.getElementById('filterTL').value.toLowerCase() : '';
-  document.querySelectorAll('#rosterTable tbody tr').forEach(row => {
+  const rows = document.querySelectorAll('#rosterTable tbody tr');
+  // First pass: mark which rows match filters
+  const filtered = [];
+  rows.forEach(row => {
     const name   = row.dataset.name || '';
     const lob    = row.dataset.lob || '';
     const status = row.dataset.status || '';
     const tl     = row.dataset.tl || '';
-    const show = (
+    const match = (
       (!nameQ || name.includes(nameQ)) &&
       (!lobQ || lob === lobQ) &&
       (!statusQ || status === statusQ) &&
       (!tlQ || tl === tlQ)
     );
-    row.style.display = show ? '' : 'none';
+    if (match) filtered.push(row);
+    row.style.display = 'none'; // hide all first
   });
+  // Apply pagination
+  const total = filtered.length;
+  if (pageSize === 0) {
+    // Show all
+    filtered.forEach(r => r.style.display = '');
+    currentPage = 1;
+  } else {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    filtered.forEach((r, i) => {
+      r.style.display = (i >= start && i < end) ? '' : 'none';
+    });
+  }
+  updatePaginationUI(total);
+}
+
+function updatePaginationUI(total) {
+  const info = document.getElementById('pageInfo');
+  const prev = document.getElementById('prevPage');
+  const next = document.getElementById('nextPage');
+  if (pageSize === 0) {
+    info.textContent = total + ' employees';
+    prev.disabled = true;
+    next.disabled = true;
+  } else {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const start = (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, total);
+    info.textContent = total === 0 ? 'No results' : start + '–' + end + ' of ' + total;
+    prev.disabled = currentPage <= 1;
+    next.disabled = currentPage >= totalPages;
+  }
+}
+
+function changePage(dir) {
+  currentPage += dir;
+  filterTable();
+}
+
+function changePageSize(val) {
+  pageSize = parseInt(val);
+  currentPage = 1;
+  filterTable();
 }
 
 // ── Sortable columns ──
@@ -881,5 +947,8 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
   btn.disabled = false;
   btn.textContent = 'Save Employee';
 });
+
+// Initialize pagination on load
+filterTable();
 </script>
 {% endblock %}
