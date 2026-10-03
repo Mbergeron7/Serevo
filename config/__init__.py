@@ -29,7 +29,7 @@ class _Config:
     # ---- branding (injected into every template via context processor) ----
     BRAND_NAME          = os.environ.get("BRAND_NAME", "Serevo")
     BRAND_TAGLINE       = os.environ.get("BRAND_TAGLINE", "Workforce Management Platform")
-    BRAND_SUPPORT_EMAIL = os.environ.get("BRAND_SUPPORT_EMAIL", "support@bergeronwfm.com")
+    BRAND_SUPPORT_EMAIL = os.environ.get("BRAND_SUPPORT_EMAIL", "support@serevo.app")
     BRAND_ACCENT_COLOR  = os.environ.get("BRAND_ACCENT_COLOR", "#0f766e")
 
     # ---- data source ----
@@ -62,9 +62,6 @@ class _Config:
     def is_demo(self):
         return self.DEMO_MODE
 
-    @property
-    def is_peopleware(self):
-        return self.DATA_SOURCE == "peopleware"
 
     def sheet_key(self, env_var, fallback_var=None, required=True):
         """Return a Google Sheet ID from the environment."""
