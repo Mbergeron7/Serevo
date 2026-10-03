@@ -565,8 +565,11 @@ def customization():
     ot_rules = [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()]
     sched_rules = [r.to_dict() for r in ScheduleRule.query.order_by(ScheduleRule.name).all()]
     from datetime import datetime as dt
-    from zoneinfo import ZoneInfo
-    cur_year = dt.now(ZoneInfo("US/Eastern")).year
+    try:
+        from zoneinfo import ZoneInfo
+        cur_year = dt.now(ZoneInfo("US/Eastern")).year
+    except Exception:
+        cur_year = dt.utcnow().year
     holidays = [h.to_dict() for h in Holiday.query.filter_by(year=cur_year).order_by(Holiday.date).all()]
     skill_groups = [g.to_dict() for g in SkillGroup.query.order_by(SkillGroup.name).all()]
     adherence_codes = [a.to_dict() for a in AdherenceException.query.order_by(AdherenceException.sort_order).all()]

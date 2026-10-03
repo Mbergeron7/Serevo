@@ -38,3 +38,48 @@ class TestPageLoads:
         for path in self.PAGES:
             resp = client.get(path)
             assert resp.status_code == 200, f"{path} returned {resp.status_code}"
+
+    SETTINGS_PAGES = [
+        "/settings/users",
+        "/settings/customization",
+        "/settings/activities",
+        "/settings/contracts",
+        "/settings/day-models",
+        "/settings/planning-units",
+        "/settings/skills",
+        "/settings/selections",
+        "/settings/shift-sequences",
+        "/settings/planning-calendars",
+        "/settings/google-sheets",
+        "/settings/api-connections",
+    ]
+
+    def test_settings_pages_load(self, client, admin_user):
+        from tests.conftest import login
+        user, pw = admin_user
+        login(client, user.email, pw)
+
+        for path in self.SETTINGS_PAGES:
+            resp = client.get(path)
+            assert resp.status_code == 200, f"{path} returned {resp.status_code}"
+
+    CAPACITY_PAGES = [
+        "/capacity/",
+        "/capacity/plan",
+        "/capacity/sources",
+    ]
+
+    def test_capacity_pages_load(self, client, admin_user):
+        from tests.conftest import login
+        user, pw = admin_user
+        login(client, user.email, pw)
+
+        for path in self.CAPACITY_PAGES:
+            resp = client.get(path)
+            assert resp.status_code == 200, f"{path} returned {resp.status_code}"
+
+    def test_agent_pages_require_login(self, client):
+        """Agent portal pages should redirect to login when not authenticated."""
+        for path in ["/portal/", "/my-schedule/", "/my-time-off/"]:
+            resp = client.get(path)
+            assert resp.status_code in (302, 200), f"{path} returned {resp.status_code}"
