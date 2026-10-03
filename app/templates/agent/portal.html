@@ -68,12 +68,15 @@
 <div class="p-panel active" id="pp-schedule">
   <div class="p-card">
     <div class="p-card-header">
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
         <button class="btn btn-outline" style="font-size:.75rem; padding:4px 10px;" onclick="changeWeek(-1)">← Prev</button>
         <span id="schedWeekLabel" style="font-weight:700; font-size:.85rem;"></span>
         <button class="btn btn-outline" style="font-size:.75rem; padding:4px 10px;" onclick="changeWeek(1)">Next →</button>
       </div>
-      <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="changeWeek(0)">Today</button>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <input type="date" id="schedDatePicker" style="font-size:.78rem; padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface);" onchange="jumpToDate(this.value)">
+        <button class="btn btn-outline" style="font-size:.75rem; padding:4px 12px;" onclick="changeWeek(0)">Today</button>
+      </div>
     </div>
     <div class="p-card-body" id="schedBody">
       <p class="empty-msg">Loading…</p>
@@ -180,6 +183,16 @@ function fmtDate(d) {
 function changeWeek(dir) {
   if (dir === 0) { initWeek(); }
   else { schedWeekStart.setDate(schedWeekStart.getDate() + dir * 7); }
+  loadSchedule();
+}
+
+function jumpToDate(val) {
+  if (!val) return;
+  const d = new Date(val + 'T00:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  schedWeekStart = d;
   loadSchedule();
 }
 
