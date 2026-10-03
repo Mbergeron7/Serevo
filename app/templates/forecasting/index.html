@@ -22,19 +22,30 @@
   .fc-controls {
     display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
   }
-  .lob-picker {
-    width: 260px; flex-shrink: 0;
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px; max-height: 360px; display: flex; flex-direction: column;
+  /* ── LOB dropdown in banner ────────────────── */
+  .lob-dropdown-wrap { position: relative; }
+  .lob-dropdown-btn {
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: #fff;
+    border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: .82rem; font-weight: 600;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
   }
-  .lob-picker .search { width: 100%; padding: 6px 10px; border: 1px solid var(--border);
-    border-radius: 6px; font-size: .82rem; margin-bottom: 8px; background: var(--bg); color: var(--text); }
-  .lob-list { flex: 1; overflow-y: auto; }
-  .lob-list label { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: .82rem; cursor: pointer; }
-  .lob-list label:hover { color: var(--brand-accent); }
-  .lob-btns { display: flex; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .lob-dropdown-btn:hover { background: rgba(255,255,255,.25); }
+  .lob-dropdown-btn .arrow { font-size: .65rem; }
+  .lob-dropdown-panel {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 100;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); width: 280px; max-height: 420px;
+    flex-direction: column; padding: 10px;
+  }
+  .lob-dropdown-panel.open { display: flex; }
+  .lob-dropdown-panel .search { width: 100%; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .82rem; margin-bottom: 6px; background: var(--bg); color: var(--text); box-sizing: border-box; }
+  .lob-btns { display: flex; gap: 8px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
   .lob-btns button { font-size: .72rem; padding: 3px 10px; border: 1px solid var(--border);
     border-radius: 4px; cursor: pointer; background: var(--bg); color: var(--text); }
+  .lob-list { flex: 1; overflow-y: auto; max-height: 300px; }
+  .lob-list label { display: flex; align-items: center; gap: 6px; padding: 4px 2px; font-size: .82rem; cursor: pointer; }
+  .lob-list label:hover { color: var(--brand-accent); background: var(--bg); border-radius: 4px; }
   .settings-panel {
     flex: 1; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
@@ -131,14 +142,6 @@
     border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── LOB tabs (for multi-LOB view) ─────────── */
-  .lob-tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 16px;
-    background: var(--bg); border-radius: 8px; padding: 3px; width: fit-content; }
-  .lob-tab { padding: 6px 16px; border-radius: 6px; border: none;
-    background: transparent; color: var(--text-muted);
-    font-size: .8rem; font-weight: 600; cursor: pointer; }
-  .lob-tab.active { background: var(--surface); color: var(--text);
-    box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
   /* ── Reforecast section ──────────────────── */
   .reforecast-section {
@@ -258,8 +261,8 @@
 
   @media (max-width: 768px) {
     .fc-controls { flex-direction: column; }
-    .lob-picker { width: 100%; max-height: 200px; }
     .refc-controls { flex-direction: column; }
+    .lob-dropdown-panel { right: auto; left: 0; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -289,6 +292,24 @@
     <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;display:none;">
       {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
     </select>
+    <!-- LOB dropdown -->
+    <div class="lob-dropdown-wrap">
+      <button class="lob-dropdown-btn" onclick="toggleLobDropdown()">
+        <span id="lobBtnLabel">All LOBs</span> <span class="arrow">▼</span>
+      </button>
+      <div class="lob-dropdown-panel" id="lobDropdownPanel">
+        <input type="text" class="search" placeholder="Search LOBs…" id="lobSearch">
+        <div class="lob-btns">
+          <button onclick="toggleAllLobs(true)">All</button>
+          <button onclick="toggleAllLobs(false)">None</button>
+        </div>
+        <div class="lob-list" id="lobList">
+          {% for lob in all_lobs %}
+          <label><input type="checkbox" name="lob" value="{{ lob }}" checked onchange="onLobCheckChange()"> {{ lob }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -305,20 +326,6 @@
 
 <!-- ═══ Controls ═══ -->
 <div class="fc-controls">
-  <!-- LOB picker -->
-  <div class="lob-picker">
-    <input type="text" class="search" placeholder="Search LOBs…" id="lobSearch">
-    <div class="lob-list" id="lobList">
-      {% for lob in all_lobs %}
-      <label><input type="checkbox" name="lob" value="{{ lob }}" checked> {{ lob }}</label>
-      {% endfor %}
-    </div>
-    <div class="lob-btns">
-      <button onclick="toggleAllLobs(true)">All</button>
-      <button onclick="toggleAllLobs(false)">None</button>
-    </div>
-  </div>
-  <!-- Settings -->
   <div class="settings-panel">
     <div class="setting-group">
       <label>Forecast Method</label>
@@ -440,8 +447,6 @@
   </div>
 </div>
 
-<!-- ═══ LOB tabs ═══ -->
-<div class="lob-tabs" id="lobTabs" style="display:none;"></div>
 
 <!-- ═══ Offered Calls chart ═══ -->
 <div class="chart-section" id="offeredSection" style="display:none;">
@@ -745,7 +750,21 @@ async function loadIntervalData() {
   renderHeatmap();
 }
 
-// ── LOB picker ──────────────────────────────────
+// ── LOB dropdown ────────────────────────────────
+function toggleLobDropdown() {
+  const panel = document.getElementById('lobDropdownPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    document.getElementById('lobSearch').focus();
+  }
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.lob-dropdown-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('lobDropdownPanel').classList.remove('open');
+  }
+});
 document.getElementById('lobSearch').addEventListener('input', function() {
   const q = this.value.toLowerCase();
   document.querySelectorAll('#lobList label').forEach(l => {
@@ -754,9 +773,18 @@ document.getElementById('lobSearch').addEventListener('input', function() {
 });
 function toggleAllLobs(checked) {
   document.querySelectorAll('#lobList input[type=checkbox]').forEach(cb => cb.checked = checked);
+  onLobCheckChange();
 }
 function getSelectedLobs() {
   return Array.from(document.querySelectorAll('#lobList input:checked')).map(cb => cb.value);
+}
+function onLobCheckChange() {
+  const sel = getSelectedLobs();
+  const btn = document.getElementById('lobBtnLabel');
+  if (sel.length === ALL_LOBS.length) btn.textContent = 'All LOBs';
+  else if (sel.length === 0) btn.textContent = 'No LOBs';
+  else if (sel.length === 1) btn.textContent = sel[0];
+  else btn.textContent = sel.length + ' LOBs';
 }
 
 // ── Status helpers ──────────────────────────────
@@ -874,7 +902,7 @@ async function loadLobData(lob, sl, asa, shrink) {
 function renderDashboard() {
   const lobs = Object.keys(forecastData);
   if (!lobs.length) {
-    ['summaryCards','lobTabs','offeredSection','ahtSection','reqSection','heatmapSection']
+    ['summaryCards','offeredSection','ahtSection','reqSection','heatmapSection']
       .forEach(id => document.getElementById(id).style.display = 'none');
     return;
   }
@@ -883,32 +911,11 @@ function renderDashboard() {
   document.getElementById('summaryCards').style.display = 'flex';
   updateSummaryCards();
 
-  // LOB tabs
-  const tabsEl = document.getElementById('lobTabs');
-  if (lobs.length > 1) {
-    tabsEl.style.display = 'flex';
-    tabsEl.innerHTML = '<button class="lob-tab active" onclick="switchLob(null, this)">All Combined</button>' +
-      lobs.map(l => `<button class="lob-tab" onclick="switchLob('${l}', this)">${l}</button>`).join('');
-  } else {
-    tabsEl.style.display = 'none';
-  }
-
   activeLob = null;
   renderCharts();
   renderHeatmap();
 }
 
-function switchLob(lob, btn) {
-  document.querySelectorAll('.lob-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  activeLob = lob;
-  if (currentView === 'daily') {
-    loadIntervalData();
-  } else {
-    renderCharts();
-    renderHeatmap();
-  }
-}
 
 function updateSummaryCards() {
   // For daily view with interval data, compute from intervals
