@@ -2036,3 +2036,19 @@ class Announcement(db.Model):
     expires_at = db.Column(db.DateTime, nullable=True)
 
     author = db.relationship("User", foreign_keys=[created_by])
+
+
+class ShiftNote(db.Model):
+    """Supervisor shift handoff notes — passed between shifts."""
+    __tablename__ = "shift_notes"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    note_date   = db.Column(db.Date, nullable=False, index=True)
+    shift_label = db.Column(db.String(40), default="")          # e.g. "AM", "PM", "Night"
+    body        = db.Column(db.Text, nullable=False)
+    category    = db.Column(db.String(40), default="general")   # general, staffing, escalation, system
+    is_resolved = db.Column(db.Boolean, default=False)
+    created_by  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    author = db.relationship("User", foreign_keys=[created_by])

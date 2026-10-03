@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Shift Notes — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Shift Notes</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Handoff notes between shifts — keep your team in the loop.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input type="date" id="startDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+    <span style="color:var(--text-muted);">to</span>
+    <input type="date" id="endDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+    <button class="btn btn-outline" onclick="loadNotes()" style="font-size:.82rem;padding:6px 14px;">Refresh</button>
+    <button class="btn btn-primary" onclick="openEditor()" style="font-size:.82rem;padding:6px 14px;">+ Add Note</button>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+  <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+  <button class="filter-btn" onclick="setFilter('general',this)">General</button>
+  <button class="filter-btn" onclick="setFilter('staffing',this)">Staffing</button>
+  <button class="filter-btn" onclick="setFilter('escalation',this)">Escalation</button>
+  <button class="filter-btn" onclick="setFilter('system',this)">System</button>
+  <button class="filter-btn" onclick="setFilter('unresolved',this)">⚠ Unresolved</button>
+</div>
+
+<div id="notesList"></div>
+
+<!-- Editor Modal -->
+<div id="editorModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:520px;width:92%;max-height:90vh;overflow-y:auto;">
+    <h3 style="font-size:1rem;margin:0 0 16px;" id="editorTitle">Add Shift Note</h3>
+    <input type="hidden" id="noteId">
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Date</label>
+        <input type="date" id="noteDate" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Shift</label>
+        <select id="noteShift" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="">—</option>
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+          <option value="Night">Night</option>
+          <option value="Mid">Mid</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Category</label>
+        <select id="noteCategory" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="general">General</option>
+          <option value="staffing">Staffing</option>
+          <option value="escalation">Escalation</option>
+          <option value="system">System</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Note *</label>
+      <textarea id="noteBody" rows="5" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;resize:vertical;" placeholder="What does the next shift need to know?"></textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-outline" onclick="closeEditor()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNote()">Save</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.filter-btn { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:4px 14px; font-size:.78rem; font-weight:600; color:var(--text-muted); cursor:pointer; transition:all .15s; }
+.filter-btn:hover { border-color:var(--brand-accent); color:var(--text); }
+.filter-btn.active { background:var(--brand-accent); color:#fff; border-color:var(--brand-accent); }
+
+.note-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:10px; transition:border-color .15s; }
+.note-card:hover { border-color:var(--brand-accent); }
+.note-card.resolved { opacity:.6; }
+.note-meta { font-size:.72rem; color:var(--text-muted); margin-top:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.cat-tag { display:inline-block; padding:2px 8px; border-radius:8px; font-size:.68rem; font-weight:700; text-transform:uppercase; }
+.cat-general { background:#e5e7eb; color:#374151; }
+.cat-staffing { background:#dbeafe; color:#1e40af; }
+.cat-escalation { background:#fee2e2; color:#991b1b; }
+.cat-system { background:#fef9c3; color:#854d0e; }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+let allNotes = [];
+let currentFilter = 'all';
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// Default range: last 7 days
+(function() {
+  const end = new Date();
+  const start = new Date(); start.setDate(start.getDate() - 6);
+  document.getElementById('startDate').value = start.toISOString().slice(0,10);
+  document.getElementById('endDate').value = end.toISOString().slice(0,10);
+  loadNotes();
+})();
+
+async function loadNotes() {
+  const r = await fetch('/shift-notes/api/list', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({start_date: document.getElementById('startDate').value, end_date: document.getElementById('endDate').value})
+  });
+  const d = await r.json();
+  if (!d.success) return;
+  allNotes = d.notes;
+  renderNotes();
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderNotes();
+}
+
+function renderNotes() {
+  let notes = allNotes;
+  if (currentFilter === 'unresolved') notes = notes.filter(n => !n.is_resolved);
+  else if (currentFilter !== 'all') notes = notes.filter(n => n.category === currentFilter);
+
+  const el = document.getElementById('notesList');
+  if (!notes.length) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 0;">No notes for this period.</p>'; return; }
+
+  // Group by date
+  const grouped = {};
+  notes.forEach(n => { (grouped[n.note_date] = grouped[n.note_date] || []).push(n); });
+
+  let html = '';
+  Object.keys(grouped).sort().reverse().forEach(dt => {
+    const dayLabel = new Date(dt+'T12:00:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+    html += `<div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:16px 0 8px;">${dayLabel}</div>`;
+    grouped[dt].forEach(n => {
+      const shift = n.shift_label ? `<span style="font-weight:700;">${esc(n.shift_label)}</span> · ` : '';
+      const resolved = n.is_resolved ? ' resolved' : '';
+      const resolveLabel = n.is_resolved ? '↩ Reopen' : '✓ Resolve';
+      html += `<div class="note-card${resolved}">
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.85rem;white-space:pre-line;">${esc(n.body)}</div>
+            <div class="note-meta">
+              ${shift}<span class="cat-tag cat-${n.category}">${esc(n.category)}</span>
+              <span>${esc(n.author)}</span>
+              ${n.is_resolved ? '<span style="color:#059669;font-weight:600;">✓ Resolved</span>' : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn btn-outline" style="font-size:.7rem;padding:3px 8px;" onclick="toggleResolve(${n.id})">${resolveLabel}</button>
+            <button class="btn btn-outline" style="font-size:.7rem;padding:3px 8px;" onclick='editNote(${JSON.stringify(n)})'>Edit</button>
+            <button class="btn" style="font-size:.7rem;padding:3px 8px;background:#dc2626;color:#fff;" onclick="deleteNote(${n.id})">✕</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+function openEditor(n) {
+  document.getElementById('editorTitle').textContent = n ? 'Edit Note' : 'Add Shift Note';
+  document.getElementById('noteId').value = n ? n.id : '';
+  document.getElementById('noteDate').value = n ? n.note_date : new Date().toISOString().slice(0,10);
+  document.getElementById('noteShift').value = n ? n.shift_label : '';
+  document.getElementById('noteCategory').value = n ? n.category : 'general';
+  document.getElementById('noteBody').value = n ? n.body : '';
+  document.getElementById('editorModal').style.display = 'flex';
+}
+function editNote(n) { openEditor(n); }
+function closeEditor() { document.getElementById('editorModal').style.display = 'none'; }
+
+async function saveNote() {
+  const body = document.getElementById('noteBody').value.trim();
+  if (!body) { alert('Note is required'); return; }
+  const payload = {
+    body,
+    note_date: document.getElementById('noteDate').value,
+    shift_label: document.getElementById('noteShift').value,
+    category: document.getElementById('noteCategory').value,
+  };
+  const id = document.getElementById('noteId').value;
+  if (id) payload.id = parseInt(id);
+  const r = await fetch('/shift-notes/api/save', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify(payload)
+  });
+  const d = await r.json();
+  if (d.success) { closeEditor(); loadNotes(); } else alert(d.error || 'Error');
+}
+
+async function toggleResolve(id) {
+  const r = await fetch('/shift-notes/api/resolve', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify({id})
+  });
+  const d = await r.json();
+  if (d.success) loadNotes();
+}
+
+async function deleteNote(id) {
+  if (!confirm('Delete this note?')) return;
+  const r = await fetch('/shift-notes/api/delete', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify({id})
+  });
+  const d = await r.json();
+  if (d.success) loadNotes();
+}
+</script>
+{% endblock %}
