@@ -752,7 +752,11 @@ function getSelectedLobs() {
   return Array.from(document.querySelectorAll('#lobList input:checked')).map(cb => cb.value);
 }
 function onLobCheckChange() {
-  // just re-render with updated selection
+  if (currentView === 'daily') {
+    loadIntervalData();
+  } else {
+    renderDashboard();
+  }
 }
 
 // ── Status helpers ──────────────────────────────
