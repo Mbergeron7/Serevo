@@ -84,6 +84,7 @@ class Employee(db.Model):
     days_per_week    = db.Column(db.Integer, default=5)
     hours_per_day    = db.Column(db.Float, default=8.5)
     timezone         = db.Column(db.String(60), default="America/New_York")
+    email            = db.Column(db.String(255), nullable=True, index=True)
     team_lead        = db.Column(db.String(100), default="")
     schedule_excluded = db.Column(db.Boolean, default=False, server_default="false")
     manually_edited  = db.Column(db.Boolean, default=False, server_default="false")
@@ -123,6 +124,7 @@ class Employee(db.Model):
             "Schedule Excluded": self.schedule_excluded or False,
             "End Date": self.end_date.isoformat() if self.end_date else "",
             "Team Lead": self.team_lead or "",
+            "Email": self.email or "",
         }
 
     def __repr__(self):

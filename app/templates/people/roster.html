@@ -360,6 +360,10 @@
           <datalist id="tlList"></datalist>
         </div>
       </div>
+      <div class="form-group">
+        <label for="emp_email">Email</label>
+        <input type="email" id="emp_email" placeholder="employee@example.com">
+      </div>
 
       <div class="form-group">
         <label>All Skills</label>
@@ -573,6 +577,7 @@ function openEmpModal(data) {
   document.getElementById('emp_status').value = data ? (data.status || data['Status'] || 'Active') : 'Active';
   document.getElementById('emp_lob').value = data ? (data.lob || data['Latest Skill Name'] || '') : '';
   document.getElementById('emp_team_lead').value = data ? (data.team_lead || data['Team Lead'] || '') : '';
+  document.getElementById('emp_email').value = data ? (data.email || data['Email'] || '') : '';
   // Skills multi-select will be set after LOBs load
   const _skillsVal = data ? (data.all_skills || data['All Skills'] || '') : '';
   document.getElementById('emp_skills').value = _skillsVal;
@@ -839,6 +844,7 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
     status: document.getElementById('emp_status').value,
     lob: document.getElementById('emp_lob').value,
     team_lead: document.getElementById('emp_team_lead').value,
+    email: document.getElementById('emp_email').value,
     all_skills: document.getElementById('emp_skills').value,
     languages: document.getElementById('emp_languages').value,
     contract_id: document.getElementById('emp_contract_id').value || null,

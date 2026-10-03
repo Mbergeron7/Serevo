@@ -223,6 +223,10 @@
           <div class="val">{{ emp.status }}</div>
         </div>
         <div class="info-item">
+          <label>Email</label>
+          <div class="val">{{ emp.email or '—' }}</div>
+        </div>
+        <div class="info-item">
           <label>Team Lead</label>
           <div class="val">{{ emp.team_lead or '—' }}</div>
         </div>
@@ -677,6 +681,10 @@
           <input type="text" id="basic_ext2" value="{{ emp.external_id_2 or '' }}">
         </div>
       </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="basic_email" value="{{ emp.email or '' }}" placeholder="employee@example.com">
+      </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
         <div class="form-group">
           <label>Team Lead</label>
@@ -758,6 +766,7 @@ async function saveBasicInfo(e) {
     first_name: document.getElementById('basic_first').value,
     last_name: document.getElementById('basic_last').value,
     status: document.getElementById('basic_status').value,
+    email: document.getElementById('basic_email').value,
     team_lead: document.getElementById('basic_tl').value,
     languages: document.getElementById('basic_lang').value,
     timezone: document.getElementById('basic_tz').value,
