@@ -305,6 +305,7 @@ def employee_profile(emp_id):
                 self.skill_end = d.get("Latest Skill End", "")
                 self.end_date = d.get("End Date", "")
                 self.schedule_excluded = d.get("Schedule Excluded", "") == "Yes"
+                self.email = d.get("Email", "")
                 self.external_id_1 = ""
                 self.external_id_2 = ""
                 lob = d.get("Latest Skill Name", "")

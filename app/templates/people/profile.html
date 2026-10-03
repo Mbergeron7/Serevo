@@ -159,7 +159,7 @@
 
 <!-- ═══ Header ═══ -->
 <div class="profile-header">
-  <div class="profile-avatar">{{ emp.first_name[0] }}{{ emp.last_name[0] }}</div>
+  <div class="profile-avatar">{{ emp.first_name[:1] }}{{ emp.last_name[:1] }}</div>
   <div class="profile-title">
     <h1>{{ emp.full_name }}
       {% set st = emp.status|lower %}
