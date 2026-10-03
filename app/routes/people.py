@@ -17,7 +17,8 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
                         SkillMapping, PlanningUnit, ShiftSequence,
-                        EmployeeShiftSequence, SkillGroup, CoachingSession)
+                        EmployeeShiftSequence, SkillGroup, CoachingSession,
+                        TimeClock)
 
 log = logging.getLogger("serevo.people")
 
@@ -682,3 +683,59 @@ def coaching_delete():
     db.session.delete(cs)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ── Attendance history for profile ───────────────────────────────
+
+@people_bp.route("/api/profile/attendance", methods=["POST"])
+@login_required
+def profile_attendance():
+    """Return recent attendance entries for an employee profile."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    employee_id = payload.get("employee_id")
+    days = int(payload.get("days", 30))
+
+    if not employee_id:
+        return jsonify(success=False, error="Missing employee_id")
+
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    cutoff = date.today() - timedelta(days=days)
+
+    entries = TimeClock.query.filter(
+        TimeClock.employee_id == employee_id,
+        TimeClock.date >= cutoff,
+    ).order_by(TimeClock.clock_in.desc()).limit(100).all()
+
+    rows = []
+    for e in entries:
+        rows.append({
+            "id": e.id,
+            "date": e.date.isoformat() if e.date else "",
+            "clock_in": e.clock_in.strftime("%H:%M") if e.clock_in else "",
+            "clock_out": e.clock_out.strftime("%H:%M") if e.clock_out else "",
+            "total_hours": e.total_hours,
+            "status": e.status,
+        })
+
+    # Summary stats
+    completed = [e for e in entries if e.status == "completed"]
+    total_hours = sum(e.total_hours or 0 for e in completed)
+    avg_hours = round(total_hours / len(completed), 1) if completed else 0
+
+    return jsonify(
+        success=True,
+        rows=rows,
+        summary={
+            "total_entries": len(entries),
+            "completed": len(completed),
+            "total_hours": round(total_hours, 1),
+            "avg_hours_per_shift": avg_hours,
+            "days": days,
+        },
+    )

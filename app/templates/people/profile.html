@@ -188,6 +188,7 @@
   <button onclick="switchTab('planning', this)">Planning</button>
   <button onclick="switchTab('availability', this)">Availability</button>
   <button onclick="switchTab('coaching', this)">Coaching</button>
+  <button onclick="switchTab('attendance', this)">Attendance</button>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════ -->
@@ -479,6 +480,49 @@
       <button class="btn-add" onclick="openCoachingModal()">+ New Session</button>
     </div>
     <div class="section-card-body" id="coachingBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Attendance                                                 -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-attendance">
+  <div class="section-card">
+    <div class="section-card-header">
+      Attendance Summary
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="attPeriod" onchange="loadAttendance()" style="font-size:.78rem; padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface);">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="section-card-body">
+      <div id="attSummaryCards" style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Total Hours</div>
+          <div id="attTotalHours" style="font-size:1.6rem; font-weight:700;">—</div>
+        </div>
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Shifts</div>
+          <div id="attShiftCount" style="font-size:1.6rem; font-weight:700;">—</div>
+        </div>
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Avg / Shift</div>
+          <div id="attAvgHours" style="font-size:1.6rem; font-weight:700;">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-header">Clock History</div>
+    <div class="section-card-body" id="attHistoryBody">
       <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
     </div>
   </div>
@@ -1084,11 +1128,57 @@ async function deleteCoaching(id) {
   } catch(err) { alert('Network error: ' + err.message); }
 }
 
-// Hook coaching tab load into switchTab
+// ── Attendance ──
+let _attLoaded = false;
+
+function loadAttendance() {
+  _attLoaded = true;
+  const days = parseInt(document.getElementById('attPeriod').value);
+  fetch('/people/api/profile/attendance', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ employee_id: EMP_ID, days: days }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) return;
+    const s = data.summary;
+    document.getElementById('attTotalHours').textContent = s.total_hours + 'h';
+    document.getElementById('attShiftCount').textContent = s.completed;
+    document.getElementById('attAvgHours').textContent = s.avg_hours_per_shift + 'h';
+
+    const rows = data.rows;
+    const body = document.getElementById('attHistoryBody');
+    if (!rows.length) {
+      body.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No attendance records for this period.</p>';
+      return;
+    }
+    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    let html = '<div style="overflow-x:auto"><table class="assign-table"><thead><tr><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(r => {
+      const statusColor = r.status === 'active' ? '#059669' : '#6b7280';
+      html += `<tr>
+        <td style="font-weight:600;">${esc(r.date)}</td>
+        <td>${esc(r.clock_in)}</td>
+        <td>${r.clock_out || '—'}</td>
+        <td>${r.total_hours != null ? r.total_hours.toFixed(1) + 'h' : '—'}</td>
+        <td><span style="color:${statusColor}; font-weight:600;">${esc(r.status)}</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
+  })
+  .catch(() => {
+    document.getElementById('attHistoryBody').innerHTML =
+      '<p style="color:#b91c1c; font-size:.85rem;">Error loading attendance data.</p>';
+  });
+}
+
+// Hook coaching and attendance tab load into switchTab
 const _origSwitchTab = switchTab;
 switchTab = function(tabId, btn) {
   _origSwitchTab(tabId, btn);
   if (tabId === 'coaching') loadCoachingSessions();
+  if (tabId === 'attendance' && !_attLoaded) loadAttendance();
 };
 </script>
 {% endblock %}

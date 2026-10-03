@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
+from sqlalchemy import func
 from app.models import db, Employee, TimeClock, User, Schedule
 
 log = logging.getLogger("serevo.attendance")
@@ -210,4 +211,65 @@ def api_dashboard():
             "total_hours": round(total_hours, 1),
             "late": late_count,
         },
+    )
+
+
+@attendance_bp.route("/api/weekly-hours", methods=["POST"])
+@login_required
+def weekly_hours():
+    """Return daily hours breakdown for the current week for the logged-in agent."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Forbidden"), 403
+
+    emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
+    if not emp:
+        return jsonify(success=True, days=[], total_hours=0, employee_found=False)
+
+    # Calculate Monday of current week
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+
+    days = []
+    total = 0
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        hrs = db.session.query(
+            func.coalesce(func.sum(TimeClock.total_hours), 0)
+        ).filter(
+            TimeClock.employee_id == emp.id,
+            TimeClock.date == d,
+            TimeClock.status == "completed",
+        ).scalar()
+        hrs_f = round(float(hrs), 1)
+
+        # Check if currently active on this day
+        active = None
+        if d == today:
+            active_entry = TimeClock.query.filter_by(
+                employee_id=emp.id, date=d, status="active"
+            ).first()
+            if active_entry:
+                ci = active_entry.clock_in
+                if not ci.tzinfo:
+                    ci = ci.replace(tzinfo=timezone.utc)
+                elapsed = (_utcnow() - ci).total_seconds() / 3600
+                active = round(elapsed, 1)
+
+        total += hrs_f
+        days.append({
+            "date": d.isoformat(),
+            "day": day_names[i],
+            "hours": hrs_f,
+            "active_hours": active,
+            "is_today": d == today,
+        })
+
+    return jsonify(
+        success=True,
+        days=days,
+        total_hours=round(total, 1),
+        week_start=monday.isoformat(),
     )
