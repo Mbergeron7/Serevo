@@ -814,13 +814,22 @@ function switchLob(lob, btn) {
 }
 
 // ── Build combined daily data ───────────────────
+function getDateRange() {
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  return { from: from || null, to: to || null };
+}
+
 function getRawDailyData() {
   const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  const { from, to } = getDateRange();
   const dateMap = {};
   for (const lob of lobs) {
     const d = forecastData[lob];
     if (!d || !d.daily) continue;
     for (const row of d.daily) {
+      if (from && row.date < from) continue;
+      if (to && row.date > to) continue;
       if (!dateMap[row.date]) dateMap[row.date] = {date: row.date, offered: 0, aht_w: 0, aht_off: 0, req: 0, is_historic: row.is_historic};
       dateMap[row.date].offered += row.offered;
       dateMap[row.date].aht_w += row.offered * row.aht;
@@ -998,10 +1007,21 @@ function chartOpts(yLabel, isLine) {
 }
 
 // ── Render heatmap ──────────────────────────────
+function filterByDateRange(daily) {
+  const { from, to } = getDateRange();
+  if (!from && !to) return daily;
+  return daily.filter(r => {
+    if (from && r.date < from) return false;
+    if (to && r.date > to) return false;
+    return true;
+  });
+}
+
 function aggregateLobByView(daily) {
-  if (currentView === 'daily') return daily.map(r => ({key: r.date, label: getGroupLabel(r.date), val: r.agents_required}));
+  const filtered = filterByDateRange(daily);
+  if (currentView === 'daily') return filtered.map(r => ({key: r.date, label: getGroupLabel(r.date), val: r.agents_required}));
   const groups = {};
-  for (const row of daily) {
+  for (const row of filtered) {
     const key = getGroupKey(row.date);
     if (!groups[key]) groups[key] = {key, total: 0, days: 0};
     groups[key].total += row.agents_required;
@@ -1101,17 +1121,18 @@ document.getElementById('yearSelect').addEventListener('change', function() {
 // ── Date range defaults ────────────────────────
 (function initDateRange() {
   const year = {{ year }};
-  const today = new Date();
   const from = document.getElementById('dateFrom');
   const to = document.getElementById('dateTo');
   from.value = year + '-01-01';
-  if (year === today.getFullYear()) {
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
-    to.value = year + '-12-31';
-  } else {
-    to.value = year + '-12-31';
-  }
+  to.value = year + '-12-31';
+
+  // Re-render charts/heatmap when date range changes
+  from.addEventListener('change', function() {
+    if (Object.keys(forecastData).length) { renderCharts(); renderHeatmap(); }
+  });
+  to.addEventListener('change', function() {
+    if (Object.keys(forecastData).length) { renderCharts(); renderHeatmap(); }
+  });
 })();
 
 // ── Scenario management ────────────────────────
