@@ -257,16 +257,16 @@
 {% set total_gap = ns.total_hc - ns.total_fte %}
 <div class="summary-row">
   <div class="summary-card">
-    <div class="big-num num-neutral">{{ ns.total_hc|int }}</div>
+    <div class="big-num num-neutral">{{ "{:,}".format(ns.total_hc|int) }}</div>
     <div class="card-label">Current Headcount</div>
   </div>
   <div class="summary-card">
-    <div class="big-num num-neutral">{{ ns.total_fte|round(1) }}</div>
+    <div class="big-num num-neutral">{{ "{:,.1f}".format(ns.total_fte) }}</div>
     <div class="card-label">FTE Required</div>
   </div>
   <div class="summary-card">
     <div class="big-num {{ 'num-positive' if total_gap >= 0 else 'num-negative' }}">
-      {{ "+" if total_gap > 0 }}{{ total_gap|round(1) }}
+      {{ "+" if total_gap > 0 }}{{ "{:,.1f}".format(total_gap) }}
     </div>
     <div class="card-label">Overall Gap</div>
   </div>
@@ -338,13 +338,13 @@
           <tr>
             <td class="metric-label">PSIH (no shrinkage)</td>
             {% for m in lob.months %}
-              <td>{{ m.psih_raw }}</td>
+              <td>{{ "{:,.1f}".format(m.psih_raw) if m.psih_raw is number else m.psih_raw }}</td>
             {% endfor %}
           </tr>
           <tr>
             <td class="metric-label">PSIH (w/ {{ (lob.months[0].shrinkage * 100)|int }}% shrinkage)</td>
             {% for m in lob.months %}
-              <td>{{ m.psih_shr }}</td>
+              <td>{{ "{:,.1f}".format(m.psih_shr) if m.psih_shr is number else m.psih_shr }}</td>
             {% endfor %}
           </tr>
           <tr>
@@ -357,13 +357,13 @@
           <tr class="highlight-row fte-row" data-lob="{{ lob.lob }}">
             <td class="metric-label">FTE Required</td>
             {% for m in lob.months %}
-              <td class="fte-cell"><strong>{{ m.fte_req|round(1) }}</strong></td>
+              <td class="fte-cell"><strong>{{ "{:,.1f}".format(m.fte_req) }}</strong></td>
             {% endfor %}
           </tr>
           <tr>
             <td class="metric-label">Actual Headcount</td>
             {% for m in lob.months %}
-              <td>{{ m.actual_hc }}</td>
+              <td>{{ "{:,}".format(m.actual_hc|int) }}</td>
             {% endfor %}
           </tr>
           <tr class="highlight-row gap-row" data-lob="{{ lob.lob }}">
@@ -371,7 +371,7 @@
             {% for m in lob.months %}
               {% set cls = 'cf-positive val-positive' if m.gap > 0 else ('cf-negative val-negative' if m.gap < 0 else 'val-neutral') %}
               <td class="{{ cls }}">
-                <strong>{{ "+" if m.gap > 0 }}{{ m.gap|round(1) }}</strong>
+                <strong>{{ "+" if m.gap > 0 }}{{ "{:,.1f}".format(m.gap) }}</strong>
               </td>
             {% endfor %}
           </tr>
