@@ -23,13 +23,50 @@ def _get_agent_employee(user):
     return Employee.query.get(user["employee_id"])
 
 
+class _PreviewPU:
+    name = "Customer Service"
+
 class _PreviewEmployee:
     """Dummy employee object so admins/demo users can preview the portal."""
     id = 0
-    employee_id = "PREVIEW"
-    full_name = "Preview Agent"
-    email = ""
-    skill_name = "General"
+    employee_id = "DEMO-001"
+    full_name = "Demo Agent"
+    email = "demo@example.com"
+    skill_name = "Customer Service"
+    planning_unit = _PreviewPU()
+
+
+class _DemoPTOType:
+    def __init__(self, label, color):
+        self.label = label
+        self.color = color
+
+class _DemoPTO:
+    """Fake PTO entry for admin preview."""
+    _counter = 0
+    def __init__(self, start, end, type_label, status):
+        _DemoPTO._counter += 1
+        self.id = _DemoPTO._counter
+        self.start_date = start
+        self.end_date = end
+        self.pto_type = type_label.lower()
+        self.time_off_type = _DemoPTOType(type_label, "#6366f1")
+        self.approval_status = status
+        self.note = ""
+
+
+class _DemoSchedule:
+    """Fake schedule row for admin preview of My Schedule."""
+    def __init__(self, d, start_str, end_str):
+        from datetime import time as _time
+        self.schedule_date = d
+        self.shift_start = _time(int(start_str.split(":")[0]), int(start_str.split(":")[1]))
+        self.shift_end = _time(int(end_str.split(":")[0]), int(end_str.split(":")[1]))
+        s = self.shift_start.hour * 60 + self.shift_start.minute
+        e = self.shift_end.hour * 60 + self.shift_end.minute
+        self.hours = round((e - s) / 60, 1)
+        self.segments = []
+        self.status = "scheduled"
 
 
 # ───────────────────────────────────────────────────────
@@ -41,7 +78,8 @@ class _PreviewEmployee:
 def my_schedule():
     user = get_current_user()
     emp = _get_agent_employee(user)
-    if not emp:
+    is_preview = not emp
+    if is_preview:
         emp = _PreviewEmployee()
 
     # Default to current week (Mon–Sun)
@@ -57,20 +95,26 @@ def my_schedule():
 
     week_end = week_start + timedelta(days=6)
 
-    schedules = (
-        Schedule.query
-        .filter_by(employee_id=emp.id)
-        .filter(Schedule.schedule_date >= week_start)
-        .filter(Schedule.schedule_date <= week_end)
-        .order_by(Schedule.schedule_date, Schedule.shift_start)
-        .all()
-    )
+    if is_preview:
+        schedules = []
+    else:
+        schedules = (
+            Schedule.query
+            .filter_by(employee_id=emp.id)
+            .filter(Schedule.schedule_date >= week_start)
+            .filter(Schedule.schedule_date <= week_end)
+            .order_by(Schedule.schedule_date, Schedule.shift_start)
+            .all()
+        )
 
     # Build day-by-day data
     days = []
     for i in range(7):
         d = week_start + timedelta(days=i)
         day_schedules = [s for s in schedules if s.schedule_date == d]
+        # Add demo shifts for preview (Mon–Fri)
+        if is_preview and d.weekday() < 5:
+            day_schedules = [_DemoSchedule(d, "09:00", "17:00")]
         days.append({
             "date": d,
             "day_name": d.strftime("%A"),
@@ -103,7 +147,8 @@ def my_schedule():
 def my_time_off():
     user = get_current_user()
     emp = _get_agent_employee(user)
-    if not emp:
+    is_preview = not emp
+    if is_preview:
         emp = _PreviewEmployee()
 
     # Get time-off types for the dropdown
@@ -112,18 +157,20 @@ def my_time_off():
     except Exception:
         types = []
 
-    # Get this employee's PTO entries, most recent first
-    entries = (
-        PTOEntry.query
-        .filter_by(employee_id=emp.id)
-        .order_by(PTOEntry.start_date.desc())
-        .all()
-    )
-
-    # Split into upcoming and past
     today = date.today()
-    upcoming = [e for e in entries if e.end_date >= today]
-    past = [e for e in entries if e.end_date < today]
+
+    if is_preview:
+        upcoming = [_DemoPTO(today + timedelta(days=14), today + timedelta(days=16), "Vacation", "approved")]
+        past = [_DemoPTO(today - timedelta(days=30), today - timedelta(days=30), "Personal", "approved")]
+    else:
+        entries = (
+            PTOEntry.query
+            .filter_by(employee_id=emp.id)
+            .order_by(PTOEntry.start_date.desc())
+            .all()
+        )
+        upcoming = [e for e in entries if e.end_date >= today]
+        past = [e for e in entries if e.end_date < today]
 
     return render_template(
         "agent/my_time_off.html",
