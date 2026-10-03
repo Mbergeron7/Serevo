@@ -9,11 +9,13 @@ import logging
 from datetime import timedelta
 from flask import Flask
 from flask_bcrypt import Bcrypt
+from flask_wtf.csrf import CSRFProtect
 from config import cfg
 
 log = logging.getLogger("serevo.app")
 
 bcrypt = Bcrypt()
+csrf = CSRFProtect()
 
 
 def create_app():
@@ -37,6 +39,7 @@ def create_app():
     from app.models import db
     db.init_app(app)
     bcrypt.init_app(app)
+    csrf.init_app(app)
 
     from flask_migrate import Migrate
     Migrate(app, db)

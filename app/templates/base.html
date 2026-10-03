@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{{ brand_name }}{% endblock %}</title>
   <style>
     :root {
@@ -97,6 +98,39 @@
   @keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
   @keyframes toastOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(40px); } }
   </style>
+  <script>
+  // Auto-include CSRF token on all AJAX requests
+  (function(){
+    var token = document.querySelector('meta[name="csrf-token"]');
+    if (!token) return;
+    var csrfToken = token.getAttribute('content');
+    var _fetch = window.fetch;
+    window.fetch = function(url, opts) {
+      opts = opts || {};
+      if (opts.method && opts.method.toUpperCase() !== 'GET') {
+        opts.headers = opts.headers || {};
+        if (opts.headers instanceof Headers) {
+          if (!opts.headers.has('X-CSRFToken')) opts.headers.set('X-CSRFToken', csrfToken);
+        } else {
+          if (!opts.headers['X-CSRFToken']) opts.headers['X-CSRFToken'] = csrfToken;
+        }
+      }
+      return _fetch.call(this, url, opts);
+    };
+    var _open = XMLHttpRequest.prototype.open;
+    var _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method) {
+      this._csrfMethod = method;
+      return _open.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function() {
+      if (this._csrfMethod && this._csrfMethod.toUpperCase() !== 'GET') {
+        this.setRequestHeader('X-CSRFToken', csrfToken);
+      }
+      return _send.apply(this, arguments);
+    };
+  })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
