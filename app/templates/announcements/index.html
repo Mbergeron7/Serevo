@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Announcements — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Announcements</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Post updates visible to all agents on their portal.</p>
+  </div>
+  <button class="btn btn-primary" onclick="openEditor()">+ New Announcement</button>
+</div>
+
+<div id="annList" style="margin-top:8px;">
+  <p style="color:var(--text-muted);font-size:.85rem;">Loading…</p>
+</div>
+
+<!-- Editor Modal -->
+<div id="editorModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:560px;width:92%;max-height:90vh;overflow-y:auto;">
+    <h3 style="font-size:1rem;margin:0 0 16px;" id="editorTitle">New Announcement</h3>
+    <input type="hidden" id="annId">
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Title *</label>
+      <input id="annTitleInput" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Body</label>
+      <textarea id="annBodyInput" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Category</label>
+        <select id="annCategory" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;">
+          <option value="general">General</option>
+          <option value="urgent">Urgent</option>
+          <option value="schedule">Schedule</option>
+          <option value="policy">Policy</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">Expires At</label>
+        <input id="annExpires" type="datetime-local" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;box-sizing:border-box;">
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;">
+        <input type="checkbox" id="annPinned"> Pin to top
+      </label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-outline" onclick="closeEditor()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAnn()">Save</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.ann-row { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:start; gap:12px; }
+.ann-row:hover { border-color:var(--brand-accent); }
+.ann-meta { font-size:.72rem; color:var(--text-muted); margin-top:4px; }
+.ann-actions { display:flex; gap:6px; flex-shrink:0; }
+.ann-actions button { font-size:.72rem; padding:4px 10px; }
+.cat-pill { display:inline-block; padding:2px 8px; border-radius:8px; font-size:.68rem; font-weight:700; text-transform:uppercase; }
+.cat-general { background:#e5e7eb; color:#374151; }
+.cat-urgent { background:#fee2e2; color:#991b1b; }
+.cat-schedule { background:#dbeafe; color:#1e40af; }
+.cat-policy { background:#ede9fe; color:#5b21b6; }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+async function loadList() {
+  const r = await fetch('/announcements/api/list', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:'{}'
+  });
+  const d = await r.json();
+  if (!d.success) { document.getElementById('annList').innerHTML = '<p style="color:#dc2626;">Error loading announcements.</p>'; return; }
+  const el = document.getElementById('annList');
+  if (!d.announcements.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;text-align:center;padding:40px 0;">No announcements yet. Click "+ New Announcement" to create one.</p>'; return; }
+  let html = '';
+  d.announcements.forEach(a => {
+    const pin = a.is_pinned ? '📌 ' : '';
+    const exp = a.expires_at ? `Expires: ${new Date(a.expires_at).toLocaleDateString()}` : 'No expiry';
+    html += `<div class="ann-row">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:.9rem;">${pin}${esc(a.title)} <span class="cat-pill cat-${a.category}">${esc(a.category)}</span></div>
+        ${a.body ? `<div style="font-size:.82rem;margin-top:4px;color:var(--text-muted);white-space:pre-line;">${esc(a.body)}</div>` : ''}
+        <div class="ann-meta">${esc(a.author)} · ${a.created_at ? new Date(a.created_at).toLocaleDateString() : ''} · ${exp}</div>
+      </div>
+      <div class="ann-actions">
+        <button class="btn btn-outline" onclick='editAnn(${JSON.stringify(a)})'>Edit</button>
+        <button class="btn" style="background:#dc2626;color:#fff;" onclick="deleteAnn(${a.id})">Delete</button>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function openEditor(ann) {
+  document.getElementById('editorTitle').textContent = ann ? 'Edit Announcement' : 'New Announcement';
+  document.getElementById('annId').value = ann ? ann.id : '';
+  document.getElementById('annTitleInput').value = ann ? ann.title : '';
+  document.getElementById('annBodyInput').value = ann ? ann.body : '';
+  document.getElementById('annCategory').value = ann ? ann.category : 'general';
+  document.getElementById('annPinned').checked = ann ? ann.is_pinned : false;
+  document.getElementById('annExpires').value = ann && ann.expires_at ? ann.expires_at.slice(0,16) : '';
+  const m = document.getElementById('editorModal');
+  m.style.display = 'flex';
+}
+function editAnn(a) { openEditor(a); }
+function closeEditor() { document.getElementById('editorModal').style.display = 'none'; }
+
+async function saveAnn() {
+  const title = document.getElementById('annTitleInput').value.trim();
+  if (!title) { alert('Title is required'); return; }
+  const body = {
+    title,
+    body: document.getElementById('annBodyInput').value.trim(),
+    category: document.getElementById('annCategory').value,
+    is_pinned: document.getElementById('annPinned').checked,
+    expires_at: document.getElementById('annExpires').value || null,
+  };
+  const id = document.getElementById('annId').value;
+  if (id) body.id = parseInt(id);
+  const r = await fetch('/announcements/api/save', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify(body)
+  });
+  const d = await r.json();
+  if (d.success) { closeEditor(); loadList(); } else { alert(d.error || 'Error saving'); }
+}
+
+async function deleteAnn(id) {
+  if (!confirm('Delete this announcement?')) return;
+  const r = await fetch('/announcements/api/delete', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify({id})
+  });
+  const d = await r.json();
+  if (d.success) loadList(); else alert(d.error || 'Error deleting');
+}
+
+loadList();
+</script>
+{% endblock %}

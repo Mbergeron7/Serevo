@@ -74,6 +74,9 @@
   </div>
 </div>
 
+<!-- ═══ Announcements ═══ -->
+<div id="announceBanner" style="display:none; margin-bottom:16px;"></div>
+
 <div class="p-tabs">
   <button class="active" onclick="switchTab('schedule', this)">📅 My Schedule</button>
   <button onclick="switchTab('shifts', this)">📋 Open Shifts</button>
@@ -342,6 +345,7 @@ async function api(url, body={}) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   return r.json();
 }
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
 // ── Open Shifts ──
 async function loadOpenShifts() {
@@ -697,6 +701,42 @@ loadPtoRequests();
 loadQuality();
 loadClockStatus();
 loadWeeklyHours();
+loadAnnouncements();
+
+// ── Announcements ─────────────────────────────
+function loadAnnouncements() {
+  api('/announcements/api/active', {}).then(d => {
+    if (!d.success || !d.announcements.length) return;
+    const el = document.getElementById('announceBanner');
+    const catColors = {urgent:'#dc2626',schedule:'#2563eb',policy:'#7c3aed',general:'#6b7280'};
+    let html = '';
+    d.announcements.forEach(a => {
+      const col = catColors[a.category] || catColors.general;
+      const pin = a.is_pinned ? '<span style="margin-right:6px;">📌</span>' : '';
+      const ago = a.created_at ? timeAgo(a.created_at) : '';
+      html += `<div class="p-card" style="border-left:4px solid ${col}; margin-bottom:8px;">
+        <div class="p-card-body" style="padding:12px 20px;">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+            <div>
+              <div style="font-weight:700;font-size:.88rem;">${pin}${esc(a.title)}</div>
+              ${a.body ? `<div style="font-size:.82rem;margin-top:4px;color:var(--text-muted);">${esc(a.body)}</div>` : ''}
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap;">${esc(a.author)} · ${ago}</div>
+          </div>
+        </div>
+      </div>`;
+    });
+    el.innerHTML = html;
+    el.style.display = 'block';
+  });
+}
+function timeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
 
 // ── Clock In / Out ─────────────────────────────
 function loadClockStatus() {
