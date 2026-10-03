@@ -92,6 +92,12 @@ def create_ticket():
 @login_required
 def get_ticket(ticket_id):
     user = get_current_user()
+
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_support_ticket
+        data = get_demo_support_ticket(ticket_id)
+        return jsonify(success=True, **data)
+
     ticket = SupportTicket.query.get_or_404(ticket_id)
 
     # Non-admins can only view their own tickets

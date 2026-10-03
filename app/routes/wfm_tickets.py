@@ -137,6 +137,11 @@ def get_ticket(ticket_id):
     if not _has_wfm_access(user):
         return jsonify(success=False, error="No WFM access"), 403
 
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_wfm_ticket
+        data = get_demo_wfm_ticket(ticket_id)
+        return jsonify(success=True, **data)
+
     ticket = WfmTicket.query.get_or_404(ticket_id)
 
     # Non-analysts can only view their own tickets

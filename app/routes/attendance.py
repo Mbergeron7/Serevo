@@ -88,6 +88,10 @@ def clock_status():
     if not user:
         return jsonify(error="Forbidden"), 403
 
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_clock_status
+        return jsonify(success=True, **get_demo_clock_status())
+
     emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
     if not emp:
         return jsonify(success=True, clocked_in=False, employee_found=False)
@@ -227,6 +231,10 @@ def weekly_hours():
     user = get_current_user()
     if not user:
         return jsonify(error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_weekly_hours
+        return jsonify(success=True, **get_demo_weekly_hours())
 
     emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
     if not emp:

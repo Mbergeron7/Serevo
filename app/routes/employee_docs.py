@@ -132,6 +132,11 @@ def download_doc(doc_id):
     if not _check_role(user):
         return "Forbidden", 403
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_employee_doc_detail
+        doc = get_demo_employee_doc_detail(doc_id)
+        return jsonify(success=True, doc=doc, demo=True, message="File download not available in demo mode.")
+
     doc = EmployeeDocument.query.get(doc_id)
     if not doc:
         return "Not found", 404

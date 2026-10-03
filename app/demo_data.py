@@ -1526,3 +1526,192 @@ def get_demo_audit_log():
         {"id": 8, "user_id": None, "user_name": "System", "action": "data_imported", "detail": "Auto-imported 24 interval actuals from connected system.", "entity_type": "actuals", "entity_id": None, "created_at": (today - datetime.timedelta(days=7)).isoformat() + "T06:00:00"},
     ]
     return entries
+
+
+def get_demo_clock_status():
+    """Return demo clock status for portal widget."""
+    return {"clocked_in": False, "employee_found": True}
+
+
+def get_demo_weekly_hours():
+    """Return demo weekly hours breakdown for portal widget."""
+    today = datetime.date.today()
+    monday = today - datetime.timedelta(days=today.weekday())
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    days = []
+    total = 0
+    for i in range(7):
+        d = monday + datetime.timedelta(days=i)
+        if d < today and d.weekday() < 5:
+            hrs = round(random.uniform(7.5, 9.0), 1)
+        elif d == today and d.weekday() < 5:
+            hrs = round(random.uniform(3.0, 5.0), 1)
+        else:
+            hrs = 0
+        total += hrs
+        days.append({
+            "date": d.isoformat(),
+            "day": day_names[i],
+            "hours": hrs,
+            "active_hours": None,
+            "is_today": d == today,
+        })
+    return {"days": days, "total_hours": round(total, 1)}
+
+
+def get_demo_profile_attendance(employee_id=None, days=30):
+    """Return demo attendance rows for the employee profile tab."""
+    today = datetime.date.today()
+    rows = []
+    for i in range(min(days, 20)):
+        d = today - datetime.timedelta(days=i + 1)
+        if d.weekday() >= 5:
+            continue
+        hour = random.choice([7, 8, 9])
+        total_h = round(random.uniform(7.5, 9.0), 1)
+        rows.append({
+            "id": 9000 + i,
+            "date": d.isoformat(),
+            "clock_in": f"{hour:02d}:{random.randint(0,15):02d}",
+            "clock_out": f"{hour + 8}:{random.randint(0,30):02d}",
+            "total_hours": total_h,
+            "status": "completed",
+        })
+    completed = [r for r in rows if r["status"] == "completed"]
+    total_hours = sum(r["total_hours"] for r in completed)
+    avg_hours = round(total_hours / len(completed), 1) if completed else 0
+    return {
+        "rows": rows,
+        "summary": {
+            "total_entries": len(rows),
+            "completed": len(completed),
+            "total_hours": round(total_hours, 1),
+            "avg_hours_per_shift": avg_hours,
+            "days": days,
+        },
+    }
+
+
+def get_demo_team_calendar(week_start=None, lob=""):
+    """Return demo team calendar grid data."""
+    if not week_start:
+        today = datetime.date.today()
+        week_start = today - datetime.timedelta(days=today.weekday())
+    dates = [week_start + datetime.timedelta(days=i) for i in range(7)]
+
+    agents = [
+        ("Alex Morgan", "E1001"), ("Jordan Rivera", "E1002"), ("Casey Chen", "E1003"),
+        ("Taylor Brooks", "E1004"), ("Sam Patel", "E1005"), ("Riley Kim", "E1006"),
+        ("Jamie Torres", "E2001"), ("Avery Nguyen", "E2002"), ("Drew Campbell", "E2003"),
+        ("Harper Wilson", "E3001"), ("Rowan Garcia", "E3002"), ("Emery Davis", "E3003"),
+    ]
+    shifts = [("08:00", "16:30"), ("09:00", "17:30"), ("10:00", "18:30"),
+              ("07:00", "15:30"), ("11:00", "19:30")]
+    rows = []
+    daily_counts = {d.isoformat(): {"scheduled": 0, "off": 0, "pto": 0} for d in dates}
+
+    for idx, (name, eid) in enumerate(agents):
+        cells = []
+        for d in dates:
+            if d.weekday() >= 5:
+                cells.append({"status": "off", "label": "OFF"})
+                daily_counts[d.isoformat()]["off"] += 1
+            elif idx == 4 and d.weekday() == 2:
+                cells.append({"status": "pto", "label": "PTO"})
+                daily_counts[d.isoformat()]["pto"] += 1
+            else:
+                sh = shifts[(idx + d.weekday()) % len(shifts)]
+                cells.append({"status": "scheduled", "label": f"{sh[0]}–{sh[1]}", "hours": 8.5, "type": "full"})
+                daily_counts[d.isoformat()]["scheduled"] += 1
+        rows.append({"id": idx + 1, "name": name, "employee_id": eid, "cells": cells})
+
+    return {
+        "dates": [d.isoformat() for d in dates],
+        "day_labels": [d.strftime("%a %b %d") for d in dates],
+        "rows": rows,
+        "daily_counts": daily_counts,
+        "total_employees": len(agents),
+    }
+
+
+def get_demo_approvals_counts():
+    """Return demo pending approval counts."""
+    return {"pto": 2, "bids": 3, "swaps": 1, "total": 6}
+
+
+def get_demo_approvals_pto(status="pending"):
+    """Return demo PTO approval entries."""
+    today = datetime.date.today()
+    entries = [
+        {"id": 1, "employee": "Alex Morgan", "employee_id": 1, "start_date": (today + datetime.timedelta(days=5)).isoformat(), "end_date": (today + datetime.timedelta(days=5)).isoformat(), "pto_type": "vacation", "time_off_type": "Vacation", "note": "Family event", "status": "pending"},
+        {"id": 2, "employee": "Casey Chen", "employee_id": 3, "start_date": (today + datetime.timedelta(days=10)).isoformat(), "end_date": (today + datetime.timedelta(days=12)).isoformat(), "pto_type": "personal", "time_off_type": "Personal Day", "note": "Moving", "status": "pending"},
+        {"id": 3, "employee": "Jordan Rivera", "employee_id": 2, "start_date": (today - datetime.timedelta(days=5)).isoformat(), "end_date": (today - datetime.timedelta(days=5)).isoformat(), "pto_type": "sick", "time_off_type": "Sick Leave", "note": "", "status": "approved"},
+    ]
+    if status != "all":
+        entries = [e for e in entries if e["status"] == status]
+    return entries
+
+
+def get_demo_approvals_bids(status="pending"):
+    """Return demo shift bid approval entries."""
+    today = datetime.date.today()
+    entries = [
+        {"id": 1, "employee": "Sam Patel", "employee_id": 5, "shift_date": (today + datetime.timedelta(days=3)).isoformat(), "shift_start": "08:00", "shift_end": "16:30", "hours": 8.5, "preference": "preferred", "status": "pending", "created_at": (today - datetime.timedelta(days=1)).isoformat()},
+        {"id": 2, "employee": "Riley Kim", "employee_id": 6, "shift_date": (today + datetime.timedelta(days=3)).isoformat(), "shift_start": "08:00", "shift_end": "16:30", "hours": 8.5, "preference": "willing", "status": "pending", "created_at": (today - datetime.timedelta(days=1)).isoformat()},
+        {"id": 3, "employee": "Taylor Brooks", "employee_id": 4, "shift_date": (today + datetime.timedelta(days=5)).isoformat(), "shift_start": "10:00", "shift_end": "18:30", "hours": 8.5, "preference": "preferred", "status": "pending", "created_at": today.isoformat()},
+    ]
+    if status != "all":
+        entries = [e for e in entries if e["status"] == status]
+    return entries
+
+
+def get_demo_approvals_swaps(status="accepted"):
+    """Return demo shift swap approval entries."""
+    today = datetime.date.today()
+    entries = [
+        {"id": 1, "requester": "Alex Morgan", "requester_id": 1, "target": "Jordan Rivera", "target_id": 2, "requester_date": (today + datetime.timedelta(days=4)).isoformat(), "target_date": (today + datetime.timedelta(days=6)).isoformat(), "requester_shift": "08:00–16:30", "target_shift": "10:00–18:30", "status": "accepted", "reason": "Appointment on Thursday", "created_at": (today - datetime.timedelta(days=1)).isoformat()},
+    ]
+    if status == "needs_approval":
+        entries = [e for e in entries if e["status"] in ("accepted", "pending")]
+    elif status != "all":
+        entries = [e for e in entries if e["status"] == status]
+    return entries
+
+
+def get_demo_wfm_ticket(ticket_id):
+    """Return a single demo WFM ticket with comments."""
+    tickets = {t["id"]: t for t in get_demo_wfm_tickets()}
+    ticket = tickets.get(ticket_id)
+    if not ticket:
+        ticket = tickets.get(1, {})
+        ticket = dict(ticket, id=ticket_id)
+    today = datetime.date.today()
+    comments = [
+        {"id": 1, "ticket_id": ticket["id"], "author_name": ticket.get("submitter_name", "Agent"), "body": "Submitted this request — please let me know if you need more info.", "is_internal": False, "created_at": ticket.get("created_at", today.isoformat())},
+        {"id": 2, "ticket_id": ticket["id"], "author_name": "WFM Analyst", "body": "Looking into this now.", "is_internal": False, "created_at": (today - datetime.timedelta(days=0)).isoformat()},
+    ]
+    return {"ticket": ticket, "comments": comments}
+
+
+def get_demo_support_ticket(ticket_id):
+    """Return a single demo support ticket with comments."""
+    tickets = {t["id"]: t for t in get_demo_support_tickets()}
+    ticket = tickets.get(ticket_id)
+    if not ticket:
+        ticket = tickets.get(1, {})
+        ticket = dict(ticket, id=ticket_id)
+    today = datetime.date.today()
+    comments = [
+        {"id": 1, "ticket_id": ticket["id"], "author_name": ticket.get("submitter_name", "Agent"), "body": "Any update on this?", "is_internal": False, "created_at": ticket.get("created_at", today.isoformat())},
+    ]
+    return {"ticket": ticket, "comments": comments}
+
+
+def get_demo_employee_doc_detail(doc_id):
+    """Return a single demo employee document's metadata."""
+    docs = {d["id"]: d for d in get_demo_employee_docs()}
+    doc = docs.get(doc_id)
+    if not doc:
+        doc = docs.get(1, {})
+        doc = dict(doc, id=doc_id)
+    return doc

@@ -34,6 +34,17 @@ def api_data():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_team_calendar
+        payload = request.get_json(silent=True) or {}
+        ws = payload.get("week_start")
+        try:
+            week_start = datetime.strptime(ws, "%Y-%m-%d").date() if ws else None
+        except ValueError:
+            week_start = None
+        data = get_demo_team_calendar(week_start, payload.get("lob", ""))
+        return jsonify(success=True, **data)
+
     payload = request.get_json(silent=True) or {}
     lob = payload.get("lob", "")
     week_start_str = payload.get("week_start")

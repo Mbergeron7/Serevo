@@ -43,6 +43,9 @@ def pending_counts():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_approvals_counts
+        return jsonify(success=True, **get_demo_approvals_counts())
     try:
         pto = PTOEntry.query.filter_by(approval_status="pending").count()
         bids = ShiftBid.query.filter_by(status="pending").count()
@@ -67,6 +70,10 @@ def list_pto():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_approvals_pto
+        status_filter = (request.json or {}).get("status", "pending")
+        return jsonify(success=True, entries=get_demo_approvals_pto(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "pending")
         q = PTOEntry.query.join(Employee, PTOEntry.employee_id == Employee.id)
@@ -130,6 +137,10 @@ def list_bids():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_approvals_bids
+        status_filter = (request.json or {}).get("status", "pending")
+        return jsonify(success=True, bids=get_demo_approvals_bids(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "pending")
         q = ShiftBid.query.join(ShiftPost, ShiftBid.shift_post_id == ShiftPost.id)
@@ -202,6 +213,10 @@ def list_swaps():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_approvals_swaps
+        status_filter = (request.json or {}).get("status", "accepted")
+        return jsonify(success=True, swaps=get_demo_approvals_swaps(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "accepted")
         q = ShiftSwapRequest.query

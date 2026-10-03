@@ -695,6 +695,12 @@ def profile_attendance():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(success=False, error="Forbidden"), 403
 
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_profile_attendance
+        payload = request.get_json(silent=True) or {}
+        data = get_demo_profile_attendance(payload.get("employee_id"), int(payload.get("days", 30)))
+        return jsonify(success=True, **data)
+
     payload = request.get_json(silent=True) or {}
     employee_id = payload.get("employee_id")
     days = int(payload.get("days", 30))
