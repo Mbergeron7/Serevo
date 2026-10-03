@@ -57,11 +57,34 @@
       <a href="/my-time-off/"{% if request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Time Off</a>
       <a href="/portal/"{% if request.path.startswith('/portal') %} class="active"{% endif %}>Self-Service</a>
       {% endif %}
-      <span class="user-name" style="margin-left:auto;">{{ current_user.name if current_user else '' }}</span>
-      <a href="/logout">Sign out</a>
+      <span style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+        {% if current_user %}
+        <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" style="position:relative;cursor:pointer;font-size:1.1rem;" title="Notifications">
+          🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
+        </div>
+        {% endif %}
+        <span class="user-name">{{ current_user.name if current_user else '' }}</span>
+        <a href="/logout">Sign out</a>
+      </span>
       {% endblock %}
     </div>
   </nav>
+
+  <!-- Notification panel -->
+  {% if current_user %}
+  <div id="notifPanel" style="display:none;position:fixed;top:50px;right:16px;width:360px;max-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:1001;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-weight:700;font-size:.9rem;">Notifications</span>
+      <div style="display:flex;gap:8px;">
+        <button onclick="markAllRead()" style="background:none;border:none;color:var(--brand-accent);font-size:.75rem;cursor:pointer;font-weight:600;">Mark all read</button>
+      </div>
+    </div>
+    <div id="notifList" style="overflow-y:auto;max-height:400px;"></div>
+    <div id="notifEmpty" style="display:none;padding:32px 16px;text-align:center;color:var(--text-muted);font-size:.85rem;">
+      No notifications yet
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Global toast container -->
   <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:400px;"></div>
@@ -132,6 +155,98 @@
     };
   })();
   </script>
+  {% if current_user %}
+  <script>
+  /* ── Notifications ── */
+  var _notifOpen = false;
+  function toggleNotifPanel() {
+    var panel = document.getElementById('notifPanel');
+    _notifOpen = !_notifOpen;
+    panel.style.display = _notifOpen ? 'block' : 'none';
+    if (_notifOpen) loadNotifications();
+  }
+  document.addEventListener('click', function(e) {
+    if (!_notifOpen) return;
+    var panel = document.getElementById('notifPanel');
+    var bell = document.getElementById('notifBell');
+    if (!panel.contains(e.target) && !bell.contains(e.target)) {
+      _notifOpen = false;
+      panel.style.display = 'none';
+    }
+  });
+  function loadNotifications() {
+    fetch('/notifications/api/list', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+    .then(function(r){return r.json()})
+    .then(function(d) {
+      var list = document.getElementById('notifList');
+      var empty = document.getElementById('notifEmpty');
+      var badge = document.getElementById('notifBadge');
+      if (!d.success || !d.notifications.length) {
+        list.innerHTML = '';
+        empty.style.display = 'block';
+        badge.style.display = 'none';
+        return;
+      }
+      empty.style.display = 'none';
+      if (d.unread_count > 0) {
+        badge.textContent = d.unread_count > 9 ? '9+' : d.unread_count;
+        badge.style.display = 'block';
+      } else {
+        badge.style.display = 'none';
+      }
+      var icons = {schedule:'📅', pto:'🏖️', swap:'🔄', quality:'⭐', system:'⚙️', alert:'🔴', info:'ℹ️'};
+      list.innerHTML = d.notifications.map(function(n) {
+        var bg = n.is_read ? 'transparent' : 'rgba(37,99,235,.06)';
+        var icon = icons[n.category] || '📌';
+        var ago = _timeAgo(n.created_at);
+        var linkStart = n.link ? '<a href="'+n.link+'" style="text-decoration:none;color:inherit;display:block;">' : '<div>';
+        var linkEnd = n.link ? '</a>' : '</div>';
+        return linkStart+'<div style="padding:10px 16px;border-bottom:1px solid var(--border);background:'+bg+';cursor:pointer;" onclick="markRead('+n.id+')">'
+          +'<div style="display:flex;gap:8px;align-items:flex-start;">'
+          +'<span style="font-size:1rem;flex-shrink:0;">'+icon+'</span>'
+          +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-size:.82rem;font-weight:'+(n.is_read?'400':'600')+';">'+n.title+'</div>'
+          +(n.message ? '<div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">'+n.message+'</div>' : '')
+          +'<div style="font-size:.68rem;color:var(--text-muted);margin-top:3px;">'+ago+'</div>'
+          +'</div></div></div>'+linkEnd;
+      }).join('');
+    });
+  }
+  function markRead(id) {
+    fetch('/notifications/api/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id})})
+    .then(function(){loadNotifications();});
+  }
+  function markAllRead() {
+    fetch('/notifications/api/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:'all'})})
+    .then(function(){loadNotifications();});
+  }
+  function _timeAgo(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var s = Math.floor((Date.now() - d.getTime())/1000);
+    if (s < 60) return 'Just now';
+    if (s < 3600) return Math.floor(s/60)+'m ago';
+    if (s < 86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  // Poll badge count every 60s
+  function _pollBadge() {
+    fetch('/notifications/api/unread-count', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+    .then(function(r){return r.json()})
+    .then(function(d) {
+      var badge = document.getElementById('notifBadge');
+      if (badge && d.count > 0) {
+        badge.textContent = d.count > 9 ? '9+' : d.count;
+        badge.style.display = 'block';
+      } else if (badge) {
+        badge.style.display = 'none';
+      }
+    }).catch(function(){});
+  }
+  _pollBadge();
+  setInterval(_pollBadge, 60000);
+  </script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

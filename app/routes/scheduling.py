@@ -517,6 +517,19 @@ def save_schedule():
             saved += 1
 
         db.session.commit()
+
+        # Notify admins about saved schedule
+        try:
+            from app.routes.notifications import notify_all_admins
+            notify_all_admins(
+                f"Schedule saved: {lob}",
+                f"{saved} shift(s) saved for {date_str}.",
+                category="schedule",
+                link="/scheduling/",
+            )
+        except Exception:
+            pass  # notifications are best-effort
+
         return jsonify({"success": True, "saved": saved})
 
     except Exception as e:

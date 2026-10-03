@@ -144,6 +144,7 @@ def create_app():
     from app.routes.agent import agent_bp
     from app.routes.quality import quality_bp
     from app.routes.oauth import oauth_bp
+    from app.routes.notifications import notif_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -158,6 +159,7 @@ def create_app():
     app.register_blueprint(agent_bp)
     app.register_blueprint(quality_bp)
     app.register_blueprint(oauth_bp)
+    app.register_blueprint(notif_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

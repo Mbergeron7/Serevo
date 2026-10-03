@@ -1938,3 +1938,64 @@ class VTOOTSignup(db.Model):
     __table_args__ = (
         db.UniqueConstraint("post_id", "employee_id", name="uq_vto_post_emp"),
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    category    = db.Column(db.String(40), nullable=False, default="info")
+    # Categories: schedule, pto, swap, quality, system, alert
+    title       = db.Column(db.String(200), nullable=False)
+    message     = db.Column(db.Text, nullable=True)
+    link        = db.Column(db.String(500), nullable=True)   # optional deep-link
+    is_read     = db.Column(db.Boolean, default=False)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    user        = db.relationship("User", backref=db.backref("notifications", lazy="dynamic"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "category": self.category,
+            "title": self.title,
+            "message": self.message,
+            "link": self.link,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ── Audit Log ─────────────────────────────────────────────────
+
+class AuditLog(db.Model):
+    __tablename__ = "audit_log"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action      = db.Column(db.String(80), nullable=False)
+    # Actions: schedule_generated, schedule_published, pto_approved, pto_denied,
+    #          employee_added, employee_updated, settings_changed, data_imported, etc.
+    detail      = db.Column(db.Text, nullable=True)
+    entity_type = db.Column(db.String(40), nullable=True)    # schedule, employee, pto, etc.
+    entity_id   = db.Column(db.Integer, nullable=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    user        = db.relationship("User", backref="audit_logs")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "user_name": self.user.display_name if self.user else "System",
+            "action": self.action,
+            "detail": self.detail,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
