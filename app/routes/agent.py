@@ -12,7 +12,7 @@ from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, TimeOffType,
     ShiftPost, ShiftBid, ShiftSwapRequest, VTOOTPost, VTOOTSignup,
-    PlanningUnit,
+    PlanningUnit, QualityEvaluation,
 )
 from datetime import date as _date_type
 
@@ -750,3 +750,120 @@ def _demo_upcoming_shifts():
                 "hours": 8.5,
             })
     return shifts
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PTO Balances
+# ═══════════════════════════════════════════════════════════════
+
+@agent_bp.route("/api/agent/pto-balances", methods=["POST"])
+@login_required
+def pto_balances():
+    """Return PTO balance for the current agent, by type, for this calendar year."""
+    user = get_current_user()
+    emp = _get_agent_employee(user)
+
+    # Demo / admin preview
+    if not emp and user and user.get("role") in ("admin", "supervisor"):
+        types = TimeOffType.query.filter_by(is_active=True).order_by(TimeOffType.sort_order).all()
+        if not types:
+            types = []
+        balances = []
+        for t in types:
+            balances.append({
+                "label": t.label, "color": t.color,
+                "entitlement": t.max_days_per_year,
+                "used": 0, "pending": 0,
+                "remaining": t.max_days_per_year if t.max_days_per_year else None,
+            })
+        return jsonify({"success": True, "balances": balances})
+
+    if not emp:
+        return jsonify({"success": False, "error": "No linked employee"}), 400
+
+    year_start = date(date.today().year, 1, 1)
+    types = TimeOffType.query.filter_by(is_active=True).order_by(TimeOffType.sort_order).all()
+    balances = []
+    for t in types:
+        # Approved days used this year
+        approved = PTOEntry.query.filter(
+            PTOEntry.employee_id == emp.id,
+            PTOEntry.time_off_type_id == t.id,
+            PTOEntry.approval_status == "approved",
+            PTOEntry.start_date >= year_start,
+        ).all()
+        used_days = sum((e.end_date - e.start_date).days + 1 for e in approved)
+
+        # Pending days
+        pending = PTOEntry.query.filter(
+            PTOEntry.employee_id == emp.id,
+            PTOEntry.time_off_type_id == t.id,
+            PTOEntry.approval_status == "pending",
+            PTOEntry.start_date >= year_start,
+        ).all()
+        pending_days = sum((e.end_date - e.start_date).days + 1 for e in pending)
+
+        remaining = None
+        if t.max_days_per_year is not None:
+            remaining = max(0, t.max_days_per_year - used_days)
+
+        balances.append({
+            "label": t.label, "color": t.color,
+            "entitlement": t.max_days_per_year,
+            "used": used_days, "pending": pending_days,
+            "remaining": remaining,
+        })
+
+    return jsonify({"success": True, "balances": balances})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Agent Quality Scores
+# ═══════════════════════════════════════════════════════════════
+
+@agent_bp.route("/api/agent/my-quality", methods=["POST"])
+@login_required
+def my_quality():
+    """Return the agent's own quality evaluations."""
+    from sqlalchemy import func
+
+    user = get_current_user()
+    emp = _get_agent_employee(user)
+
+    payload = request.get_json(silent=True) or {}
+    days = int(payload.get("days", 90))
+    cutoff = date.today() - timedelta(days=days)
+
+    # Demo / admin preview
+    if not emp and user and user.get("role") in ("admin", "supervisor"):
+        return jsonify({
+            "success": True, "avg_score": None, "eval_count": 0, "evaluations": [],
+        })
+
+    if not emp:
+        return jsonify({"success": False, "error": "No linked employee"}), 400
+
+    evals = QualityEvaluation.query.filter(
+        QualityEvaluation.employee_id == emp.id,
+        QualityEvaluation.eval_date >= cutoff,
+    ).order_by(QualityEvaluation.eval_date.desc()).all()
+
+    avg = db.session.query(func.avg(QualityEvaluation.overall_score)).filter(
+        QualityEvaluation.employee_id == emp.id,
+        QualityEvaluation.eval_date >= cutoff,
+    ).scalar()
+
+    return jsonify({
+        "success": True,
+        "avg_score": round(float(avg), 1) if avg else None,
+        "eval_count": len(evals),
+        "evaluations": [{
+            "date": e.eval_date.isoformat(),
+            "overall": round(float(e.overall_score), 1),
+            "communication": round(float(e.communication_score), 1) if e.communication_score else None,
+            "problem_solving": round(float(e.resolution_score), 1) if e.resolution_score else None,
+            "adherence": round(float(e.compliance_score), 1) if e.compliance_score else None,
+            "evaluator": e.evaluator or "",
+            "notes": (e.notes or "")[:200],
+        } for e in evals],
+    })

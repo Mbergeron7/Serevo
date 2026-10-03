@@ -54,6 +54,7 @@
       <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
       <a href="/approvals/"{% if request.path.startswith('/approvals') %} class="active"{% endif %}>Approvals</a>
       <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
+      <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
       {% else %}
       {# Agent nav — portal only #}
       <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
