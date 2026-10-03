@@ -9,7 +9,7 @@
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
     <label style="font-size:.85rem;color:var(--text-muted);">Period:</label>
-    <select id="periodSelect" onchange="loadReport()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
+    <select id="periodSelect" onchange="loadReport();loadAttendanceReport()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.85rem;">
       <option value="7">Last 7 days</option>
       <option value="14">Last 14 days</option>
       <option value="30" selected>Last 30 days</option>
@@ -51,6 +51,12 @@
     <h3>Self-Service Activity</h3>
     <div id="selfService" class="detail-content">—</div>
   </div>
+</div>
+
+<!-- Attendance: Actual vs Scheduled -->
+<div class="detail-card" style="margin-bottom:24px;">
+  <h3>Attendance — Actual vs Scheduled Hours</h3>
+  <div id="attReport" class="detail-content" style="max-height:400px; overflow-y:auto;">Loading...</div>
 </div>
 
 <style>
@@ -145,6 +151,25 @@ async function loadReport() {
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
+async function loadAttendanceReport() {
+  const days = parseInt(document.getElementById('periodSelect').value);
+  const res = await fetch('/reports/api/attendance', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({days})
+  });
+  const d = await res.json();
+  if (!d.success) { document.getElementById('attReport').innerHTML = 'Error'; return; }
+  if (!d.rows.length) { document.getElementById('attReport').innerHTML = '<span style="color:var(--text-muted);">No attendance data for this period.</span>'; return; }
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);">Employee</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Actual</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Scheduled</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Diff</th></tr></thead><tbody>';
+  d.rows.forEach(r => {
+    const diffColor = r.difference > 0 ? '#059669' : r.difference < 0 ? '#dc2626' : '';
+    html += `<tr><td style="padding:5px 8px;border-bottom:1px solid var(--border);">${esc(r.name)}</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);">${r.actual_hours}h</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);">${r.scheduled_hours}h</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:${diffColor};font-weight:600;">${r.difference > 0 ? '+' : ''}${r.difference}h</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('attReport').innerHTML = html;
+}
+
 loadReport();
+loadAttendanceReport();
 </script>
 {% endblock %}

@@ -9,7 +9,7 @@ from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, ForecastInterval,
     QualityEvaluation, ShiftSwapRequest, ShiftBid, ShiftPost,
-    PlanningUnit,
+    PlanningUnit, TimeClock,
 )
 
 log = logging.getLogger(__name__)
@@ -171,3 +171,54 @@ def summary():
     except Exception as e:
         log.exception("Reports summary error")
         return jsonify({"success": False, "error": str(e)})
+
+
+@reports_bp.route("/api/attendance", methods=["POST"])
+@login_required
+def attendance_report():
+    """Attendance hours report — actual vs scheduled per employee."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    days = int(payload.get("days", 7))
+    cutoff = date.today() - timedelta(days=days)
+
+    employees = Employee.query.filter_by(status="Active").order_by(
+        Employee.last_name, Employee.first_name
+    ).all()
+
+    rows = []
+    for emp in employees:
+        # Actual hours from TimeClock
+        actual = db.session.query(
+            func.coalesce(func.sum(TimeClock.total_hours), 0)
+        ).filter(
+            TimeClock.employee_id == emp.id,
+            TimeClock.date >= cutoff,
+            TimeClock.status == "completed",
+        ).scalar()
+
+        # Scheduled hours
+        scheduled = db.session.query(
+            func.coalesce(func.sum(Schedule.hours), 0)
+        ).filter(
+            Schedule.employee_id == emp.id,
+            Schedule.schedule_date >= cutoff,
+        ).scalar()
+
+        actual_f = round(float(actual), 1)
+        scheduled_f = round(float(scheduled), 1)
+        diff = round(actual_f - scheduled_f, 1)
+
+        if actual_f > 0 or scheduled_f > 0:
+            rows.append({
+                "name": emp.full_name,
+                "employee_id": emp.employee_id,
+                "actual_hours": actual_f,
+                "scheduled_hours": scheduled_f,
+                "difference": diff,
+            })
+
+    return jsonify(success=True, rows=rows, period_days=days)
