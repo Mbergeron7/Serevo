@@ -259,6 +259,65 @@ class RequirementInterval(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# FORECAST SCENARIOS
+# ═══════════════════════════════════════════════════════════════
+
+class ForecastScenario(db.Model):
+    """A named forecast scenario (Regular, Operational, Strategic).
+
+    Each scenario stores a snapshot of forecast settings and results
+    so users can compare different approaches and push the best one
+    to staffing requirements.
+    """
+    __tablename__ = "forecast_scenarios"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False, index=True)
+    name             = db.Column(db.String(60), nullable=False)            # "Regular", "Operational", "Strategic"
+    scenario_type    = db.Column(db.String(30), nullable=False, default="regular")  # regular | operational | strategic
+    method           = db.Column(db.String(40), default="weighted")        # forecast method used
+    interval_minutes = db.Column(db.Integer, default=30)                   # 15 or 30
+    historical_days  = db.Column(db.Integer, default=90)
+    forecast_days    = db.Column(db.Integer, default=90)
+    service_level    = db.Column(db.Float, default=0.80)
+    target_asa       = db.Column(db.Float, default=30)
+    shrinkage        = db.Column(db.Float, default=0.30)
+    is_active        = db.Column(db.Boolean, default=False)                # pushed to requirements?
+    year             = db.Column(db.Integer, nullable=False)
+    notes            = db.Column(db.Text, default="")
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref=db.backref("forecast_scenarios", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_scenario_unit_year", "planning_unit_id", "year"),
+    )
+
+    def to_dict(self):
+        pu = self.planning_unit
+        return {
+            "id": self.id,
+            "planning_unit_id": self.planning_unit_id,
+            "lob_name": pu.name if pu else "",
+            "name": self.name,
+            "scenario_type": self.scenario_type,
+            "method": self.method,
+            "interval_minutes": self.interval_minutes,
+            "historical_days": self.historical_days,
+            "forecast_days": self.forecast_days,
+            "service_level": self.service_level,
+            "target_asa": self.target_asa,
+            "shrinkage": self.shrinkage,
+            "is_active": self.is_active,
+            "year": self.year,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
 # SCHEDULES
 # ═══════════════════════════════════════════════════════════════
 

@@ -43,7 +43,7 @@ def index():
     user = get_current_user()
     now = dt.now(ZoneInfo(TIMEZONE))
     year = int(request.args.get("year", now.year))
-    years = list(range(2024, now.year + 2))
+    years = list(range(2024, now.year + 3))
 
     if user and user.get("is_demo"):
         from app.demo_data import DEMO_LOBS
@@ -782,4 +782,205 @@ def reforecast_alerts():
     except Exception as e:
         log.exception("Reforecast alerts error")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ══════════════════════════════════════════════════════════════
+# Forecast Scenarios — save, list, delete, push-to-requirements
+# ══════════════════════════════════════════════════════════════
+
+@forecasting_bp.route("/scenarios", methods=["POST"])
+@login_required
+def list_scenarios():
+    """List saved forecast scenarios for a LOB + year."""
+    from app.models import ForecastScenario, PlanningUnit
+    user = get_current_user()
+
+    if user and user.get("is_demo"):
+        return jsonify(success=True, scenarios=_demo_scenarios())
+
+    payload = request.get_json(silent=True) or {}
+    lob = payload.get("lob", "").strip()
+    from datetime import datetime as dt
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+    year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+
+    if not lob:
+        return jsonify(success=True, scenarios=[])
+
+    from app.data_source import normalize_lob
+    lob_n = normalize_lob(lob)
+    unit = PlanningUnit.query.filter_by(name=lob_n).first()
+    if not unit:
+        return jsonify(success=True, scenarios=[])
+
+    rows = ForecastScenario.query.filter_by(
+        planning_unit_id=unit.id, year=year
+    ).order_by(ForecastScenario.created_at.desc()).all()
+
+    return jsonify(success=True, scenarios=[s.to_dict() for s in rows])
+
+
+@forecasting_bp.route("/scenarios/save", methods=["POST"])
+@login_required
+def save_scenario():
+    """Save current forecast settings as a named scenario."""
+    from app.models import ForecastScenario, PlanningUnit
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    payload = request.get_json(silent=True) or {}
+    lob = payload.get("lob", "").strip()
+    name = payload.get("name", "").strip()
+    scenario_type = payload.get("scenario_type", "regular")
+    if not lob or not name:
+        return jsonify(success=False, error="LOB and name are required")
+
+    from app.data_source import normalize_lob
+    from datetime import datetime as dt
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+
+    year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+    lob_n = normalize_lob(lob)
+    unit = PlanningUnit.query.filter_by(name=lob_n).first()
+    if not unit:
+        unit = PlanningUnit(name=lob_n)
+        db.session.add(unit)
+        db.session.flush()
+
+    # Check if scenario with same name + type + year already exists for this LOB
+    existing = ForecastScenario.query.filter_by(
+        planning_unit_id=unit.id, name=name, year=year
+    ).first()
+
+    if existing:
+        # Update existing
+        existing.scenario_type = scenario_type
+        existing.method = payload.get("method", existing.method)
+        existing.interval_minutes = int(payload.get("interval_minutes", existing.interval_minutes))
+        existing.historical_days = int(payload.get("historical_days", existing.historical_days))
+        existing.forecast_days = int(payload.get("forecast_days", existing.forecast_days))
+        existing.service_level = float(payload.get("service_level", existing.service_level))
+        existing.target_asa = float(payload.get("target_asa", existing.target_asa))
+        existing.shrinkage = float(payload.get("shrinkage", existing.shrinkage))
+        existing.notes = payload.get("notes", existing.notes)
+        db.session.commit()
+        return jsonify(success=True, scenario=existing.to_dict(), updated=True)
+
+    scenario = ForecastScenario(
+        planning_unit_id=unit.id,
+        name=name,
+        scenario_type=scenario_type,
+        method=payload.get("method", "weighted"),
+        interval_minutes=int(payload.get("interval_minutes", 30)),
+        historical_days=int(payload.get("historical_days", 90)),
+        forecast_days=int(payload.get("forecast_days", 90)),
+        service_level=float(payload.get("service_level", 0.80)),
+        target_asa=float(payload.get("target_asa", 30)),
+        shrinkage=float(payload.get("shrinkage", 0.30)),
+        year=year,
+        notes=payload.get("notes", ""),
+    )
+    db.session.add(scenario)
+    db.session.commit()
+    return jsonify(success=True, scenario=scenario.to_dict(), updated=False)
+
+
+@forecasting_bp.route("/scenarios/delete", methods=["POST"])
+@login_required
+def delete_scenario():
+    """Delete a saved scenario."""
+    from app.models import ForecastScenario
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    payload = request.get_json(silent=True) or {}
+    sid = payload.get("id")
+    if not sid:
+        return jsonify(success=False, error="Scenario ID required")
+
+    scenario = ForecastScenario.query.get(int(sid))
+    if not scenario:
+        return jsonify(success=False, error="Scenario not found")
+
+    db.session.delete(scenario)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@forecasting_bp.route("/scenarios/push", methods=["POST"])
+@login_required
+def push_scenario():
+    """Push a saved scenario to staffing requirements.
+
+    Re-runs generate + Erlang C with the scenario's saved settings,
+    then marks it as the active scenario.
+    """
+    from app.models import ForecastScenario, PlanningUnit
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    payload = request.get_json(silent=True) or {}
+    sid = payload.get("id")
+    if not sid:
+        return jsonify(success=False, error="Scenario ID required")
+
+    scenario = ForecastScenario.query.get(int(sid))
+    if not scenario:
+        return jsonify(success=False, error="Scenario not found")
+
+    unit = PlanningUnit.query.get(scenario.planning_unit_id)
+    if not unit:
+        return jsonify(success=False, error="Planning unit not found")
+
+    # Re-generate forecast using scenario settings
+    from app.forecasting.engine import generate_and_save_forecast
+    result = generate_and_save_forecast(
+        unit.name,
+        method=scenario.method,
+        historical_days=scenario.historical_days,
+        forecast_days=scenario.forecast_days,
+    )
+
+    if not result.get("ok"):
+        return jsonify(success=False, error=result.get("error", "Generation failed"))
+
+    # Mark this scenario as active, unmark others for same LOB+year
+    ForecastScenario.query.filter_by(
+        planning_unit_id=unit.id, year=scenario.year
+    ).update({"is_active": False})
+    scenario.is_active = True
+    db.session.commit()
+
+    return jsonify(success=True, message=f"'{scenario.name}' pushed to requirements",
+                   scenario=scenario.to_dict())
+
+
+def _demo_scenarios():
+    """Return demo scenario data."""
+    return [
+        {"id": 1, "lob_name": "Sales Support", "name": "Regular Forecast",
+         "scenario_type": "regular", "method": "weighted", "interval_minutes": 30,
+         "historical_days": 90, "forecast_days": 90, "service_level": 0.80,
+         "target_asa": 30, "shrinkage": 0.30, "is_active": True, "year": 2026,
+         "notes": "", "created_at": "2026-09-15T10:00:00", "updated_at": "2026-09-15T10:00:00"},
+        {"id": 2, "lob_name": "Sales Support", "name": "Operational Forecast",
+         "scenario_type": "operational", "method": "holt_winters", "interval_minutes": 30,
+         "historical_days": 60, "forecast_days": 30, "service_level": 0.85,
+         "target_asa": 20, "shrinkage": 0.25, "is_active": False, "year": 2026,
+         "notes": "Short-term operational planning", "created_at": "2026-09-20T14:00:00", "updated_at": "2026-09-20T14:00:00"},
+        {"id": 3, "lob_name": "Sales Support", "name": "Strategic Forecast",
+         "scenario_type": "strategic", "method": "ml_gradient_boosting", "interval_minutes": 30,
+         "historical_days": 180, "forecast_days": 365, "service_level": 0.80,
+         "target_asa": 30, "shrinkage": 0.30, "is_active": False, "year": 2026,
+         "notes": "Long-range strategic planning", "created_at": "2026-09-25T09:00:00", "updated_at": "2026-09-25T09:00:00"},
+    ]
 

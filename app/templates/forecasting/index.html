@@ -11,6 +11,10 @@
   }
   .fc-banner h1 { font-size: 1.35rem; margin: 0 0 2px; }
   .fc-banner .sub { font-size: .82rem; opacity: .85; }
+  .year-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.1); color: #fff; font-size: .82rem; cursor: pointer; font-weight: 600; }
+  .year-btn:hover { background: rgba(255,255,255,.25); }
+  .year-btn.active { background: rgba(255,255,255,.3); border-color: #fff; }
 
   /* ── Controls row ──────────────────────────── */
   .fc-controls {
@@ -216,6 +220,40 @@
   .refc-change-up { color: #ef4444; font-weight: 600; }
   .refc-change-down { color: #22c55e; font-weight: 600; }
 
+  /* ── Scenario cards ─────────────────────── */
+  .scenario-card {
+    flex: 1; min-width: 240px; max-width: 320px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; position: relative;
+  }
+  .scenario-card.active { border-color: #22c55e; border-width: 2px; }
+  .scenario-card .sc-type {
+    font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 6px;
+  }
+  .sc-type.regular { background: #dbeafe; color: #1e40af; }
+  .sc-type.operational { background: #fef3c7; color: #92400e; }
+  .sc-type.strategic { background: #ede9fe; color: #5b21b6; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .sc-type.regular { background: #1e3a5f; color: #93c5fd; }
+    :root:not([data-theme="light"]) .sc-type.operational { background: #4a3010; color: #fcd34d; }
+    :root:not([data-theme="light"]) .sc-type.strategic { background: #3b1f7e; color: #c4b5fd; }
+  }
+  :root[data-theme="dark"] .sc-type.regular { background: #1e3a5f; color: #93c5fd; }
+  :root[data-theme="dark"] .sc-type.operational { background: #4a3010; color: #fcd34d; }
+  :root[data-theme="dark"] .sc-type.strategic { background: #3b1f7e; color: #c4b5fd; }
+  .scenario-card .sc-name { font-weight: 700; font-size: .92rem; margin-bottom: 4px; }
+  .scenario-card .sc-details { font-size: .72rem; color: var(--text-muted); line-height: 1.6; }
+  .scenario-card .sc-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .scenario-card .sc-actions button { font-size: .72rem; padding: 4px 12px; border-radius: 4px;
+    border: 1px solid var(--border); cursor: pointer; font-weight: 600; }
+  .sc-btn-push { background: #22c55e !important; color: #fff !important; border-color: #22c55e !important; }
+  .sc-btn-push:hover { background: #16a34a !important; }
+  .sc-btn-load { background: var(--surface); color: var(--text); }
+  .sc-btn-del { background: transparent; color: #ef4444 !important; border-color: #ef4444 !important; }
+  .sc-active-badge { position: absolute; top: 10px; right: 10px; font-size: .6rem; font-weight: 700;
+    text-transform: uppercase; background: #22c55e; color: #fff; padding: 2px 8px; border-radius: 10px; }
+
   @media (max-width: 768px) {
     .fc-controls { flex-direction: column; }
     .lob-picker { width: 100%; max-height: 200px; }
@@ -234,9 +272,9 @@
     <div class="sub">Call volume, AHT &amp; staffing requirements • {{ year }}</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
-    <select id="yearSelect" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:.85rem;">
-      {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
-    </select>
+    {% for y in years %}
+    <button onclick="changeYear({{ y }})" class="year-btn{% if y == year %} active{% endif %}">{{ y }}</button>
+    {% endfor %}
   </div>
 </div>
 
@@ -279,12 +317,27 @@
       </select>
     </div>
     <div class="setting-group">
+      <label>Interval</label>
+      <select id="intervalSelect">
+        <option value="15">15 min</option>
+        <option value="30" selected>30 min</option>
+      </select>
+    </div>
+    <div class="setting-group">
       <label>History Days</label>
       <input type="number" id="histDays" value="90" min="7" max="365">
     </div>
     <div class="setting-group">
       <label>Forecast Days</label>
       <input type="number" id="fcDays" value="90" min="7" max="365">
+    </div>
+    <div class="setting-group">
+      <label>Date Range</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="date" id="dateFrom" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);">
+        <span style="font-size:.78rem;color:var(--text-muted);">to</span>
+        <input type="date" id="dateTo" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--bg);color:var(--text);">
+      </div>
     </div>
     <div class="setting-group">
       <label>Service Level</label>
@@ -304,6 +357,51 @@
     <button class="btn-secondary" onclick="loadExistingData()">
       Load Saved
     </button>
+  </div>
+</div>
+
+<!-- ═══ Forecast Scenarios ═══ -->
+<div class="scenarios-panel" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div>
+      <h3 style="margin:0;font-size:1rem;">💾 Forecast Scenarios</h3>
+      <div style="font-size:.75rem;color:var(--text-muted);">Save &amp; compare different forecast approaches, then push to staffing requirements</div>
+    </div>
+    <button class="btn-action" onclick="openSaveScenarioModal()" style="font-size:.78rem;padding:6px 16px;">
+      + Save Current as Scenario
+    </button>
+  </div>
+  <div id="scenariosList" style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="color:var(--text-muted);font-size:.82rem;padding:8px 0;">Select a LOB and generate forecasts to save scenarios.</div>
+  </div>
+</div>
+
+<!-- Save Scenario Modal -->
+<div id="scenarioModal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);padding:24px;width:420px;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.3);">
+    <h3 style="margin:0 0 16px;">Save Forecast Scenario</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Scenario Name</label>
+        <input type="text" id="scenarioName" placeholder="e.g. Regular Forecast" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Type</label>
+        <select id="scenarioType" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+          <option value="regular">Regular</option>
+          <option value="operational">Operational</option>
+          <option value="strategic">Strategic</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Notes (optional)</label>
+        <textarea id="scenarioNotes" rows="2" placeholder="Describe this scenario..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn-secondary" onclick="closeScenarioModal()">Cancel</button>
+      <button class="btn-action" onclick="saveScenario()">Save Scenario</button>
+    </div>
   </div>
 </div>
 
@@ -564,6 +662,7 @@ async function generateForecasts() {
         body: JSON.stringify({
           lob, method, historical_days: histDays,
           forecast_days: fcDays, window: 7,
+          interval_minutes: parseInt(document.getElementById('intervalSelect').value),
         })
       });
       const data = await resp.json();
@@ -584,6 +683,7 @@ async function generateForecasts() {
   showStatus(`Forecasts generated for ${done} LOB(s). Data saved to database.`, 'success');
   setTimeout(hideStatus, 5000);
   renderDashboard();
+  if (lobs.length) loadScenarios(lobs[0]);
 }
 
 // ── Load existing saved data ────────────────────
@@ -611,6 +711,8 @@ async function loadExistingData() {
     setTimeout(hideStatus, 3000);
   }
   renderDashboard();
+  // Load scenarios for first selected LOB
+  if (lobs.length) loadScenarios(lobs[0]);
 }
 
 // ── Load data for a single LOB from the API ─────
@@ -904,11 +1006,168 @@ function heatClass(val, max) {
 // ── Auto-load on page ready ─────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadExistingData();
+  const lobs = getSelectedLobs();
+  if (lobs.length) loadScenarios(lobs[0]);
 });
 
-document.getElementById('yearSelect').addEventListener('change', function() {
-  window.location.href = '/forecasting/?year=' + this.value;
-});
+function changeYear(y) {
+  window.location.href = '/forecasting/?year=' + y;
+}
+
+// ── Date range defaults ────────────────────────
+(function initDateRange() {
+  const year = {{ year }};
+  const today = new Date();
+  const from = document.getElementById('dateFrom');
+  const to = document.getElementById('dateTo');
+  from.value = year + '-01-01';
+  if (year === today.getFullYear()) {
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    to.value = year + '-12-31';
+  } else {
+    to.value = year + '-12-31';
+  }
+})();
+
+// ── Scenario management ────────────────────────
+let currentScenarios = [];
+
+function openSaveScenarioModal() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB first.', 'error'); return; }
+  document.getElementById('scenarioModal').style.display = 'flex';
+  document.getElementById('scenarioName').focus();
+}
+function closeScenarioModal() {
+  document.getElementById('scenarioModal').style.display = 'none';
+}
+
+async function saveScenario() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select a LOB.', 'error'); return; }
+
+  const name = document.getElementById('scenarioName').value.trim();
+  if (!name) { showStatus('Enter a scenario name.', 'error'); return; }
+
+  const payload = {
+    lob: lobs[0],
+    name: name,
+    scenario_type: document.getElementById('scenarioType').value,
+    method: document.getElementById('methodSelect').value,
+    interval_minutes: parseInt(document.getElementById('intervalSelect').value),
+    historical_days: parseInt(document.getElementById('histDays').value) || 90,
+    forecast_days: parseInt(document.getElementById('fcDays').value) || 90,
+    service_level: parseInt(document.getElementById('slTarget').value) / 100,
+    target_asa: parseInt(document.getElementById('asaTarget').value),
+    shrinkage: parseInt(document.getElementById('shrinkage').value) / 100,
+    year: {{ year }},
+    notes: document.getElementById('scenarioNotes').value.trim(),
+  };
+
+  try {
+    const resp = await fetch('/forecasting/scenarios/save', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      closeScenarioModal();
+      showStatus(data.updated ? 'Scenario updated.' : 'Scenario saved.', 'success');
+      loadScenarios(lobs[0]);
+    } else {
+      showStatus(data.error || 'Failed to save.', 'error');
+    }
+  } catch (e) { showStatus('Error saving scenario.', 'error'); }
+}
+
+async function loadScenarios(lob) {
+  if (!lob) return;
+  try {
+    const resp = await fetch('/forecasting/scenarios', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ lob, year: {{ year }} }),
+    });
+    const data = await resp.json();
+    currentScenarios = data.scenarios || [];
+    renderScenarios();
+  } catch (e) { console.error('Error loading scenarios:', e); }
+}
+
+function renderScenarios() {
+  const el = document.getElementById('scenariosList');
+  if (!currentScenarios.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:.82rem;padding:8px 0;">No saved scenarios for this LOB. Generate forecasts and save as a scenario to compare approaches.</div>';
+    return;
+  }
+  el.innerHTML = currentScenarios.map(s => `
+    <div class="scenario-card${s.is_active ? ' active' : ''}">
+      ${s.is_active ? '<div class="sc-active-badge">✓ Active</div>' : ''}
+      <div class="sc-type ${s.scenario_type}">${s.scenario_type}</div>
+      <div class="sc-name">${s.name}</div>
+      <div class="sc-details">
+        Method: ${s.method} · ${s.interval_minutes}m intervals<br>
+        History: ${s.historical_days}d · Forecast: ${s.forecast_days}d<br>
+        SL: ${Math.round(s.service_level * 100)}% · ASA: ${s.target_asa}s · Shrink: ${Math.round(s.shrinkage * 100)}%
+        ${s.notes ? '<br><em>' + s.notes + '</em>' : ''}
+      </div>
+      <div class="sc-actions">
+        <button class="sc-btn-push" onclick="pushScenario(${s.id})">Push to Requirements</button>
+        <button class="sc-btn-load" onclick="loadScenarioSettings(${s.id})">Load Settings</button>
+        <button class="sc-btn-del" onclick="deleteScenario(${s.id})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function loadScenarioSettings(id) {
+  const s = currentScenarios.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('methodSelect').value = s.method;
+  document.getElementById('intervalSelect').value = s.interval_minutes;
+  document.getElementById('histDays').value = s.historical_days;
+  document.getElementById('fcDays').value = s.forecast_days;
+  document.getElementById('slTarget').value = Math.round(s.service_level * 100);
+  document.getElementById('asaTarget').value = s.target_asa;
+  document.getElementById('shrinkage').value = Math.round(s.shrinkage * 100);
+  showStatus(`Loaded settings from "${s.name}". Click Generate to run.`, 'info');
+}
+
+async function pushScenario(id) {
+  if (!confirm('Push this scenario to staffing requirements? This will regenerate the forecast with these settings.')) return;
+  try {
+    const resp = await fetch('/forecasting/scenarios/push', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showStatus(data.message, 'success');
+      const lobs = getSelectedLobs();
+      if (lobs.length) loadScenarios(lobs[0]);
+    } else {
+      showStatus(data.error || 'Push failed.', 'error');
+    }
+  } catch (e) { showStatus('Error pushing scenario.', 'error'); }
+}
+
+async function deleteScenario(id) {
+  if (!confirm('Delete this scenario?')) return;
+  try {
+    const resp = await fetch('/forecasting/scenarios/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showStatus('Scenario deleted.', 'success');
+      const lobs = getSelectedLobs();
+      if (lobs.length) loadScenarios(lobs[0]);
+    } else {
+      showStatus(data.error || 'Delete failed.', 'error');
+    }
+  } catch (e) { showStatus('Error deleting scenario.', 'error'); }
+}
 
 // ══════════════════════════════════════════════
 // ══ Mid-Day Reforecast
