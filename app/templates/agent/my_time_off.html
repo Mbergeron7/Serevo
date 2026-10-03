@@ -221,7 +221,8 @@ function submitRequest(e) {
   };
   var sel = document.getElementById('toType');
   if (sel) body.time_off_type_id = sel.value;
-  fetch('/api/agent/time-off', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+  var csrf = document.querySelector('meta[name="csrf-token"]').content;
+  fetch('/api/agent/time-off', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify(body)})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.ok) { showToast('Request submitted!','success'); setTimeout(function(){ location.reload(); }, 800); }
@@ -231,7 +232,8 @@ function submitRequest(e) {
 }
 function cancelRequest(id) {
   if (!confirm('Cancel this time-off request?')) return;
-  fetch('/api/agent/time-off/'+id, {method:'DELETE'})
+  var csrf = document.querySelector('meta[name="csrf-token"]').content;
+  fetch('/api/agent/time-off/'+id, {method:'DELETE', headers:{'X-CSRFToken':csrf}})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.ok) { showToast('Request cancelled','success'); setTimeout(function(){ location.reload(); }, 600); }

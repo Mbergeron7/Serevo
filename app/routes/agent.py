@@ -229,6 +229,18 @@ def submit_time_off():
     db.session.add(entry)
     db.session.commit()
 
+    # Notify admins about the new PTO request
+    try:
+        from app.routes.notifications import notify_all_admins
+        notify_all_admins(
+            f"PTO Request: {emp.full_name}",
+            f"{emp.full_name} requested {start.isoformat()} to {end.isoformat()} off.",
+            category="info",
+            link="/approvals/",
+        )
+    except Exception:
+        log.warning("Failed to notify admins of PTO request", exc_info=True)
+
     return jsonify({"ok": True, "id": entry.id, "status": "pending"})
 
 
