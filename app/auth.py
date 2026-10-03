@@ -49,6 +49,7 @@ def get_current_user():
             "role": u.role,
             "employee_id": emp_id,
             "is_demo": _is_demo_user(u),
+            "wfm_access": getattr(u, "wfm_access", False) or False,
         }
     except Exception:
         return None

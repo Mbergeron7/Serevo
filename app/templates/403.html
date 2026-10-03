@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Access Denied — {{ brand_name }}{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:80px 20px;">
+  <h1 style="font-size:2.5rem;margin-bottom:8px;">403</h1>
+  <p style="color:var(--text-muted);margin-bottom:24px;">You don't have permission to access this page.</p>
+  <a href="/" style="display:inline-block;padding:10px 24px;background:var(--brand-accent);color:#fff;border-radius:6px;text-decoration:none;">Back to Dashboard</a>
+</div>
+{% endblock %}

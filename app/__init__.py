@@ -82,6 +82,7 @@ def create_app():
             ("users", "oauth_provider", "VARCHAR(30)"),
             ("users", "oauth_id", "VARCHAR(255)"),
             ("users", "is_demo", "BOOLEAN DEFAULT FALSE"),
+            ("users", "wfm_access", "BOOLEAN DEFAULT FALSE"),
         ]
         dialect = db.engine.dialect.name
         for tbl, col, col_type in _ensure_columns:
@@ -158,6 +159,7 @@ def create_app():
     from app.routes.audit import audit_bp
     from app.routes.support import support_bp
     from app.routes.help_guide import help_bp
+    from app.routes.wfm_tickets import wfm_tickets_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -186,6 +188,7 @@ def create_app():
     app.register_blueprint(audit_bp)
     app.register_blueprint(support_bp)
     app.register_blueprint(help_bp)
+    app.register_blueprint(wfm_tickets_bp)
 
     # ---- error handlers ----
     @app.errorhandler(404)

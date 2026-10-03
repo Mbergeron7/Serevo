@@ -31,6 +31,7 @@ class User(db.Model):
     oauth_provider = db.Column(db.String(30), nullable=True)   # "google", "microsoft", etc.
     oauth_id       = db.Column(db.String(255), nullable=True)  # provider's unique user ID
     employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    wfm_access    = db.Column(db.Boolean, default=False)  # grants access to WFM ticketing tool
     created_at    = db.Column(db.DateTime, default=_utcnow)
     updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -2178,5 +2179,82 @@ class TicketComment(db.Model):
             "user_id": self.user_id,
             "user_name": self.user.display_name if self.user else "Unknown",
             "body": self.body,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# WFM TICKETS — client-facing ticketing for WFM requests
+# ═══════════════════════════════════════════════════════════════
+
+class WfmTicket(db.Model):
+    """WFM ticket submitted by team leads for schedule changes, OT, etc."""
+    __tablename__ = "wfm_tickets"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    subject      = db.Column(db.String(255), nullable=False)
+    description  = db.Column(db.Text, nullable=False)
+    category     = db.Column(db.String(50), nullable=False, default="general")
+    # Categories: schedule_change, overtime, time_off_exception, shift_swap,
+    #             headcount, forecast_adjustment, general
+    priority     = db.Column(db.String(20), nullable=False, default="medium")
+    status       = db.Column(db.String(20), nullable=False, default="open")
+    # Status: open, in_progress, resolved, closed
+    submitted_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_to  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    affected_agents = db.Column(db.Text, nullable=True)  # comma-separated agent names or IDs
+    affected_date   = db.Column(db.Date, nullable=True)   # date the request applies to
+    resolution   = db.Column(db.Text, nullable=True)
+    internal_note = db.Column(db.Text, nullable=True)     # WFM-only internal notes
+    created_at   = db.Column(db.DateTime, default=_utcnow)
+    updated_at   = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    submitter = db.relationship("User", foreign_keys=[submitted_by], backref="wfm_tickets_submitted")
+    assignee  = db.relationship("User", foreign_keys=[assigned_to], backref="wfm_tickets_assigned")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "subject": self.subject,
+            "description": self.description,
+            "category": self.category,
+            "priority": self.priority,
+            "status": self.status,
+            "submitted_by": self.submitted_by,
+            "submitter_name": self.submitter.display_name if self.submitter else "Unknown",
+            "assigned_to": self.assigned_to,
+            "assignee_name": self.assignee.display_name if self.assignee else None,
+            "affected_agents": self.affected_agents,
+            "affected_date": self.affected_date.isoformat() if self.affected_date else None,
+            "resolution": self.resolution,
+            "internal_note": self.internal_note,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class WfmTicketComment(db.Model):
+    """Comments on WFM tickets."""
+    __tablename__ = "wfm_ticket_comments"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    ticket_id  = db.Column(db.Integer, db.ForeignKey("wfm_tickets.id", ondelete="CASCADE"),
+                           nullable=False, index=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    body       = db.Column(db.Text, nullable=False)
+    is_internal = db.Column(db.Boolean, default=False)  # internal WFM-only comments
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    ticket = db.relationship("WfmTicket", backref=db.backref("comments", order_by="WfmTicketComment.created_at"))
+    user   = db.relationship("User", backref="wfm_ticket_comments")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticket_id": self.ticket_id,
+            "user_id": self.user_id,
+            "user_name": self.user.display_name if self.user else "Unknown",
+            "body": self.body,
+            "is_internal": self.is_internal,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
