@@ -541,9 +541,14 @@ class SegmentCode(db.Model):
     is_default   = db.Column(db.Boolean, default=False)                   # system default (can't be deleted)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
+    # ── Activity category ────────────────────────────────────
+    # "status" = agent state segments (break, lunch, coaching) — external IDs map ACD states for adherence
+    # "lob"    = line-of-business activities — external IDs map call route IDs for live volume + forecasting
+    activity_category = db.Column(db.String(20), default="status")        # status | lob
     # ── External ID mapping ──────────────────────────────────
-    # JSON array of external system IDs (ACD states, phone system codes, etc.)
-    # Enables automatic mapping from APIs/integrations for adherence, live status, attendance
+    # JSON array of external system IDs
+    # For status activities: ACD agent state codes (usually 1 ID) → adherence, live agent status
+    # For LOB activities: call route IDs (often multiple) → live volume, historical volume, forecasting
     external_ids = db.Column(db.Text, nullable=True)                      # JSON array e.g. ["1003", "AUX_BREAK"]
     # ── Multi-activity support ───────────────────────────────
     parent_id    = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
@@ -580,6 +585,7 @@ class SegmentCode(db.Model):
             "color": self.color, "is_productive": self.is_productive,
             "is_paid": self.is_paid, "is_default": self.is_default,
             "sort_order": self.sort_order, "is_active": self.is_active,
+            "activity_category": self.activity_category or "status",
             "external_ids": self.get_external_ids(),
             "parent_id": self.parent_id,
             "is_multi_activity": self.is_multi_activity,
@@ -1406,6 +1412,8 @@ class Activity(db.Model):
     segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
     is_active     = db.Column(db.Boolean, default=True)
     sort_order    = db.Column(db.Integer, default=0)
+    # ── Activity category ────────────────────────────────────
+    activity_category = db.Column(db.String(20), default="status")  # status | lob
     # ── External ID mapping ──────────────────────────────────
     external_ids  = db.Column(db.Text, nullable=True)              # JSON array of external system IDs
     # ── Multi-activity support ───────────────────────────────
@@ -1438,6 +1446,7 @@ class Activity(db.Model):
             "color": self.color, "segment_code_id": self.segment_code_id,
             "segment_code": sc.label if sc else "",
             "is_active": self.is_active, "sort_order": self.sort_order,
+            "activity_category": self.activity_category or "status",
             "external_ids": self.get_external_ids(),
             "parent_id": self.parent_id,
             "is_multi_activity": self.is_multi_activity,

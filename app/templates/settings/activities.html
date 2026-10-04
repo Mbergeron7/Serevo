@@ -38,12 +38,27 @@
         <label style="display:flex;align-items:center;gap:6px;margin-top:4px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
       </div>
 
+      <!-- Activity Category -->
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Activity Category</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;" id="catStatusLabel">
+            <input type="radio" name="activity_category" id="f_cat_status" value="status" checked onchange="updateCategoryUI()">
+            <div><strong style="font-size:0.85rem;">Status Activity</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">Break, Lunch, Coaching, System Issue</span></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;" id="catLobLabel">
+            <input type="radio" name="activity_category" id="f_cat_lob" value="lob" onchange="updateCategoryUI()">
+            <div><strong style="font-size:0.85rem;">LOB Activity</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">SS Sales, PS Support — maps call routing</span></div>
+          </label>
+        </div>
+      </fieldset>
+
       <!-- External ID Mapping -->
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
         <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">External ID Mapping</legend>
-        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD/phone system states, call routing IDs, or API codes to this activity. Used for adherence tracking, live agent status, and historical volume.</p>
+        <p id="extIdHelp" style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD agent state codes to this activity for adherence and live agent status tracking.</p>
         <label>External IDs <span style="font-size:0.75rem;color:var(--text-muted);">(comma-separated)</span>
-          <input id="f_external_ids" class="form-input" placeholder="e.g. 1003, AUX_BREAK, LUNCH_01">
+          <input id="f_external_ids" class="form-input" placeholder="e.g. 1003, AUX_BREAK">
         </label>
         <div id="extIdTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;min-height:0;"></div>
       </fieldset>
@@ -149,7 +164,7 @@ function appendRow(r, isChild, isParent) {
     <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${r.color};vertical-align:middle;"></span></td>
     <td><code style="font-size:.85rem;">${r.code}</code></td>
     <td>${indent}${r.label}${badge}${childBadge}</td>
-    <td style="font-size:0.85rem;color:var(--text-muted);">${isParent ? 'Parent' : isChild ? 'Subactivity' : 'Standard'}</td>
+    <td style="font-size:0.85rem;color:var(--text-muted);">${r.activity_category === 'lob' ? 'LOB' : 'Status'}${isParent ? ' · Parent' : isChild ? ' · Sub' : ''}</td>
     <td>${extIds}</td>
     <td>${r.is_productive ? '✓' : ''}</td>
     <td>${r.is_paid ? '✓' : ''}</td>
@@ -157,6 +172,22 @@ function appendRow(r, isChild, isParent) {
     <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
   tbody.appendChild(tr);
+}
+
+function updateCategoryUI() {
+  const isLob = document.getElementById('f_cat_lob').checked;
+  const helpEl = document.getElementById('extIdHelp');
+  const inputEl = document.getElementById('f_external_ids');
+  if (isLob) {
+    helpEl.textContent = 'Map call route IDs to this LOB. Incoming volume from these routes feeds the forecasting engine and updates historical volume in real time.';
+    inputEl.placeholder = 'e.g. 4001, 4002, 4003';
+  } else {
+    helpEl.textContent = 'Map ACD agent state codes to this activity for adherence and live agent status tracking.';
+    inputEl.placeholder = 'e.g. 1003, AUX_BREAK';
+  }
+  // Highlight selected card
+  document.getElementById('catStatusLabel').style.borderColor = isLob ? 'var(--border)' : 'var(--accent)';
+  document.getElementById('catLobLabel').style.borderColor = isLob ? 'var(--accent)' : 'var(--border)';
 }
 
 function toggleWindow() {
@@ -217,6 +248,9 @@ function openModal(item) {
   document.getElementById('f_sort_order').value = item ? item.sort_order : 0;
   document.getElementById('f_is_productive').checked = item ? item.is_productive : true;
   document.getElementById('f_is_paid').checked = item ? item.is_paid : true;
+  const cat = item && item.activity_category === 'lob' ? 'lob' : 'status';
+  document.getElementById('f_cat_status').checked = (cat === 'status');
+  document.getElementById('f_cat_lob').checked = (cat === 'lob');
   document.getElementById('f_external_ids').value = item && item.external_ids ? item.external_ids.join(', ') : '';
   document.getElementById('f_is_multi_activity').checked = item ? item.is_multi_activity : false;
   populateParentDropdown(item ? item.id : '');
@@ -229,6 +263,7 @@ function openModal(item) {
   toggleWindow();
   toggleMultiFields();
   renderExtIdTags();
+  updateCategoryUI();
   dlg.showModal();
 }
 
@@ -254,6 +289,7 @@ async function saveItem() {
     sort_order: parseInt(document.getElementById('f_sort_order').value) || 0,
     is_productive: document.getElementById('f_is_productive').checked,
     is_paid: document.getElementById('f_is_paid').checked,
+    activity_category: document.getElementById('f_cat_lob').checked ? 'lob' : 'status',
     external_ids: extIds,
     is_multi_activity: document.getElementById('f_is_multi_activity').checked,
     parent_id: document.getElementById('f_parent_id').value || null,

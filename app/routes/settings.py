@@ -1344,6 +1344,9 @@ def activities_save():
         else:
             parent_id = None
         is_multi = bool(data.get("is_multi_activity", False))
+        activity_category = data.get("activity_category", "status")
+        if activity_category not in ("status", "lob"):
+            activity_category = "status"
 
         seg_id = data.get("id")
         if seg_id:
@@ -1361,6 +1364,7 @@ def activities_save():
             item.is_flexible = bool(data.get("is_flexible", False))
             item.window_start_mins = data.get("window_start_mins")
             item.window_end_mins = data.get("window_end_mins")
+            item.activity_category = activity_category
             item.set_external_ids(ext_ids)
             item.parent_id = parent_id
             item.is_multi_activity = is_multi
@@ -1378,6 +1382,7 @@ def activities_save():
                 is_flexible=bool(data.get("is_flexible", False)),
                 window_start_mins=data.get("window_start_mins"),
                 window_end_mins=data.get("window_end_mins"),
+                activity_category=activity_category,
                 parent_id=parent_id,
                 is_multi_activity=is_multi,
             )
