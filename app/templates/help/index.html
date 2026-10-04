@@ -15,10 +15,11 @@
   <!-- Quick links -->
   <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
     <a href="#getting-started" class="help-chip" onclick="openSection('getting-started')">Getting Started</a>
-    <a href="#user-roles" class="help-chip" onclick="openSection('user-roles')">User Roles</a>
+    <a href="#user-roles" class="help-chip" onclick="openSection('user-roles')">Roles</a>
     <a href="#dashboard" class="help-chip" onclick="openSection('dashboard')">Dashboard</a>
     <a href="#people" class="help-chip" onclick="openSection('people')">People</a>
     <a href="#scheduling" class="help-chip" onclick="openSection('scheduling')">Scheduling</a>
+    <a href="#shift-swaps" class="help-chip" onclick="openSection('shift-swaps')">Shift Swaps</a>
     <a href="#forecasting" class="help-chip" onclick="openSection('forecasting')">Forecasting</a>
     <a href="#capacity" class="help-chip" onclick="openSection('capacity')">Capacity</a>
     <a href="#realtime" class="help-chip" onclick="openSection('realtime')">Real-Time</a>
@@ -28,21 +29,35 @@
     <a href="#reports" class="help-chip" onclick="openSection('reports')">Reports</a>
     <a href="#payroll" class="help-chip" onclick="openSection('payroll')">Payroll</a>
     <a href="#training" class="help-chip" onclick="openSection('training')">Training</a>
+    <a href="#wfm-tickets" class="help-chip" onclick="openSection('wfm-tickets')">Tickets</a>
     <a href="#settings" class="help-chip" onclick="openSection('settings')">Settings</a>
+    <a href="#agent-portal" class="help-chip" onclick="openSection('agent-portal')">Agent Portal</a>
     <a href="#support" class="help-chip" onclick="openSection('support')">Support</a>
   </div>
 
   <!-- Sections -->
   <div id="helpSections">
 
+  <!-- ============================================================ -->
   <!-- GETTING STARTED -->
-  <div class="help-section" id="getting-started" data-keywords="setup login first time account password">
+  <!-- ============================================================ -->
+  <div class="help-section" id="getting-started" data-keywords="setup login first time account password navigation notifications pwa install app home screen">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Getting Started</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>First-Time Setup</h3>
       <p>When you first access {{ brand_name }}, you'll see the setup page if no admin account exists yet. Create your admin account by entering your email and a strong password. This becomes the primary administrator account.</p>
+      <p>After creating the admin account, you should immediately:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; General</strong> and set your organization's brand name, accent color, and tagline.</li>
+        <li>Go to <strong>Settings &rarr; Activities</strong> and configure the activities your workforce performs (calls, emails, breaks, lunch, etc.).</li>
+        <li>Go to <strong>Settings &rarr; Contracts</strong> and set up at least one contract template (e.g., Full-Time 40hr).</li>
+        <li>Go to <strong>Settings &rarr; Planning Units</strong> and create your lines of business.</li>
+        <li>Go to <strong>Settings &rarr; Day Models</strong> and create your shift templates.</li>
+        <li>Go to <strong>Settings &rarr; Users</strong> to add supervisor and agent accounts.</li>
+        <li>Go to <strong>People</strong> and add your employees, assigning them contracts, skills, and planning units.</li>
+      </ol>
 
       <h3>Logging In</h3>
       <p>Navigate to your {{ brand_name }} URL and enter your email and password. If your organization has Google or Microsoft sign-in enabled, you can use the social login buttons instead.</p>
@@ -50,10 +65,10 @@
 
       <h3>Navigation</h3>
       <p>The top navigation bar shows all available sections based on your role. Admins see all sections. Supervisors see most sections. Agents see only their personal portal (My Schedule, My Time Off, Self-Service).</p>
-      <p>Use the search bar (or press <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd>) to quickly find employees, pages, or actions.</p>
+      <p>Use the search bar (or press <kbd>Ctrl+K</kbd> / <kbd>&#8984;K</kbd>) to quickly find employees, pages, or actions.</p>
 
       <h3>Notifications</h3>
-      <p>Click the bell icon in the top right to see your notifications. These include PTO requests, schedule changes, and system alerts. Notifications are automatically marked as read when you open them.</p>
+      <p>Click the bell icon in the top right to see your notifications. These include PTO requests, schedule changes, shift swap requests, shift bidding results, and system alerts. Notifications are automatically marked as read when you open them.</p>
 
       <h3>Install as an App</h3>
       <p>{{ brand_name }} can be installed on your phone or computer for quick access — no app store needed.</p>
@@ -63,96 +78,328 @@
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- USER ROLES -->
-  <div class="help-section" id="user-roles" data-keywords="admin supervisor agent permissions access roles">
+  <!-- ============================================================ -->
+  <div class="help-section" id="user-roles" data-keywords="admin supervisor agent permissions access roles security manage users accounts link employee">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>User Roles &amp; Permissions</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Admin</h3>
-      <p>Full access to all features: manage users, configure settings, view all data, generate reports, manage schedules, handle approvals, and access the audit log. Admins can create and manage other user accounts.</p>
+      <p>Full access to every feature in {{ brand_name }}. Admins can:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Create, edit, and deactivate user accounts and assign roles</li>
+        <li>Configure all system settings (activities, contracts, planning units, day models, skills, schedule rules, API connections, Google Sheets, OAuth)</li>
+        <li>Add, edit, and remove employees from the roster</li>
+        <li>Build, generate, and publish schedules</li>
+        <li>Approve or deny PTO requests, shift swaps, and other approval workflows</li>
+        <li>Post open shifts for bidding, VTO opportunities, and OT opportunities</li>
+        <li>Create and manage forecasts, capacity plans, and long-range plans</li>
+        <li>View and manage real-time adherence, attendance, quality, payroll, reports, and training</li>
+        <li>Access the audit log to review all system actions</li>
+        <li>Post announcements and manage documents</li>
+      </ul>
 
       <h3>Supervisor</h3>
-      <p>View access to most management sections (Dashboard, People, Scheduling, Forecasting, Capacity, Real-Time, Attendance, Quality, Approvals, Reports, Payroll, Shift Notes, Documents, Training, Announcements). Supervisors can also access the agent portal for their own schedule. Some edit operations may be restricted compared to admins.</p>
+      <p>View and limited-edit access to most management sections. Supervisors can:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>View the Dashboard, People, Scheduling, Forecasting, Capacity, Real-Time, Attendance, Quality, Reports, Payroll, Training, Shift Notes, Documents, and Announcements pages</li>
+        <li>Approve or deny PTO requests and shift swap requests</li>
+        <li>Approve or deny shift bidding selections (if delegated by admin)</li>
+        <li>Create and edit schedules for their team</li>
+        <li>Post shift notes and announcements</li>
+        <li>Access their own agent portal (My Schedule, My Time Off, clock in/out)</li>
+      </ul>
+      <p>Supervisors cannot change system settings, manage user accounts, or access the audit log.</p>
 
       <h3>Agent</h3>
-      <p>Access is limited to the personal portal: My Schedule (view assigned shifts), My Time Off (request PTO), and Self-Service (update personal info, view announcements, clock in/out). Agents cannot access management pages.</p>
+      <p>Access is limited to the personal agent portal. Agents can:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>View their own schedule in <strong>My Schedule</strong></li>
+        <li>Request time off in <strong>My Time Off</strong> and view request status</li>
+        <li>Clock in and out from the <strong>Self-Service</strong> portal</li>
+        <li>Browse and bid on open shifts posted by admins/supervisors</li>
+        <li>Request shift swaps with other agents or accept open swap requests</li>
+        <li>Sign up for VTO (voluntary time off) or OT (overtime) opportunities</li>
+        <li>View announcements and personal training assignments</li>
+        <li>Submit WFM support tickets</li>
+      </ul>
+      <p>Agents cannot access management pages, view other employees' data, or change settings.</p>
 
       <h3>Managing Users</h3>
-      <p>Go to <strong>Settings → Users</strong> to add, edit, or deactivate user accounts. When creating a user, choose the appropriate role. You can link a user account to an employee record so agents can see their own schedule and data.</p>
+      <p>Go to <strong>Settings &rarr; Users</strong> to manage user accounts:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>+ Add User</strong>.</li>
+        <li>Enter the user's email address and choose a role (Admin, Supervisor, or Agent).</li>
+        <li>Optionally link the user account to an existing employee record. This is required for agents so they can see their own schedule, submit PTO, clock in/out, and participate in shift swaps and bidding.</li>
+        <li>Click <strong>Save</strong>. The user will receive login credentials.</li>
+      </ol>
+      <p>To edit a user, click their row in the user list. You can change their role, update their email, link/unlink an employee record, or deactivate the account. Deactivated accounts cannot log in but their data is preserved.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- DASHBOARD -->
-  <div class="help-section" id="dashboard" data-keywords="dashboard home overview kpi metrics summary">
+  <!-- ============================================================ -->
+  <div class="help-section" id="dashboard" data-keywords="dashboard home overview kpi metrics summary charts activity feed headcount attendance trends analytics">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Dashboard</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <p>The Dashboard is the home page for admins and supervisors. It shows at-a-glance metrics for your workforce.</p>
+      <p>The Dashboard is the landing page for admins and supervisors. It provides a real-time snapshot of your workforce.</p>
 
       <h3>KPI Cards</h3>
-      <p>The top row displays key metrics: total active employees, employees scheduled today, pending PTO requests, open shifts, and more. These update in real time as data changes.</p>
+      <p>The top row displays key metrics that update in real time:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Total Active Employees</strong> — count of employees with an active status</li>
+        <li><strong>Scheduled Today</strong> — how many employees have shifts assigned for today</li>
+        <li><strong>Pending PTO Requests</strong> — number of time-off requests awaiting approval</li>
+        <li><strong>Open Shifts</strong> — shifts posted for bidding that have not yet been filled</li>
+        <li><strong>Pending Swap Requests</strong> — shift swap requests awaiting approval</li>
+        <li><strong>Adherence Rate</strong> — percentage of agents currently on-schedule (if real-time data is connected)</li>
+      </ul>
 
       <h3>Charts</h3>
-      <p>Below the KPI cards, you'll find charts showing headcount trends, attendance rates, and other workforce analytics over time. Hover over data points for details.</p>
+      <p>Below the KPI cards you'll find interactive charts:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Headcount Trend</strong> — active employee count over the selected time range</li>
+        <li><strong>Attendance Rate</strong> — daily attendance percentage with absence breakdowns</li>
+        <li><strong>Hours Worked vs. Scheduled</strong> — comparison of actual vs. planned hours</li>
+      </ul>
+      <p>Hover over any data point to see exact values. Use the date range selector to change the time window.</p>
 
       <h3>Recent Activity</h3>
-      <p>The activity feed shows the latest changes across the system — new hires, schedule updates, approved PTO, and other events.</p>
+      <p>The activity feed shows the latest changes across the system: new hires, schedule publications, approved/denied PTO, shift swap completions, configuration changes, and more. Each entry shows the action, the user who performed it, and a timestamp.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- PEOPLE -->
-  <div class="help-section" id="people" data-keywords="people roster employees add edit delete profile status team lead">
+  <!-- ============================================================ -->
+  <div class="help-section" id="people" data-keywords="people roster employees add edit delete profile status team lead filter sort paginate contract assignment skills pto accommodations employee details hire date lob line of business">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>People (Roster)</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Viewing the Roster</h3>
-      <p>The People page shows all employees in a sortable, filterable table. Use the filters at the top to narrow by name, line of business (LOB), status, or team lead. Click column headers to sort.</p>
-
-      <h3>Pagination</h3>
-      <p>Choose how many employees to show per page (25, 50, 100, or All) using the page size selector. Use the Previous/Next buttons to navigate through pages.</p>
+      <p>The People page shows all employees in a sortable, filterable table. Use the filter controls at the top to narrow the list:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Search by Name</strong> — type any part of the employee's first or last name</li>
+        <li><strong>LOB / Planning Unit</strong> — filter to a specific line of business</li>
+        <li><strong>Status</strong> — filter by Active, Inactive, On Leave, or Terminated</li>
+        <li><strong>Team Lead</strong> — show only employees assigned to a specific team lead</li>
+        <li><strong>Contract</strong> — filter by contract type (e.g., Full-Time, Part-Time)</li>
+      </ul>
+      <p>Click any column header to sort ascending/descending. Choose how many employees to show per page (25, 50, 100, or All) using the page-size selector, and use Previous/Next buttons to navigate.</p>
 
       <h3>Adding an Employee</h3>
-      <p>Click <strong>+ Add Employee</strong>. Fill in at least the first name, last name, employee ID, and status. You can also set contract type, weekly hours, skills, LOB, team lead, and more. Click Save.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>+ Add Employee</strong> at the top of the roster.</li>
+        <li>Fill in required fields: First Name, Last Name, Employee ID, and Status.</li>
+        <li>Set optional fields: hire date, email, phone, LOB/planning unit, team lead, contract type, weekly hours target.</li>
+        <li>Click <strong>Save</strong>. The employee is now in the roster and can be scheduled.</li>
+      </ol>
 
       <h3>Editing an Employee</h3>
-      <p>Click on any employee row to open their profile. Click the edit button to modify their details. Changes are saved immediately.</p>
+      <p>Click on any employee row to open their profile. Click the <strong>Edit</strong> button to modify their details. Changes are saved when you click Save. All edits are tracked in the audit log.</p>
 
-      <h3>Employee Profile</h3>
-      <p>Each employee has a profile page showing their details, schedule history, PTO history, documents, training assignments, and accommodations.</p>
+      <h3>Employee Profile Details</h3>
+      <p>Each employee's profile page contains several tabs/sections:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Overview</strong> — name, ID, contact info, status, hire date, LOB, team lead</li>
+        <li><strong>Schedule History</strong> — past and upcoming shift assignments</li>
+        <li><strong>PTO History</strong> — all time-off requests and their statuses</li>
+        <li><strong>Documents</strong> — uploaded files (contracts, certifications, ID copies)</li>
+        <li><strong>Training</strong> — assigned training modules and completion status</li>
+        <li><strong>Quality</strong> — quality evaluation scores over time</li>
+        <li><strong>Accommodations</strong> — any scheduling accommodations on file</li>
+      </ul>
+
+      <h3>Contract Assignment</h3>
+      <p>Each employee should be assigned a contract. The contract controls all scheduling rules for that employee — daily/weekly hour limits, rest periods, consecutive day limits, weekend rules, and more.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Open the employee's profile and click <strong>Edit</strong>.</li>
+        <li>In the <strong>Contract</strong> dropdown, select the appropriate contract template.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+      <p>If no contract is assigned, the auto-scheduler cannot enforce scheduling constraints for that employee. See <strong>Settings &rarr; Contracts</strong> for how to create contract templates.</p>
+
+      <h3>Skills Assignment</h3>
+      <p>Skills determine what activities or queues an employee is qualified to handle. To assign skills:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Open the employee's profile and click <strong>Edit</strong>.</li>
+        <li>In the <strong>Skills</strong> section, check the skills that apply to this employee.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+      <p>Skills are used by the auto-scheduler to match employees to planning units and activities that require specific qualifications. Manage the skills inventory in <strong>Settings &rarr; Skills</strong>.</p>
 
       <h3>PTO &amp; Accommodations</h3>
-      <p>Access PTO management and accommodations tracking from the People submenu. You can view, add, and manage time-off entries and accommodation records for each employee.</p>
+      <p>From the People submenu or an employee's profile, you can:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>View PTO balances</strong> — see remaining time-off allowances by category</li>
+        <li><strong>Add PTO entries</strong> — manually record time off (approved, denied, or pending)</li>
+        <li><strong>Manage accommodations</strong> — record scheduling accommodations such as restricted hours, specific days off, or modified shift lengths. These are respected by the auto-scheduler.</li>
+      </ul>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- SCHEDULING -->
-  <div class="help-section" id="scheduling" data-keywords="scheduling shifts roster generate publish auto schedule">
+  <!-- ============================================================ -->
+  <div class="help-section" id="scheduling" data-keywords="scheduling shifts roster generate publish auto schedule calendar daily weekly day model shift template draft create assign bulk">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Scheduling</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Viewing Schedules</h3>
-      <p>The Scheduling page displays employee schedules in a calendar view. Switch between daily and weekly views. Filter by LOB or team lead to focus on specific groups.</p>
+      <p>The Scheduling page displays employee schedules in a calendar grid. You can switch between two views:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Daily View</strong> — shows all employees and their shifts for a single date. Useful for seeing coverage at a glance.</li>
+        <li><strong>Weekly View</strong> — shows seven days across columns with employees as rows. Useful for spotting gaps and patterns.</li>
+      </ul>
+      <p>Use the filter controls to narrow by LOB/planning unit, team lead, or employee name. The schedule grid color-codes shifts by day model or activity type.</p>
 
-      <h3>Creating Schedules</h3>
-      <p>Click on empty cells to create new shift assignments. Select the employee, choose a day model (shift template), and set the date. You can create individual shifts or bulk-generate schedules.</p>
+      <h3>Creating Individual Shifts</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click on an empty cell in the schedule grid (intersection of an employee row and a date column).</li>
+        <li>In the shift creation dialog, select a <strong>Day Model</strong> (shift template) which defines the start time, end time, and break placement.</li>
+        <li>Optionally adjust the start/end time if the day model allows flexibility.</li>
+        <li>Optionally assign specific activities to intervals within the shift.</li>
+        <li>Click <strong>Save</strong>. The shift appears in the grid as a draft (unpublished).</li>
+      </ol>
 
-      <h3>Schedule Generation</h3>
-      <p>Use the "Generate" feature to automatically create schedules based on demand forecasts, employee availability, skills, and contract rules. Review the generated schedule before publishing.</p>
+      <h3>Auto-Generate Schedules</h3>
+      <p>The auto-scheduler builds optimal schedules based on your configuration:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>Generate</strong> at the top of the scheduling page.</li>
+        <li>Select the date range to generate (typically one week).</li>
+        <li>Select the planning units / LOBs to include.</li>
+        <li>The auto-scheduler uses: demand forecasts, employee availability, assigned contracts (hour limits, rest rules, consecutive day limits), skills, accommodations, PTO, and day model templates.</li>
+        <li>Review the generated schedule. Shifts appear in draft mode.</li>
+        <li>Make manual adjustments as needed (drag to move, click to edit).</li>
+        <li>When satisfied, click <strong>Publish</strong>.</li>
+      </ol>
+      <p>The auto-scheduler respects all contract rules — minimum rest between shifts, max consecutive days, weekly hour limits, weekend rules, and more. If a constraint cannot be satisfied, the scheduler flags the conflict.</p>
 
-      <h3>Publishing</h3>
-      <p>Generated schedules start in draft mode. Click "Publish" to make them visible to agents. Published schedules appear in each agent's My Schedule portal.</p>
+      <h3>Publishing Schedules</h3>
+      <p>Generated and manually created schedules start in <strong>draft</strong> mode. Agents cannot see draft schedules.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Review the draft schedule for completeness and coverage.</li>
+        <li>Click <strong>Publish</strong> (or select specific dates to publish).</li>
+        <li>Published schedules become visible to agents in their <strong>My Schedule</strong> portal.</li>
+        <li>Agents with notifications enabled receive an alert that their schedule is available.</li>
+      </ol>
+      <p>You can unpublish and make further edits, then re-publish. Agents will see the updated version.</p>
 
       <h3>Day Models</h3>
-      <p>Day models define shift templates (start time, end time, break duration). Set these up in <strong>Settings → Day Models</strong> before creating schedules.</p>
+      <p>Day models are shift templates that define the structure of a work day. Each day model specifies:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Shift start and end time</strong> (e.g., 08:00 &ndash; 16:30)</li>
+        <li><strong>Total paid hours</strong></li>
+        <li><strong>Break placement</strong> — which breaks/lunch are included, their offset from shift start, duration, and flexibility window</li>
+        <li><strong>Activities</strong> — the default activities during the shift</li>
+      </ul>
+      <p>Set up day models in <strong>Settings &rarr; Day Models</strong> before building schedules. You can create multiple day models for different shift types (morning, afternoon, evening, split shift, short day, etc.).</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- SHIFT SWAPS & BIDDING -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="shift-swaps" data-keywords="shift swap bid bidding open shift trade exchange vto voluntary time off ot overtime post claim accept approve deny agent request marketplace">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Shift Swaps &amp; Shift Bidding</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>{{ brand_name }} supports three self-service workflows that give agents flexibility while keeping admins and supervisors in control: <strong>Shift Bidding</strong>, <strong>Shift Swaps</strong>, and <strong>VTO/OT Posts</strong>.</p>
+
+      <h3>Shift Bidding</h3>
+      <p>Shift bidding lets admins/supervisors post open shifts that agents can bid on. The admin then selects the winning bid.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Admin / Supervisor Workflow</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Navigate to <strong>Scheduling</strong> or the <strong>Shift Bidding</strong> section.</li>
+        <li>Click <strong>Post Open Shift</strong>.</li>
+        <li>Select the date, day model (shift template), and planning unit/LOB.</li>
+        <li>Optionally set required skills, a bidding deadline, and a description/note.</li>
+        <li>Click <strong>Post</strong>. The open shift becomes visible to all eligible agents in their portal.</li>
+        <li>As agents submit bids, you can see the list of bidders with their names and timestamps.</li>
+        <li>Review the bids. Consider each agent's existing schedule (hours worked, rest requirements, skills) to avoid conflicts.</li>
+        <li>Click <strong>Select Winner</strong> next to the chosen agent. The shift is assigned to that agent.</li>
+        <li>The winning agent receives a notification. Other bidders are notified the shift has been filled.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Agent Workflow</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Open your <strong>Agent Portal</strong> and look for the <strong>Open Shifts</strong> or <strong>Shift Bidding</strong> section.</li>
+        <li>Browse available open shifts. Each listing shows the date, time, LOB, and any required skills.</li>
+        <li>Click <strong>Bid</strong> on any shift you want.</li>
+        <li>Wait for the admin/supervisor to select a winner. You'll receive a notification with the result.</li>
+        <li>If your bid is selected, the shift appears on your schedule in <strong>My Schedule</strong>.</li>
+      </ol>
+
+      <h3>Shift Swaps</h3>
+      <p>Shift swaps let agents trade shifts with each other, subject to supervisor/admin approval.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Requesting a Swap (Agent)</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>My Schedule</strong> in the agent portal.</li>
+        <li>Click on the shift you want to swap and select <strong>Request Swap</strong>.</li>
+        <li>Choose one of two options:
+          <ul style="margin:4px 0 4px 16px;">
+            <li><strong>Direct swap</strong> — select a specific colleague and one of their shifts to trade with.</li>
+            <li><strong>Open swap</strong> — post your shift as available for any eligible agent to pick up.</li>
+          </ul>
+        </li>
+        <li>Add an optional note (e.g., reason for the swap).</li>
+        <li>Click <strong>Submit</strong>.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Accepting a Swap (Other Agent)</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>If you receive a direct swap request, you'll get a notification. Open it to see the details.</li>
+        <li>Review the proposed trade — your shift and the other agent's shift.</li>
+        <li>Click <strong>Accept</strong> or <strong>Decline</strong>.</li>
+        <li>For open swaps, browse the <strong>Available Swaps</strong> section in your portal and click <strong>Accept</strong> on any swap you want.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Approving a Swap (Admin / Supervisor)</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Once both agents have agreed, the swap request appears in the <strong>Approvals</strong> queue.</li>
+        <li>Review the swap: check both agents' schedules for conflicts, overtime, rest period violations, and skill coverage.</li>
+        <li>Click <strong>Approve</strong> to finalize. Both agents' schedules are updated automatically.</li>
+        <li>Click <strong>Deny</strong> with an optional reason if the swap would cause a coverage or compliance issue.</li>
+        <li>Both agents receive a notification with the decision.</li>
+      </ol>
+
+      <h3>VTO / OT Posts</h3>
+      <p>Admins can post voluntary time off (VTO) or overtime (OT) opportunities for agents to sign up.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Posting VTO or OT (Admin / Supervisor)</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Navigate to <strong>Real-Time Management</strong> or <strong>Scheduling</strong>.</li>
+        <li>Click <strong>Post VTO</strong> or <strong>Post OT</strong>.</li>
+        <li>Select the date, time window, planning unit, and number of slots available.</li>
+        <li>Click <strong>Post</strong>. The opportunity appears in agents' portals.</li>
+        <li>As agents sign up, review the list and confirm selections. Slots are filled on a first-come basis or by admin selection, depending on your configuration.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Signing Up for VTO or OT (Agent)</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Check the <strong>VTO/OT Opportunities</strong> section in your agent portal.</li>
+        <li>Browse available postings. Each shows the date, time, and number of open slots.</li>
+        <li>Click <strong>Sign Up</strong> to express interest.</li>
+        <li>You'll receive a notification confirming whether your signup was accepted.</li>
+        <li>If accepted, your schedule is updated: VTO removes your shift (or portion of it), OT adds an extension or extra shift.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
   <!-- FORECASTING -->
-  <div class="help-section" id="forecasting" data-keywords="forecasting demand volume contact forecast predict">
+  <!-- ============================================================ -->
+  <div class="help-section" id="forecasting" data-keywords="forecasting demand volume contact forecast predict import data holt winters gradient boosting ml machine learning reforecast variance alerts mid-day auto best fit weighted trend moving average">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Forecasting</h2><span class="help-chevron">▸</span>
     </div>
@@ -161,19 +408,19 @@
       <p>The Forecasting module helps predict future workload demand. Upload historical volume data to generate forecasts that feed into capacity planning and schedule generation.</p>
 
       <h3>Viewing Forecasts</h3>
-      <p>Select a planning unit (LOB) and date range to view forecast data. Charts show predicted vs. actual volumes by interval.</p>
+      <p>Select a planning unit (LOB) and date range to view forecast data. Charts show predicted vs. actual volumes by interval. Toggle between daily totals and interval-level detail (15-minute or 30-minute granularity).</p>
 
       <h3>Importing Data</h3>
-      <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts.</p>
+      <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts. You can import via CSV upload or configure an API connection for automated data feeds (see <strong>Settings &rarr; API Connections</strong>).</p>
 
       <h3>Forecast Methods</h3>
       <p>Choose from five forecasting methods:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Auto (Best Fit)</strong> — Automatically selects the best method based on your data</li>
-        <li><strong>Weighted Trend</strong> — Applies recency-weighted trends to historical patterns</li>
-        <li><strong>Moving Average</strong> — Smooths recent history into a forward projection</li>
-        <li><strong>Holt-Winters</strong> — Captures seasonal patterns for cyclical workloads</li>
-        <li><strong>ML (Gradient Boosting)</strong> — Machine learning model trained on your data with day-of-week, seasonality, and lag features</li>
+        <li><strong>Auto (Best Fit)</strong> — automatically selects the best method based on your data by testing each and choosing the lowest error</li>
+        <li><strong>Weighted Trend</strong> — applies recency-weighted trends to historical patterns, giving more influence to recent weeks</li>
+        <li><strong>Moving Average</strong> — smooths recent history into a forward projection. Good for stable workloads with minimal seasonality</li>
+        <li><strong>Holt-Winters</strong> — captures seasonal patterns for cyclical workloads (e.g., monthly billing cycles, holiday spikes)</li>
+        <li><strong>ML (Gradient Boosting)</strong> — machine learning model trained on your data with day-of-week, seasonality, and lag features. Best when you have 3+ months of history</li>
       </ul>
 
       <h3>Mid-Day Reforecast</h3>
@@ -182,248 +429,759 @@
       <p><strong>Three strategies:</strong></p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Blended (Recommended)</strong> — 70% ratio scaling + 30% time-weighted adjustment using the most recent intervals. Best for most situations.</li>
-        <li><strong>Ratio Scaling</strong> — Multiplies remaining intervals by the overall actual-to-forecast ratio. Good when the trend is consistent.</li>
-        <li><strong>Delta Shift</strong> — Adds the average absolute difference to remaining intervals. Useful when volumes shift by a fixed amount.</li>
+        <li><strong>Ratio Scaling</strong> — multiplies remaining intervals by the overall actual-to-forecast ratio. Good when the trend is consistent throughout the day.</li>
+        <li><strong>Delta Shift</strong> — adds the average absolute difference to remaining intervals. Useful when volumes shift by a fixed amount rather than a percentage.</li>
       </ul>
-      <p><strong>Variance Alerts:</strong> Click <em>Check Alerts</em> to scan all LOBs for significant deviations. Alerts are classified as <span style="color:#ef4444;font-weight:600;">Critical</span> (≥25%), <span style="color:#f59e0b;font-weight:600;">Warning</span> (≥15%), or <span style="color:#3b82f6;font-weight:600;">Info</span> (≥10%). Adjust the threshold to suit your operation.</p>
-      <p><strong>Export:</strong> Use the <em>Export CSV</em> button in the interval detail table to download the reforecast data for offline analysis or sharing.</p>
+
+      <h3>Variance Alerts</h3>
+      <p>Click <em>Check Alerts</em> to scan all LOBs for significant deviations between forecast and actuals. Alerts are classified as:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><span style="color:#ef4444;font-weight:600;">Critical</span> — deviation &ge; 25%</li>
+        <li><span style="color:#f59e0b;font-weight:600;">Warning</span> — deviation &ge; 15%</li>
+        <li><span style="color:#3b82f6;font-weight:600;">Info</span> — deviation &ge; 10%</li>
+      </ul>
+      <p>Adjust the threshold percentage to suit your operation's tolerance.</p>
+
+      <h3>Export</h3>
+      <p>Use the <em>Export CSV</em> button in the interval detail table to download the reforecast data for offline analysis or sharing.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- CAPACITY -->
-  <div class="help-section" id="capacity" data-keywords="capacity planning staffing headcount long range google sheets">
+  <!-- ============================================================ -->
+  <div class="help-section" id="capacity" data-keywords="capacity planning staffing headcount long range google sheets requirements overstaffed understaffed erlang shrinkage service level">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Capacity Planning</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Capacity Panel</h3>
-      <p>The Capacity Panel shows current staffing levels against requirements. View by planning unit to see where you're overstaffed or understaffed.</p>
+      <p>The Capacity Panel shows current staffing levels against requirements for each planning unit. For every interval it displays:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Required staff</strong> — calculated from forecast volume, service level targets, AHT, and shrinkage</li>
+        <li><strong>Scheduled staff</strong> — how many employees are actually scheduled</li>
+        <li><strong>Variance</strong> — the difference (positive = overstaffed, negative = understaffed)</li>
+      </ul>
+      <p>Color coding highlights intervals that are significantly over or under the requirement. Use this to identify coverage gaps before publishing schedules.</p>
 
       <h3>Capacity Summary</h3>
-      <p>The summary view aggregates capacity data across all planning units, showing overall staffing health and trends.</p>
+      <p>The summary view aggregates capacity data across all planning units, showing overall staffing health for the selected date range. It rolls up interval-level data into daily and weekly totals, making it easy to see trends at a higher level.</p>
 
       <h3>Long-Range Planning</h3>
-      <p>Use long-range planning to project headcount needs weeks or months ahead. This connects to your forecast data to estimate future staffing requirements.</p>
+      <p>Use long-range planning to project headcount needs weeks or months ahead:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Select the planning unit and the future date range.</li>
+        <li>The system combines your forecast data with planning unit parameters (service level targets, AHT, shrinkage) to calculate required FTEs.</li>
+        <li>Compare required FTEs against your current headcount to identify hiring needs.</li>
+        <li>Export the long-range plan for budgeting and workforce planning discussions.</li>
+      </ol>
 
       <h3>Google Sheets Integration</h3>
-      <p>Capacity data can be pulled from connected Google Sheets. Set up the integration in <strong>Settings → Google Sheets</strong> by entering your sheet key and ensuring the service account has access.</p>
+      <p>Capacity data can be pulled from or pushed to connected Google Sheets for collaboration with finance and operations teams:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Google Sheets</strong>.</li>
+        <li>Enter the Google Sheet key (the long string in the sheet URL between /d/ and /edit).</li>
+        <li>Share the Google Sheet with the service account email shown on the settings page (give it Editor access).</li>
+        <li>Test the connection. Once verified, capacity data flows between {{ brand_name }} and the sheet.</li>
+      </ol>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- REAL-TIME -->
-  <div class="help-section" id="realtime" data-keywords="realtime adherence vto ot overtime voluntary time off">
+  <!-- ============================================================ -->
+  <div class="help-section" id="realtime" data-keywords="realtime real-time adherence vto ot overtime voluntary time off live agent status monitor dashboard schedule conformance intraday">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Real-Time Management</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Real-Time Dashboard</h3>
-      <p>Monitor workforce activity in real time. See who's logged in, on break, or off-schedule. Track adherence to scheduled activities.</p>
+      <p>The real-time dashboard provides a live view of your workforce. It displays:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Agent Status Board</strong> — each agent's current state (available, on call, on break, after-call work, logged out, etc.) with duration in current state</li>
+        <li><strong>Adherence Indicators</strong> — green for in-adherence, red for out-of-adherence, showing what the agent is doing versus what they're scheduled for</li>
+        <li><strong>Queue Metrics</strong> — current calls in queue, longest wait time, service level percentage (if connected to your ACD/telephony system)</li>
+        <li><strong>Staffing vs. Requirement</strong> — real-time comparison of agents available versus the number needed based on current volume</li>
+      </ul>
+
+      <h3>Adherence Monitoring</h3>
+      <p>Adherence compares an agent's actual activity to their scheduled activity:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>In Adherence</strong> — the agent is doing what they're scheduled to do</li>
+        <li><strong>Out of Adherence</strong> — the agent's actual state does not match their schedule (e.g., on break when scheduled for calls)</li>
+      </ul>
+      <p>Click on any agent to see a timeline of their adherence for the day, including each state change and its duration.</p>
+
+      <h3>Live Agent Status</h3>
+      <p>Filter the agent list by planning unit, team lead, or status. Sort by adherence percentage or time in current state to quickly identify agents who may need attention.</p>
 
       <h3>VTO / OT Management</h3>
-      <p>Manage voluntary time off (VTO) and overtime (OT) offers. When volumes are lower than expected, offer VTO. When volumes spike, offer OT to available agents.</p>
+      <p>When real-time volume deviates from the forecast:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Volume lower than expected</strong> — post VTO (voluntary time off) opportunities. Agents sign up from their portal, and you approve to release staff early.</li>
+        <li><strong>Volume higher than expected</strong> — post OT (overtime) opportunities. Available agents can sign up for extended shifts or come in on their day off.</li>
+      </ul>
+      <p>See the <strong>Shift Swaps &amp; Shift Bidding</strong> section above for the full VTO/OT posting workflow.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- ATTENDANCE -->
-  <div class="help-section" id="attendance" data-keywords="attendance clock in out time punch absent late">
+  <!-- ============================================================ -->
+  <div class="help-section" id="attendance" data-keywords="attendance clock in out time punch absent late tardy early departure edit correction record timesheet hours">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Attendance</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Time Clock</h3>
-      <p>Employees can clock in and out from the agent portal. Admins and supervisors can view all clock punches and make corrections.</p>
+      <p>Employees clock in and out from the agent portal using the time clock button. Each punch records the timestamp and the employee's ID. Agents can add notes to their punches (e.g., "arrived early for training" or "staying late to finish queue").</p>
 
       <h3>Attendance Records</h3>
-      <p>View attendance data by date range. See who was absent, late, or left early. Filter by employee, date, or status.</p>
+      <p>Admins and supervisors can view attendance data for all employees:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Attendance</strong> from the navigation menu.</li>
+        <li>Select a date range using the date pickers.</li>
+        <li>Filter by employee name, status (present, absent, late, left early), or team.</li>
+        <li>The table shows each employee's clock-in time, clock-out time, total hours, scheduled hours, and any variance.</li>
+      </ol>
 
       <h3>Editing Punches</h3>
-      <p>Admins can edit clock punches to correct errors. All edits are tracked in the audit log with the original and corrected times.</p>
+      <p>Admins can correct clock-punch errors:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Find the attendance record in the table and click the <strong>Edit</strong> icon.</li>
+        <li>Modify the clock-in time, clock-out time, or both.</li>
+        <li>Add a note explaining the correction (e.g., "Employee forgot to clock in, verified by supervisor").</li>
+        <li>Click <strong>Save</strong>. The original and corrected times are both preserved in the audit log.</li>
+      </ol>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- QUALITY -->
-  <div class="help-section" id="quality" data-keywords="quality scores qa review evaluation performance">
+  <!-- ============================================================ -->
+  <div class="help-section" id="quality" data-keywords="quality scores qa review evaluation performance coaching feedback category customer satisfaction accuracy professionalism trends">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Quality</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Quality Scores</h3>
-      <p>Track quality evaluation scores for each employee. Add scores by category (customer satisfaction, accuracy, professionalism, etc.).</p>
+      <h3>Quality Evaluations</h3>
+      <p>Track quality scores for each employee by creating evaluation records:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Quality</strong> from the navigation menu.</li>
+        <li>Click <strong>+ New Evaluation</strong>.</li>
+        <li>Select the employee, evaluation date, and category (e.g., customer satisfaction, accuracy, professionalism, process adherence).</li>
+        <li>Enter the score (numeric or percentage, depending on your scoring model).</li>
+        <li>Add evaluator notes and specific feedback.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
 
-      <h3>Quality Reviews</h3>
-      <p>Create quality review entries with scores, notes, and feedback. Link reviews to specific dates and employees for tracking trends over time.</p>
+      <h3>Coaching Sessions</h3>
+      <p>Quality evaluations can be linked to coaching sessions. After an evaluation, schedule a coaching follow-up:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>From the evaluation detail, click <strong>Create Coaching Session</strong>.</li>
+        <li>Set the coaching date, topic, action items, and any training modules to assign.</li>
+        <li>Record the outcome after the session is completed.</li>
+      </ol>
+
+      <h3>Score Tracking</h3>
+      <p>View quality trends over time per employee or across the team. The Quality page shows:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Average scores by category over the selected period</li>
+        <li>Individual employee score history with trend lines</li>
+        <li>Team-level comparisons</li>
+      </ul>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- APPROVALS -->
-  <div class="help-section" id="approvals" data-keywords="approvals pto requests approve deny pending time off">
+  <!-- ============================================================ -->
+  <div class="help-section" id="approvals" data-keywords="approvals pto requests approve deny pending time off shift swap approval queue review conflicts history">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Approvals</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Pending Requests</h3>
-      <p>The Approvals page shows all pending PTO and time-off requests. Review each request to see the employee, dates, type, and any conflicts with the schedule.</p>
+      <h3>Approval Queue</h3>
+      <p>The Approvals page consolidates all pending requests that need admin or supervisor review. Request types include:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>PTO Requests</strong> — time-off requests from agents</li>
+        <li><strong>Shift Swap Requests</strong> — swap agreements between two agents awaiting management approval</li>
+        <li><strong>Schedule Change Requests</strong> — agent-submitted requests for shift modifications</li>
+        <li><strong>Availability Updates</strong> — changes to an agent's available work hours</li>
+      </ul>
 
-      <h3>Approving / Denying</h3>
-      <p>Click on a request to review details. Choose to approve or deny. Add an optional note explaining the decision. The employee is notified of the outcome.</p>
+      <h3>Reviewing &amp; Deciding</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click on any pending request to open the detail view.</li>
+        <li>Review the request details: employee name, requested dates/shifts, type, and reason.</li>
+        <li>Check for conflicts — the system highlights if the request overlaps with critical coverage needs, would cause understaffing, or violates contract rules.</li>
+        <li>Click <strong>Approve</strong> or <strong>Deny</strong>.</li>
+        <li>Add an optional note explaining the decision (especially useful for denials).</li>
+        <li>The employee is automatically notified of the decision. Approved PTO is reflected in the schedule; approved swaps update both agents' schedules.</li>
+      </ol>
 
-      <h3>History</h3>
-      <p>View past approvals and denials. Filter by date range, employee, or status to review decision history.</p>
+      <h3>Approval History</h3>
+      <p>View past decisions by switching to the <strong>History</strong> tab. Filter by date range, employee, request type, or outcome (approved/denied) to review past patterns and ensure consistency.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- REPORTS -->
-  <div class="help-section" id="reports" data-keywords="reports export csv analytics summary attendance report">
+  <!-- ============================================================ -->
+  <div class="help-section" id="reports" data-keywords="reports export csv analytics summary attendance report hours kpi excel google sheets download workforce metrics">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Reports</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Summary Reports</h3>
-      <p>View KPI summaries showing active employees, average hours, PTO usage, and other workforce metrics over a selected time period.</p>
+      <p>View KPI summaries over a selected time period:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Total active employees and headcount changes</li>
+        <li>Average scheduled hours per employee</li>
+        <li>PTO usage rates and balances</li>
+        <li>Attendance rates (on-time, late, absent)</li>
+        <li>Quality score averages by category</li>
+        <li>Training completion rates</li>
+      </ul>
+      <p>Select the date range and planning unit/LOB to focus the report. Results update immediately.</p>
 
       <h3>Attendance Reports</h3>
-      <p>Detailed attendance data showing clock-in/out times, total hours, absences, and tardiness for each employee.</p>
+      <p>Detailed attendance data showing, for each employee over the selected period:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Daily clock-in and clock-out times</li>
+        <li>Total hours worked per day</li>
+        <li>Scheduled hours vs. actual hours</li>
+        <li>Absence count and tardiness count</li>
+        <li>Overtime hours</li>
+      </ul>
 
       <h3>CSV Export</h3>
-      <p>Click the export button to download any report as a CSV file. Choose between summary and attendance exports. The CSV includes all visible data and can be opened in Excel or Google Sheets.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Configure your report using the filters and date range.</li>
+        <li>Click the <strong>Export CSV</strong> button.</li>
+        <li>Choose between summary or attendance export formats.</li>
+        <li>The CSV file downloads to your computer. It includes all visible data and can be opened in Excel, Google Sheets, or any spreadsheet application.</li>
+      </ol>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- PAYROLL -->
-  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export">
+  <!-- ============================================================ -->
+  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export overtime regular hours scheduled clock aggregate submit">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Payroll</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>Payroll Overview</h3>
-      <p>The Payroll section aggregates scheduled hours, overtime, and time-off data for each pay period. Use this to prepare payroll submissions.</p>
+      <p>The Payroll section aggregates time data for each pay period to help prepare payroll submissions. It combines:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Scheduled hours</strong> — hours from published schedule assignments</li>
+        <li><strong>Clock punch hours</strong> — actual time worked based on clock-in/clock-out records</li>
+        <li><strong>Overtime hours</strong> — any hours exceeding the employee's contract thresholds</li>
+        <li><strong>Approved time off</strong> — PTO, VTO, and other approved absences</li>
+      </ul>
 
       <h3>Pay Period Selection</h3>
-      <p>Select the pay period dates to calculate total hours for each employee. The system automatically accounts for scheduled shifts, clock punches, and approved time off.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Payroll</strong> from the navigation menu.</li>
+        <li>Select the pay period start and end dates.</li>
+        <li>The system calculates totals for every employee: regular hours, overtime hours, PTO hours, and total payable hours.</li>
+        <li>Review the results. Flag any discrepancies for correction in the Attendance section.</li>
+        <li>Export the payroll data as CSV for import into your payroll system.</li>
+      </ol>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- TRAINING -->
-  <div class="help-section" id="training" data-keywords="training modules courses assign progress completion">
+  <!-- ============================================================ -->
+  <div class="help-section" id="training" data-keywords="training modules courses assign progress completion overdue required category duration due date bulk assign status">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Training</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Training Modules</h3>
-      <p>Create training modules with a title, description, category, and estimated duration. Mark modules as required if they're mandatory for all employees.</p>
+      <h3>Creating Training Modules</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Training</strong> from the navigation menu.</li>
+        <li>Click <strong>+ New Module</strong>.</li>
+        <li>Enter the module title, description, category (e.g., onboarding, compliance, product knowledge, soft skills), and estimated duration.</li>
+        <li>Optionally mark the module as <strong>Required</strong> if it is mandatory for all employees.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
 
       <h3>Assigning Training</h3>
-      <p>Assign modules to individual employees or bulk-assign to groups. Set a due date to track completion timelines.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>From the training module list, click <strong>Assign</strong> on the module you want to distribute.</li>
+        <li>Select individual employees or use bulk selection to assign to an entire team, LOB, or all employees.</li>
+        <li>Set a <strong>due date</strong> for completion.</li>
+        <li>Click <strong>Assign</strong>. Each employee receives a notification and the module appears in their agent portal under Training.</li>
+      </ol>
 
       <h3>Tracking Progress</h3>
-      <p>View completion status for all assignments. Filter by status (assigned, in progress, completed, overdue) to identify who needs follow-up.</p>
+      <p>View completion status for all assignments on the Training page. Filter by:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Assigned</strong> — not yet started</li>
+        <li><strong>In Progress</strong> — started but not complete</li>
+        <li><strong>Completed</strong> — finished by the due date</li>
+        <li><strong>Overdue</strong> — past the due date and not complete</li>
+      </ul>
+      <p>Click on any assignment to see details and update the status manually if needed.</p>
     </div>
   </div>
 
-  <!-- OTHER SECTIONS -->
-  <div class="help-section" id="other-sections" data-keywords="shift notes documents announcements team calendar data import">
+  <!-- ============================================================ -->
+  <!-- WFM TICKETS -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="wfm-tickets" data-keywords="wfm tickets support request schedule change availability shift preference inquiry open progress resolved closed priority assign track">
     <div class="help-header" onclick="toggleSection(this)">
-      <h2>Other Sections</h2><span class="help-chevron">▸</span>
+      <h2>WFM Tickets</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Shift Notes</h3>
-      <p>Leave notes for the next shift. Supervisors and admins can post notes that are visible to incoming staff. Useful for handoffs and important updates.</p>
+      <h3>What Are WFM Tickets?</h3>
+      <p>WFM Tickets are internal workforce management requests — schedule change requests, availability updates, shift preference submissions, accommodation requests, and other WFM-related inquiries. They provide a structured way for agents to communicate needs and for managers to track and resolve them.</p>
 
-      <h3>Employee Documents</h3>
-      <p>Upload and manage documents for each employee (contracts, certifications, ID copies). Documents are stored securely and linked to employee profiles.</p>
+      <h3>Creating a Ticket</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>WFM Tickets</strong> from the navigation menu (or from the agent portal).</li>
+        <li>Click <strong>+ New Ticket</strong>.</li>
+        <li>Enter the subject and a detailed description of the request.</li>
+        <li>Select a category (schedule change, availability, shift preference, accommodation, other).</li>
+        <li>Set a priority level (low, medium, high, urgent).</li>
+        <li>Click <strong>Submit</strong>.</li>
+      </ol>
 
-      <h3>Announcements</h3>
-      <p>Post announcements visible to all agents on their portal. Pin important announcements to keep them at the top. Set expiration dates for time-limited notices.</p>
-
-      <h3>Team Calendar</h3>
-      <p>A shared calendar view showing team schedules, PTO, and events. Useful for seeing coverage at a glance.</p>
-
-      <h3>Data Import</h3>
-      <p>Import employee data, schedules, and contact volumes from CSV files or connected systems. Use the manual entry form for individual records.</p>
-
-      <h3>WFM Tickets</h3>
-      <p>Submit and track workforce management requests — schedule change requests, availability updates, shift preferences, and other WFM-related inquiries. Agents can create tickets from the agent portal; supervisors and admins can view, assign, and resolve tickets. Filter by status (open, in progress, resolved, closed) and priority level.</p>
-
-      <h3>Audit Log</h3>
-      <p>Admin-only. View a chronological record of all significant actions: user logins, data changes, schedule publications, and configuration updates. Filter by action type, entity, or date range.</p>
+      <h3>Tracking &amp; Resolving Tickets</h3>
+      <p>Admins and supervisors can view all tickets. Filter by status:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Open</strong> — newly submitted, not yet picked up</li>
+        <li><strong>In Progress</strong> — assigned and being worked on</li>
+        <li><strong>Resolved</strong> — completed with a resolution</li>
+        <li><strong>Closed</strong> — finalized and archived</li>
+      </ul>
+      <p>Click a ticket to view details, add notes or responses, reassign to another manager, or change the status. The submitting agent can see status updates and any responses in their portal.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- SETTINGS -->
-  <div class="help-section" id="settings" data-keywords="settings configuration branding users skills contracts day models api google sheets oauth">
+  <!-- ============================================================ -->
+  <div class="help-section" id="settings" data-keywords="settings configuration branding users skills contracts day models api google sheets oauth activities planning units schedule rules general customization brand color tagline accent code label productive paid default offset duration flexibility window external id multi-activity parent child category status lob line of business contract type full time part time daily hours weekly hours monthly hours workdays calculation flexible fixed target min max work time scheduling parameters auto-scheduler rest hours consecutive days night shift overtime threshold holiday weekend saturday sunday rotation shift sequence planning calendar selections">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Settings</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
+      <p>Settings is where you configure the building blocks that drive all of {{ brand_name }}'s scheduling, forecasting, and workforce management features. Only admins can access Settings.</p>
+
+      <!-- General / Customization -->
       <h3>General / Customization</h3>
-      <p>Set your organization's brand name, accent color, tagline, and support email. These appear throughout the application.</p>
+      <p>Set your organization's branding and display preferences:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Brand Name</strong> — the name displayed throughout the application (navigation bar, login page, notifications, help guide)</li>
+        <li><strong>Accent Color</strong> — the primary color used for buttons, highlights, and interactive elements (enter a hex code or use the color picker)</li>
+        <li><strong>Tagline</strong> — a short phrase displayed below the brand name on the login page</li>
+        <li><strong>Support Email</strong> — shown in help/support sections for users to contact</li>
+      </ul>
 
+      <!-- Users -->
       <h3>Users</h3>
-      <p>Add, edit, and manage user accounts. Set roles (admin, supervisor, agent) and link users to employee records. Deactivate accounts when people leave.</p>
+      <p>Manage who can access {{ brand_name }} and what they can do:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>+ Add User</strong>.</li>
+        <li>Enter the user's email address.</li>
+        <li>Select a role: <strong>Admin</strong>, <strong>Supervisor</strong>, or <strong>Agent</strong>.</li>
+        <li>Link the user to an employee record if applicable. This connection is required for agents — it lets them see their own schedule, submit PTO, clock in/out, and participate in shift swaps/bidding.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+      <p>To edit a user, click their row. You can change roles, update email, link/unlink employee records, or deactivate the account.</p>
 
+      <!-- Activities Setup -->
+      <h3>Activities Setup</h3>
+      <p>Activities define everything your workforce does during a shift — productive work, breaks, meetings, training, etc. They are the foundation of scheduling, adherence monitoring, and reporting.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">What Activities Are</h4>
+      <p>An activity represents a type of work or non-work time: taking calls, handling emails, lunch break, coaching, team meeting, after-call work, and so on. Each scheduled interval is assigned an activity, and real-time adherence compares what the agent is actually doing against the activity they are scheduled for.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Activity Categories</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Status Activities</strong> — represent agent states like on-call, break, lunch, training, meeting, after-call work, logged out. Used for scheduling and adherence.</li>
+        <li><strong>LOB (Line of Business) Activities</strong> — represent the type of work being done, such as inbound calls, outbound calls, email, chat, back-office. Used for routing and workload assignment.</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Activity Fields</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Code</strong> — a unique short code for the activity (e.g., "CALL", "BRK", "LUN", "TRN")</li>
+        <li><strong>Label</strong> — the display name shown in schedules and reports (e.g., "Inbound Calls", "Break", "Lunch")</li>
+        <li><strong>Color</strong> — the color used to represent this activity in schedule grids and charts (hex code or color picker)</li>
+        <li><strong>Productive Flag</strong> — whether this activity counts as productive time (yes for calls, email, chat; no for breaks, lunch, meetings)</li>
+        <li><strong>Paid Flag</strong> — whether this activity counts as paid time (yes for most activities; no for unpaid lunch, for example)</li>
+        <li><strong>Default Flag</strong> — whether this is the default activity assigned to new shift intervals when no specific activity is specified</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Offset, Duration &amp; Flexibility Windows</h4>
+      <p>For activities like breaks and lunch that need to be placed at specific points in a shift:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Offset</strong> — how many minutes after the shift start this activity should begin (e.g., break at 120 minutes = 2 hours into the shift)</li>
+        <li><strong>Duration</strong> — how long the activity lasts in minutes (e.g., 15 minutes for a break, 30 minutes for lunch)</li>
+        <li><strong>Flexibility Window</strong> — how many minutes earlier or later the activity can be placed by the auto-scheduler. A flexibility of 30 means the break can start anywhere from 30 minutes before to 30 minutes after the offset, giving the scheduler room to optimize coverage.</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">External IDs</h4>
+      <p>If you integrate with external systems (ACD, telephony, WFM APIs), each activity can have an <strong>External ID</strong> that maps to the corresponding activity code in the external system. This ensures data flows correctly between {{ brand_name }} and your other tools.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Multi-Activity Support</h4>
+      <p>{{ brand_name }} supports parent/child activity relationships for complex scheduling:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>A <strong>parent activity</strong> groups related child activities (e.g., "Customer Service" as a parent with "Inbound Calls", "Email", and "Chat" as children)</li>
+        <li>When the parent is assigned in a schedule, the agent can be routed to any of the child activities based on real-time demand</li>
+        <li>Set up multi-activity by creating the parent activity first, then assigning child activities to it</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Creating an Activity Step by Step</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Activities</strong>.</li>
+        <li>Click <strong>+ Add Activity</strong>.</li>
+        <li>Enter the code, label, and select a color.</li>
+        <li>Set the category (Status or LOB).</li>
+        <li>Toggle the productive, paid, and default flags as appropriate.</li>
+        <li>If this is a break or lunch activity, set the offset, duration, and flexibility window.</li>
+        <li>If integrating with external systems, enter the external ID.</li>
+        <li>If this is a child of a multi-activity group, select the parent activity.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+
+      <!-- Contracts Setup -->
+      <h3>Contracts Setup</h3>
+      <p>Contracts are the scheduling rulebook for your employees. Each contract defines the hours, rest periods, and scheduling constraints that {{ brand_name }}'s auto-scheduler enforces. Every employee should be assigned a contract.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Why Contracts Matter</h4>
+      <p>Without a contract, the auto-scheduler has no rules to follow for an employee — it won't know their target hours, maximum consecutive days, required rest between shifts, or weekend rules. Contracts ensure schedules are compliant with labor rules and organizational policy.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">General Tab</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Name</strong> — descriptive contract name (e.g., "Full-Time Standard", "Part-Time Weekend")</li>
+        <li><strong>Abbreviation</strong> — short code shown in compact views (e.g., "FT-STD", "PT-WE")</li>
+        <li><strong>Color</strong> — color used when displaying contract-related information in schedules</li>
+        <li><strong>Contract Type</strong> — select <strong>full_time</strong> or <strong>part_time</strong>. This classification affects hour targets and may be used in reporting.</li>
+        <li><strong>Days Per Week</strong> — how many days per week this contract covers (e.g., 5 for a standard full-time, 3 for a part-time)</li>
+        <li><strong>Workdays Calculation</strong>:
+          <ul style="margin:4px 0 4px 16px;">
+            <li><strong>Flexible</strong> — the auto-scheduler chooses which days of the week to schedule, as long as it meets the days-per-week count</li>
+            <li><strong>Fixed</strong> — specific days of the week are designated as workdays (e.g., Monday through Friday)</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Work Time Tab</h4>
+      <p>Defines hour targets and limits at daily, weekly, and monthly levels:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Daily Hours Minimum</strong> — shortest allowed shift length (e.g., 4:00 for a minimum 4-hour shift)</li>
+        <li><strong>Daily Hours Target</strong> — ideal shift length (e.g., 8:00 for a standard 8-hour day)</li>
+        <li><strong>Daily Hours Maximum</strong> — longest allowed shift length (e.g., 10:00)</li>
+        <li><strong>Weekly Hours Minimum</strong> — minimum total hours per week (e.g., 32:00)</li>
+        <li><strong>Weekly Hours Target</strong> — ideal total hours per week (e.g., 40:00)</li>
+        <li><strong>Monthly Hours Maximum</strong> — cap on total hours per month</li>
+        <li><strong>Per-Day Hour Overrides</strong> — override the daily target for specific days of the week. Enter values in HH:MM format for Monday through Sunday. Leave blank to use the default daily target. Useful when certain days consistently have longer or shorter shifts.</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Scheduling Tab</h4>
+      <p>Controls the auto-scheduler's behavior and scheduling compliance rules. This tab has two groups:</p>
+
+      <p style="margin-top:10px;"><strong>AutoScheduler Parameters:</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Use Target Work Times</strong> — when enabled, the auto-scheduler tries to hit the daily/weekly hour targets exactly (not just stay within min/max)</li>
+        <li><strong>Schedule After Day Off</strong> — controls whether the scheduler can place a shift immediately after a day off with no gap</li>
+        <li><strong>Min Days Off Per Week</strong> — minimum number of days off the employee must have each week (e.g., 1 or 2)</li>
+        <li><strong>Max Days Off Per Week</strong> — maximum days off allowed per week</li>
+        <li><strong>Max Consecutive Work Days</strong> — the longest streak of consecutive work days allowed before a day off is required (e.g., 6)</li>
+        <li><strong>Min Consecutive Work Days</strong> — the shortest streak of work days (prevents isolated single work days surrounded by days off)</li>
+        <li><strong>Min Rest Hours Between Shifts</strong> — minimum gap in hours between the end of one shift and the start of the next (e.g., 11 hours). Prevents back-to-back clopening shifts.</li>
+      </ul>
+
+      <p style="margin-top:10px;"><strong>Scheduling Parameters:</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Max Saturdays Per Month</strong> — limit on how many Saturdays an employee can be scheduled in a month</li>
+        <li><strong>Max Sundays Per Month</strong> — limit on Sunday scheduling</li>
+        <li><strong>Night Shift Limits</strong> — maximum number of consecutive night shifts allowed before a longer rest break</li>
+        <li><strong>Rest Period Rules</strong> — additional rest requirements (e.g., extended rest after a night shift rotation)</li>
+        <li><strong>Overtime Thresholds</strong> — at what point hours count as overtime (typically after 8 hours daily or 40 hours weekly, but configurable)</li>
+        <li><strong>Holiday Scheduling Rules</strong> — whether employees under this contract can be scheduled on designated holidays, and any premium/overtime implications</li>
+        <li><strong>Weekend Rules</strong> — policies for weekend scheduling, such as requiring at least one full weekend off per month or alternating weekend schedules</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Assigning Contracts to Employees</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Create the contract template in <strong>Settings &rarr; Contracts</strong> (see steps above).</li>
+        <li>Go to <strong>People</strong> and open the employee's profile.</li>
+        <li>Click <strong>Edit</strong> and select the contract from the <strong>Contract</strong> dropdown.</li>
+        <li>Click <strong>Save</strong>. The auto-scheduler will now use this contract's rules when generating schedules for this employee.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Creating a Contract Step by Step</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Contracts</strong>.</li>
+        <li>Click <strong>+ Add Contract</strong>.</li>
+        <li>Fill in the <strong>General</strong> tab: name, abbreviation, color, contract type, days per week, workdays calculation mode.</li>
+        <li>Switch to the <strong>Work Time</strong> tab: set daily min/target/max hours, weekly min/target, monthly max. Add per-day overrides if needed.</li>
+        <li>Switch to the <strong>Scheduling</strong> tab: configure auto-scheduler parameters (target work times, days off, consecutive days, rest hours) and scheduling parameters (weekends, nights, overtime, holidays).</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+
+      <!-- Planning Units -->
       <h3>Planning Units</h3>
-      <p>Define your lines of business (LOBs) or workload groups. Planning units are used throughout scheduling, forecasting, and capacity planning.</p>
+      <p>Planning units represent your workload groups or lines of business (LOBs). Each planning unit is a distinct queue or work type that can be forecasted, staffed, and scheduled independently.</p>
 
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Setting Up a Planning Unit</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Planning Units</strong>.</li>
+        <li>Click <strong>+ Add Planning Unit</strong>.</li>
+        <li>Enter the name (e.g., "Inbound Sales", "Technical Support", "Billing").</li>
+        <li>Set the <strong>business hours</strong> for each day of the week — the hours during which this LOB operates. For example, Mon-Fri 08:00-20:00, Sat 09:00-17:00, Sun closed.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Assigning Activities to Planning Units</h4>
+      <p>Each planning unit should have activities associated with it — these define what work happens in this LOB. From the planning unit's settings, add the relevant activities (e.g., inbound calls, email, chat). This lets the scheduler know which activities to assign agents to when they are scheduled into this planning unit.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Planning Unit Parameters</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Minimum Staffing</strong> — the minimum number of agents that must be scheduled at all times during business hours, regardless of forecast demand</li>
+        <li><strong>Service Level Target</strong> — the percentage of contacts that should be answered within the target time (e.g., 80% of calls answered within 20 seconds)</li>
+        <li><strong>Service Level Time</strong> — the target answer time in seconds</li>
+        <li><strong>Average Handle Time (AHT)</strong> — the expected average duration of each contact in seconds</li>
+        <li><strong>Shrinkage</strong> — the percentage of scheduled time that agents are unavailable due to breaks, meetings, training, absenteeism, etc. (e.g., 30%). This factor increases the required headcount to compensate.</li>
+      </ul>
+
+      <!-- Day Models -->
       <h3>Day Models</h3>
-      <p>Create shift templates defining start time, end time, and break duration. Day models are assigned to employees when building schedules.</p>
+      <p>Day models are shift templates that define the structure of a work day. See the <strong>Scheduling</strong> section above for details on what day models contain and how they are used.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Day Models</strong>.</li>
+        <li>Click <strong>+ Add Day Model</strong>.</li>
+        <li>Enter a name (e.g., "Morning 8-4:30", "Evening 14-22", "Short Day 8-12").</li>
+        <li>Set the shift start time and end time.</li>
+        <li>Add break/lunch activities with their offset, duration, and flexibility windows.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
 
-      <h3>Contracts</h3>
-      <p>Define contract types (Full-Time, Part-Time, etc.) with weekly hour targets. Contracts help enforce scheduling rules.</p>
-
+      <!-- Skills -->
       <h3>Skills</h3>
-      <p>Manage the skills inventory. Assign skills to employees for skill-based scheduling and routing.</p>
+      <p>Skills represent qualifications, certifications, or capabilities that employees can have. They are used for skill-based scheduling (matching employees to work that requires their skills) and for filtering in capacity planning.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Skills</strong>.</li>
+        <li>Click <strong>+ Add Skill</strong>.</li>
+        <li>Enter the skill name and an optional description.</li>
+        <li>Click <strong>Save</strong>. The skill is now available to assign to employees in their profile.</li>
+      </ol>
 
-      <h3>Activities</h3>
-      <p>Define activities that employees perform (calls, emails, chat, training, meetings). Used in scheduling and real-time adherence.</p>
+      <!-- Shift Sequences / Rotation Models -->
+      <h3>Shift Sequences / Rotation Models</h3>
+      <p>Shift sequences (also called rotation models) define repeating patterns of shifts and days off over a multi-week cycle. For example, a 4-on/3-off rotation or a morning/afternoon/night rotation that cycles every 3 weeks.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Shift Sequences</strong>.</li>
+        <li>Click <strong>+ Add Sequence</strong>.</li>
+        <li>Define the cycle length (number of weeks).</li>
+        <li>For each day in the cycle, assign a day model or mark it as a day off.</li>
+        <li>Click <strong>Save</strong>. You can then assign this sequence to employees; the auto-scheduler will follow the rotation pattern.</li>
+      </ol>
 
+      <!-- Planning Calendars -->
+      <h3>Planning Calendars</h3>
+      <p>Planning calendars define special days that affect scheduling and forecasting:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Holidays</strong> — dates when the operation is closed or has reduced hours. Marked employees may get the day off automatically based on contract rules.</li>
+        <li><strong>Campaign Days</strong> — dates with expected volume spikes (product launches, promotions, open enrollment). The forecaster can apply uplift factors on these days.</li>
+      </ul>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Planning Calendars</strong>.</li>
+        <li>Click <strong>+ Add Entry</strong>.</li>
+        <li>Select the date, type (holiday or campaign), and enter a label.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+
+      <!-- Selections -->
+      <h3>Selections</h3>
+      <p>Selections are saved employee groupings used for bulk operations. Instead of selecting employees one by one every time, create a selection for a group you work with frequently (e.g., "Night Shift Team", "New Hires Q4", "Building A Staff").</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Selections</strong>.</li>
+        <li>Click <strong>+ Add Selection</strong>.</li>
+        <li>Name the selection and add employees to it.</li>
+        <li>Use the selection in scheduling, training assignments, reports, and other bulk operations.</li>
+      </ol>
+
+      <!-- Schedule Rules -->
+      <h3>Schedule Rules</h3>
+      <p>Schedule rules define global scheduling constraints that apply across all contracts, or overrides for specific situations. These include:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Maximum overtime hours per week/month across the organization</li>
+        <li>Minimum advance notice for schedule publication (e.g., schedules must be published at least 2 weeks ahead)</li>
+        <li>Rules about split shifts, on-call requirements, or standby policies</li>
+      </ul>
+
+      <!-- Google Sheets Integration -->
       <h3>Google Sheets Integration</h3>
-      <p>Connect Google Sheets for capacity data. Enter the sheet key and share the sheet with the service account email shown on the settings page.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; Google Sheets</strong>.</li>
+        <li>Copy the <strong>service account email</strong> displayed on the page.</li>
+        <li>Open your Google Sheet and click <strong>Share</strong>. Paste the service account email and give it <strong>Editor</strong> access.</li>
+        <li>Copy the <strong>sheet key</strong> from your Google Sheet's URL (the long string between <code>/d/</code> and <code>/edit</code>).</li>
+        <li>Paste the sheet key into the settings field and click <strong>Save</strong>.</li>
+        <li>Click <strong>Test Connection</strong> to verify. Once connected, capacity data can be synced between {{ brand_name }} and the sheet.</li>
+      </ol>
 
-      <h3>API Connections</h3>
-      <p>Configure connections to external systems for data import. Set up API keys and endpoints for automated data feeds.</p>
-
-      <h3>OAuth / Social Login</h3>
-      <p>Enable Google and/or Microsoft sign-in for your users. Set up OAuth client credentials in <strong>Settings → API Connections</strong>.</p>
+      <!-- API Connections / OAuth -->
+      <h3>API Connections / OAuth</h3>
+      <p>Configure connections to external systems for automated data exchange:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>API Keys</strong> — generate or enter API keys for connecting to ACD/telephony systems, HRIS platforms, or other data sources</li>
+        <li><strong>Endpoints</strong> — configure the URLs and authentication details for data import/export</li>
+        <li><strong>OAuth / Social Login</strong> — enable Google and/or Microsoft sign-in for your users by entering OAuth client credentials (Client ID and Client Secret from Google Cloud Console or Azure AD)</li>
+      </ul>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- AGENT PORTAL -->
-  <div class="help-section" id="agent-portal" data-keywords="agent portal my schedule time off self service clock in">
+  <!-- ============================================================ -->
+  <div class="help-section" id="agent-portal" data-keywords="agent portal my schedule time off self service clock in out bid open shift swap vto ot sign up request personal announcements training">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Agent Portal (Self-Service)</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
+      <p>The agent portal is the personal hub for every agent. It provides access to schedules, time-off requests, shift marketplace, and self-service features.</p>
+
       <h3>My Schedule</h3>
-      <p>View your upcoming shifts in a weekly calendar. See start/end times, activities, and any special notes for each shift.</p>
+      <p>View your upcoming shifts in a weekly calendar view. Each shift shows:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Shift start and end time</li>
+        <li>Assigned activities and break placement</li>
+        <li>Planning unit / LOB</li>
+        <li>Any special notes from your supervisor</li>
+      </ul>
+      <p>Only published schedules are visible. If you don't see a schedule for a future week, it may not have been published yet — check with your supervisor.</p>
 
       <h3>My Time Off</h3>
-      <p>Request time off by selecting dates and a reason. View the status of your requests (pending, approved, denied). See your remaining PTO balance.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>+ Request Time Off</strong>.</li>
+        <li>Select the date(s) you're requesting off.</li>
+        <li>Choose the type of time off (vacation, personal, sick, etc.).</li>
+        <li>Add an optional note.</li>
+        <li>Click <strong>Submit</strong>.</li>
+      </ol>
+      <p>Your request goes to your supervisor/admin for approval. You can track the status (pending, approved, denied) on this same page. You'll receive a notification when a decision is made.</p>
 
-      <h3>Self-Service Portal</h3>
-      <p>View announcements, clock in/out for your shift, and access personal information. The portal is your one-stop for everything you need as an agent.</p>
+      <h3>Shift Bidding (Agent View)</h3>
+      <p>When admins post open shifts, they appear in the <strong>Open Shifts</strong> section of your portal:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Browse available open shifts. Each shows date, time, LOB, and required skills.</li>
+        <li>Click <strong>Bid</strong> on any shift you're interested in and qualified for.</li>
+        <li>Wait for the admin to select a winner. You'll be notified of the outcome.</li>
+        <li>If selected, the shift appears in My Schedule.</li>
+      </ol>
+
+      <h3>Shift Swaps (Agent View)</h3>
+      <p>To swap a shift with a colleague:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>My Schedule</strong> and click on the shift you want to swap.</li>
+        <li>Select <strong>Request Swap</strong>.</li>
+        <li>Choose a direct swap (pick a colleague and one of their shifts) or post an open swap for anyone to accept.</li>
+        <li>Submit the request and wait for the other agent to accept and your supervisor to approve.</li>
+      </ol>
+      <p>To accept someone else's swap: check the <strong>Available Swaps</strong> section. Click <strong>Accept</strong> on any swap that works for you. The swap then goes to supervisor/admin for final approval.</p>
+
+      <h3>VTO / OT Signup</h3>
+      <p>When VTO (voluntary time off) or OT (overtime) opportunities are posted:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Check the <strong>VTO/OT Opportunities</strong> section in your portal.</li>
+        <li>Review the date, time window, and available slots.</li>
+        <li>Click <strong>Sign Up</strong> to express interest.</li>
+        <li>You'll be notified whether your signup was accepted. If yes, your schedule is updated accordingly.</li>
+      </ol>
 
       <h3>Clock In / Clock Out</h3>
-      <p>Use the time clock button to record your start and end times. You can add notes to your punches (e.g., "arrived early for training").</p>
+      <p>Use the time clock button on the Self-Service page to record your shift start and end:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>Clock In</strong> when you start your shift. The timestamp is recorded.</li>
+        <li>Click <strong>Clock Out</strong> when you end your shift.</li>
+        <li>Optionally add a note to your punch (e.g., "arrived early for training").</li>
+        <li>If you forget to clock in or out, contact your supervisor to have the punch corrected.</li>
+      </ol>
+
+      <h3>Announcements &amp; Training</h3>
+      <p>View organization-wide announcements on the Self-Service page. Pinned announcements appear at the top. Your assigned training modules and their due dates are also visible here.</p>
     </div>
   </div>
 
+  <!-- ============================================================ -->
   <!-- SUPPORT -->
-  <div class="help-section" id="support" data-keywords="support ticket help issue bug feature request">
+  <!-- ============================================================ -->
+  <div class="help-section" id="support" data-keywords="support troubleshooting help issue bug common problems login schedule missing permission denied data import error slow loading password reset notifications">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Support &amp; Troubleshooting</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Submitting a Support Ticket</h3>
-      <p>Go to <strong>Support Tickets</strong> from the navigation menu. Click "New Ticket" and fill in the subject, description, category, and priority. Your ticket will be reviewed by an admin.</p>
+      <h3>Common Issues &amp; Solutions</h3>
 
-      <h3>Tracking Your Tickets</h3>
-      <p>View the status of your submitted tickets on the Support page. You can filter by status and category. Click a ticket to see its details and any admin responses.</p>
+      <p><strong>Can't log in</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Verify you're using the correct email address (check for typos).</li>
+        <li>If you've forgotten your password, contact your admin to reset it.</li>
+        <li>If using social login (Google/Microsoft), make sure it's enabled for your organization in Settings.</li>
+        <li>Clear your browser cache and cookies, then try again.</li>
+        <li>If your account has been deactivated, contact your admin to reactivate it.</li>
+      </ul>
 
-      <h3>Common Issues</h3>
-      <p><strong>Can't log in:</strong> Make sure you're using the correct email address. If you've forgotten your password, contact your admin to reset it.</p>
-      <p><strong>Missing data:</strong> Check that data has been imported for the date range you're viewing. Go to Data Import to verify.</p>
-      <p><strong>Schedule not showing:</strong> Schedules must be published before agents can see them. Ask your supervisor if schedules have been published for your dates.</p>
-      <p><strong>Permission denied:</strong> You may not have the required role for that action. Contact your admin if you need elevated access.</p>
+      <p><strong>Schedule not showing for agents</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Schedules must be <strong>published</strong> before agents can see them. Check with your supervisor or admin.</li>
+        <li>Make sure the agent's user account is linked to their employee record (Settings &rarr; Users).</li>
+        <li>Verify the schedule covers the dates the agent is looking at.</li>
+      </ul>
+
+      <p><strong>Missing data or empty pages</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Check that data has been imported for the date range you're viewing.</li>
+        <li>Verify your filters aren't excluding the data — try resetting all filters.</li>
+        <li>For forecasting data, ensure historical volumes have been uploaded via Data Import.</li>
+      </ul>
+
+      <p><strong>Permission denied errors</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Your user role may not have access to that feature. Check with your admin.</li>
+        <li>Agents can only access the agent portal sections. Management pages require Supervisor or Admin roles.</li>
+      </ul>
+
+      <p><strong>Auto-scheduler not generating schedules</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Ensure employees have contracts assigned (People &rarr; employee profile).</li>
+        <li>Verify day models are configured (Settings &rarr; Day Models).</li>
+        <li>Check that planning units have business hours set and activities assigned.</li>
+        <li>Review the error messages — the scheduler reports specific constraint violations.</li>
+      </ul>
+
+      <p><strong>Google Sheets connection not working</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Verify the sheet key is correct (the string between /d/ and /edit in the sheet URL).</li>
+        <li>Make sure the Google Sheet is shared with the service account email shown in Settings &rarr; Google Sheets, with Editor access.</li>
+        <li>Click <strong>Test Connection</strong> to verify.</li>
+      </ul>
+
+      <p><strong>Notifications not arriving</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Check the bell icon — notifications may be there but the badge count didn't update. Try refreshing the page.</li>
+        <li>If using the PWA, ensure browser notifications are allowed for {{ brand_name }}.</li>
+      </ul>
+
+      <p><strong>Slow page loading</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Try reducing the page size in tables (use 25 or 50 instead of All).</li>
+        <li>Narrow your date range or filters to reduce the amount of data loaded.</li>
+        <li>Clear your browser cache.</li>
+        <li>Check your internet connection.</li>
+      </ul>
+
+      <h3>Getting More Help</h3>
+      <p>If your issue isn't covered above, submit a WFM Ticket (see the <strong>WFM Tickets</strong> section) or contact your organization's admin for assistance.</p>
     </div>
   </div>
 
