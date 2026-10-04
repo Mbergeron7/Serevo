@@ -13,7 +13,7 @@
 </div>
 
 <!-- Upload Form -->
-<div class="card" style="max-width: 640px;">
+<div class="card" id="uploadCard" style="max-width: 640px;">
   <h2>Upload File</h2>
   <form id="uploadForm" enctype="multipart/form-data">
     <div class="form-group">
@@ -30,16 +30,81 @@
       <input type="file" id="file" name="file" accept=".csv,.xlsx,.xls" required>
     </div>
 
+    <!-- Saved schema profiles -->
+    <div class="form-group" id="schemaGroup" style="display:none;">
+      <label for="schema_id">Column Mapping Profile (optional)</label>
+      <select id="schema_id" name="schema_id">
+        <option value="">— Auto-detect columns —</option>
+      </select>
+      <small style="color:var(--text-secondary);">Saved profiles remember how your file's columns map to ours</small>
+    </div>
+
     <!-- Column hints -->
     <div id="columnHints" class="column-hints">
       <p><strong>Required columns:</strong> <span id="reqCols"></span></p>
       <p><strong>Optional columns:</strong> <span id="optCols"></span></p>
     </div>
 
-    <button type="submit" class="btn btn-primary" id="uploadBtn">
-      Upload &amp; Import
-    </button>
+    <div style="display:flex; gap:.5rem;">
+      <button type="submit" class="btn btn-primary" id="uploadBtn">
+        Upload &amp; Import
+      </button>
+      <button type="button" class="btn btn-outline" id="mapBtn" onclick="previewMapping()">
+        Map Columns First
+      </button>
+    </div>
   </form>
+</div>
+
+<!-- Column Mapping Modal -->
+<div id="mappingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; overflow-y:auto;">
+  <div style="max-width:800px; margin:2rem auto; background:var(--bg-primary); border-radius:12px; padding:1.5rem; box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h2 style="margin:0;">Map Columns</h2>
+      <button class="btn btn-outline" onclick="closeMappingModal()" style="padding:4px 12px;">✕</button>
+    </div>
+
+    <div id="mappingInfo" style="margin-bottom:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+      <p style="margin:0;"><strong id="mapFilename"></strong> — <span id="mapRowCount"></span> rows</p>
+    </div>
+
+    <!-- Mapping status -->
+    <div id="mappingStatus" style="margin-bottom:1rem;"></div>
+
+    <!-- Mapping table -->
+    <div style="overflow-x:auto;">
+      <table class="data-table" id="mappingTable">
+        <thead>
+          <tr>
+            <th>Your Column</th>
+            <th>Sample Data</th>
+            <th>Maps To</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="mappingBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Save mapping profile -->
+    <div style="margin-top:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+      <label style="display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem;">
+        <input type="checkbox" id="saveMapping"> Save this mapping as a profile
+      </label>
+      <div id="saveMappingName" style="display:none;">
+        <input type="text" id="mappingProfileName" placeholder="Profile name (e.g. Client X Employees)"
+               style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px;">
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+      <button class="btn btn-outline" onclick="closeMappingModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmImportBtn" onclick="confirmImport()">
+        Import with This Mapping
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- Upload Result -->
@@ -126,6 +191,7 @@
 {% block scripts %}
 <script>
 const TYPES = {{ upload_types | tojson }};
+let _mappingData = null;  // holds preview response for step 2
 
 const typeSelect = document.getElementById('upload_type');
 const reqCols = document.getElementById('reqCols');
@@ -135,10 +201,42 @@ function updateHints() {
   const t = TYPES[typeSelect.value];
   reqCols.textContent = t.required.join(', ');
   optCols.textContent = t.optional.length ? t.optional.join(', ') : '(none)';
+  loadSavedSchemas();
 }
 typeSelect.addEventListener('change', updateHints);
 updateHints();
 
+// Load saved schemas for the selected type
+async function loadSavedSchemas() {
+  const type = typeSelect.value;
+  const sel = document.getElementById('schema_id');
+  const group = document.getElementById('schemaGroup');
+  try {
+    const resp = await fetch(`/data/schemas?upload_type=${type}`);
+    const data = await resp.json();
+    sel.innerHTML = '<option value="">— Auto-detect columns —</option>';
+    if (data.schemas && data.schemas.length) {
+      data.schemas.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${new Date(s.updated_at).toLocaleDateString()})`;
+        sel.appendChild(opt);
+      });
+      group.style.display = '';
+    } else {
+      group.style.display = 'none';
+    }
+  } catch(e) {
+    group.style.display = 'none';
+  }
+}
+
+// Save mapping checkbox toggle
+document.getElementById('saveMapping').addEventListener('change', function() {
+  document.getElementById('saveMappingName').style.display = this.checked ? '' : 'none';
+});
+
+// ── Direct upload (existing flow with auto-matching) ──
 document.getElementById('uploadForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('uploadBtn');
@@ -149,28 +247,7 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
   try {
     const resp = await fetch('/data/upload', {method: 'POST', body: fd});
     const data = await resp.json();
-    const resultDiv = document.getElementById('uploadResult');
-    const title = document.getElementById('resultTitle');
-    const body = document.getElementById('resultBody');
-    resultDiv.style.display = '';
-
-    if (data.success) {
-      title.textContent = 'Import Complete';
-      title.style.color = 'var(--brand-accent)';
-      let html = `<p><strong>${data.imported}</strong> rows imported`;
-      if (data.skipped) html += `, <strong>${data.skipped}</strong> skipped`;
-      html += ` out of <strong>${data.total}</strong> total.</p>`;
-      if (data.errors && data.errors.length) {
-        html += '<details><summary>Warnings</summary><ul>';
-        data.errors.forEach(e => html += `<li>${e}</li>`);
-        html += '</ul></details>';
-      }
-      body.innerHTML = html;
-    } else {
-      title.textContent = 'Import Failed';
-      title.style.color = '#dc2626';
-      body.innerHTML = `<p>${data.error}</p>`;
-    }
+    showResult(data);
   } catch (err) {
     alert('Upload error: ' + err.message);
   }
@@ -178,6 +255,193 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
   btn.textContent = 'Upload & Import';
 });
 
+function showResult(data) {
+  const resultDiv = document.getElementById('uploadResult');
+  const title = document.getElementById('resultTitle');
+  const body = document.getElementById('resultBody');
+  resultDiv.style.display = '';
+  if (data.success) {
+    title.textContent = 'Import Complete';
+    title.style.color = 'var(--brand-accent)';
+    let html = `<p><strong>${data.imported}</strong> rows imported`;
+    if (data.skipped) html += `, <strong>${data.skipped}</strong> skipped`;
+    html += ` out of <strong>${data.total}</strong> total.</p>`;
+    if (data.errors && data.errors.length) {
+      html += '<details><summary>Warnings</summary><ul>';
+      data.errors.forEach(e => html += `<li>${e}</li>`);
+      html += '</ul></details>';
+    }
+    body.innerHTML = html;
+  } else {
+    title.textContent = 'Import Failed';
+    title.style.color = '#dc2626';
+    body.innerHTML = `<p>${data.error}</p>`;
+  }
+}
+
+// ── Two-step mapping flow ──
+
+async function previewMapping() {
+  const fileInput = document.getElementById('file');
+  if (!fileInput.files.length) {
+    alert('Please select a file first.');
+    return;
+  }
+
+  const btn = document.getElementById('mapBtn');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+
+  const fd = new FormData(document.getElementById('uploadForm'));
+  try {
+    const resp = await fetch('/data/upload/preview', {method: 'POST', body: fd});
+    const data = await resp.json();
+    if (!data.success) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.textContent = 'Map Columns First';
+      return;
+    }
+    _mappingData = data;
+    renderMappingModal(data);
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Map Columns First';
+}
+
+function renderMappingModal(data) {
+  document.getElementById('mapFilename').textContent = data.filename;
+  document.getElementById('mapRowCount').textContent = data.row_count;
+
+  const allFields = [...data.available_fields.required, ...data.available_fields.optional];
+  const tbody = document.getElementById('mappingBody');
+  tbody.innerHTML = '';
+
+  data.file_headers.forEach(header => {
+    const mapped = data.auto_mapping[header] || '';
+    const isRequired = data.available_fields.required.includes(mapped);
+    const samples = (data.sample_data[header] || []).join(' · ');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${escHtml(header)}</strong></td>
+      <td style="color:var(--text-secondary); font-size:.85rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(samples)}</td>
+      <td>
+        <select class="map-select" data-header="${escAttr(header)}" onchange="updateMappingStatus()">
+          <option value="">— Skip —</option>
+          ${allFields.map(f => `<option value="${escAttr(f)}" ${f === mapped ? 'selected' : ''}>${escHtml(f)}${data.available_fields.required.includes(f) ? ' *' : ''}</option>`).join('')}
+        </select>
+      </td>
+      <td class="map-status"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  updateMappingStatus();
+  document.getElementById('mappingOverlay').style.display = '';
+}
+
+function updateMappingStatus() {
+  if (!_mappingData) return;
+  const required = _mappingData.available_fields.required;
+  const selects = document.querySelectorAll('.map-select');
+  const usedFields = {};
+  const duplicates = new Set();
+
+  // Find duplicates
+  selects.forEach(sel => {
+    const val = sel.value;
+    if (val) {
+      if (usedFields[val]) duplicates.add(val);
+      usedFields[val] = (usedFields[val] || 0) + 1;
+    }
+  });
+
+  // Update status icons
+  selects.forEach(sel => {
+    const val = sel.value;
+    const statusTd = sel.closest('tr').querySelector('.map-status');
+    if (!val) {
+      statusTd.innerHTML = '<span style="color:var(--text-secondary)">—</span>';
+    } else if (duplicates.has(val)) {
+      statusTd.innerHTML = '<span style="color:#f59e0b" title="Duplicate mapping">⚠️</span>';
+    } else if (required.includes(val)) {
+      statusTd.innerHTML = '<span style="color:#059669" title="Required field matched">✓</span>';
+    } else {
+      statusTd.innerHTML = '<span style="color:#3b82f6" title="Optional field matched">✓</span>';
+    }
+  });
+
+  // Check all required fields are mapped
+  const mappedFields = new Set();
+  selects.forEach(sel => { if (sel.value) mappedFields.add(sel.value); });
+  const missingReq = required.filter(f => !mappedFields.has(f));
+
+  const statusDiv = document.getElementById('mappingStatus');
+  const btn = document.getElementById('confirmImportBtn');
+  if (missingReq.length) {
+    statusDiv.innerHTML = `<p style="color:#dc2626;">⚠️ Missing required fields: <strong>${missingReq.join(', ')}</strong></p>`;
+    btn.disabled = true;
+  } else if (duplicates.size) {
+    statusDiv.innerHTML = `<p style="color:#f59e0b;">⚠️ Some fields are mapped more than once</p>`;
+    btn.disabled = false;
+  } else {
+    const matched = [...mappedFields].length;
+    statusDiv.innerHTML = `<p style="color:#059669;">✓ ${matched} columns mapped — ready to import</p>`;
+    btn.disabled = false;
+  }
+}
+
+function closeMappingModal() {
+  document.getElementById('mappingOverlay').style.display = 'none';
+  _mappingData = null;
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('confirmImportBtn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  // Build mapping from selects
+  const mapping = {};
+  document.querySelectorAll('.map-select').forEach(sel => {
+    mapping[sel.dataset.header] = sel.value || null;
+  });
+
+  const payload = { mapping };
+
+  // Save mapping if requested
+  if (document.getElementById('saveMapping').checked) {
+    const name = document.getElementById('mappingProfileName').value.trim();
+    if (name) payload.save_as = name;
+  }
+
+  try {
+    const resp = await fetch('/data/upload/confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('input[name=csrf_token]').value,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    closeMappingModal();
+    showResult(data);
+    loadSavedSchemas();  // refresh schema dropdown
+  } catch(err) {
+    alert('Import error: ' + err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Import with This Mapping';
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ── Templates ──
 function downloadTemplate(type) {
   const t = TYPES[type];
   const cols = [...t.required, ...t.optional];

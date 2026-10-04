@@ -508,6 +508,42 @@ class APIConnection(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# SCHEMA MAPPINGS (saved column-mapping profiles for data imports)
+# ═══════════════════════════════════════════════════════════════
+
+class SchemaMapping(db.Model):
+    """Saved column-mapping profile for data imports.
+
+    Stores a named mapping from client-specific column headers to our
+    internal field names, per upload type.  Lets different clients use
+    different column names and reuse their mapping across imports.
+    """
+    __tablename__ = "schema_mappings"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(120), nullable=False)
+    upload_type = db.Column(db.String(30), nullable=False)
+    mapping     = db.Column(db.Text, nullable=False, default="{}")  # JSON: {"their_header": "our_field", …}
+    created_by  = db.Column(db.String(255), default="")
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+    updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def get_mapping(self):
+        import json
+        try:
+            return json.loads(self.mapping or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def set_mapping(self, d):
+        import json
+        self.mapping = json.dumps(d)
+
+    def __repr__(self):
+        return f"<SchemaMapping {self.name} ({self.upload_type})>"
+
+
+# ═══════════════════════════════════════════════════════════════
 # DATA UPLOADS (track CSV/Excel import history)
 # ═══════════════════════════════════════════════════════════════
 
