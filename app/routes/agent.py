@@ -58,6 +58,17 @@ class _DemoPTO:
         self.note = ""
 
 
+class _DemoSegment:
+    """Fake shift segment for demo schedule preview."""
+    def __init__(self, activity_type, start_str, end_str, color="#6b7280"):
+        from datetime import time as _time
+        self.activity_type = activity_type
+        self.segment_type = activity_type
+        self.start_time = _time(int(start_str.split(":")[0]), int(start_str.split(":")[1]))
+        self.end_time = _time(int(end_str.split(":")[0]), int(end_str.split(":")[1]))
+        self.color = color
+
+
 class _DemoSchedule:
     """Fake schedule row for admin preview of My Schedule."""
     def __init__(self, d, start_str, end_str):
@@ -68,8 +79,18 @@ class _DemoSchedule:
         s = self.shift_start.hour * 60 + self.shift_start.minute
         e = self.shift_end.hour * 60 + self.shift_end.minute
         self.hours = round((e - s) / 60, 1)
-        self.segments = []
         self.status = "scheduled"
+        # Build realistic segments: on-call → break → on-call → lunch → on-call → break → on-call
+        sh = int(start_str.split(":")[0])
+        self.segments = [
+            _DemoSegment("On-Call",  f"{sh}:00",     f"{sh+2}:00",   "#059669"),
+            _DemoSegment("Break",    f"{sh+2}:00",   f"{sh+2}:15",   "#f59e0b"),
+            _DemoSegment("On-Call",  f"{sh+2}:15",   f"{sh+4}:00",   "#059669"),
+            _DemoSegment("Lunch",    f"{sh+4}:00",   f"{sh+4}:30",   "#ef4444"),
+            _DemoSegment("On-Call",  f"{sh+4}:30",   f"{sh+6}:00",   "#059669"),
+            _DemoSegment("Break",    f"{sh+6}:00",   f"{sh+6}:15",   "#f59e0b"),
+            _DemoSegment("On-Call",  f"{sh+6}:15",   f"{sh+8}:00",   "#059669"),
+        ]
 
 
 # ───────────────────────────────────────────────────────
@@ -302,6 +323,7 @@ def api_my_schedule():
         while d <= end:
             if d.weekday() < 5:  # Mon–Fri
                 sh = shifts[d.weekday()]
+                sh_h = int(sh[0].split(":")[0])
                 demo_schedules.append({
                     "id": 9000 + (d - start).days,
                     "employee": "Demo Agent",
@@ -312,7 +334,15 @@ def api_my_schedule():
                     "type": "full",
                     "hours": 8.5,
                     "status": "scheduled",
-                    "segments": [],
+                    "segments": [
+                        {"type": "On-Call", "start": f"{sh_h}:00", "end": f"{sh_h+2}:00", "color": "#059669"},
+                        {"type": "Break",   "start": f"{sh_h+2}:00", "end": f"{sh_h+2}:15", "color": "#f59e0b"},
+                        {"type": "On-Call", "start": f"{sh_h+2}:15", "end": f"{sh_h+4}:00", "color": "#059669"},
+                        {"type": "Lunch",   "start": f"{sh_h+4}:00", "end": f"{sh_h+4}:30", "color": "#ef4444"},
+                        {"type": "On-Call", "start": f"{sh_h+4}:30", "end": f"{sh_h+6}:00", "color": "#059669"},
+                        {"type": "Break",   "start": f"{sh_h+6}:00", "end": f"{sh_h+6}:15", "color": "#f59e0b"},
+                        {"type": "On-Call", "start": f"{sh_h+6}:15", "end": f"{sh_h+8}:00", "color": "#059669"},
+                    ],
                     "team_lead": "",
                     "lob": lobs[d.weekday() % len(lobs)],
                 })
