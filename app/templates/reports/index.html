@@ -167,12 +167,12 @@ async function loadAttendanceReport() {
   const d = await res.json();
   if (!d.success) { document.getElementById('attReport').innerHTML = 'Error'; return; }
   if (!d.rows.length) { document.getElementById('attReport').innerHTML = '<span style="color:var(--text-muted);">No attendance data for this period.</span>'; return; }
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);">Employee</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Actual</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Scheduled</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Diff</th></tr></thead><tbody>';
+  let html = '<div class="data-table-wrapper"><table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);">Employee</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Actual</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Scheduled</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);">Diff</th></tr></thead><tbody>';
   d.rows.forEach(r => {
     const diffColor = r.difference > 0 ? '#059669' : r.difference < 0 ? '#dc2626' : '';
     html += `<tr><td style="padding:5px 8px;border-bottom:1px solid var(--border);">${esc(r.name)}</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);">${r.actual_hours}h</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);">${r.scheduled_hours}h</td><td style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:${diffColor};font-weight:600;">${r.difference > 0 ? '+' : ''}${r.difference}h</td></tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   document.getElementById('attReport').innerHTML = html;
 }
 

@@ -78,7 +78,7 @@
       document.getElementById('attGrid').innerHTML = '<p style="color:#888;">No attendance records for this date.</p>';
       return;
     }
-    let html = '<table class="att-table"><thead><tr><th>Employee</th><th>ID</th><th>Scheduled</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
+    let html = '<div class="data-table-wrapper"><table class="att-table"><thead><tr><th>Employee</th><th>ID</th><th>Scheduled</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
     rows.forEach(r => {
       const badge = r.status === 'active' ? 'badge-active' : 'badge-completed';
       const lateTag = r.late_minutes ? ` <span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:8px;font-size:.75rem;">${r.late_minutes}m late</span>` : '';
@@ -92,7 +92,7 @@
         <td><span class="${badge}">${r.status}</span></td>
       </tr>`;
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     document.getElementById('attGrid').innerHTML = html;
   }
 

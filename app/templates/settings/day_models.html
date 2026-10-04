@@ -7,7 +7,7 @@
   <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define shift structures with activity placements — start/end times and when breaks, lunches, and meetings occur within a shift.</p>
 </div>
 
-<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
   <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
   <button class="btn btn-primary" onclick="openModal()">+ Add Day Model</button>
 </div>
@@ -25,12 +25,12 @@
     <input type="hidden" id="f_id" value="">
     <div style="display:grid;gap:12px;">
       <label>Name<input id="f_name" class="form-input" required></label>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="form-grid-3" style="gap:12px;">
         <label>Start Time<input id="f_start_time" type="time" class="form-input" value="08:00"></label>
         <label>End Time<input id="f_end_time" type="time" class="form-input" value="16:30"></label>
         <label>Paid Hours<input id="f_paid_hours" type="number" step="0.5" class="form-input" value="8"></label>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <label>Day Type
           <select id="f_day_type" class="form-input">
             <option value="any">Any</option>

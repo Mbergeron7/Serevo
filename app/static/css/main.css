@@ -616,6 +616,46 @@ footer {
   .dashboard h1 { font-size: 1.2rem; }
 }
 
+/* ── Responsive form grids ─────────────── */
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+.form-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; }
+.form-grid-7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: .5rem; }
+
+@media (max-width: 768px) {
+  .form-grid-2,
+  .form-grid-3,
+  .form-grid-4 { grid-template-columns: 1fr; }
+  .form-grid-7 { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+
+  /* ── mobile button sizing ── */
+  .btn-sm { min-height: 36px; padding: 8px 12px; font-size: .8rem; }
+  .btn-xs { min-height: 32px; padding: 6px 10px; }
+
+  /* ── tab bars scroll on mobile ── */
+  .tab-strip { overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .tab-strip a, .tab-strip button { white-space: nowrap; }
+
+  /* ── flex rows wrap on mobile ── */
+  .flex-wrap-mobile { flex-wrap: wrap !important; }
+
+  /* ── dialogs ── */
+  dialog { width: 90vw !important; max-width: 440px; }
+
+  /* ── search results fixed positioning on mobile ── */
+  #searchResults {
+    position: fixed !important;
+    left: 16px !important;
+    right: 16px !important;
+    top: 56px !important;
+    width: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .form-grid-2 { grid-template-columns: 1fr; }
+}
+
 /* ── Sortable table headers ─────────────── */
 table.sortable thead th { cursor: pointer; user-select: none; white-space: nowrap; }
 table.sortable thead th:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); }

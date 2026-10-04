@@ -22,7 +22,7 @@
   <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage LOBs and workload groups — configure business hours, assign activities, and set scheduling parameters.</p>
 </div>
 
-<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
   <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
   <button class="btn btn-primary" onclick="openModal()">+ Add Planning Unit</button>
 </div>
@@ -41,7 +41,7 @@
       <h3 id="modalTitle" style="margin:0;">Add Planning Unit</h3>
       <button type="button" onclick="document.getElementById('editModal').close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
     </div>
-    <div id="tabBar" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
+    <div id="tabBar" class="tab-strip" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
       <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
       <button class="tab-btn" onclick="switchTab('hours')" data-tab="hours">Business Hours</button>
       <button class="tab-btn" onclick="switchTab('activities')" data-tab="activities">Activities</button>
@@ -57,7 +57,7 @@
         <div style="display:grid;gap:12px;">
           <label>Name <span class="req">*</span><input id="f_name" class="form-input" required placeholder="e.g. Customer Service"></label>
           <label>Description<input id="f_description" class="form-input" placeholder="Optional description"></label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label>Timezone
               <select id="f_timezone" class="form-input tz-select">
                 <option value="America/New_York">America/New_York (ET)</option>

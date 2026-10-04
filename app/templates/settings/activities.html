@@ -7,7 +7,7 @@
   <p style="color:var(--text-muted);margin:0.25rem 0 0;">Activity codes for scheduling — configure type, behavior, external mapping, skills, and subactivities.</p>
 </div>
 
-<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
   <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
   <button class="btn btn-primary" onclick="openModal()">+ Add Activity</button>
 </div>
@@ -27,7 +27,7 @@
       <button type="button" onclick="document.getElementById('editModal').close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
     </div>
     <!-- Tabs -->
-    <div id="tabBar" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
+    <div id="tabBar" class="tab-strip" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
       <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
       <button class="tab-btn" onclick="switchTab('behavior')" data-tab="behavior">Behavior</button>
       <button class="tab-btn" onclick="switchTab('subactivities')" data-tab="subactivities">Subactivities</button>
@@ -43,15 +43,15 @@
       <!-- ── TAB: General ── -->
       <div class="tab-panel active" data-panel="general">
         <div style="display:grid;gap:12px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label>Label <span class="req">*</span><input id="f_label" class="form-input" required placeholder="e.g. SS Sales EN"></label>
             <label>Code<input id="f_code" class="form-input" placeholder="Auto from label"></label>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label>Official Name<input id="f_official_name" class="form-input" placeholder="Full official name"></label>
             <label>Abbreviation<input id="f_abbreviation" class="form-input" placeholder="e.g. SSEN" maxlength="20"></label>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div class="form-grid-3" style="gap:12px;">
             <label>Color<input id="f_color" type="color" value="#6b7280" class="form-input" style="height:38px;padding:2px;"></label>
             <label>Shortcut Key<input id="f_shortcut" class="form-input" placeholder="e.g. S" maxlength="10"></label>
             <label>Sort Order<input id="f_sort_order" type="number" class="form-input" value="0" min="0"></label>
@@ -71,7 +71,7 @@
           <!-- Activity Category -->
           <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
             <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Category</legend>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-grid-2" style="gap:12px;">
               <label class="cat-card" id="catStatusLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--accent);border-radius:6px;">
                 <input type="radio" name="activity_category" id="f_cat_status" value="status" checked onchange="updateCategoryUI()">
                 <div><strong style="font-size:0.85rem;">Status</strong><br><span style="font-size:0.72rem;color:var(--text-muted);">Agent states — break, coaching</span></div>
@@ -82,7 +82,7 @@
               </label>
             </div>
           </fieldset>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_productive" type="checkbox" checked> Productive</label>
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
           </div>
@@ -93,7 +93,7 @@
       <div class="tab-panel" data-panel="behavior">
         <div style="display:grid;gap:14px;">
           <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Scheduling behavior flags — control how this activity is treated by the optimizer and agent self-service.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-grid-2" style="gap:10px;">
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_replaceable" type="checkbox" checked> Replaceable</label>
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_plannable" type="checkbox" checked> Plannable</label>
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_comply_rest_period" type="checkbox" checked> Comply with rest period</label>
@@ -104,7 +104,7 @@
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_special_handling" type="checkbox"> Special handling in optimizer</label>
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_can_be_day_status" type="checkbox"> Can be a day status</label>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label>Importance (0-100)<input id="f_importance" type="number" class="form-input" value="50" min="0" max="100"></label>
             <label>Priority (0-100)<input id="f_priority" type="number" class="form-input" value="50" min="0" max="100"></label>
           </div>
@@ -115,7 +115,7 @@
       <div class="tab-panel" data-panel="subactivities">
         <div style="display:grid;gap:12px;">
           <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Group language-based or skill-based subactivities under a parent. Subactivities can only be assigned to Presence-type activities.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_multi_activity" type="checkbox" onchange="toggleMultiFields()"> This is a Multi-Activity (parent)</label>
             <label id="parentLabel">Parent Activity
               <select id="f_parent_id" class="form-input">
@@ -172,13 +172,13 @@
       <div class="tab-panel" data-panel="placement">
         <div style="display:grid;gap:12px;">
           <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Auto-placement rules for the schedule optimizer.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-grid-2" style="gap:12px;">
             <label>Offset (mins from shift start)<input id="f_offset_mins" type="number" class="form-input" min="0" placeholder="e.g. 120"></label>
             <label>Duration (mins)<input id="f_duration_mins" type="number" class="form-input" min="1" placeholder="e.g. 15"></label>
           </div>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_flexible" type="checkbox" onchange="toggleWindow()"> Flexible (stagger within window)</label>
           <div id="windowRow" style="display:none;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-grid-2" style="gap:12px;">
               <label>Window Start (mins)<input id="f_window_start_mins" type="number" class="form-input" min="0" placeholder="e.g. 90"></label>
               <label>Window End (mins)<input id="f_window_end_mins" type="number" class="form-input" min="0" placeholder="e.g. 150"></label>
             </div>

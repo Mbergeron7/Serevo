@@ -7,7 +7,7 @@
   <p style="color:var(--text-muted);margin:0.25rem 0 0;">Employment contract templates — define work hours, scheduling constraints, and AutoScheduler parameters. Assign to employees.</p>
 </div>
 
-<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
   <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
   <button class="btn btn-primary" onclick="openModal()">+ Add Contract</button>
 </div>
@@ -28,7 +28,7 @@
   <div style="padding:20px 24px 0;">
     <h3 id="modalTitle" style="margin:0 0 12px;">Add Contract</h3>
     <!-- Tabs -->
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);">
+    <div class="tab-strip" style="display:flex;gap:0;border-bottom:2px solid var(--border);">
       <button class="tab-btn active" onclick="switchTab('general',this)">General</button>
       <button class="tab-btn" onclick="switchTab('worktime',this)">Work Time</button>
       <button class="tab-btn" onclick="switchTab('scheduling',this)">Scheduling</button>
@@ -40,12 +40,12 @@
 
     <!-- ── GENERAL TAB ── -->
     <div id="tab-general" class="tab-panel">
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;">
+      <div class="form-grid-3" style="gap:12px;">
         <label>Name <input id="f_name" class="form-input" required></label>
         <label>Abbreviation <input id="f_abbreviation" class="form-input" maxlength="50"></label>
         <label>Color <input id="f_color" type="color" class="form-input" value="#000000" style="height:38px;"></label>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px;">
+      <div class="form-grid-3" style="gap:12px;margin-top:12px;">
         <label>Contract Type
           <select id="f_contract_type" class="form-input">
             <option value="full_time">Full-Time</option>
@@ -64,12 +64,12 @@
       </div>
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
         <legend style="font-weight:600;font-size:.9rem;">Break & Legacy Settings</legend>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="form-grid-3" style="gap:12px;">
           <label>Break (min) <input id="f_break_duration_mins" type="number" class="form-input" value="30"></label>
           <label>Break After (hrs) <input id="f_break_after_hours" type="number" step="0.5" class="form-input" value="4"></label>
           <label>Lunch (min) <input id="f_lunch_duration_mins" type="number" class="form-input" value="30"></label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-2" style="gap:12px;margin-top:10px;">
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_overtime_eligible" type="checkbox" checked> Overtime Eligible</label>
           <label>Linked Schedule Rule
             <select id="f_schedule_rule_id" class="form-input">
@@ -90,12 +90,12 @@
     <div id="tab-worktime" class="tab-panel" style="display:none;">
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;">
         <legend style="font-weight:600;font-size:.9rem;">Work Time Guidelines</legend>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="form-grid-3" style="gap:12px;">
           <label>Daily Min (hrs) <input id="f_daily_hours_min" type="number" step="0.25" class="form-input"></label>
           <label>Daily Target (hrs) <input id="f_daily_hours_target" type="number" step="0.25" class="form-input"></label>
           <label>Daily Max (hrs) <input id="f_daily_hours_max" type="number" step="0.25" class="form-input"></label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Weekly Min (hrs) <input id="f_weekly_hours_min" type="number" step="0.5" class="form-input"></label>
           <label>Weekly Target (hrs) <input id="f_weekly_hours_target" type="number" step="0.5" class="form-input" value="40"></label>
           <label>Weekly Max (hrs) <input id="f_weekly_hours" type="number" step="0.5" class="form-input" value="40"></label>
@@ -106,7 +106,7 @@
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
         <legend style="font-weight:600;font-size:.9rem;">Work Hours Per Day</legend>
         <p style="color:var(--text-muted);font-size:.85rem;margin:0 0 10px;">Optional per-day hour overrides (HH:MM format, e.g. 08:30). Leave blank to use daily target.</p>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">
+        <div class="form-grid-7" style="gap:8px;">
           <label style="text-align:center;font-size:.85rem;">Mon<input id="f_work_hours_mon" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
           <label style="text-align:center;font-size:.85rem;">Tue<input id="f_work_hours_tue" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
           <label style="text-align:center;font-size:.85rem;">Wed<input id="f_work_hours_wed" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
@@ -122,17 +122,17 @@
     <div id="tab-scheduling" class="tab-panel" style="display:none;">
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;">
         <legend style="font-weight:600;font-size:.9rem;">AutoScheduler Parameters</legend>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-grid-2" style="gap:12px;">
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_use_target_work_times" type="checkbox"> Use Target Work Times</label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_schedule_after_day_off" type="checkbox"> Schedule After Day Off</label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Min Days Off/Wk <input id="f_min_days_off_per_week" type="number" class="form-input" min="0" max="7"></label>
           <label>Min Consec Days Off/Wk <input id="f_min_consec_days_off_week" type="number" class="form-input" min="0"></label>
           <label>Max Consec Days Off <input id="f_max_consecutive_days_off" type="number" class="form-input" min="0"></label>
           <label>Max Consec Days <input id="f_max_consecutive_days" type="number" class="form-input" value="7" min="1"></label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Min Days/Wk <input id="f_min_days_per_week" type="number" class="form-input" min="0" max="7"></label>
           <label>Max Days/Wk <input id="f_max_days_per_week" type="number" class="form-input" value="6" min="1" max="7"></label>
           <label>Weeks Max 1 Sat <input id="f_weeks_max_1_sat" type="number" class="form-input" min="0"></label>
@@ -143,73 +143,73 @@
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
         <legend style="font-weight:600;font-size:.9rem;">Scheduling Parameters</legend>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
+        <div class="form-grid-4" style="gap:12px;">
           <label>Max Saturdays/Mo <input id="f_max_saturdays_per_month" type="number" class="form-input" min="0"></label>
           <label>Max Sundays/Mo <input id="f_max_sundays_per_month" type="number" class="form-input" min="0"></label>
           <label>Min Net Work Hrs/Day <input id="f_min_net_work_hours_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Max Net Work Hrs/Day <input id="f_max_net_work_hours_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Rest Between Workdays <input id="f_rest_between_workdays" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Max Activity Duration <input id="f_max_activity_duration" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Min Gap Activities <input id="f_min_gap_between_activities" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Max Gap Activities <input id="f_max_gap_between_activities" class="form-input" placeholder="HH:MM" maxlength="5"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_illness" type="checkbox"> Exclude Illness</label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_vacation" type="checkbox"> Exclude Vacation</label>
           <label>Max Shifts/Day <input id="f_max_shifts_per_day" type="number" class="form-input" min="1"></label>
           <label>Min Weekends Off/Mo <input id="f_min_weekends_off_month" type="number" class="form-input" min="0"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-3" style="gap:12px;margin-top:10px;">
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_per_day_flag" type="checkbox"> Max Work Hrs/Day Flag</label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_include_activities" type="checkbox"> Include Activities</label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_include_day_models" type="checkbox"> Include Day Models</label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Max Working Days/Wk <input id="f_max_working_days_per_week" type="number" class="form-input" min="0" max="7"></label>
           <label>Max Consec Working Days <input id="f_max_consecutive_working_days" type="number" class="form-input" min="0"></label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_illness_consec" type="checkbox"> Excl Illness (Consec)</label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_vacation_consec" type="checkbox"> Excl Vacation (Consec)</label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Min Consec Days Off (Sched) <input id="f_min_consec_days_off_week_sched" type="number" class="form-input" min="0"></label>
           <label>Max Work Hrs/24h <input id="f_max_work_hours_24h" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Min Days Off (Sat Work) <input id="f_min_days_off_sat_work" type="number" class="form-input" min="0"></label>
           <label>Min Days Off (Sun Work) <input id="f_min_days_off_sun_work" type="number" class="form-input" min="0"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-3" style="gap:12px;margin-top:10px;">
           <label>Overtime Threshold <input id="f_overtime_threshold_consec" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Overtime Num Weeks <input id="f_overtime_num_weeks" type="number" class="form-input" min="0"></label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_no_schedule_on_holidays" type="checkbox"> No Schedule on Holidays</label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-3" style="gap:12px;margin-top:10px;">
           <label>Max Night Shifts/Wk <input id="f_max_night_shifts_week" type="number" class="form-input" min="0"></label>
           <label>Max Night Shifts/Mo <input id="f_max_night_shifts_month" type="number" class="form-input" min="0"></label>
           <label>Max Consec Night Shifts <input id="f_max_consec_night_shifts" type="number" class="form-input" min="0"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-3" style="gap:12px;margin-top:10px;">
           <label>Weekly Rest (No Full Day) <input id="f_weekly_rest_no_full_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Weekly Rest (Full Day) <input id="f_weekly_rest_full_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_avoid_overlap_sun_rule" type="checkbox"> Avoid Overlap Sun Rule</label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Max Activity Dur 2 <input id="f_max_activity_duration_2" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Max Sun+Holidays/Mo <input id="f_max_sun_holidays_month" type="number" class="form-input" min="0"></label>
           <label>Comp Eligibility Wknd (days) <input id="f_comp_eligibility_weekend" type="number" class="form-input" min="0"></label>
           <label>Max Day Models/24h <input id="f_max_day_models_24h" type="number" class="form-input" min="0"></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
           <label>Rest After Holiday (No Full) <input id="f_rest_after_holiday_no_full" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Rest After Holiday (Full) <input id="f_rest_after_holiday_full" class="form-input" placeholder="HH:MM" maxlength="5"></label>
           <label>Max Sundays in Row <input id="f_max_sundays_in_row" type="number" class="form-input" min="0"></label>

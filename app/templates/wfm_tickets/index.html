@@ -783,13 +783,13 @@ function renderWorkload(workload){
   const el=document.getElementById('workloadTable');
   const names=Object.keys(workload);
   if(!names.length){el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;">No assigned tickets.</p>';return;}
-  let html=`<table class="workload-table"><thead><tr><th>Analyst</th><th>Open</th><th>In Progress</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead><tbody>`;
+  let html=`<div class="data-table-wrapper"><table class="workload-table"><thead><tr><th>Analyst</th><th>Open</th><th>In Progress</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead><tbody>`;
   names.forEach(n=>{
     const w=workload[n];
     const total=w.open+w.in_progress+w.resolved+w.closed;
     html+=`<tr><td><strong>${esc(n)}</strong></td><td>${w.open}</td><td>${w.in_progress}</td><td>${w.resolved}</td><td>${w.closed}</td><td>${total}</td></tr>`;
   });
-  html+=`</tbody></table>`;
+  html+=`</tbody></table></div>`;
   el.innerHTML=html;
 }
 

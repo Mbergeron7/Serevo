@@ -105,7 +105,7 @@
               style="border:none;outline:none;background:transparent;font-size:.82rem;width:140px;color:var(--text-primary);padding:4px 0;">
             <kbd style="font-size:.6rem;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:1px 4px;line-height:1;">⌘K</kbd>
           </div>
-          <div id="searchResults" style="display:none;position:absolute;top:calc(100% + 4px);right:0;width:340px;max-height:400px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:1002;"></div>
+          <div id="searchResults" style="display:none;position:absolute;top:calc(100% + 4px);right:0;width:340px;max-width:calc(100vw - 32px);max-height:400px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:1002;"></div>
         </div>
         <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" style="position:relative;cursor:pointer;font-size:1.1rem;" title="Notifications">
           🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
@@ -120,7 +120,7 @@
 
   <!-- Notification panel -->
   {% if current_user %}
-  <div id="notifPanel" style="display:none;position:fixed;top:50px;right:16px;width:360px;max-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:1001;overflow:hidden;">
+  <div id="notifPanel" style="display:none;position:fixed;top:50px;right:16px;width:360px;max-width:calc(100vw - 32px);max-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:1001;overflow:hidden;">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
       <span style="font-weight:700;font-size:.9rem;">Notifications</span>
       <div style="display:flex;gap:8px;">
@@ -135,7 +135,7 @@
   {% endif %}
 
   <!-- Global toast container -->
-  <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:400px;"></div>
+  <div id="toastContainer" style="position:fixed;top:20px;right:20px;left:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:400px;margin-left:auto;"></div>
 
   <main>
     {% block content %}{% endblock %}

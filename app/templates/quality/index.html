@@ -96,7 +96,7 @@
 
 <!-- Dashboard Panel -->
 <div class="q-panel active" id="qp-dashboard">
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+  <div class="form-grid-2" style="gap:20px;">
     <div class="q-card">
       <div class="q-card-header">Score by Category</div>
       <div class="q-card-body" id="catBars">
@@ -199,7 +199,7 @@
     <h3 id="evalModalTitle">New Quality Evaluation</h3>
     <form id="evalForm" onsubmit="return saveEval(event)">
       <input type="hidden" id="eval_id">
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <div class="form-group">
           <label>Agent</label>
           <select id="eval_agent" required>
@@ -237,7 +237,7 @@
         </div>
       </div>
       <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);">
-      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+      <div class="form-grid-3" style="gap:12px;">
         <div class="form-group"><label>Overall Score</label><input type="number" id="eval_overall" step="0.1" min="0" max="100" required></div>
         <div class="form-group"><label>Greeting</label><input type="number" id="eval_greeting" step="0.1" min="0" max="100"></div>
         <div class="form-group"><label>Knowledge</label><input type="number" id="eval_knowledge" step="0.1" min="0" max="100"></div>
