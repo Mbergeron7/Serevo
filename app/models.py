@@ -1611,23 +1611,95 @@ class Activity(db.Model):
 class Contract(db.Model):
     """Contract templates defining work hours, break rules, and scheduling
     constraints. Employees reference a contract instead of having hours
-    scattered across their profile. Maps to WFM platform 'Contracts'."""
+    scattered across their profile. Maps to WFM platform 'Contracts'.
+    Enhanced to match PeopleWare contract depth: General, Work Time, Scheduling."""
     __tablename__ = "contracts"
 
     id                  = db.Column(db.Integer, primary_key=True)
     name                = db.Column(db.String(100), unique=True, nullable=False)
+    abbreviation        = db.Column(db.String(50), nullable=True)
+    color               = db.Column(db.String(7), default="#000000")
     contract_type       = db.Column(db.String(30), default="full_time")  # full_time | part_time | casual | temp
-    weekly_hours        = db.Column(db.Float, default=40.0)
-    daily_hours_min     = db.Column(db.Float, default=4.0)
-    daily_hours_max     = db.Column(db.Float, default=10.0)
     days_per_week       = db.Column(db.Integer, default=5)
-    min_days_per_week   = db.Column(db.Integer, default=3)
-    max_days_per_week   = db.Column(db.Integer, default=6)
-    break_duration_mins = db.Column(db.Integer, default=30)       # paid/unpaid break per shift
-    break_after_hours   = db.Column(db.Float, default=4.0)        # break required after X hours
+    workdays_calculation = db.Column(db.String(20), default="flexible")  # flexible | fixed
+
+    # ── Work Time Guidelines ──────────────────────────────────
+    daily_hours_min     = db.Column(db.Float, nullable=True)             # HH:MM stored as hours
+    daily_hours_target  = db.Column(db.Float, nullable=True)
+    daily_hours_max     = db.Column(db.Float, nullable=True)
+    weekly_hours_min    = db.Column(db.Float, nullable=True)
+    weekly_hours_target = db.Column(db.Float, default=40.0)
+    weekly_hours        = db.Column(db.Float, default=40.0)              # weekly_hours_max (kept name for compat)
+    monthly_hours_max   = db.Column(db.Float, nullable=True)
+
+    # ── Work Hours Per Day (optional per-day overrides, HH:MM as string) ──
+    work_hours_mon      = db.Column(db.String(5), nullable=True)
+    work_hours_tue      = db.Column(db.String(5), nullable=True)
+    work_hours_wed      = db.Column(db.String(5), nullable=True)
+    work_hours_thu      = db.Column(db.String(5), nullable=True)
+    work_hours_fri      = db.Column(db.String(5), nullable=True)
+    work_hours_sat      = db.Column(db.String(5), nullable=True)
+    work_hours_sun      = db.Column(db.String(5), nullable=True)
+
+    # ── AutoScheduler Parameters ──────────────────────────────
+    use_target_work_times     = db.Column(db.Boolean, default=False)
+    schedule_after_day_off    = db.Column(db.Boolean, default=False)
+    min_days_off_per_week     = db.Column(db.Integer, nullable=True)
+    min_consec_days_off_week  = db.Column(db.Integer, nullable=True)
+    max_consecutive_days_off  = db.Column(db.Integer, nullable=True)
+    max_consecutive_days      = db.Column(db.Integer, default=7)
+    min_days_per_week         = db.Column(db.Integer, nullable=True)
+    max_days_per_week         = db.Column(db.Integer, default=6)
+    weeks_max_1_sat           = db.Column(db.Integer, nullable=True)
+    min_rest_hours            = db.Column(db.Float, default=10.0)        # between shifts
+
+    # ── Scheduling Parameters (numbered rules from PeopleWare) ─
+    max_saturdays_per_month   = db.Column(db.Integer, nullable=True)
+    max_sundays_per_month     = db.Column(db.Integer, nullable=True)     # (kept for legacy)
+    min_net_work_hours_day    = db.Column(db.String(5), nullable=True)   # HH:MM
+    max_net_work_hours_day    = db.Column(db.String(5), nullable=True)
+    rest_between_workdays     = db.Column(db.String(5), nullable=True)   # HH:MM e.g. "10:00"
+    max_activity_duration     = db.Column(db.String(5), nullable=True)   # HH:MM e.g. "12:00"
+    exclude_illness           = db.Column(db.Boolean, default=False)
+    exclude_vacation          = db.Column(db.Boolean, default=False)
+    min_gap_between_activities = db.Column(db.String(5), nullable=True)  # HH:MM e.g. "00:30"
+    max_gap_between_activities = db.Column(db.String(5), nullable=True)  # HH:MM e.g. "01:15"
+    max_shifts_per_day        = db.Column(db.Integer, nullable=True)     # e.g. 2
+    max_work_hours_per_day_flag = db.Column(db.Boolean, default=False)
+    max_work_hours_include_activities = db.Column(db.Boolean, default=False)
+    max_work_hours_include_day_models = db.Column(db.Boolean, default=False)
+    min_weekends_off_month    = db.Column(db.Integer, nullable=True)
+    max_working_days_per_week = db.Column(db.Integer, nullable=True)
+    max_consecutive_working_days = db.Column(db.Integer, nullable=True)
+    exclude_illness_consec    = db.Column(db.Boolean, default=False)
+    exclude_vacation_consec   = db.Column(db.Boolean, default=False)
+    min_consec_days_off_week_sched = db.Column(db.Integer, nullable=True)
+    max_work_hours_24h        = db.Column(db.String(5), nullable=True)   # HH:MM
+    min_days_off_sat_work     = db.Column(db.Integer, nullable=True)
+    min_days_off_sun_work     = db.Column(db.Integer, nullable=True)
+    overtime_threshold_consec = db.Column(db.String(5), nullable=True)   # HH:MM
+    overtime_num_weeks        = db.Column(db.Integer, nullable=True)
+    no_schedule_on_holidays   = db.Column(db.Boolean, default=False)
+    max_night_shifts_week     = db.Column(db.Integer, nullable=True)
+    max_night_shifts_month    = db.Column(db.Integer, nullable=True)
+    max_consec_night_shifts   = db.Column(db.Integer, nullable=True)
+    weekly_rest_no_full_day   = db.Column(db.String(5), nullable=True)   # HH:MM
+    weekly_rest_full_day      = db.Column(db.String(5), nullable=True)   # HH:MM
+    avoid_overlap_sun_rule    = db.Column(db.Boolean, default=False)
+    max_activity_duration_2   = db.Column(db.String(5), nullable=True)   # excl. absence type
+    max_sun_holidays_month    = db.Column(db.Integer, nullable=True)
+    comp_eligibility_weekend  = db.Column(db.Integer, nullable=True)     # days
+    rest_after_holiday_no_full = db.Column(db.String(5), nullable=True)
+    rest_after_holiday_full   = db.Column(db.String(5), nullable=True)
+    max_sundays_in_row        = db.Column(db.Integer, nullable=True)
+    max_weekends_in_row       = db.Column(db.Integer, nullable=True)
+    max_day_models_24h        = db.Column(db.Integer, nullable=True)
+    max_work_time_deviation   = db.Column(db.String(5), nullable=True)
+
+    # ── Legacy / general ──────────────────────────────────────
+    break_duration_mins = db.Column(db.Integer, default=30)
+    break_after_hours   = db.Column(db.Float, default=4.0)
     lunch_duration_mins = db.Column(db.Integer, default=30)
-    min_rest_hours      = db.Column(db.Float, default=10.0)       # between shifts
-    max_consecutive_days = db.Column(db.Integer, default=6)
     overtime_eligible   = db.Column(db.Boolean, default=True)
     schedule_rule_id    = db.Column(db.Integer, db.ForeignKey("schedule_rules.id"), nullable=True)
     is_active           = db.Column(db.Boolean, default=True)
@@ -1637,22 +1709,9 @@ class Contract(db.Model):
 
     def to_dict(self):
         sr = self.schedule_rule
-        return {
-            "id": self.id, "name": self.name, "contract_type": self.contract_type,
-            "weekly_hours": self.weekly_hours,
-            "daily_hours_min": self.daily_hours_min, "daily_hours_max": self.daily_hours_max,
-            "days_per_week": self.days_per_week,
-            "min_days_per_week": self.min_days_per_week, "max_days_per_week": self.max_days_per_week,
-            "break_duration_mins": self.break_duration_mins,
-            "break_after_hours": self.break_after_hours,
-            "lunch_duration_mins": self.lunch_duration_mins,
-            "min_rest_hours": self.min_rest_hours,
-            "max_consecutive_days": self.max_consecutive_days,
-            "overtime_eligible": self.overtime_eligible,
-            "schedule_rule_id": self.schedule_rule_id,
-            "schedule_rule": sr.name if sr else "",
-            "is_active": self.is_active,
-        }
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        d["schedule_rule"] = sr.name if sr else ""
+        return d
 
 
 # ═══════════════════════════════════════════════════════════════

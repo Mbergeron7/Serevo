@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Contracts</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Employment contract templates — define weekly hours, break rules, and scheduling constraints. Assign to employees.</p>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Employment contract templates — define work hours, scheduling constraints, and AutoScheduler parameters. Assign to employees.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
@@ -14,19 +14,39 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Name</th><th>Type</th><th>Wkly Hrs</th><th>Days/Wk</th><th>Daily Min</th><th>Daily Max</th><th>Break</th><th>Lunch</th><th>Rest (hrs)</th><th>OT</th><th></th></tr>
+    <tr>
+      <th>Name</th><th>Abbrev</th><th>Type</th><th>Days/Wk</th>
+      <th>Weekly Hrs</th><th>Daily Target</th><th>Rest (hrs)</th>
+      <th>Active</th><th></th>
+    </tr>
   </thead>
   <tbody></tbody>
 </table></div>
 
-<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:600px;width:90vw;background:var(--surface);color:var(--text);">
-  <h3 id="modalTitle" style="margin:0 0 16px;">Add Contract</h3>
-  <form id="editForm" onsubmit="return false;">
+<!-- ═══ TABBED MODAL ═══ -->
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:0;max-width:820px;width:95vw;background:var(--surface);color:var(--text);max-height:90vh;display:flex;flex-direction:column;">
+  <div style="padding:20px 24px 0;">
+    <h3 id="modalTitle" style="margin:0 0 12px;">Add Contract</h3>
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);">
+      <button class="tab-btn active" onclick="switchTab('general',this)">General</button>
+      <button class="tab-btn" onclick="switchTab('worktime',this)">Work Time</button>
+      <button class="tab-btn" onclick="switchTab('scheduling',this)">Scheduling</button>
+    </div>
+  </div>
+
+  <div style="padding:20px 24px;overflow-y:auto;flex:1;">
     <input type="hidden" id="f_id" value="">
-    <div style="display:grid;gap:12px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Name<input id="f_name" class="form-input" required></label>
-        <label>Type
+
+    <!-- ── GENERAL TAB ── -->
+    <div id="tab-general" class="tab-panel">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;">
+        <label>Name <input id="f_name" class="form-input" required></label>
+        <label>Abbreviation <input id="f_abbreviation" class="form-input" maxlength="50"></label>
+        <label>Color <input id="f_color" type="color" class="form-input" value="#000000" style="height:38px;"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px;">
+        <label>Contract Type
           <select id="f_contract_type" class="form-input">
             <option value="full_time">Full-Time</option>
             <option value="part_time">Part-Time</option>
@@ -34,81 +54,270 @@
             <option value="temp">Temporary</option>
           </select>
         </label>
+        <label>Days / Week <input id="f_days_per_week" type="number" class="form-input" value="5" min="1" max="7"></label>
+        <label>Workdays Calculation
+          <select id="f_workdays_calculation" class="form-input">
+            <option value="flexible">Flexible</option>
+            <option value="fixed">Fixed</option>
+          </select>
+        </label>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-        <label>Weekly Hours<input id="f_weekly_hours" type="number" step="0.5" class="form-input" value="40"></label>
-        <label>Days/Week<input id="f_days_per_week" type="number" class="form-input" value="5" min="1" max="7"></label>
-        <label>Max Consecutive Days<input id="f_max_consecutive_days" type="number" class="form-input" value="6" min="1" max="14"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
-        <label>Daily Min Hrs<input id="f_daily_hours_min" type="number" step="0.5" class="form-input" value="4"></label>
-        <label>Daily Max Hrs<input id="f_daily_hours_max" type="number" step="0.5" class="form-input" value="10"></label>
-        <label>Min Days/Wk<input id="f_min_days_per_week" type="number" class="form-input" value="3" min="0" max="7"></label>
-        <label>Max Days/Wk<input id="f_max_days_per_week" type="number" class="form-input" value="6" min="1" max="7"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-        <label>Break (min)<input id="f_break_duration_mins" type="number" class="form-input" value="30"></label>
-        <label>Break After (hrs)<input id="f_break_after_hours" type="number" step="0.5" class="form-input" value="4"></label>
-        <label>Lunch (min)<input id="f_lunch_duration_mins" type="number" class="form-input" value="30"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Min Rest Between Shifts (hrs)<input id="f_min_rest_hours" type="number" step="0.5" class="form-input" value="10"></label>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:22px;"><input id="f_overtime_eligible" type="checkbox" checked> Overtime Eligible</label>
-      </div>
-      <label>Linked Schedule Rule
-        <select id="f_schedule_rule_id" class="form-input">
-          <option value="">— None —</option>
-          {% for sr in schedule_rules %}
-          <option value="{{ sr.id }}">{{ sr.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
+        <legend style="font-weight:600;font-size:.9rem;">Break & Legacy Settings</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <label>Break (min) <input id="f_break_duration_mins" type="number" class="form-input" value="30"></label>
+          <label>Break After (hrs) <input id="f_break_after_hours" type="number" step="0.5" class="form-input" value="4"></label>
+          <label>Lunch (min) <input id="f_lunch_duration_mins" type="number" class="form-input" value="30"></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_overtime_eligible" type="checkbox" checked> Overtime Eligible</label>
+          <label>Linked Schedule Rule
+            <select id="f_schedule_rule_id" class="form-input">
+              <option value="">— None —</option>
+              {% for sr in schedule_rules %}
+              <option value="{{ sr.id }}">{{ sr.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div style="margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
+        </div>
+      </fieldset>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
-      <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
-      <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+
+    <!-- ── WORK TIME TAB ── -->
+    <div id="tab-worktime" class="tab-panel" style="display:none;">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <legend style="font-weight:600;font-size:.9rem;">Work Time Guidelines</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <label>Daily Min (hrs) <input id="f_daily_hours_min" type="number" step="0.25" class="form-input"></label>
+          <label>Daily Target (hrs) <input id="f_daily_hours_target" type="number" step="0.25" class="form-input"></label>
+          <label>Daily Max (hrs) <input id="f_daily_hours_max" type="number" step="0.25" class="form-input"></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Weekly Min (hrs) <input id="f_weekly_hours_min" type="number" step="0.5" class="form-input"></label>
+          <label>Weekly Target (hrs) <input id="f_weekly_hours_target" type="number" step="0.5" class="form-input" value="40"></label>
+          <label>Weekly Max (hrs) <input id="f_weekly_hours" type="number" step="0.5" class="form-input" value="40"></label>
+          <label>Monthly Max (hrs) <input id="f_monthly_hours_max" type="number" step="0.5" class="form-input"></label>
+        </div>
+      </fieldset>
+
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
+        <legend style="font-weight:600;font-size:.9rem;">Work Hours Per Day</legend>
+        <p style="color:var(--text-muted);font-size:.85rem;margin:0 0 10px;">Optional per-day hour overrides (HH:MM format, e.g. 08:30). Leave blank to use daily target.</p>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">
+          <label style="text-align:center;font-size:.85rem;">Mon<input id="f_work_hours_mon" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Tue<input id="f_work_hours_tue" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Wed<input id="f_work_hours_wed" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Thu<input id="f_work_hours_thu" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Fri<input id="f_work_hours_fri" class="form-input" placeholder="08:00" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Sat<input id="f_work_hours_sat" class="form-input" placeholder="" maxlength="5" style="text-align:center;"></label>
+          <label style="text-align:center;font-size:.85rem;">Sun<input id="f_work_hours_sun" class="form-input" placeholder="" maxlength="5" style="text-align:center;"></label>
+        </div>
+      </fieldset>
     </div>
-  </form>
+
+    <!-- ── SCHEDULING TAB ── -->
+    <div id="tab-scheduling" class="tab-panel" style="display:none;">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <legend style="font-weight:600;font-size:.9rem;">AutoScheduler Parameters</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_use_target_work_times" type="checkbox"> Use Target Work Times</label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_schedule_after_day_off" type="checkbox"> Schedule After Day Off</label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Min Days Off/Wk <input id="f_min_days_off_per_week" type="number" class="form-input" min="0" max="7"></label>
+          <label>Min Consec Days Off/Wk <input id="f_min_consec_days_off_week" type="number" class="form-input" min="0"></label>
+          <label>Max Consec Days Off <input id="f_max_consecutive_days_off" type="number" class="form-input" min="0"></label>
+          <label>Max Consec Days <input id="f_max_consecutive_days" type="number" class="form-input" value="7" min="1"></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Min Days/Wk <input id="f_min_days_per_week" type="number" class="form-input" min="0" max="7"></label>
+          <label>Max Days/Wk <input id="f_max_days_per_week" type="number" class="form-input" value="6" min="1" max="7"></label>
+          <label>Weeks Max 1 Sat <input id="f_weeks_max_1_sat" type="number" class="form-input" min="0"></label>
+          <label>Min Rest Hours <input id="f_min_rest_hours" type="number" step="0.5" class="form-input" value="10"></label>
+        </div>
+      </fieldset>
+
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
+        <legend style="font-weight:600;font-size:.9rem;">Scheduling Parameters</legend>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
+          <label>Max Saturdays/Mo <input id="f_max_saturdays_per_month" type="number" class="form-input" min="0"></label>
+          <label>Max Sundays/Mo <input id="f_max_sundays_per_month" type="number" class="form-input" min="0"></label>
+          <label>Min Net Work Hrs/Day <input id="f_min_net_work_hours_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Max Net Work Hrs/Day <input id="f_max_net_work_hours_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Rest Between Workdays <input id="f_rest_between_workdays" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Max Activity Duration <input id="f_max_activity_duration" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Min Gap Activities <input id="f_min_gap_between_activities" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Max Gap Activities <input id="f_max_gap_between_activities" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_illness" type="checkbox"> Exclude Illness</label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_vacation" type="checkbox"> Exclude Vacation</label>
+          <label>Max Shifts/Day <input id="f_max_shifts_per_day" type="number" class="form-input" min="1"></label>
+          <label>Min Weekends Off/Mo <input id="f_min_weekends_off_month" type="number" class="form-input" min="0"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_per_day_flag" type="checkbox"> Max Work Hrs/Day Flag</label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_include_activities" type="checkbox"> Include Activities</label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_max_work_hours_include_day_models" type="checkbox"> Include Day Models</label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Max Working Days/Wk <input id="f_max_working_days_per_week" type="number" class="form-input" min="0" max="7"></label>
+          <label>Max Consec Working Days <input id="f_max_consecutive_working_days" type="number" class="form-input" min="0"></label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_illness_consec" type="checkbox"> Excl Illness (Consec)</label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_exclude_vacation_consec" type="checkbox"> Excl Vacation (Consec)</label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Min Consec Days Off (Sched) <input id="f_min_consec_days_off_week_sched" type="number" class="form-input" min="0"></label>
+          <label>Max Work Hrs/24h <input id="f_max_work_hours_24h" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Min Days Off (Sat Work) <input id="f_min_days_off_sat_work" type="number" class="form-input" min="0"></label>
+          <label>Min Days Off (Sun Work) <input id="f_min_days_off_sun_work" type="number" class="form-input" min="0"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Overtime Threshold <input id="f_overtime_threshold_consec" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Overtime Num Weeks <input id="f_overtime_num_weeks" type="number" class="form-input" min="0"></label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_no_schedule_on_holidays" type="checkbox"> No Schedule on Holidays</label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Max Night Shifts/Wk <input id="f_max_night_shifts_week" type="number" class="form-input" min="0"></label>
+          <label>Max Night Shifts/Mo <input id="f_max_night_shifts_month" type="number" class="form-input" min="0"></label>
+          <label>Max Consec Night Shifts <input id="f_max_consec_night_shifts" type="number" class="form-input" min="0"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Weekly Rest (No Full Day) <input id="f_weekly_rest_no_full_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Weekly Rest (Full Day) <input id="f_weekly_rest_full_day" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_avoid_overlap_sun_rule" type="checkbox"> Avoid Overlap Sun Rule</label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Max Activity Dur 2 <input id="f_max_activity_duration_2" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Max Sun+Holidays/Mo <input id="f_max_sun_holidays_month" type="number" class="form-input" min="0"></label>
+          <label>Comp Eligibility Wknd (days) <input id="f_comp_eligibility_weekend" type="number" class="form-input" min="0"></label>
+          <label>Max Day Models/24h <input id="f_max_day_models_24h" type="number" class="form-input" min="0"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <label>Rest After Holiday (No Full) <input id="f_rest_after_holiday_no_full" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Rest After Holiday (Full) <input id="f_rest_after_holiday_full" class="form-input" placeholder="HH:MM" maxlength="5"></label>
+          <label>Max Sundays in Row <input id="f_max_sundays_in_row" type="number" class="form-input" min="0"></label>
+          <label>Max Weekends in Row <input id="f_max_weekends_in_row" type="number" class="form-input" min="0"></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px;">
+          <label>Max Work Time Deviation <input id="f_max_work_time_deviation" class="form-input" placeholder="HH:MM" maxlength="5" style="max-width:200px;"></label>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--border);">
+    <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
+  </div>
 </dialog>
+
+<style>
+.tab-btn{background:none;border:none;padding:8px 16px;cursor:pointer;color:var(--text-muted);font-size:.9rem;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.tab-btn:hover{color:var(--text);}
+</style>
 
 <script>
 const DATA = {{ items | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
 
+/* ── Tab switching ── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  btn.classList.add('active');
+}
+
+/* ── All field IDs grouped by type ── */
+const STR_FIELDS = ['name','abbreviation','color','contract_type','workdays_calculation',
+  'work_hours_mon','work_hours_tue','work_hours_wed','work_hours_thu','work_hours_fri','work_hours_sat','work_hours_sun',
+  'min_net_work_hours_day','max_net_work_hours_day','rest_between_workdays','max_activity_duration',
+  'min_gap_between_activities','max_gap_between_activities','max_work_hours_24h',
+  'overtime_threshold_consec','weekly_rest_no_full_day','weekly_rest_full_day',
+  'max_activity_duration_2','rest_after_holiday_no_full','rest_after_holiday_full','max_work_time_deviation'];
+const FLOAT_FIELDS = ['weekly_hours','daily_hours_min','daily_hours_target','daily_hours_max',
+  'weekly_hours_min','weekly_hours_target','monthly_hours_max','min_rest_hours','break_after_hours'];
+const INT_FIELDS = ['days_per_week','min_days_per_week','max_days_per_week','break_duration_mins',
+  'lunch_duration_mins','max_consecutive_days','min_days_off_per_week','min_consec_days_off_week',
+  'max_consecutive_days_off','weeks_max_1_sat','max_saturdays_per_month','max_sundays_per_month',
+  'max_shifts_per_day','min_weekends_off_month','max_working_days_per_week','max_consecutive_working_days',
+  'min_consec_days_off_week_sched','min_days_off_sat_work','min_days_off_sun_work',
+  'overtime_num_weeks','max_night_shifts_week','max_night_shifts_month','max_consec_night_shifts',
+  'max_sun_holidays_month','comp_eligibility_weekend','max_sundays_in_row','max_weekends_in_row','max_day_models_24h'];
+const BOOL_FIELDS = ['overtime_eligible','use_target_work_times','schedule_after_day_off',
+  'exclude_illness','exclude_vacation','max_work_hours_per_day_flag',
+  'max_work_hours_include_activities','max_work_hours_include_day_models',
+  'exclude_illness_consec','exclude_vacation_consec','no_schedule_on_holidays','avoid_overlap_sun_rule','is_active'];
+const ALL_VALUE_FIELDS = [...STR_FIELDS, ...FLOAT_FIELDS, ...INT_FIELDS];
+
 function render() {
   tbody.innerHTML = '';
   DATA.forEach(r => {
+    const typeLabel = (r.contract_type||'full_time').replace(/_/g,' ');
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.name}</td>
-      <td><span class="status-badge">${r.contract_type.replace('_',' ')}</span></td>
-      <td>${r.weekly_hours}</td>
-      <td>${r.days_per_week}</td>
-      <td>${r.daily_hours_min}</td>
-      <td>${r.daily_hours_max}</td>
-      <td>${r.break_duration_mins} min</td>
-      <td>${r.lunch_duration_mins} min</td>
-      <td>${r.min_rest_hours}</td>
-      <td>${r.overtime_eligible ? '✓' : ''}</td>
-      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${r.color||'#000'};margin-right:6px;vertical-align:middle;"></span>${r.name}</td>
+      <td>${r.abbreviation||''}</td>
+      <td><span class="status-badge">${typeLabel}</span></td>
+      <td>${r.days_per_week||''}</td>
+      <td>${r.weekly_hours||''}</td>
+      <td>${r.daily_hours_target||r.daily_hours_min||''}</td>
+      <td>${r.min_rest_hours||''}</td>
+      <td>${r.is_active!==false ? '<span style="color:var(--success);">✓</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
+      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r).replace(/'/g,"&#39;")})'>Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
     tbody.appendChild(tr);
   });
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:2rem;">No contracts yet. Click "+ Add Contract" to create one.</td></tr>';
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No contracts yet. Click "+ Add Contract" to create one.</td></tr>';
 }
 
 function openModal(item) {
   document.getElementById('modalTitle').textContent = item ? 'Edit Contract' : 'Add Contract';
-  const fields = ['id','name','contract_type','weekly_hours','days_per_week','daily_hours_min','daily_hours_max',
-    'min_days_per_week','max_days_per_week','break_duration_mins','break_after_hours','lunch_duration_mins',
-    'min_rest_hours','max_consecutive_days','schedule_rule_id'];
-  fields.forEach(f => {
+  // Reset to General tab
+  switchTab('general', document.querySelector('.tab-btn'));
+
+  // Value fields
+  ALL_VALUE_FIELDS.forEach(f => {
     const el = document.getElementById('f_'+f);
-    if (el) el.value = item ? (item[f]!=null ? item[f] : '') : (el.defaultValue||'');
+    if (!el) return;
+    el.value = item ? (item[f] != null ? item[f] : '') : (el.defaultValue || '');
   });
-  document.getElementById('f_overtime_eligible').checked = item ? item.overtime_eligible : true;
-  if (!item) document.getElementById('f_id').value = '';
+  // Boolean fields
+  BOOL_FIELDS.forEach(f => {
+    const el = document.getElementById('f_'+f);
+    if (!el) return;
+    if (f === 'is_active') {
+      el.checked = item ? item[f] !== false : true;
+    } else if (f === 'overtime_eligible') {
+      el.checked = item ? item[f] !== false : true;
+    } else {
+      el.checked = item ? !!item[f] : false;
+    }
+  });
+  // Hidden id + schedule rule
+  document.getElementById('f_id').value = item ? item.id : '';
+  const srEl = document.getElementById('f_schedule_rule_id');
+  if (srEl) srEl.value = item ? (item.schedule_rule_id || '') : '';
   dlg.showModal();
 }
 
@@ -116,23 +325,39 @@ function editItem(item) { openModal(item); }
 
 async function saveItem() {
   const body = {};
-  ['id','name','contract_type','weekly_hours','days_per_week','daily_hours_min','daily_hours_max',
-   'min_days_per_week','max_days_per_week','break_duration_mins','break_after_hours','lunch_duration_mins',
-   'min_rest_hours','max_consecutive_days','schedule_rule_id'].forEach(f => {
+  body.id = document.getElementById('f_id').value || null;
+  // Value fields
+  ALL_VALUE_FIELDS.forEach(f => {
     const el = document.getElementById('f_'+f);
+    if (!el) return;
     body[f] = el.value || null;
   });
-  body.overtime_eligible = document.getElementById('f_overtime_eligible').checked;
-  const res = await fetch('/settings/contracts/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  // Boolean fields
+  BOOL_FIELDS.forEach(f => {
+    const el = document.getElementById('f_'+f);
+    if (!el) return;
+    body[f] = el.checked;
+  });
+  body.schedule_rule_id = document.getElementById('f_schedule_rule_id').value || null;
+
+  const res = await fetch('/settings/contracts/save', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+    body: JSON.stringify(body)
+  });
   const data = await res.json();
-  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+  if (data.success) { location.reload(); } else { alert(data.error || 'Save failed'); }
 }
 
 async function deleteItem(id) {
-  if (!confirm('Delete this contract?')) return;
-  const res = await fetch('/settings/contracts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  if (!confirm('Delete this contract? Employees linked to it will be unassigned.')) return;
+  const res = await fetch('/settings/contracts/delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+    body: JSON.stringify({id})
+  });
   const data = await res.json();
-  if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
+  if (data.success) { location.reload(); } else { alert(data.error || 'Delete failed'); }
 }
 
 render();

@@ -1517,16 +1517,59 @@ def contracts_save():
     try:
         item = Contract.query.get(int(d["id"])) if d.get("id") else Contract()
         item.name = d["name"]
-        item.contract_type = d.get("contract_type", "full_time")
-        for fld in ["weekly_hours", "daily_hours_min", "daily_hours_max", "break_after_hours",
-                     "min_rest_hours"]:
-            if d.get(fld) is not None:
+
+        # String fields
+        for fld in ["abbreviation", "color", "contract_type", "workdays_calculation",
+                     "work_hours_mon", "work_hours_tue", "work_hours_wed", "work_hours_thu",
+                     "work_hours_fri", "work_hours_sat", "work_hours_sun",
+                     "min_net_work_hours_day", "max_net_work_hours_day",
+                     "rest_between_workdays", "max_activity_duration",
+                     "min_gap_between_activities", "max_gap_between_activities",
+                     "max_work_hours_24h", "overtime_threshold_consec",
+                     "weekly_rest_no_full_day", "weekly_rest_full_day",
+                     "max_activity_duration_2", "rest_after_holiday_no_full",
+                     "rest_after_holiday_full", "max_work_time_deviation"]:
+            if fld in d:
+                setattr(item, fld, d[fld] or None)
+
+        # Float fields
+        for fld in ["weekly_hours", "daily_hours_min", "daily_hours_target", "daily_hours_max",
+                     "weekly_hours_min", "weekly_hours_target", "monthly_hours_max",
+                     "min_rest_hours", "break_after_hours"]:
+            if fld in d and d[fld] is not None and d[fld] != '':
                 setattr(item, fld, float(d[fld]))
+            elif fld in d:
+                setattr(item, fld, None)
+
+        # Integer fields
         for fld in ["days_per_week", "min_days_per_week", "max_days_per_week",
-                     "break_duration_mins", "lunch_duration_mins", "max_consecutive_days"]:
-            if d.get(fld) is not None:
+                     "break_duration_mins", "lunch_duration_mins", "max_consecutive_days",
+                     "min_days_off_per_week", "min_consec_days_off_week",
+                     "max_consecutive_days_off", "weeks_max_1_sat",
+                     "max_saturdays_per_month", "max_sundays_per_month",
+                     "max_shifts_per_day", "min_weekends_off_month",
+                     "max_working_days_per_week", "max_consecutive_working_days",
+                     "min_consec_days_off_week_sched", "min_days_off_sat_work",
+                     "min_days_off_sun_work", "overtime_num_weeks",
+                     "max_night_shifts_week", "max_night_shifts_month",
+                     "max_consec_night_shifts", "max_sun_holidays_month",
+                     "comp_eligibility_weekend", "max_sundays_in_row",
+                     "max_weekends_in_row", "max_day_models_24h"]:
+            if fld in d and d[fld] is not None and d[fld] != '':
                 setattr(item, fld, int(d[fld]))
-        item.overtime_eligible = bool(d.get("overtime_eligible", True))
+            elif fld in d:
+                setattr(item, fld, None)
+
+        # Boolean fields
+        for fld in ["overtime_eligible", "is_active", "use_target_work_times", "schedule_after_day_off",
+                     "exclude_illness", "exclude_vacation",
+                     "max_work_hours_per_day_flag", "max_work_hours_include_activities",
+                     "max_work_hours_include_day_models",
+                     "exclude_illness_consec", "exclude_vacation_consec",
+                     "no_schedule_on_holidays", "avoid_overlap_sun_rule"]:
+            if fld in d:
+                setattr(item, fld, bool(d[fld]))
+
         item.schedule_rule_id = int(d["schedule_rule_id"]) if d.get("schedule_rule_id") else None
         if not d.get("id"):
             db.session.add(item)
