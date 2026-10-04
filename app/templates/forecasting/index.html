@@ -114,6 +114,12 @@
   :root[data-theme="dark"] .heat-med  { background: #713f12; color: #fef08a; }
   :root[data-theme="dark"] .heat-high { background: #7f1d1d; color: #fecaca; }
 
+  /* Heat expandable rows */
+  .heat-lob-row:hover { background: var(--surface-hover, rgba(0,0,0,.03)); }
+  .heat-expand { font-size: .65rem; display: inline-block; transition: transform .15s; margin-right: 4px; }
+  .heat-lob-row.expanded .heat-expand { transform: rotate(90deg); }
+  .heat-activity-row td { background: var(--surface-alt, rgba(0,0,0,.02)); }
+
   /* ── Status / loading ──────────────────────── */
   .fc-status { font-size: .82rem; padding: 10px; margin-bottom: 14px;
     border-radius: 6px; display: none; }
@@ -471,7 +477,7 @@
 <!-- ═══ Requirements heatmap ═══ -->
 <div class="heatmap-section" id="heatmapSection" style="display:none;">
   <h2>Coverage Heatmap</h2>
-  <div class="chart-sub">Daily agents required by LOB — <span class="heat-low" style="padding:1px 8px;border-radius:3px;">Low</span> <span class="heat-med" style="padding:1px 8px;border-radius:3px;">Medium</span> <span class="heat-high" style="padding:1px 8px;border-radius:3px;">High</span></div>
+  <div class="chart-sub">Daily agents required by LOB — <span class="heat-low" style="padding:1px 8px;border-radius:3px;">Low</span> <span class="heat-med" style="padding:1px 8px;border-radius:3px;">Medium</span> <span class="heat-high" style="padding:1px 8px;border-radius:3px;">High</span> · Click a LOB row to see assigned activities</div>
   <div class="heat-table-wrap">
     <table class="heat-table" id="heatTable">
       <thead id="heatHead"></thead>
@@ -610,6 +616,7 @@
 const ALL_LOBS = {{ all_lobs | tojson }};
 let chartOffered = null, chartAht = null, chartReq = null;
 let forecastData = {};  // {lob: {daily, totals}}
+const lobActivities = {{ lob_activities | default({}) | tojson }};
 let activeLob = null;
 let currentView = 'yearly';
 let navAnchor = new Date();  // current navigation anchor date
@@ -1285,7 +1292,27 @@ function renderHeatmap() {
       cells += `<td class="${cls}">${val}</td>`;
     }
     const avg = cnt > 0 ? Math.round(sum / cnt * 10) / 10 : 0;
-    html += `<tr><td class="row-label">${lob}</td>${cells}<td style="font-weight:700;">${avg}</td></tr>`;
+    const acts = lobActivities[lob] || [];
+    const hasActs = acts.length > 0;
+    const expandIcon = hasActs ? '<span class="heat-expand">▶</span> ' : '';
+    html += `<tr class="${hasActs ? 'heat-lob-row' : ''}" data-lob="${lob}" ${hasActs ? 'onclick="toggleHeatActivities(this)" style="cursor:pointer;"' : ''}><td class="row-label">${expandIcon}${lob}</td>${cells}<td style="font-weight:700;">${avg}</td></tr>`;
+
+    // Activity sub-rows (hidden by default)
+    if (hasActs) {
+      for (const act of acts) {
+        const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${act.color};margin-right:6px;vertical-align:middle;"></span>`;
+        // Activities share the LOB's total proportionally for display
+        const actCount = acts.length;
+        let actCells = '';
+        for (const k of displayKeys) {
+          const r = lobAgg[lob][k];
+          const val = r ? Math.round((r.val / actCount) * 10) / 10 : 0;
+          actCells += `<td style="color:var(--text-muted);font-size:.85rem;">${val}</td>`;
+        }
+        const actAvg = cnt > 0 ? Math.round((sum / cnt / actCount) * 10) / 10 : 0;
+        html += `<tr class="heat-activity-row" data-parent="${lob}" style="display:none;"><td class="row-label" style="padding-left:28px;font-size:.85rem;">${dot}${act.name}</td>${actCells}<td style="font-size:.85rem;">${actAvg}</td></tr>`;
+      }
+    }
   }
 
   // Sum row
@@ -1312,6 +1339,14 @@ function heatClass(val, max) {
   if (pct < .33) return 'heat-low';
   if (pct < .66) return 'heat-med';
   return 'heat-high';
+}
+
+function toggleHeatActivities(row) {
+  const lob = row.dataset.lob;
+  const isExpanded = row.classList.toggle('expanded');
+  document.querySelectorAll(`.heat-activity-row[data-parent="${lob}"]`).forEach(r => {
+    r.style.display = isExpanded ? '' : 'none';
+  });
 }
 
 // ── Auto-load on page ready ─────────────────────

@@ -301,6 +301,27 @@
         <li><strong>Activities</strong> — the default activities during the shift</li>
       </ul>
       <p>Set up day models in <strong>Settings &rarr; Day Models</strong> before building schedules. You can create multiple day models for different shift types (morning, afternoon, evening, split shift, short day, etc.).</p>
+
+      <h3>Coverage Overlay</h3>
+      <p>In Daily View, a <strong>Coverage</strong> bar appears below the shift timeline showing staffing levels per 30-minute interval. Each bar displays <strong>scheduled/required</strong> counts with color coding:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><span style="color:#059669;font-weight:600;">Green</span> — adequately staffed (scheduled &ge; required)</li>
+        <li><span style="color:#d97706;font-weight:600;">Amber</span> — slightly understaffed (gap of 1–2)</li>
+        <li><span style="color:#dc2626;font-weight:600;">Red</span> — significantly understaffed (gap &gt; 2)</li>
+      </ul>
+      <p>Hover over any bar to see the exact numbers and gap for that interval.</p>
+
+      <h3>End-to-End: Creating a Full Schedule</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
+        <li><strong>Prerequisites</strong> — Ensure you have: a forecast generated for the target period, contracts configured for all employees, day models set up for each shift type, and activities assigned to your planning units.</li>
+        <li><strong>Check your forecast</strong> — Go to <em>Forecasting</em> and verify the agents-required numbers look right for the week you want to schedule. If needed, adjust using a scenario or reforecast.</li>
+        <li><strong>Navigate to Scheduling</strong> — Select the target planning unit (LOB) and switch to the desired view (Daily or Weekly).</li>
+        <li><strong>Auto-generate</strong> — Click <em>Generate</em>, select the date range and LOBs. The scheduler builds shifts respecting contracts, availability, and demand.</li>
+        <li><strong>Review coverage</strong> — In Daily View, check the Coverage overlay. Green bars mean you're covered; amber/red bars indicate gaps that need manual attention.</li>
+        <li><strong>Adjust manually</strong> — Click any shift to edit. Move agents to fill coverage gaps. Add individual shifts for specific intervals that are short-staffed.</li>
+        <li><strong>Publish</strong> — When coverage looks good across all days, click <em>Publish</em> to make the schedule visible to agents.</li>
+        <li><strong>Monitor</strong> — After publishing, use <em>Real-Time Management</em> to track adherence and make intraday adjustments as needed.</li>
+      </ol>
     </div>
   </div>
 
@@ -444,6 +465,22 @@
 
       <h3>Export</h3>
       <p>Use the <em>Export CSV</em> button in the interval detail table to download the reforecast data for offline analysis or sharing.</p>
+
+      <h3>Coverage Heatmap</h3>
+      <p>When viewing forecasts in <strong>Weekly</strong>, <strong>Monthly</strong>, or <strong>Yearly</strong> view, the Coverage Heatmap appears below the charts. It shows average daily agents required per LOB, color-coded from green (low demand) through yellow (medium) to red (high demand).</p>
+      <p><strong>Activity breakdown:</strong> Click any LOB row to expand and see the activities assigned to that planning unit. Each activity shows its share of the LOB's staffing requirement along with its color indicator. This lets you see which activities drive the most demand in each planning unit.</p>
+      <p>The <strong>TOTAL</strong> row at the bottom sums all LOBs for each period, giving you an enterprise-wide view of staffing needs over time.</p>
+
+      <h3>End-to-End: From Data to Forecast</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
+        <li><strong>Set up your planning units</strong> — Go to <em>Settings &rarr; Planning Units</em> and create a unit for each LOB. Assign activities and configure business hours.</li>
+        <li><strong>Import historical data</strong> — Upload at least 4–8 weeks of historical contact volumes via CSV or API connection. The more data, the better the forecast accuracy.</li>
+        <li><strong>Select forecast method</strong> — Choose a LOB, set a date range, and pick a forecast method. <em>Auto (Best Fit)</em> is recommended for your first run.</li>
+        <li><strong>Generate the forecast</strong> — Click <em>Generate</em>. The system produces interval-level predictions and calculates agents required using Erlang C.</li>
+        <li><strong>Review the heatmap</strong> — Switch to Weekly or Monthly view to see the Coverage Heatmap. Click LOB rows to verify which activities are assigned and their relative demand.</li>
+        <li><strong>Save a scenario</strong> — If satisfied, save the forecast as a named scenario (e.g., "Q1 Baseline") for comparison or to feed into scheduling.</li>
+        <li><strong>Monitor during the day</strong> — Use <em>Mid-Day Reforecast</em> when actual volumes diverge from the forecast. Set up <em>Variance Alerts</em> to catch significant deviations automatically.</li>
+      </ol>
     </div>
   </div>
 

@@ -46,14 +46,30 @@ def index():
     years = list(range(2024, now.year + 3))
 
     if user and user.get("is_demo"):
-        from app.demo_data import DEMO_LOBS
+        from app.demo_data import DEMO_LOBS, get_demo_planning_units_config
         all_lobs = sorted(DEMO_LOBS)
+        pu_config = get_demo_planning_units_config()
+        lob_activities = {}
+        for pu in pu_config:
+            # Filter to LOB activities only (exclude status activities like Break/Lunch)
+            acts = [a for a in pu.get("assigned_activities", [])]
+            lob_activities[pu["name"]] = acts
     else:
         from app.models import PlanningUnit
-        all_lobs = sorted([pu.name for pu in PlanningUnit.query.filter_by(is_active=True).all()])
+        units = PlanningUnit.query.filter_by(is_active=True).all()
+        all_lobs = sorted([pu.name for pu in units])
+        lob_activities = {}
+        for pu in units:
+            acts = []
+            for pa in pu.assigned_activities:
+                sc = pa.segment_code
+                if sc:
+                    acts.append({"id": sc.id, "name": sc.name, "color": sc.color or "#6b7280"})
+            lob_activities[pu.name] = acts
 
     return render_template("forecasting/index.html",
-        user=user, year=year, years=years, all_lobs=all_lobs)
+        user=user, year=year, years=years, all_lobs=all_lobs,
+        lob_activities=lob_activities)
 
 
 # ── View existing forecast data (API) ──────────────────────

@@ -1872,12 +1872,12 @@ function renderTimelineView(container) {
     });
     html += `</div>`; // timeline-body
 
-    // Requirements overlay bar chart — positioned to align with timeline
+    // Requirements overlay — combined bar + numerical display
     if (day.coverage && day.coverage.length) {
       const maxVal = Math.max(...day.coverage.map(c => Math.max(c.required, c.scheduled)), 1);
-      html += `<div class="req-overlay">
+      html += `<div class="req-overlay" style="height:52px;">
         <div class="req-overlay-inner" style="width:${180 + numHours * TL_PX_PER_HOUR}px">
-          <div class="tl-name-col" style="font-size:.68rem;color:var(--text-muted)">Req'd</div>
+          <div class="tl-name-col" style="font-size:.68rem;color:var(--text-muted)">Coverage</div>
           <div style="position:relative;flex:1;height:100%">`;
       day.coverage.forEach(c => {
         const h = parseInt(c.time.split(':')[0]);
@@ -1886,10 +1886,13 @@ function renderTimelineView(container) {
         if (totalMin < minH * 60 || totalMin >= maxH * 60) return;
         const left = ((totalMin - minH * 60) / 60) * TL_PX_PER_HOUR;
         const barW = TL_PX_PER_HOUR / 2;  // 30-min intervals
-        const barH = Math.round((c.required / maxVal) * 38);
+        const barH = Math.round((c.required / maxVal) * 32);
         const barColor = c.gap >= 0 ? '#059669' : (c.gap >= -2 ? '#d97706' : '#dc2626');
-        html += `<div style="position:absolute;left:${left}px;bottom:0;width:${barW}px;height:${barH}px;background:color-mix(in srgb, ${barColor} 40%, transparent)"
-          title="${c.time}: need ${c.required}, have ${c.scheduled} (${c.gap >= 0 ? '+' : ''}${c.gap})"></div>`;
+        const gapSign = c.gap >= 0 ? '+' : '';
+        html += `<div style="position:absolute;left:${left}px;bottom:0;width:${barW}px;height:${barH}px;background:color-mix(in srgb, ${barColor} 35%, transparent);border-top:2px solid ${barColor};display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:visible;"
+          title="${c.time}: need ${c.required}, have ${c.scheduled} (${gapSign}${c.gap})">
+          <span style="font-size:.58rem;font-weight:700;color:${barColor};position:absolute;top:-12px;white-space:nowrap;">${c.scheduled}/${c.required}</span>
+        </div>`;
       });
       html += `</div></div></div>`;
     }
