@@ -692,6 +692,143 @@ def _resolve_employee_db_id(employee_ext_id):
         return None
 
 
+def _get_wtpm_eligible_shifts(employee_db_id, date_obj):
+    """
+    Resolve the Work Time Pattern Model chain for an employee on a given date.
+
+    Chain: Employee → EmployeeWorkTimePattern → WorkTimePatternModel
+           → (cycle to current week's) WeekTimePattern → eligible DayModels
+
+    The WTPM may contain multiple WeekTimePatterns that cycle. The reference_date
+    on the EmployeeWorkTimePattern determines which week in the cycle we're on.
+
+    Returns:
+        list of DayModel dicts [{name, start_time, end_time, paid_hours, total_hours,
+                                  model_type, color, activities_json, day_model_id}]
+        or empty list if no WTPM assigned or no eligible day models for this date.
+    """
+    try:
+        import json as _json
+        from app.models import (EmployeeWorkTimePattern, WorkTimePatternModel,
+                                WorkTimePatternModelPattern, WeekTimePattern,
+                                WeekTimePatternDayModel, DayModel)
+
+        # Find the employee's active WTPM assignment
+        assignment = EmployeeWorkTimePattern.query.filter_by(
+            employee_id=employee_db_id
+        ).first()
+        if not assignment:
+            return []
+
+        # Check validity period
+        if assignment.valid_from and date_obj < assignment.valid_from:
+            return []
+        if assignment.valid_to and date_obj > assignment.valid_to:
+            return []
+
+        wtpm = assignment.work_time_pattern_model
+        if not wtpm or not wtpm.is_active:
+            return []
+
+        # Get the ordered week time patterns for this WTPM
+        pattern_links = WorkTimePatternModelPattern.query.filter_by(
+            work_time_pattern_model_id=wtpm.id
+        ).order_by(WorkTimePatternModelPattern.position).all()
+
+        if not pattern_links:
+            return []
+
+        # Determine which week pattern to use based on cycle position
+        ref_date = assignment.reference_date or date_obj
+        days_elapsed = (date_obj - ref_date).days
+        if days_elapsed < 0:
+            days_elapsed = 0
+        weeks_elapsed = days_elapsed // 7
+        cycle_length = len(pattern_links)
+        current_week_idx = weeks_elapsed % cycle_length
+
+        wtp_link = pattern_links[current_week_idx]
+        wtp = wtp_link.week_time_pattern
+        if not wtp or not wtp.is_active:
+            return []
+
+        # Get eligible day models from this week time pattern
+        dm_links = WeekTimePatternDayModel.query.filter_by(
+            week_time_pattern_id=wtp.id
+        ).order_by(WeekTimePatternDayModel.position).all()
+
+        if not dm_links:
+            return []
+
+        # Filter day models by day_type matching today
+        day_of_week = date_obj.weekday()  # 0=Mon ... 6=Sun
+        if day_of_week < 5:
+            today_type = "weekday"
+        elif day_of_week == 5:
+            today_type = "saturday"
+        else:
+            today_type = "sunday"
+
+        eligible = []
+        for link in dm_links:
+            dm = link.day_model
+            if not dm or not dm.is_active:
+                continue
+            # day_type filter: "any" matches everything, otherwise must match
+            if dm.day_type and dm.day_type != "any" and dm.day_type != today_type:
+                continue
+            eligible.append({
+                "day_model_id": dm.id,
+                "name": dm.name,
+                "abbreviation": dm.abbreviation or "",
+                "start_time": dm.start_time,
+                "end_time": dm.end_time,
+                "paid_hours": dm.paid_hours or 8.0,
+                "total_hours": dm.total_hours or 8.5,
+                "model_type": dm.model_type or "Fixed",
+                "color": dm.color or "#4472C4",
+                "activities_json": dm.activities_json or "[]",
+            })
+
+        return eligible
+
+    except Exception as e:
+        log.warning(f"WTPM resolution error for employee {employee_db_id}: {e}")
+        return []
+
+
+def _get_employee_quartile(employee_db_id, planning_unit_id=None):
+    """
+    Get an employee's quartile assignment (1-4).
+    Returns the quartile number or None if not assigned.
+    """
+    try:
+        from app.models import EmployeeQuartile
+        q = EmployeeQuartile.query.filter_by(employee_id=employee_db_id)
+        if planning_unit_id:
+            q = q.filter(
+                (EmployeeQuartile.planning_unit_id == planning_unit_id) |
+                (EmployeeQuartile.planning_unit_id.is_(None))
+            )
+        row = q.first()
+        return row.quartile if row else None
+    except Exception:
+        return None
+
+
+def _has_quartile_assignments(planning_unit_id):
+    """Check if any employees in this planning unit have quartile assignments."""
+    try:
+        from app.models import EmployeeQuartile
+        count = EmployeeQuartile.query.filter(
+            (EmployeeQuartile.planning_unit_id == planning_unit_id) |
+            (EmployeeQuartile.planning_unit_id.is_(None))
+        ).count()
+        return count > 0
+    except Exception:
+        return False
+
+
 def _get_availability(employee_name, date_obj, availability_map=None, employee_ext_id=None, _db_id_cache=None):
     """
     Check if an employee is available on a given date and what
@@ -1004,22 +1141,45 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 hours = rot_shift.get("hours", shift_length_hrs)
                 stype = rot_shift.get("type", "full")
             else:
-                start = avail.get("shift_start") or "08:00"
-                # Apply earliest_start constraint
-                if avail.get("earliest_start"):
-                    es_min = _time_to_minutes(avail["earliest_start"])
-                    if _time_to_minutes(start) < es_min:
-                        start = avail["earliest_start"]
-                if avail["day_type"] == "half":
-                    end_mins = _time_to_minutes(start) + (shift_length_mins // 2)
-                    end = _minutes_to_time(end_mins)
-                    hours = shift_length_hrs / 2
-                    stype = "half"
-                else:
-                    end_mins = _time_to_minutes(start) + shift_length_mins
-                    end = avail.get("shift_end") or _minutes_to_time(end_mins)
-                    hours = shift_length_hrs
-                    stype = "full"
+                # Check WTPM eligible shifts
+                wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj) if db_id else []
+                if wtpm_shifts:
+                    # Filter by availability, pick first eligible
+                    chosen_dm = None
+                    for dm in wtpm_shifts:
+                        dm_start_min = _time_to_minutes(dm["start_time"])
+                        dm_end_min = _time_to_minutes(dm["end_time"])
+                        if avail.get("earliest_start") and dm_start_min < _time_to_minutes(avail["earliest_start"]):
+                            continue
+                        if avail.get("latest_end") and dm_end_min > _time_to_minutes(avail["latest_end"]):
+                            continue
+                        chosen_dm = dm
+                        break
+                    if chosen_dm:
+                        start = chosen_dm["start_time"]
+                        end = chosen_dm["end_time"]
+                        hours = chosen_dm.get("total_hours", shift_length_hrs)
+                        stype = "full"
+                    else:
+                        wtpm_shifts = []  # fall through to standard
+
+                if not wtpm_shifts:
+                    start = avail.get("shift_start") or "08:00"
+                    # Apply earliest_start constraint
+                    if avail.get("earliest_start"):
+                        es_min = _time_to_minutes(avail["earliest_start"])
+                        if _time_to_minutes(start) < es_min:
+                            start = avail["earliest_start"]
+                    if avail["day_type"] == "half":
+                        end_mins = _time_to_minutes(start) + (shift_length_mins // 2)
+                        end = _minutes_to_time(end_mins)
+                        hours = shift_length_hrs / 2
+                        stype = "half"
+                    else:
+                        end_mins = _time_to_minutes(start) + shift_length_mins
+                        end = avail.get("shift_end") or _minutes_to_time(end_mins)
+                        hours = shift_length_hrs
+                        stype = "full"
                 # Cap end time at latest_end
                 if avail.get("latest_end"):
                     le_min = _time_to_minutes(avail["latest_end"])
@@ -1134,17 +1294,56 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             continue
         emp_avails.append((emp, avail, rot_shift))
 
+    # ── Resolve WTPM eligible shifts and quartile for each employee ──
+    # Enrich emp_avails with WTPM day models and quartile
+    pu_id = None
+    try:
+        from app.models import PlanningUnit, db as _db
+        from app.data_source import normalize_lob
+        _lob_norm = normalize_lob(lob.strip()).lower()
+        _pu = PlanningUnit.query.filter(
+            _db.func.lower(PlanningUnit.name) == _lob_norm
+        ).first()
+        pu_id = _pu.id if _pu else None
+    except Exception:
+        pass
+
+    use_quartiles = _has_quartile_assignments(pu_id) if pu_id else False
+
+    enriched = []  # (emp, avail, rot_shift, wtpm_shifts, quartile)
+    for emp, avail, rot_shift in emp_avails:
+        ext_id = emp.get("employee_id")
+        db_id = _db_id_cache.get(ext_id) if ext_id else None
+        if db_id is None and ext_id:
+            db_id = _resolve_employee_db_id(ext_id)
+
+        # WTPM eligible day models (only used if no rotation/shift sequence)
+        wtpm_shifts = []
+        if not rot_shift and db_id:
+            wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj)
+
+        quartile = None
+        if use_quartiles and db_id:
+            quartile = _get_employee_quartile(db_id, pu_id)
+
+        enriched.append((emp, avail, rot_shift, wtpm_shifts, quartile))
+
     # Sort employees for optimal placement:
-    # 1. Restricted employees first (rotation, fixed start, half day) — fewer options
-    # 2. Among unrestricted: highest proficiency first — place best agents in peak gaps
-    emp_avails.sort(key=lambda x: (
-        0 if x[2] or x[1].get("shift_start") or x[1]["day_type"] == "half" else 1,
-        -_emp_effectiveness(x[0]),  # highest effectiveness first within group
+    # 1. Rotation/shift sequence employees first (static, fewest options)
+    # 2. WTPM-assigned employees next (constrained to eligible day models)
+    # 3. Unrestricted employees last
+    # Within each group: if quartiles enabled, Q1 first (lower = better)
+    # Then by highest proficiency
+    enriched.sort(key=lambda x: (
+        0 if x[2] else (1 if x[3] else 2),              # rot > wtpm > unrestricted
+        0 if x[1].get("shift_start") or x[1]["day_type"] == "half" else 1,
+        (x[4] or 5) if use_quartiles else 0,             # Q1=1 first, unassigned=5 last
+        -_emp_effectiveness(x[0]),                        # highest effectiveness first
     ))
 
     shifts = []
-    for emp, avail, rot_shift in emp_avails:
-        # ── Rotation-assigned shift takes priority ──
+    for emp, avail, rot_shift, wtpm_shifts, quartile in enriched:
+        # ── Priority 1: Rotation/shift sequence — static override ──
         if rot_shift:
             rs = rot_shift["start"]
             re = rot_shift["end"]
@@ -1154,7 +1353,56 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             if length <= 0:
                 length = shift_length_mins
                 end_min = start_min + length
-        else:
+
+        # ── Priority 2: WTPM day models — pick best-fitting eligible shift ──
+        elif wtpm_shifts:
+            # Filter eligible day models by availability constraints
+            candidates = []
+            for dm in wtpm_shifts:
+                dm_start = _time_to_minutes(dm["start_time"])
+                dm_end = _time_to_minutes(dm["end_time"])
+                dm_length = dm_end - dm_start
+                if dm_length <= 0:
+                    continue
+
+                # Apply availability constraints as filters
+                if avail.get("earliest_start"):
+                    es_min = _time_to_minutes(avail["earliest_start"])
+                    if dm_start < es_min:
+                        continue  # shift starts too early for this employee
+                if avail.get("latest_start"):
+                    ls_min = _time_to_minutes(avail["latest_start"])
+                    if dm_start > ls_min:
+                        continue  # shift starts too late
+                if avail.get("latest_end"):
+                    le_min = _time_to_minutes(avail["latest_end"])
+                    if dm_end > le_min:
+                        continue  # shift ends too late
+
+                # Score by how much unmet demand this day model covers
+                score = 0
+                for m in range(dm_start, dm_end, DEFAULT_INTERVAL_MINS):
+                    req = req_by_minute.get(m, 0)
+                    already = scheduled_per_interval.get(m, 0)
+                    gap = req - already
+                    if gap > 0:
+                        score += gap
+                candidates.append((dm, dm_start, dm_end, dm_length, score))
+
+            if candidates:
+                # Pick the day model that covers the most unmet demand
+                candidates.sort(key=lambda c: -c[4])
+                best_dm, start_min, end_min, length, _ = candidates[0]
+                log.info(f"  WTPM: {emp['name']} → {best_dm['name']} "
+                         f"({best_dm['start_time']}-{best_dm['end_time']})")
+            else:
+                # No WTPM day model fits availability — fall back to standard logic
+                log.info(f"  WTPM: {emp['name']} — no eligible day model fits availability, "
+                         "falling back to standard placement")
+                wtpm_shifts = []  # clear so we fall into standard logic below
+
+        # ── Priority 3: Standard placement (no rotation, no WTPM) ──
+        if not rot_shift and not wtpm_shifts:
             if avail["day_type"] == "half":
                 length = shift_length_mins // 2
             else:
@@ -1217,7 +1465,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         stype = "half" if avail["day_type"] == "half" else "full"
         s_time = _minutes_to_time(start_min)
         e_time = _minutes_to_time(end_min)
-        shifts.append({
+        shift_dict = {
             "employee": emp["name"],
             "employee_id": emp["employee_id"],
             "start": s_time,
@@ -1228,7 +1476,15 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "team_lead": emp.get("team_lead", ""),
             "effectiveness": eff,
             "segments": [],  # filled below with stagger
-        })
+        }
+        if quartile:
+            shift_dict["quartile"] = quartile
+        if wtpm_shifts and not rot_shift:
+            # Record which day model was selected
+            best_dm_name = candidates[0][0]["name"] if candidates else None
+            if best_dm_name:
+                shift_dict["day_model"] = best_dm_name
+        shifts.append(shift_dict)
 
     # Apply staggered segments across all scheduled employees
     total_scheduled = len(shifts)
