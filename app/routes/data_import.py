@@ -42,7 +42,10 @@ UPLOAD_TYPES = {
         "required": ["Employee ID", "First Name", "Last Name"],
         "optional": ["Status", "LOB", "All Skills", "Skill Start", "Skill End", "End Date",
                       "Planning Unit", "Latest Skill Name", "Contract Type", "Email",
-                      "Address Email", "Start Date", "Title"],
+                      "Address Email", "Start Date", "Title",
+                      "External ID 1", "External ID 2", "Languages", "Contract",
+                      "Weekly Hours", "Days Per Week", "Hours Per Day",
+                      "Timezone", "Team Lead", "Schedule Excluded"],
     },
     "forecast": {
         "label": "Forecast Data",
@@ -74,6 +77,41 @@ UPLOAD_TYPES = {
         "label": "Agent Status Events",
         "required": ["Employee ID", "Status", "Start"],
         "optional": ["End"],
+    },
+    "activities": {
+        "label": "Activities / Segment Codes",
+        "required": ["Code", "Label"],
+        "optional": ["Color", "Activity Type", "Activity Category", "Is Productive", "Is Paid",
+                      "Official Name", "Abbreviation", "Shortcut", "External IDs",
+                      "Parent Code", "Is Multi-Activity",
+                      "Is Replaceable", "Is Plannable", "Importance", "Priority",
+                      "Is Requestable", "Is Exchangeable", "Allow Full Day",
+                      "Can Be Day Status", "Offset Mins", "Duration Mins",
+                      "Is Flexible", "Window Start Mins", "Window End Mins"],
+    },
+    "contracts": {
+        "label": "Contracts",
+        "required": ["Name"],
+        "optional": ["Abbreviation", "Color", "Contract Type", "Days Per Week",
+                      "Workdays Calculation",
+                      "Daily Hours Min", "Daily Hours Target", "Daily Hours Max",
+                      "Weekly Hours Min", "Weekly Hours Target", "Weekly Hours Max",
+                      "Monthly Hours Max",
+                      "Break Duration Mins", "Break After Hours",
+                      "Lunch Duration Mins", "Overtime Eligible",
+                      "Min Rest Hours", "Max Consecutive Days",
+                      "Min Days Per Week", "Max Days Per Week",
+                      "Min Days Off Per Week", "Max Night Shifts Week",
+                      "Max Night Shifts Month"],
+    },
+    "planning_units": {
+        "label": "Planning Units",
+        "required": ["Name"],
+        "optional": ["Description", "Timezone", "Is Active",
+                      "Mon Open", "Mon Close", "Tue Open", "Tue Close",
+                      "Wed Open", "Wed Close", "Thu Open", "Thu Close",
+                      "Fri Open", "Fri Close", "Sat Open", "Sat Close",
+                      "Sun Open", "Sun Close"],
     },
 }
 
@@ -234,6 +272,12 @@ def _import_rows(upload_type, rows, uploaded_by=""):
             imported, skipped, errors = _import_actuals(rows)
         elif upload_type == "agent_status":
             imported, skipped, errors = _import_agent_status(rows)
+        elif upload_type == "activities":
+            imported, skipped, errors = _import_activities(rows)
+        elif upload_type == "contracts":
+            imported, skipped, errors = _import_contracts(rows)
+        elif upload_type == "planning_units":
+            imported, skipped, errors = _import_planning_units(rows)
 
         upload.rows_imported = imported
         upload.rows_skipped = skipped
@@ -330,6 +374,56 @@ def _import_employees(rows):
         ct_val = _get_val(row, "Contract Type")
         if ct_val:
             emp.contract_type = ct_val
+
+        # External IDs
+        ext1 = _get_val(row, "External ID 1")
+        if ext1:
+            emp.external_id_1 = str(ext1).strip()
+        ext2 = _get_val(row, "External ID 2")
+        if ext2:
+            emp.external_id_2 = str(ext2).strip()
+
+        # Languages
+        lang = _get_val(row, "Languages")
+        if lang:
+            emp.languages = str(lang).strip()
+
+        # Contract link (by name)
+        contract_name = _get_val(row, "Contract")
+        if contract_name:
+            from app.models import Contract as ContractModel
+            c = ContractModel.query.filter_by(name=str(contract_name).strip()).first()
+            if c:
+                emp.contract_id = c.id
+
+        # Numeric fields
+        wh = _get_val(row, "Weekly Hours")
+        if wh:
+            try: emp.weekly_hours = float(wh)
+            except (ValueError, TypeError): pass
+        dpw = _get_val(row, "Days Per Week")
+        if dpw:
+            try: emp.days_per_week = int(dpw)
+            except (ValueError, TypeError): pass
+        hpd = _get_val(row, "Hours Per Day")
+        if hpd:
+            try: emp.hours_per_day = float(hpd)
+            except (ValueError, TypeError): pass
+
+        # Timezone
+        tz = _get_val(row, "Timezone")
+        if tz:
+            emp.timezone = str(tz).strip()
+
+        # Team lead
+        tl = _get_val(row, "Team Lead")
+        if tl:
+            emp.team_lead = str(tl).strip()
+
+        # Schedule excluded
+        se = _get_val(row, "Schedule Excluded")
+        if se:
+            emp.schedule_excluded = str(se).strip().lower() in ("true", "yes", "1", "y")
 
         # Parse dates
         for field, attr in [
@@ -570,6 +664,235 @@ def _import_agent_status(rows):
             db.session.add(AgentStatusEvent(employee_id=emp.id, status=status,
                                             start_ts=start, end_ts=end, source="upload"))
         imported += 1
+    db.session.flush()
+    return imported, skipped, errors
+
+
+# ═══════════════════════════════════════════════════════════════
+# ACTIVITIES / SEGMENT CODES IMPORT
+# ═══════════════════════════════════════════════════════════════
+
+def _bool_val(val):
+    """Convert a cell value to boolean. None/empty → None (skip)."""
+    if val is None or str(val).strip() == "":
+        return None
+    return str(val).strip().lower() in ("true", "yes", "1", "y")
+
+
+def _int_val(val):
+    """Convert a cell value to int, or None."""
+    if val is None or str(val).strip() == "":
+        return None
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return None
+
+
+def _import_activities(rows):
+    """Import or update SegmentCode activities. Upserts on code."""
+    from app.models import db, SegmentCode
+    imported, skipped = 0, 0
+    errors = []
+    for i, row in enumerate(rows, start=2):
+        code = str(_get_val(row, "Code") or "").strip()
+        label = str(_get_val(row, "Label") or "").strip()
+        if not code or not label:
+            skipped += 1
+            errors.append(f"Row {i}: missing Code or Label")
+            continue
+
+        existing = SegmentCode.query.filter_by(code=code).first()
+        sc = existing or SegmentCode(code=code)
+        sc.label = label
+
+        # Simple string fields
+        for csv_col, attr in [
+            ("Color", "color"), ("Activity Type", "activity_type"),
+            ("Activity Category", "activity_category"),
+            ("Official Name", "official_name"), ("Abbreviation", "abbreviation"),
+            ("Shortcut", "shortcut"), ("External IDs", "external_ids"),
+        ]:
+            v = _get_val(row, csv_col)
+            if v:
+                setattr(sc, attr, str(v).strip())
+
+        # Parent code (resolve to id)
+        parent_code = _get_val(row, "Parent Code")
+        if parent_code:
+            parent = SegmentCode.query.filter_by(code=str(parent_code).strip()).first()
+            if parent:
+                sc.parent_id = parent.id
+
+        # Boolean fields
+        for csv_col, attr in [
+            ("Is Productive", "is_productive"), ("Is Paid", "is_paid"),
+            ("Is Multi-Activity", "is_multi_activity"),
+            ("Is Replaceable", "is_replaceable"), ("Is Plannable", "is_plannable"),
+            ("Is Requestable", "is_requestable"), ("Is Exchangeable", "is_exchangeable"),
+            ("Allow Full Day", "allow_full_day"),
+            ("Can Be Day Status", "can_be_day_status"), ("Is Flexible", "is_flexible"),
+        ]:
+            bv = _bool_val(_get_val(row, csv_col))
+            if bv is not None:
+                setattr(sc, attr, bv)
+
+        # Integer fields
+        for csv_col, attr in [
+            ("Importance", "importance"), ("Priority", "priority"),
+            ("Offset Mins", "offset_mins"), ("Duration Mins", "duration_mins"),
+            ("Window Start Mins", "window_start_mins"),
+            ("Window End Mins", "window_end_mins"),
+        ]:
+            iv = _int_val(_get_val(row, csv_col))
+            if iv is not None:
+                setattr(sc, attr, iv)
+
+        if not existing:
+            db.session.add(sc)
+        imported += 1
+
+    db.session.flush()
+    return imported, skipped, errors
+
+
+# ═══════════════════════════════════════════════════════════════
+# CONTRACTS IMPORT
+# ═══════════════════════════════════════════════════════════════
+
+def _import_contracts(rows):
+    """Import or update Contract templates. Upserts on name."""
+    from app.models import db, Contract
+    imported, skipped = 0, 0
+    errors = []
+    for i, row in enumerate(rows, start=2):
+        name = str(_get_val(row, "Name") or "").strip()
+        if not name:
+            skipped += 1
+            errors.append(f"Row {i}: missing Name")
+            continue
+
+        existing = Contract.query.filter_by(name=name).first()
+        c = existing or Contract(name=name)
+
+        # String fields
+        for csv_col, attr in [
+            ("Abbreviation", "abbreviation"), ("Color", "color"),
+            ("Contract Type", "contract_type"),
+            ("Workdays Calculation", "workdays_calculation"),
+        ]:
+            v = _get_val(row, csv_col)
+            if v:
+                setattr(c, attr, str(v).strip())
+
+        # Float fields
+        for csv_col, attr in [
+            ("Daily Hours Min", "daily_hours_min"),
+            ("Daily Hours Target", "daily_hours_target"),
+            ("Daily Hours Max", "daily_hours_max"),
+            ("Weekly Hours Min", "weekly_hours_min"),
+            ("Weekly Hours Target", "weekly_hours_target"),
+            ("Weekly Hours Max", "weekly_hours"),
+            ("Monthly Hours Max", "monthly_hours_max"),
+            ("Min Rest Hours", "min_rest_hours"),
+            ("Break After Hours", "break_after_hours"),
+        ]:
+            v = _get_val(row, csv_col)
+            if v:
+                try: setattr(c, attr, float(v))
+                except (ValueError, TypeError): pass
+
+        # Integer fields
+        for csv_col, attr in [
+            ("Days Per Week", "days_per_week"),
+            ("Break Duration Mins", "break_duration_mins"),
+            ("Lunch Duration Mins", "lunch_duration_mins"),
+            ("Max Consecutive Days", "max_consecutive_days"),
+            ("Min Days Per Week", "min_days_per_week"),
+            ("Max Days Per Week", "max_days_per_week"),
+            ("Min Days Off Per Week", "min_days_off_per_week"),
+            ("Max Night Shifts Week", "max_night_shifts_week"),
+            ("Max Night Shifts Month", "max_night_shifts_month"),
+        ]:
+            iv = _int_val(_get_val(row, csv_col))
+            if iv is not None:
+                setattr(c, attr, iv)
+
+        # Boolean fields
+        for csv_col, attr in [
+            ("Overtime Eligible", "overtime_eligible"),
+        ]:
+            bv = _bool_val(_get_val(row, csv_col))
+            if bv is not None:
+                setattr(c, attr, bv)
+
+        if not existing:
+            db.session.add(c)
+        imported += 1
+
+    db.session.flush()
+    return imported, skipped, errors
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING UNITS IMPORT
+# ═══════════════════════════════════════════════════════════════
+
+def _import_planning_units(rows):
+    """Import or update Planning Units with optional business hours. Upserts on name."""
+    from app.models import db, PlanningUnit, PlanningUnitBusinessHours
+    imported, skipped = 0, 0
+    errors = []
+    day_pairs = [
+        ("Mon", "monday"), ("Tue", "tuesday"), ("Wed", "wednesday"),
+        ("Thu", "thursday"), ("Fri", "friday"), ("Sat", "saturday"), ("Sun", "sunday"),
+    ]
+    for i, row in enumerate(rows, start=2):
+        name = str(_get_val(row, "Name") or "").strip()
+        if not name:
+            skipped += 1
+            errors.append(f"Row {i}: missing Name")
+            continue
+
+        existing = PlanningUnit.query.filter_by(name=name).first()
+        pu = existing or PlanningUnit(name=name)
+
+        desc = _get_val(row, "Description")
+        if desc:
+            pu.description = str(desc).strip()
+        tz = _get_val(row, "Timezone")
+        if tz:
+            pu.timezone = str(tz).strip()
+        active = _bool_val(_get_val(row, "Is Active"))
+        if active is not None:
+            pu.is_active = active
+
+        if not existing:
+            db.session.add(pu)
+            db.session.flush()  # need pu.id for business hours
+
+        # Business hours per day (e.g. "Mon Open"="08:00", "Mon Close"="22:00")
+        for prefix, day_type in day_pairs:
+            open_val = _get_val(row, f"{prefix} Open")
+            close_val = _get_val(row, f"{prefix} Close")
+            if open_val and close_val:
+                open_str = str(open_val).strip()
+                close_str = str(close_val).strip()
+                # Upsert: find existing row for this day type
+                bh = PlanningUnitBusinessHours.query.filter_by(
+                    planning_unit_id=pu.id, day_type=day_type
+                ).first()
+                if bh:
+                    bh.open_time = open_str
+                    bh.close_time = close_str
+                else:
+                    db.session.add(PlanningUnitBusinessHours(
+                        planning_unit_id=pu.id, day_type=day_type,
+                        open_time=open_str, close_time=close_str,
+                    ))
+
+        imported += 1
+
     db.session.flush()
     return imported, skipped, errors
 
