@@ -1686,7 +1686,7 @@ def planning_units_page():
 @settings_bp.route("/planning-units/save", methods=["POST"])
 @admin_required
 def planning_units_save():
-    from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, db
+    from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, CallRoute, db
     d = request.json or {}
     try:
         if d.get("id"):
@@ -1732,6 +1732,20 @@ def planning_units_save():
                 window_end=pa.get("window_end") or None,
                 valid_from=_parse_date(pa.get("valid_from")),
                 valid_to=_parse_date(pa.get("valid_to")),
+            ))
+
+        # Sync call routes (replace all)
+        CallRoute.query.filter_by(planning_unit_id=item.id).delete()
+        for cr in (d.get("call_routes") or []):
+            route_id = (cr.get("route_id") or "").strip()
+            route_name = (cr.get("name") or "").strip()
+            if not route_id or not route_name:
+                continue
+            db.session.add(CallRoute(
+                planning_unit_id=item.id,
+                route_id=route_id,
+                name=route_name,
+                is_active=bool(cr.get("is_active", True)),
             ))
 
         # Sync parameters (replace all)

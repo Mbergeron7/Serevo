@@ -71,6 +71,33 @@ class PlanningUnit(db.Model):
             "business_hours": [bh.to_dict() for bh in self.business_hours],
             "assigned_activities": [pa.to_dict() for pa in self.assigned_activities],
             "parameters": [p.to_dict() for p in self.unit_parameters],
+            "call_routes": [cr.to_dict() for cr in self.call_routes],
+        }
+
+
+class CallRoute(db.Model):
+    """Maps a phone system call route/queue to a planning unit.
+    E.g. route_id='719' → name='SS Sales EN' → planning_unit 'Sales'.
+    Used to translate incoming real-time data (which only has route IDs)."""
+    __tablename__ = "call_routes"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False)
+    route_id         = db.Column(db.String(50), nullable=False, index=True)    # e.g. "719"
+    name             = db.Column(db.String(200), nullable=False)               # e.g. "SS Sales EN"
+    is_active        = db.Column(db.Boolean, default=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref=db.backref("call_routes", lazy="select", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("route_id", name="uq_call_route_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id, "route_id": self.route_id,
+            "name": self.name, "is_active": self.is_active,
         }
 
 

@@ -26,6 +26,7 @@ from app.auth import get_current_user
 from app.models import (
     AgentStatusEvent,
     AppSetting,
+    CallRoute,
     Employee,
     IntervalActual,
     LobMapping,
@@ -108,6 +109,8 @@ _VOLUME_COL_ALIASES = {
     "lob": "lob", "queue": "lob", "workload": "lob",
     "skill": "lob", "queue name": "lob", "skill name": "lob",
     "line of business": "lob", "program": "lob",
+    "route": "route_id", "route id": "route_id", "route_id": "route_id",
+    "routeid": "route_id", "queue id": "route_id", "queue_id": "route_id",
     # metrics
     "offered": "offered", "calls offered": "offered", "total offered": "offered",
     "answered": "answered", "calls answered": "answered", "total answered": "answered",
@@ -149,9 +152,25 @@ def _match_columns(headers, alias_map):
     return mapping
 
 
+def _resolve_route_to_pu(route_id):
+    """Resolve a route ID to a PlanningUnit via the call_routes table."""
+    cr = CallRoute.query.filter_by(route_id=str(route_id).strip(), is_active=True).first()
+    if cr:
+        return cr.planning_unit
+    return None
+
+
 def _resolve_lob_to_pu(lob_name):
-    """Resolve a LOB name to a PlanningUnit, using LobMapping if available."""
-    # Check explicit mapping first
+    """Resolve a LOB name to a PlanningUnit, using CallRoute name, LobMapping, or direct match."""
+    # Check call route by name first
+    cr = CallRoute.query.filter(
+        db.func.lower(CallRoute.name) == lob_name.lower(),
+        CallRoute.is_active == True,
+    ).first()
+    if cr:
+        return cr.planning_unit
+
+    # Check explicit LOB mapping
     mapping = LobMapping.query.filter_by(source_name=lob_name).first()
     pu_name = mapping.planning_unit_name if mapping else lob_name
 
@@ -255,10 +274,13 @@ def sync_call_volume(spreadsheet):
     headers = rows[0]
     col_map = _match_columns(headers, _VOLUME_COL_ALIASES)
 
-    required = {"date", "time", "lob"}
-    missing = required - set(col_map.keys())
-    if missing:
-        return 0, 0, [f"Missing required columns: {', '.join(missing)}. Found: {headers}"]
+    # Need date + time + either route_id or lob
+    has_identifier = "route_id" in col_map or "lob" in col_map
+    has_time = "date" in col_map and "time" in col_map
+    if not has_identifier:
+        return 0, 0, [f"Missing route/LOB column. Found: {headers}"]
+    if not has_time:
+        return 0, 0, [f"Missing date/time columns. Found: {headers}"]
 
     upserted = 0
     skipped = 0
@@ -266,12 +288,18 @@ def sync_call_volume(spreadsheet):
 
     for i, row in enumerate(rows[1:], start=2):
         try:
-            lob_name = row[col_map["lob"]].strip()
-            if not lob_name:
-                skipped += 1
-                continue
+            # Resolve to planning unit: try route_id first, then LOB name
+            pu = None
+            if "route_id" in col_map:
+                rid = row[col_map["route_id"]].strip()
+                if rid:
+                    pu = _resolve_route_to_pu(rid)
 
-            pu = _resolve_lob_to_pu(lob_name)
+            if not pu and "lob" in col_map:
+                lob_name = row[col_map["lob"]].strip()
+                if lob_name:
+                    pu = _resolve_lob_to_pu(lob_name)
+
             if not pu:
                 skipped += 1
                 continue

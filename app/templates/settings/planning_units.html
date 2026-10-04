@@ -29,7 +29,7 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Name</th><th>Description</th><th>Timezone</th><th>Employees</th><th>Hours</th><th>Activities</th><th>Active</th><th></th></tr>
+    <tr><th>Name</th><th>Description</th><th>Timezone</th><th>Employees</th><th>Hours</th><th>Activities</th><th>Routes</th><th>Active</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table></div>
@@ -45,6 +45,7 @@
       <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
       <button class="tab-btn" onclick="switchTab('hours')" data-tab="hours">Business Hours</button>
       <button class="tab-btn" onclick="switchTab('activities')" data-tab="activities">Activities</button>
+      <button class="tab-btn" onclick="switchTab('routes')" data-tab="routes">Call Routes</button>
       <button class="tab-btn" onclick="switchTab('parameters')" data-tab="parameters">Parameters</button>
     </div>
   </div>
@@ -111,6 +112,16 @@
         <div id="puActivitiesEmpty" style="text-align:center;color:var(--text-muted);padding:1.5rem;font-size:.85rem;">No activities assigned. Click "+ Assign Activity" to start.</div>
       </div>
 
+      <!-- ── TAB: Call Routes ── -->
+      <div class="tab-panel" data-panel="routes">
+        <div class="info-box">Map phone system call routes/queues to this planning unit. The Route ID is what appears in the incoming real-time data — Serevo uses it to automatically route data to the right planning unit.</div>
+        <div style="margin-bottom:12px;">
+          <button type="button" class="btn btn-sm" onclick="addCallRoute()">+ Add Route</button>
+        </div>
+        <div id="callRoutesList"></div>
+        <div id="callRoutesEmpty" style="text-align:center;color:var(--text-muted);padding:1.5rem;font-size:.85rem;">No call routes configured. Click "+ Add Route" to map routes from your phone system.</div>
+      </div>
+
       <!-- ── TAB: Parameters ── -->
       <div class="tab-panel" data-panel="parameters">
         <div class="info-box">Define custom parameters with lower and upper limits — used for scheduling constraints (min/max staffing, service levels, etc.).</div>
@@ -138,6 +149,7 @@ const dlg = document.getElementById('editModal');
 /* ── Dynamic row arrays ── */
 let bizHours = [];
 let puActivities = [];
+let callRoutes = [];
 let params = [];
 
 /* ── Tab switching ── */
@@ -153,6 +165,7 @@ function render() {
     const tr = document.createElement('tr');
     const bhCount = (r.business_hours || []).length;
     const actCount = (r.assigned_activities || []).length;
+    const routeCount = (r.call_routes || []).length;
     tr.innerHTML = `
       <td style="font-weight:600;">${esc(r.name)}</td>
       <td style="color:var(--text-muted);font-size:.85rem;">${esc(r.description || '—')}</td>
@@ -160,12 +173,13 @@ function render() {
       <td>${r.employee_count}</td>
       <td>${bhCount ? '<span class="badge-count">'+bhCount+'</span>' : '—'}</td>
       <td>${actCount ? '<span class="badge-count">'+actCount+'</span>' : '—'}</td>
+      <td>${routeCount ? '<span class="badge-count">'+routeCount+'</span>' : '—'}</td>
       <td>${r.is_active ? '✓' : '—'}</td>
       <td><button class="btn btn-sm" onclick='editItem(${r.id})'>Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
     tbody.appendChild(tr);
   });
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -181,10 +195,12 @@ function openModal(item) {
 
   bizHours = item ? JSON.parse(JSON.stringify(item.business_hours || [])) : [];
   puActivities = item ? JSON.parse(JSON.stringify(item.assigned_activities || [])) : [];
+  callRoutes = item ? JSON.parse(JSON.stringify(item.call_routes || [])) : [];
   params = item ? JSON.parse(JSON.stringify(item.parameters || [])) : [];
 
   renderBizHours();
   renderPuActivities();
+  renderCallRoutes();
   renderParams();
   switchTab('general');
   dlg.showModal();
@@ -269,6 +285,39 @@ function renderPuActivities() {
 }
 
 /* ══════════════════════════════════════════
+   Call Routes
+   ══════════════════════════════════════════ */
+function addCallRoute() {
+  callRoutes.push({ route_id:'', name:'', is_active:true });
+  renderCallRoutes();
+}
+
+function removeCallRoute(i) { callRoutes.splice(i,1); renderCallRoutes(); }
+
+function updateCallRoute(i, field, val) { callRoutes[i][field] = val; }
+
+function renderCallRoutes() {
+  const el = document.getElementById('callRoutesList');
+  const empty = document.getElementById('callRoutesEmpty');
+  empty.style.display = callRoutes.length ? 'none' : 'block';
+  el.innerHTML = '';
+  callRoutes.forEach((cr, i) => {
+    const row = document.createElement('div');
+    row.className = 'dyn-row';
+    row.style.gridTemplateColumns = '120px 1fr 60px 36px';
+    row.innerHTML = `
+      <label style="font-size:.75rem;">Route ID<input class="form-input" placeholder="e.g. 719" value="${esc(cr.route_id||'')}" onchange="updateCallRoute(${i},'route_id',this.value)"></label>
+      <label style="font-size:.75rem;">Route Name<input class="form-input" placeholder="e.g. SS Sales EN" value="${esc(cr.name||'')}" onchange="updateCallRoute(${i},'name',this.value)"></label>
+      <label style="font-size:.75rem;display:flex;align-items:end;gap:4px;padding-bottom:8px;">
+        <input type="checkbox" ${cr.is_active!==false?'checked':''} onchange="updateCallRoute(${i},'is_active',this.checked)"> Active
+      </label>
+      <button type="button" onclick="removeCallRoute(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:14px;">✕</button>`;
+    el.appendChild(row);
+  });
+  updateTabBadge('routes', callRoutes.length);
+}
+
+/* ══════════════════════════════════════════
    Parameters
    ══════════════════════════════════════════ */
 function addParameter() {
@@ -320,6 +369,7 @@ async function saveItem() {
     is_active: document.getElementById('f_is_active').checked,
     business_hours: bizHours,
     assigned_activities: puActivities,
+    call_routes: callRoutes,
     parameters: params,
   };
   const res = await fetch('/settings/planning-units/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
