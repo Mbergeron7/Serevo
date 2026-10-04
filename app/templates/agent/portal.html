@@ -35,6 +35,12 @@
 
   .empty-msg { color:var(--text-muted); font-size:.85rem; padding:20px 0; text-align:center; }
 
+  .seg-row td { border-top:none !important; }
+  .seg-strip { display:flex; flex-wrap:wrap; gap:6px; }
+  .seg-chip { display:inline-flex; align-items:center; gap:4px; font-size:.72rem; padding:3px 8px; border-radius:6px; background:color-mix(in srgb, var(--sc) 12%, transparent); border-left:3px solid var(--sc); }
+  .seg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .seg-t { color:var(--text-muted); font-size:.68rem; margin-left:2px; }
+
   .mini-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:999; }
   .mini-modal .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; max-width:520px; width:92%; max-height:90vh; overflow-y:auto; }
   .mini-modal h3 { font-size:.95rem; margin:0 0 16px; }
@@ -307,6 +313,7 @@ async function loadSchedule() {
       el.innerHTML = '<p class="empty-msg">No shifts scheduled this week.</p>';
       return;
     }
+    const SEG_COLORS = {'on-call':'#059669','On-Call':'#059669','break':'#f59e0b','Break':'#f59e0b','lunch':'#ef4444','Lunch':'#ef4444','meeting':'#8b5cf6','Meeting':'#8b5cf6','training':'#3b82f6','Training':'#3b82f6','other':'#6b7280','Other':'#6b7280'};
     let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Status</th><th>LOB</th></tr></thead><tbody>';
     const today = fmtDate(new Date());
     scheds.forEach(s => {
@@ -326,6 +333,22 @@ async function loadSchedule() {
       html += '<td><span class="pill ' + statusCls + '">' + esc(s.status) + '</span></td>';
       html += '<td>' + esc(s.lob || '') + '</td>';
       html += '</tr>';
+      // Segment row
+      const segs = s.segments || [];
+      if (segs.length && s.status !== 'off') {
+        html += '<tr class="seg-row"' + (isToday ? ' style="background:rgba(59,130,246,.04);"' : '') + '>';
+        html += '<td colspan="6" style="padding:4px 12px 10px;">';
+        html += '<div class="seg-strip">';
+        segs.forEach(seg => {
+          const c = seg.color || SEG_COLORS[seg.type] || '#6b7280';
+          const label = seg.type || 'Activity';
+          const t = (seg.start || '') + ' – ' + (seg.end || '');
+          html += '<span class="seg-chip" style="--sc:' + c + ';" title="' + esc(label) + ' ' + t + '">';
+          html += '<span class="seg-dot" style="background:' + c + ';"></span>' + esc(label);
+          html += '<span class="seg-t">' + t + '</span></span>';
+        });
+        html += '</div></td></tr>';
+      }
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
