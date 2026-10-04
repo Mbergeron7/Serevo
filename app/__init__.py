@@ -29,6 +29,47 @@ log = logging.getLogger("serevo.app")
 bcrypt = Bcrypt()
 csrf = CSRFProtect()
 
+_scheduler_started = False
+
+
+def _start_scheduler(app):
+    """Start APScheduler for the 5-minute Call Potential sync.
+    Only runs on the main Gunicorn worker (not in reloader or testing)."""
+    global _scheduler_started
+    if _scheduler_started:
+        return
+
+    import os
+    # Don't start in testing, or when explicitly disabled
+    if app.testing:
+        return
+    if os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true").lower() != "true":
+        log.info("Call Potential sync disabled (CALLPOTENTIAL_SYNC_ENABLED=false)")
+        return
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from app.routes.realtime_sync import run_sync
+
+        scheduler = BackgroundScheduler(daemon=True)
+        scheduler.add_job(
+            func=run_sync,
+            trigger="interval",
+            minutes=5,
+            id="callpotential_sync",
+            kwargs={"app": app},
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.start()
+        _scheduler_started = True
+        log.info("Call Potential auto-sync started (every 5 minutes)")
+    except ImportError:
+        log.warning("APScheduler not installed — Call Potential auto-sync disabled. "
+                     "Install with: pip install APScheduler")
+    except Exception as e:
+        log.warning(f"Could not start scheduler: {e}")
+
 
 def create_app():
     app = Flask(
@@ -187,6 +228,7 @@ def create_app():
     from app.routes.help_guide import help_bp
     from app.routes.wfm_tickets import wfm_tickets_bp
     from app.routes.scheduling_config import scheduling_config_bp
+    from app.routes.realtime_sync import realtime_sync_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -217,6 +259,10 @@ def create_app():
     app.register_blueprint(help_bp)
     app.register_blueprint(wfm_tickets_bp)
     app.register_blueprint(scheduling_config_bp)
+    app.register_blueprint(realtime_sync_bp)
+
+    # ---- APScheduler: 5-minute Call Potential sync ----
+    _start_scheduler(app)
 
     # ---- error handlers ----
     @app.errorhandler(403)

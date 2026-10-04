@@ -21,5 +21,8 @@ flask-wtf>=1.2
 scikit-learn>=1.4
 pandas>=2.1
 
+# Background scheduler
+APScheduler>=3.10
+
 # Testing
 pytest>=8.0
