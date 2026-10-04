@@ -18,7 +18,8 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         EmployeeContract, Selection, SelectionMember,
                         SkillMapping, PlanningUnit, ShiftSequence,
                         EmployeeShiftSequence, SkillGroup, CoachingSession,
-                        TimeClock)
+                        TimeClock, EmployeeWorkTimePattern, WorkTimePatternModel,
+                        EmployeeQuartile)
 
 log = logging.getLogger("serevo.people")
 
@@ -406,6 +407,8 @@ def employee_profile(emp_id):
             selection_memberships=[],
             pu_assignments=[],
             ss_assignments=[],
+            wtp_assignments=[],
+            quartile=None,
             avail_map={},
         )
 
@@ -422,6 +425,16 @@ def employee_profile(emp_id):
     except Exception:
         db.session.rollback()
         ss_assignments = []
+    try:
+        wtp_assignments = EmployeeWorkTimePattern.query.filter_by(employee_id=emp.id).all()
+    except Exception:
+        db.session.rollback()
+        wtp_assignments = []
+    try:
+        quartile = EmployeeQuartile.query.filter_by(employee_id=emp.id).first()
+    except Exception:
+        db.session.rollback()
+        quartile = None
     # Build availability map keyed by day_of_week (0-6)
     avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
     avail_map = {a.day_of_week: a for a in avail_entries}
@@ -434,6 +447,8 @@ def employee_profile(emp_id):
         selection_memberships=selection_memberships,
         pu_assignments=pu_assignments,
         ss_assignments=ss_assignments,
+        wtp_assignments=wtp_assignments,
+        quartile=quartile,
         avail_map=avail_map,
     )
 
@@ -461,6 +476,13 @@ def profile_selections_list():
 def profile_shift_sequences_list():
     items = ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
+
+
+@people_bp.route("/api/profile/rotation-models-list")
+@login_required
+def profile_rotation_models_list():
+    items = WorkTimePatternModel.query.filter_by(is_active=True).order_by(WorkTimePatternModel.name).all()
+    return jsonify({"items": [{"id": m.id, "name": m.name} for m in items]})
 
 
 @people_bp.route("/api/profile/assign", methods=["POST"])
@@ -505,6 +527,25 @@ def profile_assign():
                 valid_from=valid_from, valid_to=valid_to,
             )
             db.session.add(obj)
+        elif assign_type == "work_time_pattern":
+            ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
+            obj = EmployeeWorkTimePattern(
+                employee_id=emp_id, work_time_pattern_model_id=item_id,
+                reference_date=ref_date,
+                valid_from=valid_from, valid_to=valid_to,
+            )
+            db.session.add(obj)
+        elif assign_type == "quartile":
+            obj = EmployeeQuartile.query.filter_by(employee_id=emp_id).first()
+            if not obj:
+                obj = EmployeeQuartile(employee_id=emp_id)
+                db.session.add(obj)
+            obj.quartile = int(data.get("quartile", 4))
+            obj.planning_unit_id = int(item_id) if item_id else None
+            eff = data.get("effective_date")
+            if eff:
+                obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
+            obj.notes = data.get("notes", "")
         elif assign_type == "skill":
             obj = SkillMapping(
                 employee_id=emp_id, skill_group_id=item_id,
@@ -545,6 +586,8 @@ def profile_unassign():
         "selection": SelectionMember,
         "shift_sequence": EmployeeShiftSequence,
         "skill": SkillMapping,
+        "work_time_pattern": EmployeeWorkTimePattern,
+        "quartile": EmployeeQuartile,
     }
     model = model_map.get(assign_type)
     if not model:
