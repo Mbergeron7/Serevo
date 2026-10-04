@@ -28,10 +28,10 @@ def upgrade():
     columns_to_add = [
         # General
         ('abbreviation', sa.String(50), None),
-        ('color', sa.String(7), "'#000000'"),
-        ('contract_type', sa.String(30), "'full_time'"),
+        ('color', sa.String(7), '#000000'),
+        ('contract_type', sa.String(30), 'full_time'),
         ('days_per_week', sa.Integer(), '5'),
-        ('workdays_calculation', sa.String(20), "'flexible'"),
+        ('workdays_calculation', sa.String(20), 'flexible'),
 
         # Work Time Guidelines
         ('daily_hours_min', sa.Float(), None),
