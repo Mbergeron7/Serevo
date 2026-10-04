@@ -1,0 +1,847 @@
+{% extends "base.html" %}
+{% block title %}Scheduling Configuration — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
+  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+
+  .view-tabs {
+    display: flex; gap: 2px; margin-bottom: 20px;
+    background: var(--bg); border-radius: 8px; padding: 3px;
+    width: fit-content;
+  }
+  .view-tab {
+    padding: 6px 16px; border-radius: 6px; border: none;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    background: transparent; color: var(--text-muted);
+  }
+  .view-tab.active { background: var(--brand-accent); color: #fff; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .panel-toolbar {
+    display: flex; justify-content: flex-end; align-items: center;
+    gap: 8px; margin-bottom: 14px;
+  }
+  .filter-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filter-bar label { font-size: .82rem; font-weight: 600; color: var(--text-muted); }
+  .filter-bar select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+
+  .data-table { width: 100%; }
+  .data-table th { white-space: nowrap; }
+
+  .color-swatch {
+    display: inline-block; width: 24px; height: 24px;
+    border-radius: 6px; vertical-align: middle;
+    border: 1px solid var(--border);
+  }
+
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: .72rem; font-weight: 600; margin: 1px 2px;
+    color: #fff; white-space: nowrap;
+  }
+  .q-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: .75rem; font-weight: 700; color: #fff;
+  }
+  .q-badge.q1 { background: #059669; }
+  .q-badge.q2 { background: #2563eb; }
+  .q-badge.q3 { background: #d97706; }
+  .q-badge.q4 { background: #dc2626; }
+
+  .empty-state {
+    text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;
+    font-size: .9rem;
+  }
+
+  /* Modal / Dialog */
+  dialog {
+    border-radius: 12px; border: 1px solid var(--border);
+    padding: 28px; max-width: 580px; width: 90vw;
+    background: var(--surface); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h3 { margin: 0 0 16px; font-size: 1.1rem; }
+  .form-grid { display: grid; gap: 12px; }
+  .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .82rem; font-weight: 600; color: var(--text-muted); }
+  .form-grid label.inline { flex-direction: row; align-items: center; gap: 6px; }
+  .form-input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text); width: 100%; box-sizing: border-box;
+  }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Assignment section inside modals */
+  .assign-section { margin-top: 16px; }
+  .assign-section h4 { font-size: .85rem; font-weight: 700; margin: 0 0 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+  .assign-pool {
+    display: flex; flex-wrap: wrap; gap: 4px; padding: 10px;
+    border: 1px dashed var(--border); border-radius: 8px;
+    min-height: 40px; margin-bottom: 8px; background: var(--bg);
+  }
+  .assign-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 8px; font-size: .78rem;
+    font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); transition: .15s;
+  }
+  .assign-chip:hover { border-color: var(--brand-accent); }
+  .assign-chip.selected { background: var(--brand-accent); color: #fff; border-color: var(--brand-accent); }
+  .assign-chip .dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  }
+
+  /* Bulk modal */
+  .emp-check-list { max-height: 300px; overflow-y: auto; }
+  .emp-check-list label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; font-size: .85rem; cursor: pointer;
+  }
+  .emp-check-list label:hover { background: var(--bg); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Scheduling Configuration</h1>
+  <p class="subtitle">Configure shift models, week patterns, rotation models, and employee quartile assignments for KPI-based scheduling.</p>
+</div>
+
+<div style="margin-bottom:16px;">
+  <a href="/scheduling/" style="color:var(--brand-accent);text-decoration:none;font-size:.9rem;">← Back to Scheduling</a>
+</div>
+
+<div class="view-tabs" id="mainTabs">
+  <button class="view-tab active" data-tab="dm">Day Models</button>
+  <button class="view-tab" data-tab="wtp">Week Patterns</button>
+  <button class="view-tab" data-tab="wtpm">Rotation Models</button>
+  <button class="view-tab" data-tab="eq">Employee Quartiles</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 1: Day Models
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-dm" class="tab-panel active">
+  <div class="panel-toolbar">
+    <button class="btn btn-primary" onclick="dm_openModal()">+ Add Day Model</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="dm-table">
+      <thead>
+        <tr><th>Color</th><th>Name</th><th>Abbr</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Planning Unit</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 2: Week Patterns
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-wtp" class="tab-panel">
+  <div class="panel-toolbar">
+    <button class="btn btn-primary" onclick="wtp_openModal()">+ Add Week Pattern</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="wtp-table">
+      <thead>
+        <tr><th>Name</th><th>Abbr</th><th>Planning Unit</th><th>Max Exception Days</th><th>Assigned Day Models</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 3: Rotation Models
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-wtpm" class="tab-panel">
+  <div class="panel-toolbar">
+    <button class="btn btn-primary" onclick="wtpm_openModal()">+ Add Rotation Model</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="wtpm-table">
+      <thead>
+        <tr><th>Name</th><th>Abbr</th><th>Type</th><th>Description</th><th>Exception Pattern</th><th>Assigned Week Patterns</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 4: Employee Quartiles
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-eq" class="tab-panel">
+  <div class="filter-bar">
+    <label>Planning Unit</label>
+    <select id="eq-pu-filter" onchange="eq_render()">
+      <option value="">All</option>
+    </select>
+    <div style="flex:1;"></div>
+    <button class="btn btn-primary" onclick="eq_openBulkModal()">Bulk Assign</button>
+    <button class="btn btn-primary" onclick="eq_openModal()">+ Add Assignment</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="eq-table">
+      <thead>
+        <tr><th>Employee Name</th><th>Employee ID</th><th>Planning Unit</th><th>Quartile</th><th>Effective Date</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODALS
+     ═══════════════════════════════════════════════════════════════ -->
+
+<!-- Day Model Modal -->
+<dialog id="dm-modal">
+  <h3 id="dm-modal-title">Add Day Model</h3>
+  <form onsubmit="return false;">
+    <input type="hidden" id="dm_f_id">
+    <div class="form-grid">
+      <div class="form-row2">
+        <label>Name<input id="dm_f_name" class="form-input" required></label>
+        <label>Abbreviation<input id="dm_f_abbreviation" class="form-input" maxlength="10"></label>
+      </div>
+      <div class="form-row2">
+        <label>Start Time<input id="dm_f_start_time" type="time" class="form-input" required></label>
+        <label>End Time<input id="dm_f_end_time" type="time" class="form-input" required></label>
+      </div>
+      <div class="form-row2">
+        <label>Paid Hours<input id="dm_f_paid_hours" type="number" step="0.25" class="form-input"></label>
+        <label>Total Hours<input id="dm_f_total_hours" type="number" step="0.25" class="form-input"></label>
+      </div>
+      <div class="form-row2">
+        <label>Type
+          <select id="dm_f_model_type" class="form-input">
+            <option value="Fixed">Fixed</option>
+            <option value="Flexible">Flexible</option>
+          </select>
+        </label>
+        <label>Planning Unit
+          <select id="dm_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
+        </label>
+      </div>
+      <div class="form-row2">
+        <label>Color<input id="dm_f_color" type="color" value="#6b7280" class="form-input" style="height:38px;padding:2px;"></label>
+        <label class="inline" style="margin-top:auto;"><input id="dm_f_is_active" type="checkbox" checked> Active</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('dm-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="dm_save()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Week Pattern Modal -->
+<dialog id="wtp-modal">
+  <h3 id="wtp-modal-title">Add Week Pattern</h3>
+  <form onsubmit="return false;">
+    <input type="hidden" id="wtp_f_id">
+    <div class="form-grid">
+      <div class="form-row2">
+        <label>Name<input id="wtp_f_name" class="form-input" required></label>
+        <label>Abbreviation<input id="wtp_f_abbreviation" class="form-input" maxlength="10"></label>
+      </div>
+      <div class="form-row2">
+        <label>Planning Unit
+          <select id="wtp_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
+        </label>
+        <label>Max Exception Days<input id="wtp_f_max_exception_days" type="number" class="form-input" min="0" value="0"></label>
+      </div>
+      <label class="inline"><input id="wtp_f_is_active" type="checkbox" checked> Active</label>
+      <div class="assign-section">
+        <h4>Assign Day Models</h4>
+        <div class="assign-pool" id="wtp-dm-pool"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('wtp-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="wtp_save()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Rotation Model Modal -->
+<dialog id="wtpm-modal">
+  <h3 id="wtpm-modal-title">Add Rotation Model</h3>
+  <form onsubmit="return false;">
+    <input type="hidden" id="wtpm_f_id">
+    <div class="form-grid">
+      <div class="form-row2">
+        <label>Name<input id="wtpm_f_name" class="form-input" required></label>
+        <label>Abbreviation<input id="wtpm_f_abbreviation" class="form-input" maxlength="10"></label>
+      </div>
+      <div class="form-row2">
+        <label>Type
+          <select id="wtpm_f_model_type" class="form-input">
+            <option value="Fixed">Fixed</option>
+            <option value="Variable">Variable</option>
+          </select>
+        </label>
+        <label>Planning Unit
+          <select id="wtpm_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
+        </label>
+      </div>
+      <label>Description<textarea id="wtpm_f_description" class="form-input" rows="2"></textarea></label>
+      <label>Exception Week Pattern
+        <select id="wtpm_f_exception_wtp_id" class="form-input"><option value="">— None —</option></select>
+      </label>
+      <label class="inline"><input id="wtpm_f_is_active" type="checkbox" checked> Active</label>
+      <div class="assign-section">
+        <h4>Assign Week Patterns</h4>
+        <div class="assign-pool" id="wtpm-wtp-pool"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('wtpm-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="wtpm_save()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Employee Quartile Modal -->
+<dialog id="eq-modal">
+  <h3 id="eq-modal-title">Add Quartile Assignment</h3>
+  <form onsubmit="return false;">
+    <input type="hidden" id="eq_f_id">
+    <div class="form-grid">
+      <div class="form-row2">
+        <label>Employee
+          <select id="eq_f_employee_id" class="form-input" required><option value="">— Select —</option></select>
+        </label>
+        <label>Quartile
+          <select id="eq_f_quartile" class="form-input" required>
+            <option value="Q1">Q1</option>
+            <option value="Q2">Q2</option>
+            <option value="Q3">Q3</option>
+            <option value="Q4">Q4</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-row2">
+        <label>Planning Unit
+          <select id="eq_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
+        </label>
+        <label>Effective Date<input id="eq_f_effective_date" type="date" class="form-input"></label>
+      </div>
+      <label>Notes<input id="eq_f_notes" class="form-input" placeholder="Optional notes"></label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('eq-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="eq_save()">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Bulk Quartile Modal -->
+<dialog id="eq-bulk-modal" style="max-width:520px;">
+  <h3>Bulk Assign Quartile</h3>
+  <form onsubmit="return false;">
+    <div class="form-grid">
+      <div class="form-row2">
+        <label>Quartile
+          <select id="bulk_f_quartile" class="form-input" required>
+            <option value="Q1">Q1</option>
+            <option value="Q2">Q2</option>
+            <option value="Q3">Q3</option>
+            <option value="Q4">Q4</option>
+          </select>
+        </label>
+        <label>Planning Unit
+          <select id="bulk_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
+        </label>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:.82rem;font-weight:600;color:var(--text-muted);">Select Employees</span>
+          <button type="button" class="btn btn-sm" onclick="bulkToggleAll()">Toggle All</button>
+        </div>
+        <div class="emp-check-list" id="bulk-emp-list"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('eq-bulk-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="eq_bulkSave()">Assign</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const CSRF = '{{ csrf_token() }}';
+const API = '/scheduling/config/api';
+const H = {'Content-Type':'application/json', 'X-CSRFToken': CSRF};
+
+/* ── Shared state ─────────────────────────────────────────────── */
+let supportData = {planning_units:[], shift_templates:[], activities:[], employees:[]};
+let dmData=[], wtpData=[], wtpmData=[], eqData=[];
+
+/* ── Tab switching ────────────────────────────────────────────── */
+document.querySelectorAll('#mainTabs .view-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mainTabs .view-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ── Helpers ───────────────────────────────────────────────────── */
+function puName(id) {
+  const p = supportData.planning_units.find(u => u.id == id);
+  return p ? p.name : '—';
+}
+function empName(id) {
+  const e = supportData.employees.find(u => u.id == id);
+  return e ? (e.name || `${e.first_name||''} ${e.last_name||''}`.trim()) : id;
+}
+function populateSelect(sel, items, valKey, lblKey, blank) {
+  const el = typeof sel === 'string' ? document.getElementById(sel) : sel;
+  el.innerHTML = blank ? `<option value="">${blank}</option>` : '';
+  items.forEach(i => {
+    const o = document.createElement('option');
+    o.value = i[valKey]; o.textContent = i[lblKey]; el.appendChild(o);
+  });
+}
+function qClass(q) { return (q||'').toLowerCase().replace(/\s/g,''); }
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 1 — Day Models
+   ══════════════════════════════════════════════════════════════════ */
+function dm_render() {
+  const tb = document.querySelector('#dm-table tbody');
+  tb.innerHTML = '';
+  if (!dmData.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-state">No day models yet. Click "+ Add Day Model" to create one.</td></tr>'; return; }
+  dmData.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="color-swatch" style="background:${r.color||'#6b7280'}"></span></td>
+      <td>${r.name}</td>
+      <td><code style="font-size:.85rem">${r.abbreviation||''}</code></td>
+      <td>${r.start_time||'—'}</td>
+      <td>${r.end_time||'—'}</td>
+      <td>${r.total_hours != null ? r.total_hours+'h' : '—'}${r.paid_hours != null ? ' ('+r.paid_hours+'h paid)' : ''}</td>
+      <td>${r.model_type||'—'}</td>
+      <td>${puName(r.planning_unit_id)}</td>
+      <td>
+        <button class="btn btn-sm" onclick='dm_openModal(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="dm_delete(${r.id})">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function dm_openModal(item) {
+  const dlg = document.getElementById('dm-modal');
+  document.getElementById('dm-modal-title').textContent = item ? 'Edit Day Model' : 'Add Day Model';
+  populateSelect('dm_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  document.getElementById('dm_f_id').value = item ? item.id : '';
+  document.getElementById('dm_f_name').value = item ? item.name : '';
+  document.getElementById('dm_f_abbreviation').value = item ? item.abbreviation||'' : '';
+  document.getElementById('dm_f_start_time').value = item ? item.start_time||'' : '';
+  document.getElementById('dm_f_end_time').value = item ? item.end_time||'' : '';
+  document.getElementById('dm_f_paid_hours').value = item && item.paid_hours != null ? item.paid_hours : '';
+  document.getElementById('dm_f_total_hours').value = item && item.total_hours != null ? item.total_hours : '';
+  document.getElementById('dm_f_model_type').value = item ? item.model_type||'Fixed' : 'Fixed';
+  document.getElementById('dm_f_color').value = item ? item.color||'#6b7280' : '#6b7280';
+  document.getElementById('dm_f_planning_unit_id').value = item ? item.planning_unit_id||'' : '';
+  document.getElementById('dm_f_is_active').checked = item ? item.is_active !== false : true;
+  dlg.showModal();
+}
+
+async function dm_save() {
+  const body = {
+    id: document.getElementById('dm_f_id').value || null,
+    name: document.getElementById('dm_f_name').value.trim(),
+    abbreviation: document.getElementById('dm_f_abbreviation').value.trim(),
+    start_time: document.getElementById('dm_f_start_time').value,
+    end_time: document.getElementById('dm_f_end_time').value,
+    paid_hours: parseFloat(document.getElementById('dm_f_paid_hours').value) || null,
+    total_hours: parseFloat(document.getElementById('dm_f_total_hours').value) || null,
+    model_type: document.getElementById('dm_f_model_type').value,
+    color: document.getElementById('dm_f_color').value,
+    planning_unit_id: document.getElementById('dm_f_planning_unit_id').value || null,
+    is_active: document.getElementById('dm_f_is_active').checked,
+  };
+  try {
+    const res = await fetch(API+'/day-models', {method:'POST', headers:H, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (data.success) { document.getElementById('dm-modal').close(); showToast('Day model saved','success'); await loadDayModels(); }
+    else { showToast(data.error||'Save failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+async function dm_delete(id) {
+  if (!confirm('Delete this day model?')) return;
+  try {
+    const res = await fetch(API+'/day-models/'+id, {method:'DELETE', headers:H});
+    const data = await res.json();
+    if (data.success) { showToast('Day model deleted','success'); await loadDayModels(); }
+    else { showToast(data.error||'Delete failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 2 — Week Patterns
+   ══════════════════════════════════════════════════════════════════ */
+let wtp_selectedDMs = [];
+
+function wtp_render() {
+  const tb = document.querySelector('#wtp-table tbody');
+  tb.innerHTML = '';
+  if (!wtpData.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">No week patterns yet. Click "+ Add Week Pattern" to create one.</td></tr>'; return; }
+  wtpData.forEach(r => {
+    const chips = (r.assigned_day_model_ids||[]).map(did => {
+      const dm = dmData.find(d => d.id == did);
+      if (!dm) return '';
+      return `<span class="chip" style="background:${dm.color||'#6b7280'}" title="${dm.name}">${dm.abbreviation||dm.name} ${dm.start_time||''}–${dm.end_time||''}</span>`;
+    }).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td><code style="font-size:.85rem">${r.abbreviation||''}</code></td>
+      <td>${puName(r.planning_unit_id)}</td>
+      <td>${r.max_exception_days != null ? r.max_exception_days : '—'}</td>
+      <td>${chips || '<span style="color:var(--text-muted)">None</span>'}</td>
+      <td>
+        <button class="btn btn-sm" onclick='wtp_openModal(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="wtp_delete(${r.id})">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function wtp_renderPool() {
+  const pool = document.getElementById('wtp-dm-pool');
+  pool.innerHTML = '';
+  if (!dmData.length) { pool.innerHTML = '<span style="color:var(--text-muted);font-size:.82rem;">No day models available. Create day models first.</span>'; return; }
+  dmData.forEach(dm => {
+    const sel = wtp_selectedDMs.includes(dm.id);
+    const el = document.createElement('span');
+    el.className = 'assign-chip' + (sel ? ' selected' : '');
+    el.innerHTML = `<span class="dot" style="background:${dm.color||'#6b7280'}"></span>${dm.abbreviation||dm.name}`;
+    el.onclick = () => {
+      if (wtp_selectedDMs.includes(dm.id)) wtp_selectedDMs = wtp_selectedDMs.filter(x=>x!==dm.id);
+      else wtp_selectedDMs.push(dm.id);
+      wtp_renderPool();
+    };
+    pool.appendChild(el);
+  });
+}
+
+function wtp_openModal(item) {
+  const dlg = document.getElementById('wtp-modal');
+  document.getElementById('wtp-modal-title').textContent = item ? 'Edit Week Pattern' : 'Add Week Pattern';
+  populateSelect('wtp_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  document.getElementById('wtp_f_id').value = item ? item.id : '';
+  document.getElementById('wtp_f_name').value = item ? item.name : '';
+  document.getElementById('wtp_f_abbreviation').value = item ? item.abbreviation||'' : '';
+  document.getElementById('wtp_f_planning_unit_id').value = item ? item.planning_unit_id||'' : '';
+  document.getElementById('wtp_f_max_exception_days').value = item && item.max_exception_days != null ? item.max_exception_days : 0;
+  document.getElementById('wtp_f_is_active').checked = item ? item.is_active !== false : true;
+  wtp_selectedDMs = item && item.assigned_day_model_ids ? [...item.assigned_day_model_ids] : [];
+  wtp_renderPool();
+  dlg.showModal();
+}
+
+async function wtp_save() {
+  const body = {
+    id: document.getElementById('wtp_f_id').value || null,
+    name: document.getElementById('wtp_f_name').value.trim(),
+    abbreviation: document.getElementById('wtp_f_abbreviation').value.trim(),
+    planning_unit_id: document.getElementById('wtp_f_planning_unit_id').value || null,
+    max_exception_days: parseInt(document.getElementById('wtp_f_max_exception_days').value) || 0,
+    is_active: document.getElementById('wtp_f_is_active').checked,
+    assigned_day_model_ids: wtp_selectedDMs,
+  };
+  try {
+    const res = await fetch(API+'/week-time-patterns', {method:'POST', headers:H, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (data.success) { document.getElementById('wtp-modal').close(); showToast('Week pattern saved','success'); await loadWeekPatterns(); }
+    else { showToast(data.error||'Save failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+async function wtp_delete(id) {
+  if (!confirm('Delete this week pattern?')) return;
+  try {
+    const res = await fetch(API+'/week-time-patterns/'+id, {method:'DELETE', headers:H});
+    const data = await res.json();
+    if (data.success) { showToast('Week pattern deleted','success'); await loadWeekPatterns(); }
+    else { showToast(data.error||'Delete failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 3 — Rotation Models
+   ══════════════════════════════════════════════════════════════════ */
+let wtpm_selectedWTPs = [];
+
+function wtpm_render() {
+  const tb = document.querySelector('#wtpm-table tbody');
+  tb.innerHTML = '';
+  if (!wtpmData.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">No rotation models yet. Click "+ Add Rotation Model" to create one.</td></tr>'; return; }
+  wtpmData.forEach(r => {
+    const chips = (r.assigned_pattern_ids||[]).map(pid => {
+      const wtp = wtpData.find(w => w.id == pid);
+      return wtp ? `<span class="chip" style="background:var(--brand-accent)">${wtp.abbreviation||wtp.name}</span>` : '';
+    }).join('');
+    const excWtp = r.exception_wtp_id ? (wtpData.find(w=>w.id==r.exception_wtp_id)||{}).name||'—' : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td><code style="font-size:.85rem">${r.abbreviation||''}</code></td>
+      <td>${r.model_type||'—'}</td>
+      <td>${r.description||'—'}</td>
+      <td>${excWtp}</td>
+      <td>${chips || '<span style="color:var(--text-muted)">None</span>'}</td>
+      <td>
+        <button class="btn btn-sm" onclick='wtpm_openModal(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="wtpm_delete(${r.id})">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function wtpm_renderPool() {
+  const pool = document.getElementById('wtpm-wtp-pool');
+  pool.innerHTML = '';
+  if (!wtpData.length) { pool.innerHTML = '<span style="color:var(--text-muted);font-size:.82rem;">No week patterns available. Create week patterns first.</span>'; return; }
+  wtpData.forEach(wtp => {
+    const sel = wtpm_selectedWTPs.includes(wtp.id);
+    const el = document.createElement('span');
+    el.className = 'assign-chip' + (sel ? ' selected' : '');
+    el.textContent = wtp.abbreviation||wtp.name;
+    el.onclick = () => {
+      if (wtpm_selectedWTPs.includes(wtp.id)) wtpm_selectedWTPs = wtpm_selectedWTPs.filter(x=>x!==wtp.id);
+      else wtpm_selectedWTPs.push(wtp.id);
+      wtpm_renderPool();
+    };
+    pool.appendChild(el);
+  });
+}
+
+function wtpm_openModal(item) {
+  const dlg = document.getElementById('wtpm-modal');
+  document.getElementById('wtpm-modal-title').textContent = item ? 'Edit Rotation Model' : 'Add Rotation Model';
+  populateSelect('wtpm_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  populateSelect('wtpm_f_exception_wtp_id', wtpData, 'id', 'name', '— None —');
+  document.getElementById('wtpm_f_id').value = item ? item.id : '';
+  document.getElementById('wtpm_f_name').value = item ? item.name : '';
+  document.getElementById('wtpm_f_abbreviation').value = item ? item.abbreviation||'' : '';
+  document.getElementById('wtpm_f_model_type').value = item ? item.model_type||'Fixed' : 'Fixed';
+  document.getElementById('wtpm_f_description').value = item ? item.description||'' : '';
+  document.getElementById('wtpm_f_exception_wtp_id').value = item ? item.exception_wtp_id||'' : '';
+  document.getElementById('wtpm_f_planning_unit_id').value = item ? item.planning_unit_id||'' : '';
+  document.getElementById('wtpm_f_is_active').checked = item ? item.is_active !== false : true;
+  wtpm_selectedWTPs = item && item.assigned_pattern_ids ? [...item.assigned_pattern_ids] : [];
+  wtpm_renderPool();
+  dlg.showModal();
+}
+
+async function wtpm_save() {
+  const body = {
+    id: document.getElementById('wtpm_f_id').value || null,
+    name: document.getElementById('wtpm_f_name').value.trim(),
+    abbreviation: document.getElementById('wtpm_f_abbreviation').value.trim(),
+    model_type: document.getElementById('wtpm_f_model_type').value,
+    description: document.getElementById('wtpm_f_description').value.trim(),
+    exception_wtp_id: document.getElementById('wtpm_f_exception_wtp_id').value || null,
+    planning_unit_id: document.getElementById('wtpm_f_planning_unit_id').value || null,
+    is_active: document.getElementById('wtpm_f_is_active').checked,
+    assigned_pattern_ids: wtpm_selectedWTPs,
+  };
+  try {
+    const res = await fetch(API+'/work-time-pattern-models', {method:'POST', headers:H, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (data.success) { document.getElementById('wtpm-modal').close(); showToast('Rotation model saved','success'); await loadRotationModels(); }
+    else { showToast(data.error||'Save failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+async function wtpm_delete(id) {
+  if (!confirm('Delete this rotation model?')) return;
+  try {
+    const res = await fetch(API+'/work-time-pattern-models/'+id, {method:'DELETE', headers:H});
+    const data = await res.json();
+    if (data.success) { showToast('Rotation model deleted','success'); await loadRotationModels(); }
+    else { showToast(data.error||'Delete failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 4 — Employee Quartiles
+   ══════════════════════════════════════════════════════════════════ */
+function eq_render() {
+  const tb = document.querySelector('#eq-table tbody');
+  tb.innerHTML = '';
+  const puFilter = document.getElementById('eq-pu-filter').value;
+  const filtered = puFilter ? eqData.filter(r => r.planning_unit_id == puFilter) : eqData;
+  if (!filtered.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">No quartile assignments yet. Click "+ Add Assignment" or "Bulk Assign" to get started.</td></tr>'; return; }
+  filtered.forEach(r => {
+    const q = r.quartile || '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${empName(r.employee_id)}</td>
+      <td>${r.employee_id}</td>
+      <td>${puName(r.planning_unit_id)}</td>
+      <td><span class="q-badge ${qClass(q)}">${q}</span></td>
+      <td>${r.effective_date||'—'}</td>
+      <td>${r.notes||'—'}</td>
+      <td>
+        <button class="btn btn-sm" onclick='eq_openModal(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="eq_delete(${r.id})">Delete</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function eq_openModal(item) {
+  const dlg = document.getElementById('eq-modal');
+  document.getElementById('eq-modal-title').textContent = item ? 'Edit Quartile Assignment' : 'Add Quartile Assignment';
+  populateSelect('eq_f_employee_id', supportData.employees, 'id', 'name', '— Select —');
+  populateSelect('eq_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  document.getElementById('eq_f_id').value = item ? item.id : '';
+  document.getElementById('eq_f_employee_id').value = item ? item.employee_id||'' : '';
+  document.getElementById('eq_f_quartile').value = item ? item.quartile||'Q1' : 'Q1';
+  document.getElementById('eq_f_planning_unit_id').value = item ? item.planning_unit_id||'' : '';
+  document.getElementById('eq_f_effective_date').value = item ? item.effective_date||'' : '';
+  document.getElementById('eq_f_notes').value = item ? item.notes||'' : '';
+  dlg.showModal();
+}
+
+async function eq_save() {
+  const body = {
+    id: document.getElementById('eq_f_id').value || null,
+    employee_id: document.getElementById('eq_f_employee_id').value || null,
+    quartile: document.getElementById('eq_f_quartile').value,
+    planning_unit_id: document.getElementById('eq_f_planning_unit_id').value || null,
+    effective_date: document.getElementById('eq_f_effective_date').value || null,
+    notes: document.getElementById('eq_f_notes').value.trim() || null,
+  };
+  try {
+    const res = await fetch(API+'/quartiles', {method:'POST', headers:H, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (data.success) { document.getElementById('eq-modal').close(); showToast('Quartile assignment saved','success'); await loadQuartiles(); }
+    else { showToast(data.error||'Save failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+async function eq_delete(id) {
+  if (!confirm('Delete this quartile assignment?')) return;
+  try {
+    const res = await fetch(API+'/quartiles/'+id, {method:'DELETE', headers:H});
+    const data = await res.json();
+    if (data.success) { showToast('Quartile assignment deleted','success'); await loadQuartiles(); }
+    else { showToast(data.error||'Delete failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+function eq_openBulkModal() {
+  const dlg = document.getElementById('eq-bulk-modal');
+  populateSelect('bulk_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  const list = document.getElementById('bulk-emp-list');
+  list.innerHTML = '';
+  supportData.employees.forEach(e => {
+    const lbl = document.createElement('label');
+    const name = e.name || `${e.first_name||''} ${e.last_name||''}`.trim();
+    lbl.innerHTML = `<input type="checkbox" value="${e.id}" class="bulk-emp-cb"> ${name} <span style="color:var(--text-muted);font-size:.78rem;">(${e.id})</span>`;
+    list.appendChild(lbl);
+  });
+  dlg.showModal();
+}
+
+function bulkToggleAll() {
+  const cbs = document.querySelectorAll('.bulk-emp-cb');
+  const allChecked = [...cbs].every(c => c.checked);
+  cbs.forEach(c => c.checked = !allChecked);
+}
+
+async function eq_bulkSave() {
+  const checked = [...document.querySelectorAll('.bulk-emp-cb:checked')].map(c => c.value);
+  if (!checked.length) { showToast('Select at least one employee','error'); return; }
+  const quartile = document.getElementById('bulk_f_quartile').value;
+  const planning_unit_id = document.getElementById('bulk_f_planning_unit_id').value || null;
+  const assignments = checked.map(eid => ({employee_id: eid, quartile, planning_unit_id}));
+  try {
+    const res = await fetch(API+'/quartiles/bulk', {method:'POST', headers:H, body:JSON.stringify({assignments})});
+    const data = await res.json();
+    if (data.success) { document.getElementById('eq-bulk-modal').close(); showToast(`Assigned ${checked.length} employees to ${quartile}`,'success'); await loadQuartiles(); }
+    else { showToast(data.error||'Bulk assign failed','error'); }
+  } catch(e) { showToast('Network error','error'); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Data loading
+   ══════════════════════════════════════════════════════════════════ */
+async function loadSupportData() {
+  try {
+    const res = await fetch(API+'/supporting-data', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data) {
+      supportData = {
+        planning_units: data.planning_units||[],
+        shift_templates: data.shift_templates||[],
+        activities: data.activities||[],
+        employees: (data.employees||[]).map(e => ({...e, name: e.name || `${e.first_name||''} ${e.last_name||''}`.trim()})),
+      };
+      /* Populate PU filter on quartiles tab */
+      populateSelect('eq-pu-filter', supportData.planning_units, 'id', 'name', 'All');
+    }
+  } catch(e) { console.error('Failed to load supporting data', e); }
+}
+
+async function loadDayModels() {
+  try {
+    const res = await fetch(API+'/day-models', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data.success) { dmData = data.items||[]; dm_render(); }
+  } catch(e) { console.error('Failed to load day models', e); }
+}
+
+async function loadWeekPatterns() {
+  try {
+    const res = await fetch(API+'/week-time-patterns', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data.success) { wtpData = data.items||[]; wtp_render(); }
+  } catch(e) { console.error('Failed to load week patterns', e); }
+}
+
+async function loadRotationModels() {
+  try {
+    const res = await fetch(API+'/work-time-pattern-models', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data.success) { wtpmData = data.items||[]; wtpm_render(); }
+  } catch(e) { console.error('Failed to load rotation models', e); }
+}
+
+async function loadQuartiles() {
+  try {
+    const res = await fetch(API+'/quartiles', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data.success) { eqData = data.items||[]; eq_render(); }
+  } catch(e) { console.error('Failed to load quartiles', e); }
+}
+
+/* ── Init ──────────────────────────────────────────────────────── */
+(async function init() {
+  await loadSupportData();
+  await Promise.all([loadDayModels(), loadWeekPatterns(), loadRotationModels(), loadQuartiles()]);
+})();
+</script>
+{% endblock %}

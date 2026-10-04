@@ -1476,9 +1476,13 @@ def day_models_save():
     try:
         item = DayModel.query.get(int(d["id"])) if d.get("id") else DayModel()
         item.name = d["name"]
+        item.abbreviation = d.get("abbreviation", "")
         item.start_time = d.get("start_time", "08:00")
         item.end_time = d.get("end_time", "16:30")
         item.paid_hours = float(d.get("paid_hours", 8))
+        item.total_hours = float(d.get("total_hours", 0)) or item.paid_hours
+        item.model_type = d.get("model_type", "Fixed")
+        item.color = d.get("color", "#4472C4")
         item.day_type = d.get("day_type", "any")
         item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
         item.shift_template_id = int(d["shift_template_id"]) if d.get("shift_template_id") else None

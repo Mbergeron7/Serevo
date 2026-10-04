@@ -1458,10 +1458,14 @@ class DayModel(db.Model):
 
     id               = db.Column(db.Integer, primary_key=True)
     name             = db.Column(db.String(100), unique=True, nullable=False)
+    abbreviation     = db.Column(db.String(20), nullable=True)       # e.g. "FT 10.5"
     shift_template_id = db.Column(db.Integer, db.ForeignKey("shift_templates.id"), nullable=True)
     start_time       = db.Column(db.String(5), nullable=False, default="08:00")
     end_time         = db.Column(db.String(5), nullable=False, default="16:30")
     paid_hours       = db.Column(db.Float, default=8.0)
+    total_hours      = db.Column(db.Float, default=8.5)              # total duration incl. unpaid break
+    model_type       = db.Column(db.String(20), default="Fixed")     # Fixed | Flexible
+    color            = db.Column(db.String(7), default="#4472C4")    # hex color for UI
     # JSON array: [{activity_id, offset_mins, duration_mins, is_flexible, window_start, window_end}]
     activities_json  = db.Column(db.Text, default="[]")
     day_type         = db.Column(db.String(20), default="any")   # weekday | saturday | sunday | holiday | any
@@ -1479,10 +1483,14 @@ class DayModel(db.Model):
         pu = self.planning_unit
         return {
             "id": self.id, "name": self.name,
+            "abbreviation": self.abbreviation or "",
             "shift_template_id": self.shift_template_id,
             "shift_template": st.name if st else "",
             "start_time": self.start_time, "end_time": self.end_time,
             "paid_hours": self.paid_hours,
+            "total_hours": self.total_hours or self.paid_hours,
+            "model_type": self.model_type or "Fixed",
+            "color": self.color or "#4472C4",
             "activities": _json.loads(self.activities_json) if self.activities_json else [],
             "day_type": self.day_type,
             "planning_unit_id": self.planning_unit_id,
@@ -1492,30 +1500,71 @@ class DayModel(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
-# WEEK TIME PATTERNS — Group day models by weekday
+# WEEK TIME PATTERNS — Group day models for quartile/role scheduling
 # ═══════════════════════════════════════════════════════════════
 
 class WeekTimePattern(db.Model):
-    """A week time pattern assigns a day model to each day of the week.
-    WFM platform equivalent: 'Week time patterns'. Used to define what
-    a typical work week looks like — which day model applies Mon-Sun."""
+    """A week time pattern groups eligible day models for a specific
+    role or quartile. WFM platform equivalent: 'Week time patterns'.
+    Can be used as day-of-week mapping OR as a pool of eligible shifts."""
     __tablename__ = "week_time_patterns"
 
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(100), unique=True, nullable=False)
+    id                  = db.Column(db.Integer, primary_key=True)
+    name                = db.Column(db.String(100), unique=True, nullable=False)
+    abbreviation        = db.Column(db.String(20), nullable=True)       # e.g. "SS Q1"
     # JSON: {mon: day_model_id, tue: day_model_id, ..., sun: day_model_id}
-    # null for a day = day off
-    days_json   = db.Column(db.Text, nullable=False, default="{}")
-    total_hours = db.Column(db.Float, default=40.0)              # calculated weekly hours
-    is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=_utcnow)
+    # null for a day = day off — used for day-of-week mapping mode
+    days_json           = db.Column(db.Text, nullable=False, default="{}")
+    total_hours         = db.Column(db.Float, default=40.0)
+    max_exception_days  = db.Column(db.Integer, default=0)              # max exception days per week
+    planning_unit_id    = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    is_active           = db.Column(db.Boolean, default=True)
+    created_at          = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit  = db.relationship("PlanningUnit", backref="week_time_patterns")
+    assigned_day_models = db.relationship("WeekTimePatternDayModel", backref="week_time_pattern",
+                                          cascade="all, delete-orphan",
+                                          order_by="WeekTimePatternDayModel.position")
 
     def to_dict(self):
         import json as _json
+        pu = self.planning_unit
         return {
             "id": self.id, "name": self.name,
+            "abbreviation": self.abbreviation or "",
             "days": _json.loads(self.days_json) if self.days_json else {},
-            "total_hours": self.total_hours, "is_active": self.is_active,
+            "total_hours": self.total_hours,
+            "max_exception_days": self.max_exception_days,
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit": pu.name if pu else "All",
+            "assigned_day_models": [adm.to_dict() for adm in self.assigned_day_models],
+            "is_active": self.is_active,
+        }
+
+
+class WeekTimePatternDayModel(db.Model):
+    """Junction table linking day models to a week time pattern with position."""
+    __tablename__ = "week_time_pattern_day_models"
+
+    id                    = db.Column(db.Integer, primary_key=True)
+    week_time_pattern_id  = db.Column(db.Integer, db.ForeignKey("week_time_patterns.id", ondelete="CASCADE"),
+                                       nullable=False, index=True)
+    day_model_id          = db.Column(db.Integer, db.ForeignKey("day_models.id", ondelete="CASCADE"),
+                                       nullable=False, index=True)
+    position              = db.Column(db.Integer, default=0)
+
+    day_model = db.relationship("DayModel")
+
+    def to_dict(self):
+        dm = self.day_model
+        return {
+            "id": self.id,
+            "day_model_id": self.day_model_id,
+            "day_model_name": dm.name if dm else "",
+            "start_time": dm.start_time if dm else "",
+            "end_time": dm.end_time if dm else "",
+            "color": (dm.color or "#4472C4") if dm else "#4472C4",
+            "position": self.position,
         }
 
 
@@ -1529,26 +1578,106 @@ class WorkTimePatternModel(db.Model):
     planning unit to tell the scheduler which shift shapes to use."""
     __tablename__ = "work_time_pattern_models"
 
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(100), unique=True, nullable=False)
+    id                = db.Column(db.Integer, primary_key=True)
+    name              = db.Column(db.String(100), unique=True, nullable=False)
+    abbreviation      = db.Column(db.String(20), nullable=True)       # e.g. "SS"
+    model_type        = db.Column(db.String(20), default="Fixed")     # Fixed | Flexible
+    description       = db.Column(db.Text, nullable=True)
     # JSON array: [week_time_pattern_id, ...] — ordered list of week patterns
     # If multiple, they cycle (week 1 uses pattern[0], week 2 uses pattern[1], etc.)
-    patterns_json = db.Column(db.Text, nullable=False, default="[]")
-    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
-    is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=_utcnow)
+    patterns_json     = db.Column(db.Text, nullable=False, default="[]")
+    exception_wtp_id  = db.Column(db.Integer, db.ForeignKey("week_time_patterns.id"), nullable=True)
+    planning_unit_id  = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    is_active         = db.Column(db.Boolean, default=True)
+    created_at        = db.Column(db.DateTime, default=_utcnow)
 
-    planning_unit = db.relationship("PlanningUnit", backref="work_time_pattern_models")
+    planning_unit     = db.relationship("PlanningUnit", backref="work_time_pattern_models")
+    exception_wtp     = db.relationship("WeekTimePattern", foreign_keys=[exception_wtp_id])
+    assigned_patterns = db.relationship("WorkTimePatternModelPattern", backref="work_time_pattern_model",
+                                         cascade="all, delete-orphan",
+                                         order_by="WorkTimePatternModelPattern.position")
 
     def to_dict(self):
         import json as _json
         pu = self.planning_unit
+        ewtp = self.exception_wtp
         return {
             "id": self.id, "name": self.name,
+            "abbreviation": self.abbreviation or "",
+            "model_type": self.model_type or "Fixed",
+            "description": self.description or "",
             "patterns": _json.loads(self.patterns_json) if self.patterns_json else [],
+            "exception_wtp_id": self.exception_wtp_id,
+            "exception_wtp_name": ewtp.name if ewtp else "",
             "planning_unit_id": self.planning_unit_id,
             "planning_unit": pu.name if pu else "All",
+            "assigned_patterns": [ap.to_dict() for ap in self.assigned_patterns],
             "is_active": self.is_active,
+        }
+
+
+class WorkTimePatternModelPattern(db.Model):
+    """Junction table linking week time patterns to a work time pattern model with position."""
+    __tablename__ = "work_time_pattern_model_patterns"
+
+    id                          = db.Column(db.Integer, primary_key=True)
+    work_time_pattern_model_id  = db.Column(db.Integer, db.ForeignKey("work_time_pattern_models.id", ondelete="CASCADE"),
+                                             nullable=False, index=True)
+    week_time_pattern_id        = db.Column(db.Integer, db.ForeignKey("week_time_patterns.id", ondelete="CASCADE"),
+                                             nullable=False, index=True)
+    position                    = db.Column(db.Integer, default=0)
+
+    week_time_pattern = db.relationship("WeekTimePattern")
+
+    def to_dict(self):
+        wtp = self.week_time_pattern
+        return {
+            "id": self.id,
+            "week_time_pattern_id": self.week_time_pattern_id,
+            "week_time_pattern_name": wtp.name if wtp else "",
+            "position": self.position,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# EMPLOYEE QUARTILE ASSIGNMENT
+# ═══════════════════════════════════════════════════════════════
+
+class EmployeeQuartile(db.Model):
+    """Assigns a performance quartile (Q1-Q4) to an employee per LOB/planning unit.
+    Q1 = top performers (prime shifts), Q4 = lowest (remaining shifts)."""
+    __tablename__ = "employee_quartiles"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    quartile         = db.Column(db.Integer, nullable=False, default=4)  # 1-4
+    effective_date   = db.Column(db.Date, nullable=True)
+    notes            = db.Column(db.Text, nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    employee      = db.relationship("Employee", backref="quartile_assignments")
+    planning_unit = db.relationship("PlanningUnit", backref="employee_quartiles")
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "planning_unit_id", name="uq_emp_quartile_pu"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        pu = self.planning_unit
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "employee_name": emp.full_name if emp else "",
+            "employee_ext_id": emp.employee_id if emp else "",
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit": pu.name if pu else "All",
+            "quartile": self.quartile,
+            "effective_date": self.effective_date.isoformat() if self.effective_date else "",
+            "notes": self.notes or "",
         }
 
 

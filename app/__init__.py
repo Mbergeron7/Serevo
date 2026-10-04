@@ -161,6 +161,7 @@ def create_app():
     from app.routes.support import support_bp
     from app.routes.help_guide import help_bp
     from app.routes.wfm_tickets import wfm_tickets_bp
+    from app.routes.scheduling_config import scheduling_config_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -190,6 +191,7 @@ def create_app():
     app.register_blueprint(support_bp)
     app.register_blueprint(help_bp)
     app.register_blueprint(wfm_tickets_bp)
+    app.register_blueprint(scheduling_config_bp)
 
     # ---- error handlers ----
     @app.errorhandler(403)
