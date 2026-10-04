@@ -2,9 +2,24 @@
 {% block title %}Planning Units — {{ brand_name }}{% endblock %}
 
 {% block content %}
+<style>
+  .tab-btn{background:none;border:none;padding:8px 16px;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-btn:hover{color:var(--text);}
+  .tab-panel{display:none;} .tab-panel.active{display:block;}
+  .req{color:#ef4444;font-weight:700;}
+  .dyn-row{display:grid;gap:8px;align-items:end;padding:8px 0;border-bottom:1px solid var(--border-light, #e5e7eb);}
+  .dyn-row:last-child{border-bottom:none;}
+  .tz-select{max-width:260px;}
+  .day-type-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;font-size:.78rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);transition:all .15s;}
+  .day-type-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .info-box{background:var(--surface-raised, #f9fafb);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:.8rem;color:var(--text-muted);margin-bottom:12px;}
+  .badge-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:.7rem;font-weight:600;padding:0 5px;margin-left:6px;}
+</style>
+
 <div class="page-header">
   <h1>Planning Units</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage LOBs and workload groups — the core organizational units that employees, schedules, and forecasts are grouped by.</p>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage LOBs and workload groups — configure business hours, assign activities, and set scheduling parameters.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
@@ -14,69 +29,307 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Name</th><th>Employees</th><th>Active</th><th></th></tr>
+    <tr><th>Name</th><th>Description</th><th>Timezone</th><th>Employees</th><th>Hours</th><th>Activities</th><th>Active</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table></div>
 
-<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:440px;width:90vw;background:var(--surface);color:var(--text);">
-  <h3 id="modalTitle" style="margin:0 0 16px;">Add Planning Unit</h3>
-  <form id="editForm" onsubmit="return false;">
-    <input type="hidden" id="f_id" value="">
-    <div style="display:grid;gap:12px;">
-      <label>Name<input id="f_name" class="form-input" required></label>
-      <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
+<!-- ═══ MODAL ═══ -->
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:0;max-width:720px;width:95vw;background:var(--surface);color:var(--text);max-height:92vh;overflow:hidden;">
+  <div style="padding:20px 24px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="modalTitle" style="margin:0;">Add Planning Unit</h3>
+      <button type="button" onclick="document.getElementById('editModal').close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <div id="tabBar" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
+      <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
+      <button class="tab-btn" onclick="switchTab('hours')" data-tab="hours">Business Hours</button>
+      <button class="tab-btn" onclick="switchTab('activities')" data-tab="activities">Activities</button>
+      <button class="tab-btn" onclick="switchTab('parameters')" data-tab="parameters">Parameters</button>
+    </div>
+  </div>
+  <div style="padding:16px 24px 24px;overflow-y:auto;max-height:calc(92vh - 120px);">
+    <form id="editForm" onsubmit="return false;">
+      <input type="hidden" id="f_id" value="">
+
+      <!-- ── TAB: General ── -->
+      <div class="tab-panel active" data-panel="general">
+        <div style="display:grid;gap:12px;">
+          <label>Name <span class="req">*</span><input id="f_name" class="form-input" required placeholder="e.g. Customer Service"></label>
+          <label>Description<input id="f_description" class="form-input" placeholder="Optional description"></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Timezone
+              <select id="f_timezone" class="form-input tz-select">
+                <option value="America/New_York">America/New_York (ET)</option>
+                <option value="America/Chicago">America/Chicago (CT)</option>
+                <option value="America/Denver">America/Denver (MT)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+                <option value="America/Phoenix">America/Phoenix (AZ)</option>
+                <option value="America/Anchorage">America/Anchorage (AK)</option>
+                <option value="Pacific/Honolulu">Pacific/Honolulu (HI)</option>
+                <option value="America/Toronto">America/Toronto</option>
+                <option value="America/Vancouver">America/Vancouver</option>
+                <option value="Europe/London">Europe/London (GMT)</option>
+                <option value="Europe/Berlin">Europe/Berlin (CET)</option>
+                <option value="Europe/Paris">Europe/Paris (CET)</option>
+                <option value="Europe/Madrid">Europe/Madrid (CET)</option>
+                <option value="Europe/Rome">Europe/Rome (CET)</option>
+                <option value="Europe/Amsterdam">Europe/Amsterdam (CET)</option>
+                <option value="Europe/Bucharest">Europe/Bucharest (EET)</option>
+                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                <option value="Asia/Manila">Asia/Manila (PHT)</option>
+                <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
+                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
+            <label style="display:flex;align-items:end;gap:6px;padding-bottom:8px;">
+              <input id="f_is_active" type="checkbox" checked> Active
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Business Hours ── -->
+      <div class="tab-panel" data-panel="hours">
+        <div class="info-box">Define operating hours for each day type. These control when scheduling and forecasting are active.</div>
+        <div style="margin-bottom:12px;">
+          <button type="button" class="btn btn-sm" onclick="addBizHour()">+ Add Hours</button>
+        </div>
+        <div id="bizHoursList"></div>
+        <div id="bizHoursEmpty" style="text-align:center;color:var(--text-muted);padding:1.5rem;font-size:.85rem;">No business hours configured. Click "+ Add Hours" to start.</div>
+      </div>
+
+      <!-- ── TAB: Activities ── -->
+      <div class="tab-panel" data-panel="activities">
+        <div class="info-box">Assign activities to this planning unit with optional time windows and validity dates.</div>
+        <div style="margin-bottom:12px;">
+          <button type="button" class="btn btn-sm" onclick="addPuActivity()">+ Assign Activity</button>
+        </div>
+        <div id="puActivitiesList"></div>
+        <div id="puActivitiesEmpty" style="text-align:center;color:var(--text-muted);padding:1.5rem;font-size:.85rem;">No activities assigned. Click "+ Assign Activity" to start.</div>
+      </div>
+
+      <!-- ── TAB: Parameters ── -->
+      <div class="tab-panel" data-panel="parameters">
+        <div class="info-box">Define custom parameters with lower and upper limits — used for scheduling constraints (min/max staffing, service levels, etc.).</div>
+        <div style="margin-bottom:12px;">
+          <button type="button" class="btn btn-sm" onclick="addParameter()">+ Add Parameter</button>
+        </div>
+        <div id="paramsList"></div>
+        <div id="paramsEmpty" style="text-align:center;color:var(--text-muted);padding:1.5rem;font-size:.85rem;">No parameters defined. Click "+ Add Parameter" to start.</div>
+      </div>
+
+    </form>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
       <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
       <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
     </div>
-  </form>
+  </div>
 </dialog>
 
 <script>
 const DATA = {{ items | tojson }};
+const ALL_ACTIVITIES = {{ activities | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
 
+/* ── Dynamic row arrays ── */
+let bizHours = [];
+let puActivities = [];
+let params = [];
+
+/* ── Tab switching ── */
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+}
+
+/* ── Table render ── */
 function render() {
   tbody.innerHTML = '';
   DATA.forEach(r => {
     const tr = document.createElement('tr');
+    const bhCount = (r.business_hours || []).length;
+    const actCount = (r.assigned_activities || []).length;
     tr.innerHTML = `
-      <td>${r.name}</td>
+      <td style="font-weight:600;">${esc(r.name)}</td>
+      <td style="color:var(--text-muted);font-size:.85rem;">${esc(r.description || '—')}</td>
+      <td style="font-size:.82rem;font-family:monospace;">${esc(r.timezone || 'America/New_York')}</td>
       <td>${r.employee_count}</td>
+      <td>${bhCount ? '<span class="badge-count">'+bhCount+'</span>' : '—'}</td>
+      <td>${actCount ? '<span class="badge-count">'+actCount+'</span>' : '—'}</td>
       <td>${r.is_active ? '✓' : '—'}</td>
-      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+      <td><button class="btn btn-sm" onclick='editItem(${r.id})'>Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
     tbody.appendChild(tr);
   });
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
 }
 
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ── Modal open ── */
 function openModal(item) {
   document.getElementById('modalTitle').textContent = item ? 'Edit Planning Unit' : 'Add Planning Unit';
   document.getElementById('f_id').value = item ? item.id : '';
   document.getElementById('f_name').value = item ? item.name : '';
+  document.getElementById('f_description').value = item ? (item.description || '') : '';
+  document.getElementById('f_timezone').value = item ? (item.timezone || 'America/New_York') : 'America/New_York';
   document.getElementById('f_is_active').checked = item ? item.is_active : true;
+
+  bizHours = item ? JSON.parse(JSON.stringify(item.business_hours || [])) : [];
+  puActivities = item ? JSON.parse(JSON.stringify(item.assigned_activities || [])) : [];
+  params = item ? JSON.parse(JSON.stringify(item.parameters || [])) : [];
+
+  renderBizHours();
+  renderPuActivities();
+  renderParams();
+  switchTab('general');
   dlg.showModal();
 }
 
-function editItem(item) { openModal(item); }
+function editItem(id) {
+  const item = DATA.find(r => r.id === id);
+  if (item) openModal(item);
+}
 
+/* ══════════════════════════════════════════
+   Business Hours
+   ══════════════════════════════════════════ */
+const DAY_TYPES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday','Holiday','Special'];
+
+function addBizHour() {
+  bizHours.push({ day_type:'Monday', open_time:'08:00', close_time:'22:00', valid_from:'', valid_to:'' });
+  renderBizHours();
+}
+
+function removeBizHour(i) { bizHours.splice(i,1); renderBizHours(); }
+
+function updateBizHour(i, field, val) { bizHours[i][field] = val; }
+
+function renderBizHours() {
+  const el = document.getElementById('bizHoursList');
+  const empty = document.getElementById('bizHoursEmpty');
+  empty.style.display = bizHours.length ? 'none' : 'block';
+  el.innerHTML = '';
+  bizHours.forEach((bh, i) => {
+    const row = document.createElement('div');
+    row.className = 'dyn-row';
+    row.style.gridTemplateColumns = '1fr 100px 100px 120px 120px 36px';
+    row.innerHTML = `
+      <select class="form-input" onchange="updateBizHour(${i},'day_type',this.value)">
+        ${DAY_TYPES.map(d => `<option${bh.day_type===d?' selected':''}>${d}</option>`).join('')}
+      </select>
+      <label style="font-size:.75rem;">Open<input type="time" class="form-input" value="${bh.open_time||'08:00'}" onchange="updateBizHour(${i},'open_time',this.value)"></label>
+      <label style="font-size:.75rem;">Close<input type="time" class="form-input" value="${bh.close_time||'22:00'}" onchange="updateBizHour(${i},'close_time',this.value)"></label>
+      <label style="font-size:.75rem;">From<input type="date" class="form-input" value="${bh.valid_from||''}" onchange="updateBizHour(${i},'valid_from',this.value)"></label>
+      <label style="font-size:.75rem;">To<input type="date" class="form-input" value="${bh.valid_to||''}" onchange="updateBizHour(${i},'valid_to',this.value)"></label>
+      <button type="button" onclick="removeBizHour(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:14px;">✕</button>`;
+    el.appendChild(row);
+  });
+  updateTabBadge('hours', bizHours.length);
+}
+
+/* ══════════════════════════════════════════
+   Assigned Activities
+   ══════════════════════════════════════════ */
+function addPuActivity() {
+  if (!ALL_ACTIVITIES.length) { alert('No activities available. Create activities first.'); return; }
+  puActivities.push({ segment_code_id: ALL_ACTIVITIES[0].id, window_start:'', window_end:'', valid_from:'', valid_to:'' });
+  renderPuActivities();
+}
+
+function removePuActivity(i) { puActivities.splice(i,1); renderPuActivities(); }
+
+function updatePuActivity(i, field, val) { puActivities[i][field] = val; }
+
+function renderPuActivities() {
+  const el = document.getElementById('puActivitiesList');
+  const empty = document.getElementById('puActivitiesEmpty');
+  empty.style.display = puActivities.length ? 'none' : 'block';
+  el.innerHTML = '';
+  puActivities.forEach((pa, i) => {
+    const row = document.createElement('div');
+    row.className = 'dyn-row';
+    row.style.gridTemplateColumns = '1fr 90px 90px 120px 120px 36px';
+    row.innerHTML = `
+      <select class="form-input" onchange="updatePuActivity(${i},'segment_code_id',parseInt(this.value))">
+        ${ALL_ACTIVITIES.map(a => `<option value="${a.id}"${pa.segment_code_id===a.id?' selected':''}>${esc(a.label)} (${esc(a.code||'')})</option>`).join('')}
+      </select>
+      <label style="font-size:.75rem;">Start<input type="time" class="form-input" value="${pa.window_start||''}" onchange="updatePuActivity(${i},'window_start',this.value)"></label>
+      <label style="font-size:.75rem;">End<input type="time" class="form-input" value="${pa.window_end||''}" onchange="updatePuActivity(${i},'window_end',this.value)"></label>
+      <label style="font-size:.75rem;">From<input type="date" class="form-input" value="${pa.valid_from||''}" onchange="updatePuActivity(${i},'valid_from',this.value)"></label>
+      <label style="font-size:.75rem;">To<input type="date" class="form-input" value="${pa.valid_to||''}" onchange="updatePuActivity(${i},'valid_to',this.value)"></label>
+      <button type="button" onclick="removePuActivity(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:14px;">✕</button>`;
+    el.appendChild(row);
+  });
+  updateTabBadge('activities', puActivities.length);
+}
+
+/* ══════════════════════════════════════════
+   Parameters
+   ══════════════════════════════════════════ */
+function addParameter() {
+  params.push({ name:'', lower_limit:'', upper_limit:'' });
+  renderParams();
+}
+
+function removeParam(i) { params.splice(i,1); renderParams(); }
+
+function updateParam(i, field, val) { params[i][field] = val; }
+
+function renderParams() {
+  const el = document.getElementById('paramsList');
+  const empty = document.getElementById('paramsEmpty');
+  empty.style.display = params.length ? 'none' : 'block';
+  el.innerHTML = '';
+  params.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'dyn-row';
+    row.style.gridTemplateColumns = '1fr 100px 100px 36px';
+    row.innerHTML = `
+      <input class="form-input" placeholder="Parameter name" value="${esc(p.name||'')}" onchange="updateParam(${i},'name',this.value)">
+      <label style="font-size:.75rem;">Lower<input type="number" step="any" class="form-input" value="${p.lower_limit!=null&&p.lower_limit!==''?p.lower_limit:''}" onchange="updateParam(${i},'lower_limit',this.value)"></label>
+      <label style="font-size:.75rem;">Upper<input type="number" step="any" class="form-input" value="${p.upper_limit!=null&&p.upper_limit!==''?p.upper_limit:''}" onchange="updateParam(${i},'upper_limit',this.value)"></label>
+      <button type="button" onclick="removeParam(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:14px;">✕</button>`;
+    el.appendChild(row);
+  });
+  updateTabBadge('parameters', params.length);
+}
+
+/* ── Tab badge ── */
+function updateTabBadge(tab, count) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!btn) return;
+  let badge = btn.querySelector('.badge-count');
+  if (count > 0) {
+    if (!badge) { badge = document.createElement('span'); badge.className = 'badge-count'; btn.appendChild(badge); }
+    badge.textContent = count;
+  } else if (badge) { badge.remove(); }
+}
+
+/* ── Save ── */
 async function saveItem() {
   const body = {
     id: document.getElementById('f_id').value || null,
     name: document.getElementById('f_name').value,
+    description: document.getElementById('f_description').value,
+    timezone: document.getElementById('f_timezone').value,
     is_active: document.getElementById('f_is_active').checked,
+    business_hours: bizHours,
+    assigned_activities: puActivities,
+    parameters: params,
   };
   const res = await fetch('/settings/planning-units/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
 }
 
+/* ── Delete ── */
 async function deleteItem(id) {
-  if (!confirm('Delete this planning unit? This will NOT delete associated employees — they will become unassigned.')) return;
+  if (!confirm('Delete this planning unit? Associated employees will become unassigned.')) return;
   const res = await fetch('/settings/planning-units/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }

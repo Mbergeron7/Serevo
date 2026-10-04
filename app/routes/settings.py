@@ -1627,34 +1627,100 @@ def planning_units_page():
     user = get_current_user()
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_planning_units_config
-        return render_template("settings/planning_units.html", items=get_demo_planning_units_config())
-    from app.models import PlanningUnit, Employee
+        return render_template("settings/planning_units.html", items=get_demo_planning_units_config(), activities=[])
+    from app.models import PlanningUnit, Employee, SegmentCode
     pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
     items = []
     for pu in pus:
-        items.append({
-            "id": pu.id, "name": pu.name, "is_active": pu.is_active,
-            "employee_count": Employee.query.filter_by(planning_unit_id=pu.id).count(),
-        })
-    return render_template("settings/planning_units.html", items=items)
+        d = pu.to_dict()
+        d["employee_count"] = Employee.query.filter_by(planning_unit_id=pu.id).count()
+        items.append(d)
+    # Available activities for assignment dropdown
+    activities = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.label).all()]
+    return render_template("settings/planning_units.html", items=items, activities=activities)
 
 
 @settings_bp.route("/planning-units/save", methods=["POST"])
 @admin_required
 def planning_units_save():
-    from app.models import PlanningUnit, db
+    from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, db
     d = request.json or {}
     try:
-        item = PlanningUnit.query.get(int(d["id"])) if d.get("id") else PlanningUnit()
-        item.name = d["name"]
-        item.is_active = bool(d.get("is_active", True))
-        if not d.get("id"):
+        if d.get("id"):
+            item = PlanningUnit.query.get(int(d["id"]))
+            if not item:
+                return jsonify(success=False, error="Not found")
+        else:
+            item = PlanningUnit()
             db.session.add(item)
+        item.name = (d.get("name") or "").strip()
+        if not item.name:
+            return jsonify(success=False, error="Name is required")
+        item.description = (d.get("description") or "").strip() or None
+        item.timezone = (d.get("timezone") or "America/New_York").strip()
+        item.is_active = bool(d.get("is_active", True))
+        db.session.flush()
+
+        # Sync business hours (replace all)
+        PlanningUnitBusinessHours.query.filter_by(planning_unit_id=item.id).delete()
+        for bh in (d.get("business_hours") or []):
+            day_type = (bh.get("day_type") or "").strip()
+            if not day_type:
+                continue
+            db.session.add(PlanningUnitBusinessHours(
+                planning_unit_id=item.id,
+                day_type=day_type,
+                open_time=bh.get("open_time", "08:00"),
+                close_time=bh.get("close_time", "22:00"),
+                valid_from=_parse_date(bh.get("valid_from")),
+                valid_to=_parse_date(bh.get("valid_to")),
+            ))
+
+        # Sync assigned activities (replace all)
+        PlanningUnitActivity.query.filter_by(planning_unit_id=item.id).delete()
+        for pa in (d.get("assigned_activities") or []):
+            sc_id = pa.get("segment_code_id")
+            if not sc_id:
+                continue
+            db.session.add(PlanningUnitActivity(
+                planning_unit_id=item.id,
+                segment_code_id=int(sc_id),
+                window_start=pa.get("window_start") or None,
+                window_end=pa.get("window_end") or None,
+                valid_from=_parse_date(pa.get("valid_from")),
+                valid_to=_parse_date(pa.get("valid_to")),
+            ))
+
+        # Sync parameters (replace all)
+        PlanningUnitParameter.query.filter_by(planning_unit_id=item.id).delete()
+        for p in (d.get("parameters") or []):
+            name = (p.get("name") or "").strip()
+            if not name:
+                continue
+            db.session.add(PlanningUnitParameter(
+                planning_unit_id=item.id,
+                name=name,
+                lower_limit=float(p["lower_limit"]) if p.get("lower_limit") not in (None, "") else None,
+                upper_limit=float(p["upper_limit"]) if p.get("upper_limit") not in (None, "") else None,
+            ))
+
         db.session.commit()
-        return jsonify(success=True)
+        return jsonify(success=True, id=item.id)
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=str(e))
+
+
+def _parse_date(val):
+    """Parse a date string (YYYY-MM-DD) to a date object, or None."""
+    if not val:
+        return None
+    from datetime import date as dt_date
+    try:
+        parts = str(val).split("-")
+        return dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        return None
 
 
 @settings_bp.route("/planning-units/delete", methods=["POST"])
@@ -1665,7 +1731,6 @@ def planning_units_delete():
     try:
         item = PlanningUnit.query.get(int(d["id"]))
         if item:
-            # Unassign employees instead of deleting them
             Employee.query.filter_by(planning_unit_id=item.id).update({"planning_unit_id": None})
             db.session.delete(item)
             db.session.commit()
