@@ -16,22 +16,48 @@ branch_labels = None
 depends_on = None
 
 
+def _column_exists(table, column):
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = :t AND column_name = :c)"
+    ), {"t": table, "c": column})
+    return result.scalar()
+
+
+def _constraint_exists(name):
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = :n)"
+    ), {"n": name})
+    return result.scalar()
+
+
 def upgrade():
     # SegmentCode: activity_category, external_ids, parent_id, is_multi_activity
     with op.batch_alter_table('segment_codes', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('activity_category', sa.String(20), server_default='status', nullable=True))
-        batch_op.add_column(sa.Column('external_ids', sa.Text(), nullable=True))
-        batch_op.add_column(sa.Column('parent_id', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('is_multi_activity', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.create_foreign_key('fk_segment_codes_parent', 'segment_codes', ['parent_id'], ['id'])
+        for col_name, col_type, default in [
+            ('activity_category', sa.String(20), 'status'),
+            ('external_ids', sa.Text(), None),
+            ('parent_id', sa.Integer(), None),
+            ('is_multi_activity', sa.Boolean(), '0'),
+        ]:
+            if not _column_exists('segment_codes', col_name):
+                batch_op.add_column(sa.Column(col_name, col_type, server_default=default, nullable=True))
+        if not _constraint_exists('fk_segment_codes_parent'):
+            batch_op.create_foreign_key('fk_segment_codes_parent', 'segment_codes', ['parent_id'], ['id'])
 
     # Activity: activity_category, external_ids, parent_id, is_multi_activity
     with op.batch_alter_table('activities', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('activity_category', sa.String(20), server_default='status', nullable=True))
-        batch_op.add_column(sa.Column('external_ids', sa.Text(), nullable=True))
-        batch_op.add_column(sa.Column('parent_id', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('is_multi_activity', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.create_foreign_key('fk_activities_parent', 'activities', ['parent_id'], ['id'])
+        for col_name, col_type, default in [
+            ('activity_category', sa.String(20), 'status'),
+            ('external_ids', sa.Text(), None),
+            ('parent_id', sa.Integer(), None),
+            ('is_multi_activity', sa.Boolean(), '0'),
+        ]:
+            if not _column_exists('activities', col_name):
+                batch_op.add_column(sa.Column(col_name, col_type, server_default=default, nullable=True))
+        if not _constraint_exists('fk_activities_parent'):
+            batch_op.create_foreign_key('fk_activities_parent', 'activities', ['parent_id'], ['id'])
 
 
 def downgrade():

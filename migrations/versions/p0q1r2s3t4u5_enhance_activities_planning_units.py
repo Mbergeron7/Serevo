@@ -16,95 +16,120 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(name):
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
+    ), {"t": name})
+    return result.scalar()
+
+
+def _column_exists(table, column):
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = :t AND column_name = :c)"
+    ), {"t": table, "c": column})
+    return result.scalar()
+
+
 def upgrade():
     # ── SegmentCode: new PeopleWare-level fields ─────────────
+    cols_to_add = [
+        ('activity_type', sa.String(20), 'presence'),
+        ('official_name', sa.String(120), None),
+        ('abbreviation', sa.String(20), None),
+        ('shortcut', sa.String(10), None),
+        ('is_replaceable', sa.Boolean(), '1'),
+        ('is_plannable', sa.Boolean(), '1'),
+        ('importance', sa.Integer(), '50'),
+        ('priority', sa.Integer(), '50'),
+        ('comply_rest_period', sa.Boolean(), '1'),
+        ('allow_overstaffing_zero', sa.Boolean(), '0'),
+        ('is_requestable', sa.Boolean(), '0'),
+        ('is_exchangeable', sa.Boolean(), '0'),
+        ('allow_full_day', sa.Boolean(), '0'),
+        ('special_handling', sa.Boolean(), '0'),
+        ('can_be_day_status', sa.Boolean(), '0'),
+    ]
     with op.batch_alter_table('segment_codes', schema=None) as batch_op:
-        # Activity type (presence/break/absence/meeting/vacation)
-        batch_op.add_column(sa.Column('activity_type', sa.String(20), server_default='presence', nullable=True))
-        # Naming
-        batch_op.add_column(sa.Column('official_name', sa.String(120), nullable=True))
-        batch_op.add_column(sa.Column('abbreviation', sa.String(20), nullable=True))
-        batch_op.add_column(sa.Column('shortcut', sa.String(10), nullable=True))
-        # Scheduling behavior flags
-        batch_op.add_column(sa.Column('is_replaceable', sa.Boolean(), server_default='1', nullable=True))
-        batch_op.add_column(sa.Column('is_plannable', sa.Boolean(), server_default='1', nullable=True))
-        batch_op.add_column(sa.Column('importance', sa.Integer(), server_default='50', nullable=True))
-        batch_op.add_column(sa.Column('priority', sa.Integer(), server_default='50', nullable=True))
-        batch_op.add_column(sa.Column('comply_rest_period', sa.Boolean(), server_default='1', nullable=True))
-        batch_op.add_column(sa.Column('allow_overstaffing_zero', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.add_column(sa.Column('is_requestable', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.add_column(sa.Column('is_exchangeable', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.add_column(sa.Column('allow_full_day', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.add_column(sa.Column('special_handling', sa.Boolean(), server_default='0', nullable=True))
-        batch_op.add_column(sa.Column('can_be_day_status', sa.Boolean(), server_default='0', nullable=True))
+        for col_name, col_type, default in cols_to_add:
+            if not _column_exists('segment_codes', col_name):
+                batch_op.add_column(sa.Column(col_name, col_type, server_default=default, nullable=True))
 
     # ── ActivitySkill table ──────────────────────────────────
-    op.create_table('activity_skills',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('segment_code_id', sa.Integer(), nullable=False),
-        sa.Column('name', sa.String(120), nullable=False),
-        sa.Column('weighting', sa.Integer(), server_default='100', nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
-        sa.PrimaryKeyConstraint('id')
-    )
+    if not _table_exists('activity_skills'):
+        op.create_table('activity_skills',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('segment_code_id', sa.Integer(), nullable=False),
+            sa.Column('name', sa.String(120), nullable=False),
+            sa.Column('weighting', sa.Integer(), server_default='100', nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
+            sa.PrimaryKeyConstraint('id')
+        )
 
     # ── ExternalStatusMapping table ──────────────────────────
-    op.create_table('external_status_mappings',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('segment_code_id', sa.Integer(), nullable=False),
-        sa.Column('external_status', sa.String(100), nullable=False),
-        sa.Column('description', sa.String(200), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
-        sa.PrimaryKeyConstraint('id')
-    )
+    if not _table_exists('external_status_mappings'):
+        op.create_table('external_status_mappings',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('segment_code_id', sa.Integer(), nullable=False),
+            sa.Column('external_status', sa.String(100), nullable=False),
+            sa.Column('description', sa.String(200), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
+            sa.PrimaryKeyConstraint('id')
+        )
 
     # ── PlanningUnit: new fields ─────────────────────────────
     with op.batch_alter_table('planning_units', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('description', sa.String(255), nullable=True))
-        batch_op.add_column(sa.Column('timezone', sa.String(60), server_default='America/New_York', nullable=True))
+        if not _column_exists('planning_units', 'description'):
+            batch_op.add_column(sa.Column('description', sa.String(255), nullable=True))
+        if not _column_exists('planning_units', 'timezone'):
+            batch_op.add_column(sa.Column('timezone', sa.String(60), server_default='America/New_York', nullable=True))
 
     # ── PlanningUnitBusinessHours table ──────────────────────
-    op.create_table('planning_unit_business_hours',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('planning_unit_id', sa.Integer(), nullable=False),
-        sa.Column('day_type', sa.String(20), nullable=False),
-        sa.Column('open_time', sa.String(5), nullable=False),
-        sa.Column('close_time', sa.String(5), nullable=False),
-        sa.Column('valid_from', sa.Date(), nullable=True),
-        sa.Column('valid_to', sa.Date(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
-        sa.PrimaryKeyConstraint('id')
-    )
+    if not _table_exists('planning_unit_business_hours'):
+        op.create_table('planning_unit_business_hours',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('planning_unit_id', sa.Integer(), nullable=False),
+            sa.Column('day_type', sa.String(20), nullable=False),
+            sa.Column('open_time', sa.String(5), nullable=False),
+            sa.Column('close_time', sa.String(5), nullable=False),
+            sa.Column('valid_from', sa.Date(), nullable=True),
+            sa.Column('valid_to', sa.Date(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
+            sa.PrimaryKeyConstraint('id')
+        )
 
     # ── PlanningUnitActivity table ───────────────────────────
-    op.create_table('planning_unit_activities',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('planning_unit_id', sa.Integer(), nullable=False),
-        sa.Column('segment_code_id', sa.Integer(), nullable=False),
-        sa.Column('window_start', sa.String(5), nullable=True),
-        sa.Column('window_end', sa.String(5), nullable=True),
-        sa.Column('valid_from', sa.Date(), nullable=True),
-        sa.Column('valid_to', sa.Date(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
-        sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
-        sa.PrimaryKeyConstraint('id')
-    )
+    if not _table_exists('planning_unit_activities'):
+        op.create_table('planning_unit_activities',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('planning_unit_id', sa.Integer(), nullable=False),
+            sa.Column('segment_code_id', sa.Integer(), nullable=False),
+            sa.Column('window_start', sa.String(5), nullable=True),
+            sa.Column('window_end', sa.String(5), nullable=True),
+            sa.Column('valid_from', sa.Date(), nullable=True),
+            sa.Column('valid_to', sa.Date(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
+            sa.ForeignKeyConstraint(['segment_code_id'], ['segment_codes.id']),
+            sa.PrimaryKeyConstraint('id')
+        )
 
     # ── PlanningUnitParameter table ──────────────────────────
-    op.create_table('planning_unit_parameters',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('planning_unit_id', sa.Integer(), nullable=False),
-        sa.Column('name', sa.String(120), nullable=False),
-        sa.Column('lower_limit', sa.Float(), nullable=True),
-        sa.Column('upper_limit', sa.Float(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
-        sa.PrimaryKeyConstraint('id')
-    )
+    if not _table_exists('planning_unit_parameters'):
+        op.create_table('planning_unit_parameters',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('planning_unit_id', sa.Integer(), nullable=False),
+            sa.Column('name', sa.String(120), nullable=False),
+            sa.Column('lower_limit', sa.Float(), nullable=True),
+            sa.Column('upper_limit', sa.Float(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['planning_unit_id'], ['planning_units.id']),
+            sa.PrimaryKeyConstraint('id')
+        )
 
 
 def downgrade():
