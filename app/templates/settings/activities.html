@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Activities</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Activity codes for scheduling — breaks, lunch, training, meetings, LOB activities. Configure colors, placement rules, external ID mapping, and multi-activity grouping.</p>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Activity codes for scheduling — configure type, behavior, external mapping, skills, and subactivities.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
@@ -14,96 +14,198 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Color</th><th>Code</th><th>Label</th><th>Type</th><th>External IDs</th><th>Productive</th><th>Paid</th><th>Duration</th><th></th></tr>
+    <tr><th>Color</th><th>Code</th><th>Label</th><th>Type</th><th>Category</th><th>External IDs</th><th>Skills</th><th>Productive</th><th>Paid</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table></div>
 
-<!-- Modal -->
-<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:560px;width:90vw;background:var(--surface);color:var(--text);max-height:90vh;overflow-y:auto;">
-  <h3 id="modalTitle" style="margin:0 0 16px;">Add Activity</h3>
-  <form id="editForm" onsubmit="return false;">
-    <input type="hidden" id="f_id" value="">
-    <div style="display:grid;gap:12px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Label<input id="f_label" class="form-input" required placeholder="e.g. SS Sales EN"></label>
-        <label>Code<input id="f_code" class="form-input" placeholder="Auto from label"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Color<input id="f_color" type="color" value="#6b7280" class="form-input" style="height:38px;padding:2px;"></label>
-        <label>Sort Order<input id="f_sort_order" type="number" class="form-input" value="0" min="0"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label style="display:flex;align-items:center;gap:6px;margin-top:4px;"><input id="f_is_productive" type="checkbox" checked> Productive</label>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:4px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
-      </div>
-
-      <!-- Activity Category -->
-      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
-        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Activity Category</legend>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;" id="catStatusLabel">
-            <input type="radio" name="activity_category" id="f_cat_status" value="status" checked onchange="updateCategoryUI()">
-            <div><strong style="font-size:0.85rem;">Status Activity</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">Break, Lunch, Coaching, System Issue</span></div>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;" id="catLobLabel">
-            <input type="radio" name="activity_category" id="f_cat_lob" value="lob" onchange="updateCategoryUI()">
-            <div><strong style="font-size:0.85rem;">LOB Activity</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">SS Sales, PS Support — maps call routing</span></div>
-          </label>
-        </div>
-      </fieldset>
-
-      <!-- External ID Mapping -->
-      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
-        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">External ID Mapping</legend>
-        <p id="extIdHelp" style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD agent state codes to this activity for adherence and live agent status tracking.</p>
-        <label>External IDs <span style="font-size:0.75rem;color:var(--text-muted);">(comma-separated)</span>
-          <input id="f_external_ids" class="form-input" placeholder="e.g. 1003, AUX_BREAK">
-        </label>
-        <div id="extIdTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;min-height:0;"></div>
-      </fieldset>
-
-      <!-- Multi-Activity -->
-      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
-        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Multi-Activity</legend>
-        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Group language-based or skill-based subactivities under a parent LOB. Mark a parent as "Multi-Activity" then assign children to it.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_multi_activity" type="checkbox" onchange="toggleMultiFields()"> This is a Multi-Activity (parent)</label>
-          <label id="parentLabel">Parent Activity
-            <select id="f_parent_id" class="form-input">
-              <option value="">— None (top-level) —</option>
-            </select>
-          </label>
-        </div>
-        <div id="subactivitiesList" style="display:none;margin-top:8px;">
-          <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 4px;">Subactivities linked to this parent:</p>
-          <div id="subactivitiesContainer" style="font-size:0.85rem;"></div>
-        </div>
-      </fieldset>
-
-      <!-- Scheduling Placement -->
-      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
-        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Scheduling Placement</legend>
-        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Optional — only fill these if you want auto-placement on the timeline.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Offset (mins from shift start)<input id="f_offset_mins" type="number" class="form-input" min="0" placeholder="e.g. 120"></label>
-          <label>Duration (mins)<input id="f_duration_mins" type="number" class="form-input" min="1" placeholder="e.g. 15"></label>
-        </div>
-        <div style="margin-top:10px;">
-          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_flexible" type="checkbox" onchange="toggleWindow()"> Flexible (stagger within window)</label>
-        </div>
-        <div id="windowRow" style="display:none;margin-top:10px;">
-          <label>Window Start (mins)<input id="f_window_start_mins" type="number" class="form-input" min="0" placeholder="e.g. 90"></label>
-          <label>Window End (mins)<input id="f_window_end_mins" type="number" class="form-input" min="0" placeholder="e.g. 150"></label>
-        </div>
-      </fieldset>
+<!-- ═══ MODAL ═══ -->
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:0;max-width:680px;width:95vw;background:var(--surface);color:var(--text);max-height:92vh;overflow:hidden;">
+  <div style="padding:20px 24px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="modalTitle" style="margin:0;">Add Activity</h3>
+      <button type="button" onclick="document.getElementById('editModal').close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <!-- Tabs -->
+    <div id="tabBar" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
+      <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
+      <button class="tab-btn" onclick="switchTab('behavior')" data-tab="behavior">Behavior</button>
+      <button class="tab-btn" onclick="switchTab('subactivities')" data-tab="subactivities">Subactivities</button>
+      <button class="tab-btn" onclick="switchTab('skills')" data-tab="skills">Skills</button>
+      <button class="tab-btn" onclick="switchTab('external')" data-tab="external">External</button>
+      <button class="tab-btn" onclick="switchTab('placement')" data-tab="placement">Placement</button>
+    </div>
+  </div>
+  <div style="padding:16px 24px 24px;overflow-y:auto;max-height:calc(92vh - 120px);">
+    <form id="editForm" onsubmit="return false;">
+      <input type="hidden" id="f_id" value="">
+
+      <!-- ── TAB: General ── -->
+      <div class="tab-panel active" data-panel="general">
+        <div style="display:grid;gap:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Label <span class="req">*</span><input id="f_label" class="form-input" required placeholder="e.g. SS Sales EN"></label>
+            <label>Code<input id="f_code" class="form-input" placeholder="Auto from label"></label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Official Name<input id="f_official_name" class="form-input" placeholder="Full official name"></label>
+            <label>Abbreviation<input id="f_abbreviation" class="form-input" placeholder="e.g. SSEN" maxlength="20"></label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <label>Color<input id="f_color" type="color" value="#6b7280" class="form-input" style="height:38px;padding:2px;"></label>
+            <label>Shortcut Key<input id="f_shortcut" class="form-input" placeholder="e.g. S" maxlength="10"></label>
+            <label>Sort Order<input id="f_sort_order" type="number" class="form-input" value="0" min="0"></label>
+          </div>
+          <!-- Activity Type -->
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+            <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Activity Type</legend>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <label class="type-chip" data-type="presence"><input type="radio" name="activity_type" value="presence" checked onchange="updateTypeUI()"><span>Presence</span></label>
+              <label class="type-chip" data-type="break"><input type="radio" name="activity_type" value="break" onchange="updateTypeUI()"><span>Break</span></label>
+              <label class="type-chip" data-type="absence"><input type="radio" name="activity_type" value="absence" onchange="updateTypeUI()"><span>Absence</span></label>
+              <label class="type-chip" data-type="meeting"><input type="radio" name="activity_type" value="meeting" onchange="updateTypeUI()"><span>Meeting</span></label>
+              <label class="type-chip" data-type="vacation"><input type="radio" name="activity_type" value="vacation" onchange="updateTypeUI()"><span>Vacation</span></label>
+            </div>
+            <p id="typeHelp" style="font-size:0.75rem;color:var(--text-muted);margin:8px 0 0;">Presence: productive/on-phone time. Subactivities can only be assigned to Presence-type activities.</p>
+          </fieldset>
+          <!-- Activity Category -->
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+            <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Category</legend>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <label class="cat-card" id="catStatusLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--accent);border-radius:6px;">
+                <input type="radio" name="activity_category" id="f_cat_status" value="status" checked onchange="updateCategoryUI()">
+                <div><strong style="font-size:0.85rem;">Status</strong><br><span style="font-size:0.72rem;color:var(--text-muted);">Agent states — break, coaching</span></div>
+              </label>
+              <label class="cat-card" id="catLobLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;">
+                <input type="radio" name="activity_category" id="f_cat_lob" value="lob" onchange="updateCategoryUI()">
+                <div><strong style="font-size:0.85rem;">LOB</strong><br><span style="font-size:0.72rem;color:var(--text-muted);">Line-of-business — maps call routing</span></div>
+              </label>
+            </div>
+          </fieldset>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_productive" type="checkbox" checked> Productive</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Behavior ── -->
+      <div class="tab-panel" data-panel="behavior">
+        <div style="display:grid;gap:14px;">
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Scheduling behavior flags — control how this activity is treated by the optimizer and agent self-service.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_replaceable" type="checkbox" checked> Replaceable</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_plannable" type="checkbox" checked> Plannable</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_comply_rest_period" type="checkbox" checked> Comply with rest period</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_allow_overstaffing_zero" type="checkbox"> Allow overstaffing if req=0</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_requestable" type="checkbox"> Requestable (self-service)</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_exchangeable" type="checkbox"> Exchangeable (shift swap)</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_allow_full_day" type="checkbox"> Allow as full-day activity</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_special_handling" type="checkbox"> Special handling in optimizer</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_can_be_day_status" type="checkbox"> Can be a day status</label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Importance (0-100)<input id="f_importance" type="number" class="form-input" value="50" min="0" max="100"></label>
+            <label>Priority (0-100)<input id="f_priority" type="number" class="form-input" value="50" min="0" max="100"></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Subactivities ── -->
+      <div class="tab-panel" data-panel="subactivities">
+        <div style="display:grid;gap:12px;">
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Group language-based or skill-based subactivities under a parent. Subactivities can only be assigned to Presence-type activities.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_multi_activity" type="checkbox" onchange="toggleMultiFields()"> This is a Multi-Activity (parent)</label>
+            <label id="parentLabel">Parent Activity
+              <select id="f_parent_id" class="form-input">
+                <option value="">— None (top-level) —</option>
+              </select>
+            </label>
+          </div>
+          <div id="subactivitiesList" style="display:none;margin-top:4px;">
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 4px;">Subactivities linked to this parent:</p>
+            <div id="subactivitiesContainer" style="font-size:0.85rem;"></div>
+          </div>
+          <div id="subNotPresence" style="display:none;padding:12px;background:var(--surface-raised,#fefce8);border:1px solid #fbbf24;border-radius:6px;font-size:0.8rem;color:#92400e;">
+            ⚠ Subactivities can only be assigned to Presence-type activities. Change the type to Presence on the General tab to enable this.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Skills ── -->
+      <div class="tab-panel" data-panel="skills">
+        <div style="display:grid;gap:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Skills assigned to this activity with weighting.</p>
+            <button type="button" class="btn btn-sm" onclick="addSkillRow()">+ Add Skill</button>
+          </div>
+          <div id="skillsList" style="display:grid;gap:6px;"></div>
+          <p id="noSkills" style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:1rem;">No skills configured.</p>
+        </div>
+      </div>
+
+      <!-- ── TAB: External ── -->
+      <div class="tab-panel" data-panel="external">
+        <div style="display:grid;gap:14px;">
+          <!-- External IDs -->
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+            <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">External ID Mapping</legend>
+            <p id="extIdHelp" style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD agent state codes for adherence and live agent status.</p>
+            <label>External IDs <span style="font-size:0.75rem;color:var(--text-muted);">(comma-separated)</span>
+              <input id="f_external_ids" class="form-input" placeholder="e.g. 1003, AUX_BREAK">
+            </label>
+            <div id="extIdTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;min-height:0;"></div>
+          </fieldset>
+          <!-- External Status Mappings -->
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+            <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">External Status Mappings</legend>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD agent statuses to this activity for adherence tracking.</p>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><button type="button" class="btn btn-sm" onclick="addExtStatusRow()">+ Add Mapping</button></div>
+            <div id="extStatusList" style="display:grid;gap:6px;"></div>
+            <p id="noExtStatuses" style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:0.5rem;">No status mappings configured.</p>
+          </fieldset>
+        </div>
+      </div>
+
+      <!-- ── TAB: Placement ── -->
+      <div class="tab-panel" data-panel="placement">
+        <div style="display:grid;gap:12px;">
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Auto-placement rules for the schedule optimizer.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Offset (mins from shift start)<input id="f_offset_mins" type="number" class="form-input" min="0" placeholder="e.g. 120"></label>
+            <label>Duration (mins)<input id="f_duration_mins" type="number" class="form-input" min="1" placeholder="e.g. 15"></label>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_flexible" type="checkbox" onchange="toggleWindow()"> Flexible (stagger within window)</label>
+          <div id="windowRow" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <label>Window Start (mins)<input id="f_window_start_mins" type="number" class="form-input" min="0" placeholder="e.g. 90"></label>
+              <label>Window End (mins)<input id="f_window_end_mins" type="number" class="form-input" min="0" placeholder="e.g. 150"></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </form>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
       <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
       <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
     </div>
-  </form>
+  </div>
 </dialog>
+
+<style>
+.tab-btn{background:none;border:none;padding:8px 16px;cursor:pointer;color:var(--text-muted);font-size:0.85rem;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-btn:hover{color:var(--text);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+.type-chip{display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 14px;border:1px solid var(--border);border-radius:20px;font-size:0.82rem;transition:all .15s;}
+.type-chip:has(input:checked){border-color:var(--accent);background:color-mix(in srgb, var(--accent) 8%, transparent);}
+.type-chip input{display:none;}
+.req{color:#ef4444;}
+.skill-row,.ext-status-row{display:grid;grid-template-columns:1fr 80px 32px;gap:8px;align-items:end;}
+</style>
 
 <script>
 const DATA = {{ items | tojson }};
@@ -111,202 +213,280 @@ const PARENTS = {{ parents | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
 
+// ─── Tab switching ───
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+}
+
+// ─── Table rendering ───
 function render() {
   tbody.innerHTML = '';
-  // Group: parents first, then their children indented, then standalone items
-  const parentMap = {};
-  const topLevel = [];
   const children = {};
-
-  DATA.forEach(r => {
-    if (r.is_multi_activity) parentMap[r.id] = r;
-    if (r.parent_id) {
-      if (!children[r.parent_id]) children[r.parent_id] = [];
-      children[r.parent_id].push(r);
-    }
-  });
-
-  // Render in order: multi-activity parents with their children, then standalone
+  DATA.forEach(r => { if (r.parent_id) { (children[r.parent_id] = children[r.parent_id] || []).push(r); } });
   const rendered = new Set();
 
-  // First pass: multi-activity parents + children
   DATA.forEach(r => {
     if (r.is_multi_activity && !rendered.has(r.id)) {
       rendered.add(r.id);
       appendRow(r, false, true);
-      (children[r.id] || []).forEach(child => {
-        rendered.add(child.id);
-        appendRow(child, true, false);
-      });
+      (children[r.id] || []).forEach(c => { rendered.add(c.id); appendRow(c, true, false); });
     }
   });
-
-  // Second pass: standalone items (not parent, not child)
-  DATA.forEach(r => {
-    if (!rendered.has(r.id)) {
-      rendered.add(r.id);
-      appendRow(r, false, false);
-    }
-  });
-
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No activities yet. Click "+ Add Activity" to create one.</td></tr>';
+  DATA.forEach(r => { if (!rendered.has(r.id)) { rendered.add(r.id); appendRow(r, false, false); } });
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:2rem;">No activities yet.</td></tr>';
 }
 
 function appendRow(r, isChild, isParent) {
   const tr = document.createElement('tr');
   if (isChild) tr.style.background = 'var(--surface-raised, rgba(0,0,0,0.02))';
   const indent = isChild ? '<span style="color:var(--text-muted);margin-right:4px;">└</span>' : '';
-  const badge = isParent ? '<span style="font-size:0.7rem;background:var(--accent);color:#fff;padding:1px 6px;border-radius:10px;margin-left:6px;">Multi</span>' : '';
-  const childBadge = isChild ? '<span style="font-size:0.7rem;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:10px;margin-left:6px;">Sub</span>' : '';
-  const extIds = (r.external_ids || []).length ? r.external_ids.map(eid => `<code style="font-size:0.75rem;background:var(--surface-raised,#f3f4f6);padding:1px 5px;border-radius:3px;border:1px solid var(--border);">${eid}</code>`).join(' ') : '<span style="color:var(--text-muted);">—</span>';
-
+  const typeBadge = `<span style="font-size:0.72rem;padding:1px 6px;border-radius:10px;background:${typeColor(r.activity_type)};color:#fff;">${(r.activity_type||'presence').charAt(0).toUpperCase()+(r.activity_type||'presence').slice(1)}</span>`;
+  const multiBadge = isParent ? ' <span style="font-size:0.68rem;background:var(--accent);color:#fff;padding:1px 5px;border-radius:10px;">Multi</span>' : isChild ? ' <span style="font-size:0.68rem;background:var(--border);color:var(--text-muted);padding:1px 5px;border-radius:10px;">Sub</span>' : '';
+  const extIds = (r.external_ids||[]).length ? r.external_ids.map(e => `<code style="font-size:0.72rem;background:var(--surface-raised,#f3f4f6);padding:1px 4px;border-radius:3px;border:1px solid var(--border);">${e}</code>`).join(' ') : '<span style="color:var(--text-muted);">—</span>';
+  const skillCount = (r.skills||[]).length;
   tr.innerHTML = `
-    <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${r.color};vertical-align:middle;"></span></td>
-    <td><code style="font-size:.85rem;">${r.code}</code></td>
-    <td>${indent}${r.label}${badge}${childBadge}</td>
-    <td style="font-size:0.85rem;color:var(--text-muted);">${r.activity_category === 'lob' ? 'LOB' : 'Status'}${isParent ? ' · Parent' : isChild ? ' · Sub' : ''}</td>
+    <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${r.color};"></span></td>
+    <td><code style="font-size:.82rem;">${r.code}</code></td>
+    <td>${indent}${r.label}${multiBadge}</td>
+    <td>${typeBadge}</td>
+    <td style="font-size:0.82rem;color:var(--text-muted);">${r.activity_category==='lob'?'LOB':'Status'}</td>
     <td>${extIds}</td>
+    <td style="font-size:0.82rem;">${skillCount ? skillCount+' skill'+(skillCount>1?'s':'') : '—'}</td>
     <td>${r.is_productive ? '✓' : ''}</td>
     <td>${r.is_paid ? '✓' : ''}</td>
-    <td>${r.duration_mins != null ? r.duration_mins + ' min' : '—'}</td>
     <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+        <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Del</button></td>`;
   tbody.appendChild(tr);
+}
+
+function typeColor(t) {
+  return {presence:'#3b82f6',break:'#f59e0b',absence:'#ef4444',meeting:'#8b5cf6',vacation:'#10b981'}[t||'presence']||'#6b7280';
+}
+
+// ─── UI updates ───
+const typeHelps = {
+  presence: 'Presence: productive/on-phone time. Subactivities can only be assigned to Presence-type.',
+  break: 'Break: scheduled breaks (paid or unpaid). Not eligible for subactivities.',
+  absence: 'Absence: unplanned absence, sick leave, etc.',
+  meeting: 'Meeting: scheduled meetings, huddles, training sessions.',
+  vacation: 'Vacation: planned time off, holidays.'
+};
+
+function updateTypeUI() {
+  const t = document.querySelector('input[name="activity_type"]:checked').value;
+  document.getElementById('typeHelp').textContent = typeHelps[t] || '';
+  const isPresence = (t === 'presence');
+  document.getElementById('subNotPresence').style.display = isPresence ? 'none' : '';
+  document.querySelectorAll('#subactivities [id^="f_is_multi"], #subactivities #parentLabel').forEach(el => {
+    if (!isPresence) el.closest('label,div')?.style && (el.closest('label').style.opacity = isPresence ? '1' : '0.5');
+  });
 }
 
 function updateCategoryUI() {
   const isLob = document.getElementById('f_cat_lob').checked;
-  const helpEl = document.getElementById('extIdHelp');
-  const inputEl = document.getElementById('f_external_ids');
-  if (isLob) {
-    helpEl.textContent = 'Map call route IDs to this LOB. Incoming volume from these routes feeds the forecasting engine and updates historical volume in real time.';
-    inputEl.placeholder = 'e.g. 4001, 4002, 4003';
-  } else {
-    helpEl.textContent = 'Map ACD agent state codes to this activity for adherence and live agent status tracking.';
-    inputEl.placeholder = 'e.g. 1003, AUX_BREAK';
-  }
-  // Highlight selected card
+  document.getElementById('extIdHelp').textContent = isLob
+    ? 'Map call route IDs to this LOB. Incoming volume feeds forecasting and updates historical volume in real time.'
+    : 'Map ACD agent state codes for adherence and live agent status.';
+  document.getElementById('f_external_ids').placeholder = isLob ? 'e.g. 4001, 4002, 4003' : 'e.g. 1003, AUX_BREAK';
   document.getElementById('catStatusLabel').style.borderColor = isLob ? 'var(--border)' : 'var(--accent)';
   document.getElementById('catLobLabel').style.borderColor = isLob ? 'var(--accent)' : 'var(--border)';
 }
 
 function toggleWindow() {
-  const show = document.getElementById('f_is_flexible').checked;
-  const wr = document.getElementById('windowRow');
-  wr.style.display = show ? '' : 'none';
-  if (show) { wr.style.display = 'grid'; wr.style.gridTemplateColumns = '1fr 1fr'; wr.style.gap = '12px'; }
+  document.getElementById('windowRow').style.display = document.getElementById('f_is_flexible').checked ? '' : 'none';
 }
 
 function toggleMultiFields() {
   const isMulti = document.getElementById('f_is_multi_activity').checked;
   document.getElementById('parentLabel').style.display = isMulti ? 'none' : '';
   document.getElementById('subactivitiesList').style.display = isMulti ? '' : 'none';
-  if (isMulti) {
-    document.getElementById('f_parent_id').value = '';
-    showSubactivities();
-  }
+  if (isMulti) { document.getElementById('f_parent_id').value = ''; showSubactivities(); }
 }
 
 function showSubactivities() {
   const editId = document.getElementById('f_id').value;
-  const container = document.getElementById('subactivitiesContainer');
-  if (!editId) { container.innerHTML = '<em style="color:var(--text-muted);">Save this activity first, then assign subactivities to it.</em>'; return; }
+  const c = document.getElementById('subactivitiesContainer');
+  if (!editId) { c.innerHTML = '<em style="color:var(--text-muted);">Save first, then assign subactivities.</em>'; return; }
   const subs = DATA.filter(d => d.parent_id == parseInt(editId));
-  if (subs.length) {
-    container.innerHTML = subs.map(s => `<span style="display:inline-block;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;margin:2px;font-size:0.8rem;">${s.label}</span>`).join('');
-  } else {
-    container.innerHTML = '<em style="color:var(--text-muted);">No subactivities yet. Create activities and set this as their parent.</em>';
-  }
+  c.innerHTML = subs.length ? subs.map(s => `<span style="display:inline-block;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;margin:2px;font-size:0.8rem;">${s.label}</span>`).join('') : '<em style="color:var(--text-muted);">No subactivities yet.</em>';
 }
 
 function renderExtIdTags() {
-  const input = document.getElementById('f_external_ids');
-  const container = document.getElementById('extIdTags');
-  const ids = input.value.split(',').map(s => s.trim()).filter(Boolean);
-  container.innerHTML = ids.map(eid => `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:0.8rem;"><code>${eid}</code></span>`).join('');
+  const ids = document.getElementById('f_external_ids').value.split(',').map(s => s.trim()).filter(Boolean);
+  document.getElementById('extIdTags').innerHTML = ids.map(e => `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:0.78rem;"><code>${e}</code></span>`).join('');
 }
 
 function populateParentDropdown(currentId) {
   const sel = document.getElementById('f_parent_id');
   sel.innerHTML = '<option value="">— None (top-level) —</option>';
-  DATA.forEach(d => {
-    if (d.is_multi_activity && d.id !== parseInt(currentId)) {
-      const opt = document.createElement('option');
-      opt.value = d.id;
-      opt.textContent = d.label;
-      sel.appendChild(opt);
-    }
-  });
+  DATA.forEach(d => { if (d.is_multi_activity && d.id !== parseInt(currentId)) { const o = document.createElement('option'); o.value = d.id; o.textContent = d.label; sel.appendChild(o); } });
 }
 
+// ─── Skills rows ───
+let skillRows = [];
+function renderSkills() {
+  const c = document.getElementById('skillsList');
+  c.innerHTML = '';
+  document.getElementById('noSkills').style.display = skillRows.length ? 'none' : '';
+  skillRows.forEach((sk, i) => {
+    const div = document.createElement('div');
+    div.className = 'skill-row';
+    div.innerHTML = `<input class="form-input" value="${sk.name}" placeholder="Skill name" onchange="skillRows[${i}].name=this.value">
+      <input class="form-input" type="number" value="${sk.weighting}" min="0" max="100" placeholder="Wt" onchange="skillRows[${i}].weighting=parseInt(this.value)||0">
+      <button type="button" class="btn btn-sm btn-danger" onclick="skillRows.splice(${i},1);renderSkills()">×</button>`;
+    c.appendChild(div);
+  });
+}
+function addSkillRow() { skillRows.push({name:'', weighting:100}); renderSkills(); }
+
+// ─── External Status rows ───
+let extStatusRows = [];
+function renderExtStatuses() {
+  const c = document.getElementById('extStatusList');
+  c.innerHTML = '';
+  document.getElementById('noExtStatuses').style.display = extStatusRows.length ? 'none' : '';
+  extStatusRows.forEach((m, i) => {
+    const div = document.createElement('div');
+    div.className = 'ext-status-row';
+    div.style.gridTemplateColumns = '1fr 1fr 32px';
+    div.innerHTML = `<input class="form-input" value="${m.external_status}" placeholder="ACD status code" onchange="extStatusRows[${i}].external_status=this.value">
+      <input class="form-input" value="${m.description||''}" placeholder="Description" onchange="extStatusRows[${i}].description=this.value">
+      <button type="button" class="btn btn-sm btn-danger" onclick="extStatusRows.splice(${i},1);renderExtStatuses()">×</button>`;
+    c.appendChild(div);
+  });
+}
+function addExtStatusRow() { extStatusRows.push({external_status:'', description:''}); renderExtStatuses(); }
+
+// ─── Modal open/edit ───
 function openModal(item) {
   document.getElementById('modalTitle').textContent = item ? 'Edit Activity' : 'Add Activity';
-  document.getElementById('f_id').value = item ? item.id : '';
-  document.getElementById('f_label').value = item ? item.label : '';
-  document.getElementById('f_code').value = item ? item.code : '';
-  document.getElementById('f_color').value = item ? item.color : '#6b7280';
-  document.getElementById('f_sort_order').value = item ? item.sort_order : 0;
-  document.getElementById('f_is_productive').checked = item ? item.is_productive : true;
-  document.getElementById('f_is_paid').checked = item ? item.is_paid : true;
+  switchTab('general');
+
+  const f = id => document.getElementById(id);
+  f('f_id').value = item ? item.id : '';
+  f('f_label').value = item ? item.label : '';
+  f('f_code').value = item ? item.code : '';
+  f('f_color').value = item ? item.color : '#6b7280';
+  f('f_sort_order').value = item ? item.sort_order : 0;
+  f('f_official_name').value = item ? (item.official_name||'') : '';
+  f('f_abbreviation').value = item ? (item.abbreviation||'') : '';
+  f('f_shortcut').value = item ? (item.shortcut||'') : '';
+  f('f_is_productive').checked = item ? item.is_productive : true;
+  f('f_is_paid').checked = item ? item.is_paid : true;
+
+  // Type
+  const aType = item ? (item.activity_type || 'presence') : 'presence';
+  document.querySelectorAll('input[name="activity_type"]').forEach(r => r.checked = (r.value === aType));
+
+  // Category
   const cat = item && item.activity_category === 'lob' ? 'lob' : 'status';
-  document.getElementById('f_cat_status').checked = (cat === 'status');
-  document.getElementById('f_cat_lob').checked = (cat === 'lob');
-  document.getElementById('f_external_ids').value = item && item.external_ids ? item.external_ids.join(', ') : '';
-  document.getElementById('f_is_multi_activity').checked = item ? item.is_multi_activity : false;
+  f('f_cat_status').checked = (cat === 'status');
+  f('f_cat_lob').checked = (cat === 'lob');
+
+  // External IDs
+  f('f_external_ids').value = item && item.external_ids ? item.external_ids.join(', ') : '';
+
+  // Multi-activity
+  f('f_is_multi_activity').checked = item ? item.is_multi_activity : false;
   populateParentDropdown(item ? item.id : '');
-  document.getElementById('f_parent_id').value = item && item.parent_id ? item.parent_id : '';
-  document.getElementById('f_offset_mins').value = item && item.offset_mins != null ? item.offset_mins : '';
-  document.getElementById('f_duration_mins').value = item && item.duration_mins != null ? item.duration_mins : '';
-  document.getElementById('f_is_flexible').checked = item ? item.is_flexible : false;
-  document.getElementById('f_window_start_mins').value = item && item.window_start_mins != null ? item.window_start_mins : '';
-  document.getElementById('f_window_end_mins').value = item && item.window_end_mins != null ? item.window_end_mins : '';
+  f('f_parent_id').value = item && item.parent_id ? item.parent_id : '';
+
+  // Behavior
+  f('f_is_replaceable').checked = item ? (item.is_replaceable !== false) : true;
+  f('f_is_plannable').checked = item ? (item.is_plannable !== false) : true;
+  f('f_importance').value = item ? (item.importance || 50) : 50;
+  f('f_priority').value = item ? (item.priority || 50) : 50;
+  f('f_comply_rest_period').checked = item ? (item.comply_rest_period !== false) : true;
+  f('f_allow_overstaffing_zero').checked = item ? item.allow_overstaffing_zero : false;
+  f('f_is_requestable').checked = item ? item.is_requestable : false;
+  f('f_is_exchangeable').checked = item ? item.is_exchangeable : false;
+  f('f_allow_full_day').checked = item ? item.allow_full_day : false;
+  f('f_special_handling').checked = item ? item.special_handling : false;
+  f('f_can_be_day_status').checked = item ? item.can_be_day_status : false;
+
+  // Placement
+  f('f_offset_mins').value = item && item.offset_mins != null ? item.offset_mins : '';
+  f('f_duration_mins').value = item && item.duration_mins != null ? item.duration_mins : '';
+  f('f_is_flexible').checked = item ? item.is_flexible : false;
+  f('f_window_start_mins').value = item && item.window_start_mins != null ? item.window_start_mins : '';
+  f('f_window_end_mins').value = item && item.window_end_mins != null ? item.window_end_mins : '';
+
+  // Skills
+  skillRows = item && item.skills ? item.skills.map(s => ({...s})) : [];
+  renderSkills();
+
+  // External statuses
+  extStatusRows = item && item.external_statuses ? item.external_statuses.map(m => ({...m})) : [];
+  renderExtStatuses();
+
   toggleWindow();
   toggleMultiFields();
   renderExtIdTags();
   updateCategoryUI();
+  updateTypeUI();
   dlg.showModal();
 }
 
 function editItem(item) { openModal(item); }
-
-// Live-update tags as user types
 document.getElementById('f_external_ids').addEventListener('input', renderExtIdTags);
 
+// ─── Save ───
 async function saveItem() {
-  const label = document.getElementById('f_label').value.trim();
-  let code = document.getElementById('f_code').value.trim();
-  if (!code && label) {
-    code = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-  }
-  const extIdsRaw = document.getElementById('f_external_ids').value.trim();
+  const f = id => document.getElementById(id);
+  const label = f('f_label').value.trim();
+  let code = f('f_code').value.trim();
+  if (!code && label) code = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+  const extIdsRaw = f('f_external_ids').value.trim();
   const extIds = extIdsRaw ? extIdsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
   const body = {
-    id: document.getElementById('f_id').value || null,
-    code: code,
-    label: label,
-    color: document.getElementById('f_color').value,
-    sort_order: parseInt(document.getElementById('f_sort_order').value) || 0,
-    is_productive: document.getElementById('f_is_productive').checked,
-    is_paid: document.getElementById('f_is_paid').checked,
-    activity_category: document.getElementById('f_cat_lob').checked ? 'lob' : 'status',
+    id: f('f_id').value || null,
+    code, label,
+    color: f('f_color').value,
+    sort_order: parseInt(f('f_sort_order').value) || 0,
+    official_name: f('f_official_name').value.trim(),
+    abbreviation: f('f_abbreviation').value.trim(),
+    shortcut: f('f_shortcut').value.trim(),
+    is_productive: f('f_is_productive').checked,
+    is_paid: f('f_is_paid').checked,
+    activity_type: document.querySelector('input[name="activity_type"]:checked').value,
+    activity_category: f('f_cat_lob').checked ? 'lob' : 'status',
     external_ids: extIds,
-    is_multi_activity: document.getElementById('f_is_multi_activity').checked,
-    parent_id: document.getElementById('f_parent_id').value || null,
-    offset_mins: document.getElementById('f_offset_mins').value ? parseInt(document.getElementById('f_offset_mins').value) : null,
-    duration_mins: document.getElementById('f_duration_mins').value ? parseInt(document.getElementById('f_duration_mins').value) : null,
-    is_flexible: document.getElementById('f_is_flexible').checked,
-    window_start_mins: document.getElementById('f_window_start_mins').value ? parseInt(document.getElementById('f_window_start_mins').value) : null,
-    window_end_mins: document.getElementById('f_window_end_mins').value ? parseInt(document.getElementById('f_window_end_mins').value) : null,
+    is_multi_activity: f('f_is_multi_activity').checked,
+    parent_id: f('f_parent_id').value || null,
+    // Behavior
+    is_replaceable: f('f_is_replaceable').checked,
+    is_plannable: f('f_is_plannable').checked,
+    importance: parseInt(f('f_importance').value) || 50,
+    priority: parseInt(f('f_priority').value) || 50,
+    comply_rest_period: f('f_comply_rest_period').checked,
+    allow_overstaffing_zero: f('f_allow_overstaffing_zero').checked,
+    is_requestable: f('f_is_requestable').checked,
+    is_exchangeable: f('f_is_exchangeable').checked,
+    allow_full_day: f('f_allow_full_day').checked,
+    special_handling: f('f_special_handling').checked,
+    can_be_day_status: f('f_can_be_day_status').checked,
+    // Placement
+    offset_mins: f('f_offset_mins').value ? parseInt(f('f_offset_mins').value) : null,
+    duration_mins: f('f_duration_mins').value ? parseInt(f('f_duration_mins').value) : null,
+    is_flexible: f('f_is_flexible').checked,
+    window_start_mins: f('f_window_start_mins').value ? parseInt(f('f_window_start_mins').value) : null,
+    window_end_mins: f('f_window_end_mins').value ? parseInt(f('f_window_end_mins').value) : null,
+    // Skills & external statuses
+    skills: skillRows.filter(s => s.name.trim()),
+    external_statuses: extStatusRows.filter(m => m.external_status.trim()),
   };
-  const res = await fetch('/settings/activities/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+
+  const res = await fetch('/settings/activities/save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name=csrf-token]')?.content||''}, body:JSON.stringify(body)});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
 }
 
 async function deleteItem(id) {
   if (!confirm('Delete this activity?')) return;
-  const res = await fetch('/settings/activities/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  const res = await fetch('/settings/activities/delete', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name=csrf-token]')?.content||''}, body:JSON.stringify({id})});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
 }

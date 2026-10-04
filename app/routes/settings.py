@@ -1294,6 +1294,41 @@ def delete_lob_mapping():
 
 
 # ═══════════════════════════════════════════════════════════════
+# ACTIVITIES — helpers
+# ═══════════════════════════════════════════════════════════════
+
+def _save_activity_skills(segment_code, skills_data):
+    """Sync skills for an activity (replace all)."""
+    from app.models import ActivitySkill, db
+    # Remove existing
+    ActivitySkill.query.filter_by(segment_code_id=segment_code.id).delete()
+    for sk in (skills_data or []):
+        name = (sk.get("name") or "").strip()
+        if not name:
+            continue
+        db.session.add(ActivitySkill(
+            segment_code_id=segment_code.id,
+            name=name,
+            weighting=int(sk.get("weighting", 100)),
+        ))
+
+
+def _save_external_status_mappings(segment_code, mappings_data):
+    """Sync external status mappings for an activity (replace all)."""
+    from app.models import ExternalStatusMapping, db
+    ExternalStatusMapping.query.filter_by(segment_code_id=segment_code.id).delete()
+    for m in (mappings_data or []):
+        ext = (m.get("external_status") or "").strip()
+        if not ext:
+            continue
+        db.session.add(ExternalStatusMapping(
+            segment_code_id=segment_code.id,
+            external_status=ext,
+            description=(m.get("description") or "").strip() or None,
+        ))
+
+
+# ═══════════════════════════════════════════════════════════════
 # ACTIVITIES
 # ═══════════════════════════════════════════════════════════════
 
@@ -1348,6 +1383,11 @@ def activities_save():
         if activity_category not in ("status", "lob"):
             activity_category = "status"
 
+        # Parse activity type
+        activity_type = data.get("activity_type", "presence")
+        if activity_type not in ("presence", "break", "absence", "meeting", "vacation"):
+            activity_type = "presence"
+
         seg_id = data.get("id")
         if seg_id:
             item = SegmentCode.query.get(int(seg_id))
@@ -1365,6 +1405,21 @@ def activities_save():
             item.window_start_mins = data.get("window_start_mins")
             item.window_end_mins = data.get("window_end_mins")
             item.activity_category = activity_category
+            item.activity_type = activity_type
+            item.official_name = (data.get("official_name") or "").strip() or None
+            item.abbreviation = (data.get("abbreviation") or "").strip() or None
+            item.shortcut = (data.get("shortcut") or "").strip() or None
+            item.is_replaceable = bool(data.get("is_replaceable", True))
+            item.is_plannable = bool(data.get("is_plannable", True))
+            item.importance = int(data.get("importance", 50))
+            item.priority = int(data.get("priority", 50))
+            item.comply_rest_period = bool(data.get("comply_rest_period", True))
+            item.allow_overstaffing_zero = bool(data.get("allow_overstaffing_zero", False))
+            item.is_requestable = bool(data.get("is_requestable", False))
+            item.is_exchangeable = bool(data.get("is_exchangeable", False))
+            item.allow_full_day = bool(data.get("allow_full_day", False))
+            item.special_handling = bool(data.get("special_handling", False))
+            item.can_be_day_status = bool(data.get("can_be_day_status", False))
             item.set_external_ids(ext_ids)
             item.parent_id = parent_id
             item.is_multi_activity = is_multi
@@ -1383,11 +1438,31 @@ def activities_save():
                 window_start_mins=data.get("window_start_mins"),
                 window_end_mins=data.get("window_end_mins"),
                 activity_category=activity_category,
+                activity_type=activity_type,
+                official_name=(data.get("official_name") or "").strip() or None,
+                abbreviation=(data.get("abbreviation") or "").strip() or None,
+                shortcut=(data.get("shortcut") or "").strip() or None,
+                is_replaceable=bool(data.get("is_replaceable", True)),
+                is_plannable=bool(data.get("is_plannable", True)),
+                importance=int(data.get("importance", 50)),
+                priority=int(data.get("priority", 50)),
+                comply_rest_period=bool(data.get("comply_rest_period", True)),
+                allow_overstaffing_zero=bool(data.get("allow_overstaffing_zero", False)),
+                is_requestable=bool(data.get("is_requestable", False)),
+                is_exchangeable=bool(data.get("is_exchangeable", False)),
+                allow_full_day=bool(data.get("allow_full_day", False)),
+                special_handling=bool(data.get("special_handling", False)),
+                can_be_day_status=bool(data.get("can_be_day_status", False)),
                 parent_id=parent_id,
                 is_multi_activity=is_multi,
             )
             item.set_external_ids(ext_ids)
             db.session.add(item)
+
+        # Handle skills
+        db.session.flush()  # ensure item.id is set
+        _save_activity_skills(item, data.get("skills", []))
+        _save_external_status_mappings(item, data.get("external_statuses", []))
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:

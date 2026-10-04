@@ -53,12 +53,98 @@ class PlanningUnit(db.Model):
     is_active  = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=_utcnow)
 
+    description  = db.Column(db.String(255), nullable=True)
+    timezone     = db.Column(db.String(60), default="America/New_York")
+
     employees    = db.relationship("Employee", backref="planning_unit", lazy="dynamic")
     requirements = db.relationship("RequirementInterval", backref="planning_unit", lazy="dynamic")
     forecasts    = db.relationship("ForecastInterval", backref="planning_unit", lazy="dynamic")
 
     def __repr__(self):
         return f"<PlanningUnit {self.name}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name, "is_active": self.is_active,
+            "description": self.description or "",
+            "timezone": self.timezone or "America/New_York",
+            "business_hours": [bh.to_dict() for bh in self.business_hours],
+            "assigned_activities": [pa.to_dict() for pa in self.assigned_activities],
+            "parameters": [p.to_dict() for p in self.unit_parameters],
+        }
+
+
+class PlanningUnitBusinessHours(db.Model):
+    """Business hours per day type for a planning unit.
+    E.g. Monday: 08:00-22:00, valid from 2026-01-01."""
+    __tablename__ = "planning_unit_business_hours"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False)
+    day_type         = db.Column(db.String(20), nullable=False)           # monday|tuesday|...|sunday|holiday
+    open_time        = db.Column(db.String(5), nullable=False)            # "08:00"
+    close_time       = db.Column(db.String(5), nullable=False)            # "22:00"
+    valid_from       = db.Column(db.Date, nullable=True)
+    valid_to         = db.Column(db.Date, nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref=db.backref("business_hours", lazy="select", cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {
+            "id": self.id, "day_type": self.day_type,
+            "open_time": self.open_time, "close_time": self.close_time,
+            "valid_from": self.valid_from.isoformat() if self.valid_from else None,
+            "valid_to": self.valid_to.isoformat() if self.valid_to else None,
+        }
+
+
+class PlanningUnitActivity(db.Model):
+    """Activities assigned to a planning unit with time windows and validity dates.
+    E.g. 'Break' activity available 10:00-14:00, valid from 2026-01-01."""
+    __tablename__ = "planning_unit_activities"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False)
+    segment_code_id  = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=False)
+    window_start     = db.Column(db.String(5), nullable=True)             # "10:00" — time window start
+    window_end       = db.Column(db.String(5), nullable=True)             # "14:00" — time window end
+    valid_from       = db.Column(db.Date, nullable=True)
+    valid_to         = db.Column(db.Date, nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref=db.backref("assigned_activities", lazy="select", cascade="all, delete-orphan"))
+    segment_code  = db.relationship("SegmentCode")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "segment_code_id": self.segment_code_id,
+            "activity_name": self.segment_code.label if self.segment_code else "",
+            "window_start": self.window_start, "window_end": self.window_end,
+            "valid_from": self.valid_from.isoformat() if self.valid_from else None,
+            "valid_to": self.valid_to.isoformat() if self.valid_to else None,
+        }
+
+
+class PlanningUnitParameter(db.Model):
+    """User-defined parameters for a planning unit (e.g. AHT targets, shrinkage).
+    Name + lower/upper limit range."""
+    __tablename__ = "planning_unit_parameters"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False)
+    name             = db.Column(db.String(120), nullable=False)
+    lower_limit      = db.Column(db.Float, nullable=True)
+    upper_limit      = db.Column(db.Float, nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref=db.backref("unit_parameters", lazy="select", cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "lower_limit": self.lower_limit, "upper_limit": self.upper_limit,
+        }
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -541,24 +627,38 @@ class SegmentCode(db.Model):
     is_default   = db.Column(db.Boolean, default=False)                   # system default (can't be deleted)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
+    # ── Activity type (PeopleWare categories) ────────────────
+    # Controls which features are available on this activity
+    activity_type = db.Column(db.String(20), default="presence")          # presence | break | absence | meeting | vacation
     # ── Activity category ────────────────────────────────────
-    # "status" = agent state segments (break, lunch, coaching) — external IDs map ACD states for adherence
-    # "lob"    = line-of-business activities — external IDs map call route IDs for live volume + forecasting
     activity_category = db.Column(db.String(20), default="status")        # status | lob
+    # ── Naming / identification ──────────────────────────────
+    official_name = db.Column(db.String(120), nullable=True)              # official/long name
+    abbreviation  = db.Column(db.String(20), nullable=True)               # short abbreviation
+    shortcut      = db.Column(db.String(10), nullable=True)               # keyboard shortcut key
     # ── External ID mapping ──────────────────────────────────
-    # JSON array of external system IDs
-    # For status activities: ACD agent state codes (usually 1 ID) → adherence, live agent status
-    # For LOB activities: call route IDs (often multiple) → live volume, historical volume, forecasting
     external_ids = db.Column(db.Text, nullable=True)                      # JSON array e.g. ["1003", "AUX_BREAK"]
     # ── Multi-activity support ───────────────────────────────
     parent_id    = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
     is_multi_activity = db.Column(db.Boolean, default=False)              # True = parent with subactivities
+    # ── Scheduling behavior flags ────────────────────────────
+    is_replaceable       = db.Column(db.Boolean, default=True)            # can be replaced by another activity
+    is_plannable         = db.Column(db.Boolean, default=True)            # can be placed in schedules
+    importance           = db.Column(db.Integer, default=50)              # 0-100, higher = more important
+    priority             = db.Column(db.Integer, default=50)              # 0-100, scheduling priority
+    comply_rest_period   = db.Column(db.Boolean, default=True)            # must respect rest period rules
+    allow_overstaffing_zero = db.Column(db.Boolean, default=False)        # allow overstaffing when requirement=0
+    is_requestable       = db.Column(db.Boolean, default=False)           # agents can request in self-service
+    is_exchangeable      = db.Column(db.Boolean, default=False)           # can be swapped in shift exchange
+    allow_full_day       = db.Column(db.Boolean, default=False)           # can span full day
+    special_handling     = db.Column(db.Boolean, default=False)           # special handling in optimized scheduling
+    can_be_day_status    = db.Column(db.Boolean, default=False)           # can serve as day-level status
     # ── Placement rules ──────────────────────────────────────
-    offset_mins       = db.Column(db.Integer, nullable=True)   # default offset from shift start (e.g. 120 = 2hrs in)
-    duration_mins     = db.Column(db.Integer, nullable=True)    # segment length (e.g. 15 for break, 30 for lunch)
-    is_flexible       = db.Column(db.Boolean, default=False)    # True = stagger within window; False = fixed placement
-    window_start_mins = db.Column(db.Integer, nullable=True)    # earliest offset from shift start (flexible only)
-    window_end_mins   = db.Column(db.Integer, nullable=True)    # latest offset from shift start (flexible only)
+    offset_mins       = db.Column(db.Integer, nullable=True)
+    duration_mins     = db.Column(db.Integer, nullable=True)
+    is_flexible       = db.Column(db.Boolean, default=False)
+    window_start_mins = db.Column(db.Integer, nullable=True)
+    window_end_mins   = db.Column(db.Integer, nullable=True)
     created_at   = db.Column(db.DateTime, default=_utcnow)
 
     # Self-referential relationship for multi-activity parent/child
@@ -585,16 +685,67 @@ class SegmentCode(db.Model):
             "color": self.color, "is_productive": self.is_productive,
             "is_paid": self.is_paid, "is_default": self.is_default,
             "sort_order": self.sort_order, "is_active": self.is_active,
+            "activity_type": self.activity_type or "presence",
             "activity_category": self.activity_category or "status",
+            "official_name": self.official_name or "",
+            "abbreviation": self.abbreviation or "",
+            "shortcut": self.shortcut or "",
             "external_ids": self.get_external_ids(),
             "parent_id": self.parent_id,
             "is_multi_activity": self.is_multi_activity,
+            "is_replaceable": self.is_replaceable if self.is_replaceable is not None else True,
+            "is_plannable": self.is_plannable if self.is_plannable is not None else True,
+            "importance": self.importance or 50,
+            "priority": self.priority or 50,
+            "comply_rest_period": self.comply_rest_period if self.comply_rest_period is not None else True,
+            "allow_overstaffing_zero": self.allow_overstaffing_zero or False,
+            "is_requestable": self.is_requestable or False,
+            "is_exchangeable": self.is_exchangeable or False,
+            "allow_full_day": self.allow_full_day or False,
+            "special_handling": self.special_handling or False,
+            "can_be_day_status": self.can_be_day_status or False,
             "offset_mins": self.offset_mins,
             "duration_mins": self.duration_mins,
             "is_flexible": self.is_flexible,
             "window_start_mins": self.window_start_mins,
             "window_end_mins": self.window_end_mins,
+            "skills": [s.to_dict() for s in self.activity_skills],
+            "external_statuses": [m.to_dict() for m in self.external_status_mappings],
         }
+
+
+class ActivitySkill(db.Model):
+    """Skills linked to an activity with weighting.
+    E.g. 'SS Sales Combined' weight 100 on the SS Sales activity."""
+    __tablename__ = "activity_skills"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=False)
+    name            = db.Column(db.String(120), nullable=False)
+    weighting       = db.Column(db.Integer, default=100)               # 0-100 skill weight
+    created_at      = db.Column(db.DateTime, default=_utcnow)
+
+    segment_code = db.relationship("SegmentCode", backref=db.backref("activity_skills", lazy="select", cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name, "weighting": self.weighting}
+
+
+class ExternalStatusMapping(db.Model):
+    """Maps external ACD agent statuses to internal activities for adherence tracking.
+    E.g. ACD status code '205' → 'Break' activity."""
+    __tablename__ = "external_status_mappings"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=False)
+    external_status = db.Column(db.String(100), nullable=False)        # ACD status code/name
+    description     = db.Column(db.String(200), nullable=True)         # human-readable description
+    created_at      = db.Column(db.DateTime, default=_utcnow)
+
+    segment_code = db.relationship("SegmentCode", backref=db.backref("external_status_mappings", lazy="select", cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {"id": self.id, "external_status": self.external_status, "description": self.description or ""}
 
 
 class ShiftTemplate(db.Model):
