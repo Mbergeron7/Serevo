@@ -541,6 +541,13 @@ class SegmentCode(db.Model):
     is_default   = db.Column(db.Boolean, default=False)                   # system default (can't be deleted)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
+    # ── External ID mapping ──────────────────────────────────
+    # JSON array of external system IDs (ACD states, phone system codes, etc.)
+    # Enables automatic mapping from APIs/integrations for adherence, live status, attendance
+    external_ids = db.Column(db.Text, nullable=True)                      # JSON array e.g. ["1003", "AUX_BREAK"]
+    # ── Multi-activity support ───────────────────────────────
+    parent_id    = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
+    is_multi_activity = db.Column(db.Boolean, default=False)              # True = parent with subactivities
     # ── Placement rules ──────────────────────────────────────
     offset_mins       = db.Column(db.Integer, nullable=True)   # default offset from shift start (e.g. 120 = 2hrs in)
     duration_mins     = db.Column(db.Integer, nullable=True)    # segment length (e.g. 15 for break, 30 for lunch)
@@ -549,12 +556,33 @@ class SegmentCode(db.Model):
     window_end_mins   = db.Column(db.Integer, nullable=True)    # latest offset from shift start (flexible only)
     created_at   = db.Column(db.DateTime, default=_utcnow)
 
+    # Self-referential relationship for multi-activity parent/child
+    parent = db.relationship("SegmentCode", remote_side=[id], backref=db.backref("subactivities", lazy="dynamic"))
+
+    def get_external_ids(self):
+        """Return external IDs as a Python list."""
+        if not self.external_ids:
+            return []
+        try:
+            import json
+            return json.loads(self.external_ids)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_external_ids(self, ids_list):
+        """Set external IDs from a Python list."""
+        import json
+        self.external_ids = json.dumps(ids_list) if ids_list else None
+
     def to_dict(self):
         return {
             "id": self.id, "code": self.code, "label": self.label,
             "color": self.color, "is_productive": self.is_productive,
             "is_paid": self.is_paid, "is_default": self.is_default,
             "sort_order": self.sort_order, "is_active": self.is_active,
+            "external_ids": self.get_external_ids(),
+            "parent_id": self.parent_id,
+            "is_multi_activity": self.is_multi_activity,
             "offset_mins": self.offset_mins,
             "duration_mins": self.duration_mins,
             "is_flexible": self.is_flexible,
@@ -1378,9 +1406,28 @@ class Activity(db.Model):
     segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
     is_active     = db.Column(db.Boolean, default=True)
     sort_order    = db.Column(db.Integer, default=0)
+    # ── External ID mapping ──────────────────────────────────
+    external_ids  = db.Column(db.Text, nullable=True)              # JSON array of external system IDs
+    # ── Multi-activity support ───────────────────────────────
+    parent_id     = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=True)
+    is_multi_activity = db.Column(db.Boolean, default=False)       # True = parent with subactivities
     created_at    = db.Column(db.DateTime, default=_utcnow)
 
     segment_code = db.relationship("SegmentCode", backref="activities")
+    parent = db.relationship("Activity", remote_side=[id], backref=db.backref("subactivities", lazy="dynamic"))
+
+    def get_external_ids(self):
+        if not self.external_ids:
+            return []
+        try:
+            import json
+            return json.loads(self.external_ids)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_external_ids(self, ids_list):
+        import json
+        self.external_ids = json.dumps(ids_list) if ids_list else None
 
     def to_dict(self):
         sc = self.segment_code
@@ -1391,6 +1438,9 @@ class Activity(db.Model):
             "color": self.color, "segment_code_id": self.segment_code_id,
             "segment_code": sc.label if sc else "",
             "is_active": self.is_active, "sort_order": self.sort_order,
+            "external_ids": self.get_external_ids(),
+            "parent_id": self.parent_id,
+            "is_multi_activity": self.is_multi_activity,
         }
 
 

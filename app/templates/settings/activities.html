@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Activities</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Activity codes for scheduling — breaks, lunch, training, meetings, coaching. Configure colors, placement rules, and scheduling windows.</p>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Activity codes for scheduling — breaks, lunch, training, meetings, LOB activities. Configure colors, placement rules, external ID mapping, and multi-activity grouping.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
@@ -14,19 +14,19 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Color</th><th>Code</th><th>Label</th><th>Productive</th><th>Paid</th><th>Duration</th><th>Sort Order</th><th></th></tr>
+    <tr><th>Color</th><th>Code</th><th>Label</th><th>Type</th><th>External IDs</th><th>Productive</th><th>Paid</th><th>Duration</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table></div>
 
 <!-- Modal -->
-<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:520px;width:90vw;background:var(--surface);color:var(--text);">
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:560px;width:90vw;background:var(--surface);color:var(--text);max-height:90vh;overflow-y:auto;">
   <h3 id="modalTitle" style="margin:0 0 16px;">Add Activity</h3>
   <form id="editForm" onsubmit="return false;">
     <input type="hidden" id="f_id" value="">
     <div style="display:grid;gap:12px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Label<input id="f_label" class="form-input" required placeholder="e.g. Break 2"></label>
+        <label>Label<input id="f_label" class="form-input" required placeholder="e.g. SS Sales EN"></label>
         <label>Code<input id="f_code" class="form-input" placeholder="Auto from label"></label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -37,6 +37,34 @@
         <label style="display:flex;align-items:center;gap:6px;margin-top:4px;"><input id="f_is_productive" type="checkbox" checked> Productive</label>
         <label style="display:flex;align-items:center;gap:6px;margin-top:4px;"><input id="f_is_paid" type="checkbox" checked> Paid</label>
       </div>
+
+      <!-- External ID Mapping -->
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">External ID Mapping</legend>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Map ACD/phone system states, call routing IDs, or API codes to this activity. Used for adherence tracking, live agent status, and historical volume.</p>
+        <label>External IDs <span style="font-size:0.75rem;color:var(--text-muted);">(comma-separated)</span>
+          <input id="f_external_ids" class="form-input" placeholder="e.g. 1003, AUX_BREAK, LUNCH_01">
+        </label>
+        <div id="extIdTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;min-height:0;"></div>
+      </fieldset>
+
+      <!-- Multi-Activity -->
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
+        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;color:var(--text-muted);">Multi-Activity</legend>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 0.5rem;">Group language-based or skill-based subactivities under a parent LOB. Mark a parent as "Multi-Activity" then assign children to it.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_multi_activity" type="checkbox" onchange="toggleMultiFields()"> This is a Multi-Activity (parent)</label>
+          <label id="parentLabel">Parent Activity
+            <select id="f_parent_id" class="form-input">
+              <option value="">— None (top-level) —</option>
+            </select>
+          </label>
+        </div>
+        <div id="subactivitiesList" style="display:none;margin-top:8px;">
+          <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 4px;">Subactivities linked to this parent:</p>
+          <div id="subactivitiesContainer" style="font-size:0.85rem;"></div>
+        </div>
+      </fieldset>
 
       <!-- Scheduling Placement -->
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin:0;">
@@ -64,26 +92,71 @@
 
 <script>
 const DATA = {{ items | tojson }};
+const PARENTS = {{ parents | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
 
 function render() {
   tbody.innerHTML = '';
+  // Group: parents first, then their children indented, then standalone items
+  const parentMap = {};
+  const topLevel = [];
+  const children = {};
+
   DATA.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${r.color};vertical-align:middle;"></span></td>
-      <td><code style="font-size:.85rem;">${r.code}</code></td>
-      <td>${r.label}</td>
-      <td>${r.is_productive ? '✓' : ''}</td>
-      <td>${r.is_paid ? '✓' : ''}</td>
-      <td>${r.duration_mins != null ? r.duration_mins + ' min' : '—'}</td>
-      <td>${r.sort_order}</td>
-      <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
-    tbody.appendChild(tr);
+    if (r.is_multi_activity) parentMap[r.id] = r;
+    if (r.parent_id) {
+      if (!children[r.parent_id]) children[r.parent_id] = [];
+      children[r.parent_id].push(r);
+    }
   });
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">No activities yet. Click "+ Add Activity" to create one.</td></tr>';
+
+  // Render in order: multi-activity parents with their children, then standalone
+  const rendered = new Set();
+
+  // First pass: multi-activity parents + children
+  DATA.forEach(r => {
+    if (r.is_multi_activity && !rendered.has(r.id)) {
+      rendered.add(r.id);
+      appendRow(r, false, true);
+      (children[r.id] || []).forEach(child => {
+        rendered.add(child.id);
+        appendRow(child, true, false);
+      });
+    }
+  });
+
+  // Second pass: standalone items (not parent, not child)
+  DATA.forEach(r => {
+    if (!rendered.has(r.id)) {
+      rendered.add(r.id);
+      appendRow(r, false, false);
+    }
+  });
+
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No activities yet. Click "+ Add Activity" to create one.</td></tr>';
+}
+
+function appendRow(r, isChild, isParent) {
+  const tr = document.createElement('tr');
+  if (isChild) tr.style.background = 'var(--surface-raised, rgba(0,0,0,0.02))';
+  const indent = isChild ? '<span style="color:var(--text-muted);margin-right:4px;">└</span>' : '';
+  const badge = isParent ? '<span style="font-size:0.7rem;background:var(--accent);color:#fff;padding:1px 6px;border-radius:10px;margin-left:6px;">Multi</span>' : '';
+  const childBadge = isChild ? '<span style="font-size:0.7rem;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:10px;margin-left:6px;">Sub</span>' : '';
+  const extIds = (r.external_ids || []).length ? r.external_ids.map(eid => `<code style="font-size:0.75rem;background:var(--surface-raised,#f3f4f6);padding:1px 5px;border-radius:3px;border:1px solid var(--border);">${eid}</code>`).join(' ') : '<span style="color:var(--text-muted);">—</span>';
+
+  tr.innerHTML = `
+    <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:${r.color};vertical-align:middle;"></span></td>
+    <td><code style="font-size:.85rem;">${r.code}</code></td>
+    <td>${indent}${r.label}${badge}${childBadge}</td>
+    <td style="font-size:0.85rem;color:var(--text-muted);">${isParent ? 'Parent' : isChild ? 'Subactivity' : 'Standard'}</td>
+    <td>${extIds}</td>
+    <td>${r.is_productive ? '✓' : ''}</td>
+    <td>${r.is_paid ? '✓' : ''}</td>
+    <td>${r.duration_mins != null ? r.duration_mins + ' min' : '—'}</td>
+    <td><button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+  tbody.appendChild(tr);
 }
 
 function toggleWindow() {
@@ -91,6 +164,48 @@ function toggleWindow() {
   const wr = document.getElementById('windowRow');
   wr.style.display = show ? '' : 'none';
   if (show) { wr.style.display = 'grid'; wr.style.gridTemplateColumns = '1fr 1fr'; wr.style.gap = '12px'; }
+}
+
+function toggleMultiFields() {
+  const isMulti = document.getElementById('f_is_multi_activity').checked;
+  document.getElementById('parentLabel').style.display = isMulti ? 'none' : '';
+  document.getElementById('subactivitiesList').style.display = isMulti ? '' : 'none';
+  if (isMulti) {
+    document.getElementById('f_parent_id').value = '';
+    showSubactivities();
+  }
+}
+
+function showSubactivities() {
+  const editId = document.getElementById('f_id').value;
+  const container = document.getElementById('subactivitiesContainer');
+  if (!editId) { container.innerHTML = '<em style="color:var(--text-muted);">Save this activity first, then assign subactivities to it.</em>'; return; }
+  const subs = DATA.filter(d => d.parent_id == parseInt(editId));
+  if (subs.length) {
+    container.innerHTML = subs.map(s => `<span style="display:inline-block;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;margin:2px;font-size:0.8rem;">${s.label}</span>`).join('');
+  } else {
+    container.innerHTML = '<em style="color:var(--text-muted);">No subactivities yet. Create activities and set this as their parent.</em>';
+  }
+}
+
+function renderExtIdTags() {
+  const input = document.getElementById('f_external_ids');
+  const container = document.getElementById('extIdTags');
+  const ids = input.value.split(',').map(s => s.trim()).filter(Boolean);
+  container.innerHTML = ids.map(eid => `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-raised,#f3f4f6);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:0.8rem;"><code>${eid}</code></span>`).join('');
+}
+
+function populateParentDropdown(currentId) {
+  const sel = document.getElementById('f_parent_id');
+  sel.innerHTML = '<option value="">— None (top-level) —</option>';
+  DATA.forEach(d => {
+    if (d.is_multi_activity && d.id !== parseInt(currentId)) {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.label;
+      sel.appendChild(opt);
+    }
+  });
 }
 
 function openModal(item) {
@@ -102,16 +217,25 @@ function openModal(item) {
   document.getElementById('f_sort_order').value = item ? item.sort_order : 0;
   document.getElementById('f_is_productive').checked = item ? item.is_productive : true;
   document.getElementById('f_is_paid').checked = item ? item.is_paid : true;
+  document.getElementById('f_external_ids').value = item && item.external_ids ? item.external_ids.join(', ') : '';
+  document.getElementById('f_is_multi_activity').checked = item ? item.is_multi_activity : false;
+  populateParentDropdown(item ? item.id : '');
+  document.getElementById('f_parent_id').value = item && item.parent_id ? item.parent_id : '';
   document.getElementById('f_offset_mins').value = item && item.offset_mins != null ? item.offset_mins : '';
   document.getElementById('f_duration_mins').value = item && item.duration_mins != null ? item.duration_mins : '';
   document.getElementById('f_is_flexible').checked = item ? item.is_flexible : false;
   document.getElementById('f_window_start_mins').value = item && item.window_start_mins != null ? item.window_start_mins : '';
   document.getElementById('f_window_end_mins').value = item && item.window_end_mins != null ? item.window_end_mins : '';
   toggleWindow();
+  toggleMultiFields();
+  renderExtIdTags();
   dlg.showModal();
 }
 
 function editItem(item) { openModal(item); }
+
+// Live-update tags as user types
+document.getElementById('f_external_ids').addEventListener('input', renderExtIdTags);
 
 async function saveItem() {
   const label = document.getElementById('f_label').value.trim();
@@ -119,6 +243,9 @@ async function saveItem() {
   if (!code && label) {
     code = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
   }
+  const extIdsRaw = document.getElementById('f_external_ids').value.trim();
+  const extIds = extIdsRaw ? extIdsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
   const body = {
     id: document.getElementById('f_id').value || null,
     code: code,
@@ -127,6 +254,9 @@ async function saveItem() {
     sort_order: parseInt(document.getElementById('f_sort_order').value) || 0,
     is_productive: document.getElementById('f_is_productive').checked,
     is_paid: document.getElementById('f_is_paid').checked,
+    external_ids: extIds,
+    is_multi_activity: document.getElementById('f_is_multi_activity').checked,
+    parent_id: document.getElementById('f_parent_id').value || null,
     offset_mins: document.getElementById('f_offset_mins').value ? parseInt(document.getElementById('f_offset_mins').value) : null,
     duration_mins: document.getElementById('f_duration_mins').value ? parseInt(document.getElementById('f_duration_mins').value) : null,
     is_flexible: document.getElementById('f_is_flexible').checked,

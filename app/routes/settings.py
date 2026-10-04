@@ -1305,8 +1305,11 @@ def activities():
         from app.demo_data import get_demo_activities
         return render_template("settings/activities.html", items=get_demo_activities())
     from app.models import SegmentCode
-    items = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()]
-    return render_template("settings/activities.html", items=items)
+    all_items = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()
+    items = [s.to_dict() for s in all_items]
+    # Build parent options for multi-activity dropdown
+    parents = [{"id": s.id, "label": s.label} for s in all_items if s.is_multi_activity]
+    return render_template("settings/activities.html", items=items, parents=parents)
 
 
 @settings_bp.route("/activities/save", methods=["POST"])
@@ -1326,6 +1329,22 @@ def activities_save():
         if not code or not label:
             return jsonify(success=False, error="Code and label are required")
 
+        # Parse external IDs from comma-separated string or list
+        raw_ext = data.get("external_ids", [])
+        if isinstance(raw_ext, str):
+            ext_ids = [x.strip() for x in raw_ext.split(",") if x.strip()]
+        elif isinstance(raw_ext, list):
+            ext_ids = [str(x).strip() for x in raw_ext if str(x).strip()]
+        else:
+            ext_ids = []
+
+        parent_id = data.get("parent_id")
+        if parent_id:
+            parent_id = int(parent_id)
+        else:
+            parent_id = None
+        is_multi = bool(data.get("is_multi_activity", False))
+
         seg_id = data.get("id")
         if seg_id:
             item = SegmentCode.query.get(int(seg_id))
@@ -1342,6 +1361,9 @@ def activities_save():
             item.is_flexible = bool(data.get("is_flexible", False))
             item.window_start_mins = data.get("window_start_mins")
             item.window_end_mins = data.get("window_end_mins")
+            item.set_external_ids(ext_ids)
+            item.parent_id = parent_id
+            item.is_multi_activity = is_multi
         else:
             if SegmentCode.query.filter_by(code=code).first():
                 return jsonify(success=False, error=f"Code '{code}' already exists")
@@ -1356,7 +1378,10 @@ def activities_save():
                 is_flexible=bool(data.get("is_flexible", False)),
                 window_start_mins=data.get("window_start_mins"),
                 window_end_mins=data.get("window_end_mins"),
+                parent_id=parent_id,
+                is_multi_activity=is_multi,
             )
+            item.set_external_ids(ext_ids)
             db.session.add(item)
         db.session.commit()
         return jsonify(success=True)
