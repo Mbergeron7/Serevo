@@ -304,14 +304,14 @@ function renderCallRoutes() {
   callRoutes.forEach((cr, i) => {
     const row = document.createElement('div');
     row.className = 'dyn-row';
-    row.style.gridTemplateColumns = '120px 1fr 60px 36px';
+    row.style.gridTemplateColumns = '140px 1fr 80px 36px';
     row.innerHTML = `
       <label style="font-size:.75rem;">Route ID<input class="form-input" placeholder="e.g. 719" value="${esc(cr.route_id||'')}" onchange="updateCallRoute(${i},'route_id',this.value)"></label>
       <label style="font-size:.75rem;">Route Name<input class="form-input" placeholder="e.g. SS Sales EN" value="${esc(cr.name||'')}" onchange="updateCallRoute(${i},'name',this.value)"></label>
-      <label style="font-size:.75rem;display:flex;align-items:end;gap:4px;padding-bottom:8px;">
+      <label style="font-size:.75rem;display:flex;align-items:center;gap:6px;padding-top:18px;">
         <input type="checkbox" ${cr.is_active!==false?'checked':''} onchange="updateCallRoute(${i},'is_active',this.checked)"> Active
       </label>
-      <button type="button" onclick="removeCallRoute(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:14px;">✕</button>`;
+      <button type="button" onclick="removeCallRoute(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:0;margin-top:16px;">✕</button>`;
     el.appendChild(row);
   });
   updateTabBadge('routes', callRoutes.length);
