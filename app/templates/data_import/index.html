@@ -423,7 +423,7 @@ async function confirmImport() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('input[name=csrf_token]').value,
+        'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content,
       },
       body: JSON.stringify(payload),
     });
