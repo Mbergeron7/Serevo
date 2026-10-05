@@ -428,17 +428,18 @@
       {% if ss_assignments %}
       <div style="overflow-x:auto"><table class="assign-table">
         <thead>
-          <tr><th>Sequence</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
+          <tr><th>Sequence</th><th>Employee Row</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
         </thead>
         <tbody>
           {% for sa in ss_assignments %}
           <tr>
             <td style="font-weight:600;">{{ sa.shift_sequence.name }}</td>
+            <td>{{ sa.row.name if sa.row else 'Row ' ~ (sa.row_index + 1) }}</td>
             <td>{{ sa.reference_date or '—' }}</td>
             <td>{{ sa.valid_from or '—' }}</td>
             <td>{{ sa.valid_to or '—' }}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-outline-sm" onclick="openAssignModal('shift_sequence', {id:{{ sa.id }}, item_id:{{ sa.shift_sequence_id }}, reference_date:'{{ sa.reference_date or '' }}', valid_from:'{{ sa.valid_from or '' }}', valid_to:'{{ sa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-outline-sm" onclick="openAssignModal('shift_sequence', {id:{{ sa.id }}, item_id:{{ sa.shift_sequence_id }}, row_index:{{ sa.row_index or 0 }}, reference_date:'{{ sa.reference_date or '' }}', valid_from:'{{ sa.valid_from or '' }}', valid_to:'{{ sa.valid_to or '' }}'})">Edit</button>
               <button class="btn-danger-sm" onclick="removeAssignment('shift_sequence', {{ sa.id }})">Remove</button>
             </td>
           </tr>
@@ -725,6 +726,13 @@
         <small style="color:var(--text-muted);">1 = Primary skill</small>
       </div>
 
+      <div class="form-group" id="assign_row_group" style="display:none;">
+        <label for="assign_row_index">Employee Row</label>
+        <select id="assign_row_index">
+          <option value="0">Row 1</option>
+        </select>
+      </div>
+
       <div class="form-group" id="assign_ref_date_group" style="display:none;">
         <label for="assign_ref_date">Reference Date</label>
         <input type="date" id="assign_ref_date">
@@ -1008,6 +1016,7 @@ function openAssignModal(type, editData) {
   // Show/hide extra fields
   priorityGrp.style.display = type === 'planning_unit' ? '' : 'none';
   refDateGrp.style.display = (type === 'shift_sequence' || type === 'work_time_pattern') ? '' : 'none';
+  document.getElementById('assign_row_group').style.display = type === 'shift_sequence' ? '' : 'none';
   const profGrp = document.getElementById('assign_proficiency_group');
   const skillPriGrp = document.getElementById('assign_skill_priority_group');
   profGrp.style.display = type === 'skill' ? '' : 'none';
@@ -1047,6 +1056,14 @@ function openAssignModal(type, editData) {
       if (isEdit && editData.item_id) {
         sel.value = editData.item_id;
       }
+      // Load rows for shift_sequence
+      if (type === 'shift_sequence') {
+        const seqId = isEdit ? editData.item_id : null;
+        if (seqId) loadSequenceRows(seqId, isEdit ? editData.row_index : 0);
+        sel.addEventListener('change', function() {
+          if (this.value) loadSequenceRows(this.value, 0);
+        });
+      }
     })
     .catch(() => { sel.innerHTML = '<option value="">Error loading</option>'; });
 
@@ -1054,6 +1071,28 @@ function openAssignModal(type, editData) {
 }
 
 function closeAssignModal() { document.getElementById('assignModal').style.display = 'none'; }
+
+function loadSequenceRows(seqId, selectedIndex) {
+  const rowSel = document.getElementById('assign_row_index');
+  rowSel.innerHTML = '<option value="0">Loading…</option>';
+  fetch('/settings/shift-sequences/' + seqId + '/rows')
+    .then(r => r.json())
+    .then(rows => {
+      if (rows.length === 0) {
+        rowSel.innerHTML = '<option value="0">Row 1 (default)</option>';
+      } else {
+        rowSel.innerHTML = '';
+        rows.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.position;
+          opt.textContent = r.name || ('Row ' + (r.position + 1));
+          rowSel.appendChild(opt);
+        });
+      }
+      rowSel.value = selectedIndex || 0;
+    })
+    .catch(() => { rowSel.innerHTML = '<option value="0">Row 1</option>'; });
+}
 
 async function saveAssignment(e) {
   e.preventDefault();
@@ -1069,6 +1108,9 @@ async function saveAssignment(e) {
     valid_to: document.getElementById('assign_to').value || null,
   };
   if (assignmentId) { body.assignment_id = parseInt(assignmentId); }
+  if (type === 'shift_sequence') {
+    body.row_index = parseInt(document.getElementById('assign_row_index').value) || 0;
+  }
   if (type === 'skill') {
     body.proficiency = parseInt(document.getElementById('assign_proficiency').value) || 3;
     body.priority = parseInt(document.getElementById('assign_skill_priority').value) || 1;

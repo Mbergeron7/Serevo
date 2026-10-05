@@ -2175,15 +2175,28 @@ def shift_sequences_page():
 @settings_bp.route("/shift-sequences/save", methods=["POST"])
 @admin_required
 def shift_sequences_save():
-    from app.models import ShiftSequence, db
+    import json as _json
+    from app.models import ShiftSequence, ShiftSequenceRow, db
     d = request.json or {}
     try:
-        item = ShiftSequence.query.get(int(d["id"])) if d.get("id") else ShiftSequence()
+        is_new = not d.get("id")
+        item = ShiftSequence.query.get(int(d["id"])) if not is_new else ShiftSequence()
         item.name = d["name"]
         item.cycle_weeks = int(d.get("cycle_weeks", 1))
         item.is_active = bool(d.get("is_active", True))
-        if not d.get("id"):
+        if is_new:
             db.session.add(item)
+            db.session.flush()  # get item.id
+            # Seed initial rows
+            initial_rows = int(d.get("initial_rows", 1))
+            for i in range(initial_rows):
+                row = ShiftSequenceRow(
+                    shift_sequence_id=item.id,
+                    name=f"Row {i + 1}",
+                    position=i,
+                    pattern_json=_json.dumps({}),
+                )
+                db.session.add(row)
         db.session.commit()
         return jsonify(success=True, id=item.id)
     except Exception as e:

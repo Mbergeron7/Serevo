@@ -2206,6 +2206,14 @@ class EmployeeShiftSequence(db.Model):
         db.UniqueConstraint("employee_id", "shift_sequence_id", name="uq_emp_ss"),
     )
 
+    @property
+    def row(self):
+        """Return the ShiftSequenceRow matching this assignment's row_index."""
+        return ShiftSequenceRow.query.filter_by(
+            shift_sequence_id=self.shift_sequence_id,
+            position=self.row_index or 0
+        ).first()
+
     def to_dict(self):
         ss = self.shift_sequence
         return {

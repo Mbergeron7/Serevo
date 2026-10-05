@@ -545,17 +545,20 @@ def profile_assign():
                 db.session.add(obj)
         elif assign_type == "shift_sequence":
             ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
+            row_index = int(data.get("row_index", 0))
             if assignment_id:
                 obj = EmployeeShiftSequence.query.get(int(assignment_id))
                 if not obj:
                     return jsonify({"success": False, "error": "Assignment not found."})
                 obj.shift_sequence_id = item_id
+                obj.row_index = row_index
                 obj.reference_date = ref_date
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
                 obj = EmployeeShiftSequence(
                     employee_id=emp_id, shift_sequence_id=item_id,
+                    row_index=row_index,
                     reference_date=ref_date,
                     valid_from=valid_from, valid_to=valid_to,
                 )

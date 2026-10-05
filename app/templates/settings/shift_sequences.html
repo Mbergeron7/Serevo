@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Shift Sequences</h1>
-  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define repeating rotation patterns — assign shift templates to each day across a multi-week cycle.</p>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Define repeating rotation patterns — assign day models to employee rows across a multi-week cycle.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -14,19 +14,22 @@
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
   <thead>
-    <tr><th>Name</th><th>Cycle Weeks</th><th>Active</th><th></th></tr>
+    <tr><th>Name</th><th>Cycle Weeks</th><th>Rows</th><th>Active</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table></div>
 
-<!-- Create / Edit modal -->
+<!-- Create / Edit name modal -->
 <dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface,#fff);color:var(--text,#111);">
   <h3 id="modalTitle" style="margin:0 0 16px;">Add Shift Sequence</h3>
   <form id="editForm" onsubmit="return false;">
     <input type="hidden" id="f_id" value="">
     <div style="display:grid;gap:12px;">
-      <label>Name<input id="f_name" class="form-input" required placeholder="e.g. 4-Week Rotation A"></label>
+      <label>Name<input id="f_name" class="form-input" required placeholder="e.g. WFM 5 Week Rotation"></label>
       <label>Cycle Length (weeks)<input id="f_cycle_weeks" type="number" class="form-input" min="1" max="52" value="1"></label>
+      <label>Number of Employee Rows<input id="f_rows" type="number" class="form-input" min="1" max="50" value="1">
+        <small style="color:var(--text-muted);display:block;margin-top:2px;">Each row represents one position in the rotation</small>
+      </label>
       <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_active" type="checkbox" checked> Active</label>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
@@ -36,50 +39,107 @@
   </form>
 </dialog>
 
-<!-- Pattern editor modal -->
-<dialog id="patternModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:920px;width:96vw;background:var(--surface,#fff);color:var(--text,#111);">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-    <h3 id="patternModalTitle" style="margin:0;">Edit Pattern</h3>
-    <button type="button" class="btn" onclick="document.getElementById('patternModal').close()" style="font-size:1.2rem;line-height:1;padding:4px 10px;" aria-label="Close">&times;</button>
+<!-- Rotation Builder modal (full-width) -->
+<dialog id="builderModal">
+  <div class="builder-header">
+    <div>
+      <h3 id="builderTitle" style="margin:0;">Rotation Builder</h3>
+      <p id="builderSubtitle" style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;"></p>
+    </div>
+    <button type="button" class="btn" onclick="document.getElementById('builderModal').close()" style="font-size:1.2rem;line-height:1;padding:4px 10px;" aria-label="Close">&times;</button>
   </div>
-  <div id="patternGrid" style="overflow-x:auto;"></div>
-  <div style="margin-top:12px;display:flex;gap:10px;">
-    <button class="btn" onclick="addWeek()">+ Add Week</button>
-    <button class="btn btn-danger" id="removeWeekBtn" onclick="removeWeek()">Remove Last Week</button>
+
+  <div class="builder-toolbar">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-weight:600;font-size:.85rem;">Assign:</span>
+      <label style="font-size:.85rem;display:flex;align-items:center;gap:4px;">
+        <input type="radio" name="assignMode" value="day_model" checked onchange="setAssignMode('day_model')"> Day Model
+      </label>
+      <select id="bulkTemplate" style="font-size:.85rem;padding:4px 8px;border-radius:6px;border:1px solid var(--border);">
+        <option value="">— Select to paint —</option>
+      </select>
+      <button class="btn btn-sm" onclick="clearBulkSelect()" style="font-size:.78rem;">Clear Selection</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-sm" onclick="addRow()">+ Add Row</button>
+      <button class="btn btn-sm" onclick="addWeek()">+ Add Week</button>
+      <button class="btn btn-sm btn-danger" id="removeWeekBtn" onclick="removeWeek()">− Remove Week</button>
+    </div>
   </div>
-  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
-    <button type="button" class="btn" onclick="document.getElementById('patternModal').close()">Cancel</button>
-    <button type="button" class="btn btn-primary" onclick="savePattern()">Save Pattern</button>
+
+  <div id="builderGrid" style="overflow-x:auto;padding:0 0 16px;"></div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 0 0;border-top:1px solid var(--border);">
+    <button type="button" class="btn" onclick="document.getElementById('builderModal').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" onclick="saveRotation()">Save Rotation</button>
   </div>
 </dialog>
 
 <style>
-  #editModal::backdrop, #patternModal::backdrop { background:rgba(0,0,0,.5); }
-  .pattern-table { width:100%; border-collapse:collapse; font-size:.85rem; }
-  .pattern-table th { padding:6px 4px; text-align:center; font-weight:600; color:var(--text-muted); font-size:.8rem; }
-  .pattern-table td { padding:3px; }
-  .pattern-table .week-label { font-weight:600; white-space:nowrap; padding:6px 10px 6px 0; vertical-align:middle; }
-  .shift-cell {
-    border-radius:6px; padding:6px 8px; text-align:center; cursor:pointer;
-    min-height:42px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    border:1px solid var(--border); transition:box-shadow .15s;
-    font-size:.8rem; line-height:1.3; user-select:none;
+  #editModal::backdrop, #builderModal::backdrop { background:rgba(0,0,0,.5); }
+  #builderModal {
+    border-radius:12px; border:1px solid var(--border); padding:0;
+    max-width:96vw; width:96vw; max-height:92vh;
+    background:var(--surface,#fff); color:var(--text,#111);
+    display:flex; flex-direction:column;
   }
-  .shift-cell:hover { box-shadow:0 0 0 2px var(--accent); }
-  .shift-cell.is-off { background:var(--bg); color:var(--text-muted); }
-  .shift-cell.is-shift { background:rgba(20,184,166,.12); color:var(--text); border-color:rgba(20,184,166,.3); }
-  .shift-cell .cell-name { font-weight:600; }
-  .shift-cell .cell-time { font-size:.72rem; color:var(--text-muted); }
+  .builder-header {
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:20px 24px 12px; border-bottom:1px solid var(--border);
+  }
+  .builder-toolbar {
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+    padding:10px 24px; background:var(--bg,#f8fafc); border-bottom:1px solid var(--border);
+  }
+  #builderGrid { padding:16px 24px; overflow:auto; flex:1; }
+
+  .rot-table { border-collapse:collapse; font-size:.82rem; }
+  .rot-table th {
+    padding:4px 2px; text-align:center; font-weight:600; color:var(--text-muted);
+    font-size:.75rem; position:sticky; top:0; background:var(--surface,#fff); z-index:2;
+  }
+  .rot-table td { padding:2px; }
+  .rot-table .row-label {
+    position:sticky; left:0; background:var(--surface,#fff); z-index:1;
+    padding:4px 8px; white-space:nowrap; vertical-align:middle;
+  }
+  .rot-table .row-label input {
+    width:100px; font-size:.82rem; padding:3px 6px; border:1px solid var(--border);
+    border-radius:4px; background:transparent; color:var(--text);
+  }
+  .rot-table .week-sep { border-left:2px solid var(--accent); }
+  .rot-table .week-header {
+    text-align:center; font-weight:700; font-size:.78rem; padding:6px 4px;
+    color:var(--accent); background:var(--bg,#f8fafc);
+  }
+
+  .sc {
+    border-radius:5px; padding:4px 3px; text-align:center; cursor:pointer;
+    min-width:80px; min-height:38px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    border:1px solid var(--border); transition:box-shadow .12s, background .12s;
+    font-size:.75rem; line-height:1.2; user-select:none;
+  }
+  .sc:hover { box-shadow:0 0 0 2px var(--accent); }
+  .sc.is-off { background:var(--bg,#f8fafc); color:var(--text-muted); }
+  .sc.is-shift { background:rgba(20,184,166,.12); color:var(--text); border-color:rgba(20,184,166,.3); }
+  .sc .sn { font-weight:600; font-size:.74rem; }
+  .sc .st { font-size:.68rem; color:var(--text-muted); }
+
   .shift-picker {
-    position:absolute; z-index:100; background:var(--surface); border:1px solid var(--border);
-    border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:6px; min-width:180px;
-    max-height:260px; overflow-y:auto;
+    position:absolute; z-index:100; background:var(--surface,#fff); border:1px solid var(--border);
+    border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:6px; min-width:200px;
+    max-height:280px; overflow-y:auto;
   }
-  .shift-picker-item {
-    padding:6px 10px; border-radius:4px; cursor:pointer; font-size:.82rem;
-  }
-  .shift-picker-item:hover { background:var(--bg); }
+  .shift-picker-item { padding:5px 10px; border-radius:4px; cursor:pointer; font-size:.82rem; }
+  .shift-picker-item:hover { background:var(--bg,#f1f5f9); }
   .shift-picker-item.off-item { color:var(--text-muted); font-style:italic; }
+
+  .remove-row-btn {
+    background:none; border:none; color:#b91c1c; cursor:pointer; font-size:.9rem;
+    padding:2px 6px; border-radius:4px; opacity:.6;
+  }
+  .remove-row-btn:hover { opacity:1; background:#fef2f2; }
 </style>
 
 <script>
@@ -87,10 +147,8 @@ const DATA = {{ items | tojson }};
 const TEMPLATES = {{ shift_templates | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
-let editingSeqId = null;
-let editingCycleWeeks = 1;
-let patternData = {}; // {w0_d0: templateId, ...}
 
+// ── Main table ──
 function render() {
   tbody.innerHTML = '';
   DATA.forEach(r => {
@@ -98,15 +156,16 @@ function render() {
     tr.innerHTML = `
       <td style="font-weight:600;">${r.name}</td>
       <td>${r.cycle_weeks} week${r.cycle_weeks!==1?'s':''}</td>
+      <td>${r.row_count} row${r.row_count!==1?'s':''}</td>
       <td>${r.is_active ? '&#10003;' : '—'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-sm" onclick="openPatternEditor(${r.id})">Edit Pattern</button>
-        <button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Edit</button>
+        <button class="btn btn-sm btn-primary" onclick="openBuilder(${r.id})">Edit Rotation</button>
+        <button class="btn btn-sm" onclick='editItem(${JSON.stringify(r)})'>Settings</button>
         <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button>
       </td>`;
     tbody.appendChild(tr);
   });
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem;">No shift sequences yet. Add one to get started.</td></tr>';
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem;">No shift sequences yet. Add one to get started.</td></tr>';
 }
 
 function openModal(item) {
@@ -114,7 +173,10 @@ function openModal(item) {
   document.getElementById('f_id').value = item ? item.id : '';
   document.getElementById('f_name').value = item ? item.name : '';
   document.getElementById('f_cycle_weeks').value = item ? item.cycle_weeks : 1;
+  document.getElementById('f_rows').value = item ? (item.row_count || 1) : 1;
   document.getElementById('f_is_active').checked = item ? item.is_active : true;
+  if (item) document.getElementById('f_rows').parentElement.style.display = 'none';
+  else document.getElementById('f_rows').parentElement.style.display = '';
   dlg.showModal();
 }
 
@@ -128,89 +190,126 @@ async function saveItem() {
     cycle_weeks: parseInt(document.getElementById('f_cycle_weeks').value) || 1,
     is_active: document.getElementById('f_is_active').checked,
   };
+  if (isNew) body.initial_rows = parseInt(document.getElementById('f_rows').value) || 1;
   const res = await fetch('/settings/shift-sequences/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();
   if (data.success) {
     dlg.close();
-    // Reload page, and if new, auto-open the pattern editor for it
-    if (isNew) {
-      sessionStorage.setItem('autoOpenPattern', body.name);
-    }
+    if (isNew) sessionStorage.setItem('autoOpenBuilder', body.name);
     location.reload();
   } else { alert(data.error||'Save failed'); }
 }
 
 async function deleteItem(id) {
-  if (!confirm('Delete this shift sequence?')) return;
+  if (!confirm('Delete this shift sequence and all its rows?')) return;
   const res = await fetch('/settings/shift-sequences/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }
 }
 
+// ── Rotation Builder ──
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+let editingSeqId = null;
+let editingCycleWeeks = 1;
+let rowsData = []; // [{name, pattern: {w0_d0: tmplId, ...}}, ...]
 
-async function openPatternEditor(seqId) {
+function getTemplate(id) { return TEMPLATES.find(t => String(t.id) === String(id)); }
+
+async function openBuilder(seqId) {
   editingSeqId = seqId;
   const seq = DATA.find(d => d.id === seqId);
   editingCycleWeeks = seq.cycle_weeks;
-  document.getElementById('patternModalTitle').textContent = `Pattern — ${seq.name}`;
-  // Load existing pattern from row data
+  document.getElementById('builderTitle').textContent = seq.name;
+  document.getElementById('builderSubtitle').textContent = `${editingCycleWeeks} week cycle — click any cell to assign a day model`;
+
+  // Populate template picker
+  const bulkSel = document.getElementById('bulkTemplate');
+  bulkSel.innerHTML = '<option value="">— Select to paint —</option><option value="__off">Off (clear)</option>';
+  TEMPLATES.forEach(t => {
+    bulkSel.innerHTML += `<option value="${t.id}">${t.name} (${t.start}–${t.end})</option>`;
+  });
+
+  // Load rows
   try {
     const res = await fetch(`/settings/shift-sequences/${seqId}/rows`);
     const rows = await res.json();
-    patternData = (rows.length > 0 && rows[0].pattern) ? {...rows[0].pattern} : {};
-  } catch(e) { patternData = {}; }
-  renderGrid();
-  document.getElementById('patternModal').showModal();
+    rowsData = rows.map(r => ({name: r.name, pattern: r.pattern || {}}));
+  } catch(e) { rowsData = []; }
+
+  // If no rows yet, seed with at least one
+  if (rowsData.length === 0) rowsData.push({name: 'Row 1', pattern: {}});
+
+  renderBuilder();
+  document.getElementById('builderModal').showModal();
 }
 
-function getTemplate(id) {
-  return TEMPLATES.find(t => String(t.id) === String(id));
-}
-
-function renderGrid() {
-  const el = document.getElementById('patternGrid');
+function renderBuilder() {
+  const el = document.getElementById('builderGrid');
   document.getElementById('removeWeekBtn').style.display = editingCycleWeeks > 1 ? '' : 'none';
-  let html = '<div style="overflow-x:auto"><table class="pattern-table"><thead><tr><th></th>';
-  DAYS.forEach(d => html += `<th>${d}</th>`);
-  html += '</tr></thead><tbody>';
+  document.getElementById('builderSubtitle').textContent =
+    `${editingCycleWeeks} week cycle · ${rowsData.length} employee row${rowsData.length!==1?'s':''} — click any cell to assign a day model`;
+
+  let html = '<table class="rot-table"><thead><tr><th style="min-width:130px;text-align:left;">Employee Row</th>';
+  // Week headers
   for (let w = 0; w < editingCycleWeeks; w++) {
-    html += `<tr><td class="week-label">Week ${w+1}</td>`;
     DAYS.forEach((d, di) => {
-      const key = `w${w}_d${di}`;
-      const val = patternData[key] || '';
-      const tmpl = val ? getTemplate(val) : null;
-      const isShift = !!tmpl;
-      html += `<td style="position:relative;">
-        <div class="shift-cell ${isShift ? 'is-shift' : 'is-off'}" onclick="openPicker(this,'${key}')" data-key="${key}">
-          <span class="cell-name">${isShift ? tmpl.name : 'Off'}</span>
-          ${isShift ? `<span class="cell-time">${tmpl.start}–${tmpl.end}</span>` : ''}
-        </div>
-      </td>`;
+      html += `<th class="${di===0?'week-sep':''}">`;
+      if (di === 3) html += `<span style="display:block;font-size:.7rem;color:var(--accent);margin-bottom:1px;">Week ${w+1}</span>`;
+      html += `${d}</th>`;
     });
-    html += '</tr>';
   }
-  html += '</tbody></table></div>';
+  html += '<th></th></tr></thead><tbody>';
+
+  rowsData.forEach((row, ri) => {
+    html += `<tr>`;
+    html += `<td class="row-label"><input value="${row.name||''}" onchange="rowsData[${ri}].name=this.value" placeholder="Row ${ri+1}" title="Row name — use employee name or position label"></td>`;
+    for (let w = 0; w < editingCycleWeeks; w++) {
+      DAYS.forEach((d, di) => {
+        const key = `w${w}_d${di}`;
+        const val = row.pattern[key] || '';
+        const tmpl = val ? getTemplate(val) : null;
+        const isShift = !!tmpl;
+        html += `<td style="position:relative;" class="${di===0?'week-sep':''}">
+          <div class="sc ${isShift ? 'is-shift' : 'is-off'}" onclick="cellClick(this,${ri},'${key}')" data-ri="${ri}" data-key="${key}">
+            <span class="sn">${isShift ? tmpl.name : 'Off'}</span>
+            ${isShift ? `<span class="st">${tmpl.start}–${tmpl.end}</span>` : ''}
+          </div>
+        </td>`;
+      });
+    }
+    html += `<td><button class="remove-row-btn" onclick="removeRow(${ri})" title="Remove row">&times;</button></td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
   el.innerHTML = html;
 }
 
-function openPicker(cellEl, key) {
-  // Close any existing picker
+function cellClick(cellEl, rowIdx, key) {
+  const bulkVal = document.getElementById('bulkTemplate').value;
+  if (bulkVal) {
+    // Paint mode — directly assign
+    if (bulkVal === '__off') {
+      delete rowsData[rowIdx].pattern[key];
+    } else {
+      rowsData[rowIdx].pattern[key] = String(bulkVal);
+    }
+    renderBuilder();
+    return;
+  }
+  // Picker mode
   closePicker();
   const picker = document.createElement('div');
   picker.className = 'shift-picker';
   picker.id = 'activePicker';
-  // Off option
-  let html = `<div class="shift-picker-item off-item" onclick="selectShift('${key}','')">Off</div>`;
+  let html = `<div class="shift-picker-item off-item" onclick="selectCell(${rowIdx},'${key}','')">Off</div>`;
   TEMPLATES.forEach(t => {
-    html += `<div class="shift-picker-item" onclick="selectShift('${key}','${t.id}')">${t.name} <span style="color:var(--text-muted);font-size:.75rem;">${t.start}–${t.end}</span></div>`;
+    html += `<div class="shift-picker-item" onclick="selectCell(${rowIdx},'${key}','${t.id}')">${t.name} <span style="color:var(--text-muted);font-size:.75rem;">${t.start}–${t.end}</span></div>`;
   });
   picker.innerHTML = html;
   cellEl.parentElement.appendChild(picker);
-  // Position below the cell
   picker.style.top = cellEl.offsetHeight + 2 + 'px';
   picker.style.left = '0';
-  // Close on outside click
   setTimeout(() => document.addEventListener('click', closePicker, {once:true}), 10);
 }
 
@@ -219,31 +318,45 @@ function closePicker() {
   if (p) p.remove();
 }
 
-function selectShift(key, templateId) {
-  if (templateId) {
-    patternData[key] = String(templateId);
-  } else {
-    delete patternData[key];
-  }
+function selectCell(rowIdx, key, templateId) {
+  if (templateId) rowsData[rowIdx].pattern[key] = String(templateId);
+  else delete rowsData[rowIdx].pattern[key];
   closePicker();
-  renderGrid();
+  renderBuilder();
+}
+
+function clearBulkSelect() { document.getElementById('bulkTemplate').value = ''; }
+
+function addRow() {
+  rowsData.push({name: `Row ${rowsData.length+1}`, pattern: {}});
+  renderBuilder();
+}
+
+function removeRow(idx) {
+  if (rowsData.length <= 1) { alert('Must have at least one row.'); return; }
+  if (!confirm(`Remove row "${rowsData[idx].name||'Row '+(idx+1)}"?`)) return;
+  rowsData.splice(idx, 1);
+  renderBuilder();
 }
 
 function addWeek() {
   editingCycleWeeks++;
-  renderGrid();
+  renderBuilder();
 }
 
 function removeWeek() {
   if (editingCycleWeeks <= 1) return;
   editingCycleWeeks--;
-  // Clean up removed week's data
-  DAYS.forEach((d, di) => { delete patternData[`w${editingCycleWeeks}_d${di}`]; });
-  renderGrid();
+  rowsData.forEach(row => {
+    DAYS.forEach((d, di) => { delete row.pattern[`w${editingCycleWeeks}_d${di}`]; });
+  });
+  renderBuilder();
 }
 
-async function savePattern() {
-  // Save cycle_weeks update first
+function setAssignMode(mode) { /* future: activity mode */ }
+
+async function saveRotation() {
+  // Update cycle_weeks
   const seq = DATA.find(d => d.id === editingSeqId);
   if (seq.cycle_weeks !== editingCycleWeeks) {
     await fetch('/settings/shift-sequences/save', {
@@ -251,10 +364,10 @@ async function savePattern() {
       body:JSON.stringify({id:editingSeqId, name:seq.name, cycle_weeks:editingCycleWeeks, is_active:seq.is_active})
     });
   }
-  // Save pattern as a single row with position=0
+  // Save rows
   const body = {
     sequence_id: editingSeqId,
-    rows: [{ name: 'pattern', pattern: patternData }]
+    rows: rowsData.map(r => ({name: r.name, pattern: r.pattern}))
   };
   const res = await fetch('/settings/shift-sequences/save-rows', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();
@@ -263,12 +376,12 @@ async function savePattern() {
 
 render();
 
-// Auto-open pattern editor after creating a new sequence
-const autoName = sessionStorage.getItem('autoOpenPattern');
+// Auto-open builder after creating a new sequence
+const autoName = sessionStorage.getItem('autoOpenBuilder');
 if (autoName) {
-  sessionStorage.removeItem('autoOpenPattern');
+  sessionStorage.removeItem('autoOpenBuilder');
   const seq = DATA.find(d => d.name === autoName);
-  if (seq) { setTimeout(() => openPatternEditor(seq.id), 300); }
+  if (seq) setTimeout(() => openBuilder(seq.id), 300);
 }
 </script>
 {% endblock %}
