@@ -418,6 +418,8 @@ def _get_employees_for_lob(lob, sheet=None):
     4. DB all employees + sheet LOB mapping (handles NULL planning_unit_id)
     """
     from app.data_source import normalize_lob
+    if not lob:
+        return [], [], ["No LOB specified"]
     lob_normalized = normalize_lob(lob.strip()).lower()
 
     def _is_active(status_val):

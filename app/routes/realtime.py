@@ -735,7 +735,10 @@ def net_staffing():
                 snap = get_demo_realtime_snapshot(l, date_obj)
             else:
                 sheet = _get_sheet()
-                snap = get_intraday_snapshot(l, date_obj, sheet)
+                try:
+                    snap = get_intraday_snapshot(l, date_obj, sheet)
+                except Exception:
+                    snap = {"intervals": []}
 
             intervals = snap.get("intervals", [])
             enriched = []
