@@ -57,14 +57,14 @@
 </div>
 
 <!-- Column Mapping Modal -->
-<div id="mappingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; overflow-y:auto;">
-  <div style="max-width:800px; margin:2rem auto; background:var(--bg-primary); border-radius:12px; padding:1.5rem; box-shadow:0 8px 32px rgba(0,0,0,.2);">
+<div id="mappingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; overflow-y:auto; padding:1rem;">
+  <div style="max-width:800px; margin:2rem auto; background:var(--surface, #fff); border-radius:12px; padding:1.5rem; box-shadow:0 8px 32px rgba(0,0,0,.2);">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
       <h2 style="margin:0;">Map Columns</h2>
       <button class="btn btn-outline" onclick="closeMappingModal()" style="padding:4px 12px;">✕</button>
     </div>
 
-    <div id="mappingInfo" style="margin-bottom:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+    <div id="mappingInfo" style="margin-bottom:1rem; padding:.75rem; background:var(--surface-alt, #f3f4f6); border-radius:8px;">
       <p style="margin:0;"><strong id="mapFilename"></strong> — <span id="mapRowCount"></span> rows</p>
     </div>
 
@@ -87,7 +87,7 @@
     </div>
 
     <!-- Save mapping profile -->
-    <div style="margin-top:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+    <div style="margin-top:1rem; padding:.75rem; background:var(--surface-alt, #f3f4f6); border-radius:8px;">
       <label style="display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem;">
         <input type="checkbox" id="saveMapping"> Save this mapping as a profile
       </label>
@@ -168,7 +168,7 @@
       <input type="checkbox" id="activeOnly" checked> Active &amp; LOA only
     </label>
   </div>
-  <div id="syncPreview" style="display:none; margin-top:1rem; padding:.75rem; background:var(--bg-secondary); border-radius:8px;">
+  <div id="syncPreview" style="display:none; margin-top:1rem; padding:.75rem; background:var(--surface-alt, #f3f4f6); border-radius:8px;">
   </div>
   <div id="syncResult" style="display:none; margin-top:1rem;"></div>
 </div>
