@@ -2230,20 +2230,32 @@ def shift_sequences_page():
         data = get_demo_shift_sequences()
         return render_template("settings/shift_sequences.html",
                                items=data["items"],
-                               shift_templates=data["shift_templates"])
-    from app.models import ShiftSequence, ShiftTemplate
+                               shift_templates=data.get("shift_templates", []),
+                               day_models=data.get("day_models", []))
+    from app.models import ShiftSequence, ShiftTemplate, DayModel
+    items, shift_templates, day_models = [], [], []
     try:
         seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
         items = [s.to_dict() for s in seqs]
-        templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
-        shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
     except Exception as e:
         log.warning(f"shift_sequences query failed: {e}")
         from app.models import db
         db.session.rollback()
-        items, shift_templates = [], []
+    try:
+        templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+        shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
+    except Exception:
+        from app.models import db
+        db.session.rollback()
+    try:
+        dms = DayModel.query.filter_by(is_active=True).order_by(DayModel.sort_order, DayModel.name).all()
+        day_models = [{"id": d.id, "name": d.name, "abbreviation": d.abbreviation or "",
+                       "start": d.start_time, "end": d.end_time, "color": d.color or "#4472C4"} for d in dms]
+    except Exception:
+        from app.models import db
+        db.session.rollback()
     return render_template("settings/shift_sequences.html",
-                           items=items, shift_templates=shift_templates)
+                           items=items, shift_templates=shift_templates, day_models=day_models)
 
 
 @settings_bp.route("/shift-sequences/save", methods=["POST"])

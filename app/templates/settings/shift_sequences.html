@@ -145,6 +145,9 @@
 <script>
 const DATA = {{ items | tojson }};
 const TEMPLATES = {{ shift_templates | tojson }};
+const DAY_MODELS = {{ day_models | tojson }};
+// Use day models if available, otherwise fall back to shift templates
+const ASSIGN_OPTIONS = DAY_MODELS.length > 0 ? DAY_MODELS : TEMPLATES;
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
 
@@ -195,7 +198,6 @@ async function saveItem() {
   const data = await res.json();
   if (data.success) {
     dlg.close();
-    if (isNew) sessionStorage.setItem('autoOpenBuilder', body.name);
     location.reload();
   } else { alert(data.error||'Save failed'); }
 }
@@ -213,7 +215,10 @@ let editingSeqId = null;
 let editingCycleWeeks = 1;
 let rowsData = []; // [{name, pattern: {w0_d0: tmplId, ...}}, ...]
 
-function getTemplate(id) { return TEMPLATES.find(t => String(t.id) === String(id)); }
+function getTemplate(id) {
+  return ASSIGN_OPTIONS.find(t => String(t.id) === String(id))
+      || TEMPLATES.find(t => String(t.id) === String(id));
+}
 
 async function openBuilder(seqId) {
   editingSeqId = seqId;
@@ -222,11 +227,13 @@ async function openBuilder(seqId) {
   document.getElementById('builderTitle').textContent = seq.name;
   document.getElementById('builderSubtitle').textContent = `${editingCycleWeeks} week cycle — click any cell to assign a day model`;
 
-  // Populate template picker
+  // Populate template picker with day models (or shift templates as fallback)
   const bulkSel = document.getElementById('bulkTemplate');
   bulkSel.innerHTML = '<option value="">— Select to paint —</option><option value="__off">Off (clear)</option>';
-  TEMPLATES.forEach(t => {
-    bulkSel.innerHTML += `<option value="${t.id}">${t.name} (${t.start}–${t.end})</option>`;
+  ASSIGN_OPTIONS.forEach(t => {
+    const label = t.abbreviation ? `${t.name} (${t.abbreviation})` : `${t.name} (${t.start}–${t.end})`;
+    const color = t.color ? ` style="border-left:3px solid ${t.color};padding-left:6px;"` : '';
+    bulkSel.innerHTML += `<option value="${t.id}"${color}>${label}</option>`;
   });
 
   // Load rows
@@ -269,9 +276,10 @@ function renderBuilder() {
         const val = row.pattern[key] || '';
         const tmpl = val ? getTemplate(val) : null;
         const isShift = !!tmpl;
+        const cellColor = (isShift && tmpl.color) ? `background:${tmpl.color}22;border-color:${tmpl.color}66;` : '';
         html += `<td style="position:relative;" class="${di===0?'week-sep':''}">
-          <div class="sc ${isShift ? 'is-shift' : 'is-off'}" onclick="cellClick(this,${ri},'${key}')" data-ri="${ri}" data-key="${key}">
-            <span class="sn">${isShift ? tmpl.name : 'Off'}</span>
+          <div class="sc ${isShift ? 'is-shift' : 'is-off'}" style="${cellColor}" onclick="cellClick(this,${ri},'${key}')" data-ri="${ri}" data-key="${key}">
+            <span class="sn">${isShift ? (tmpl.abbreviation || tmpl.name) : 'Off'}</span>
             ${isShift ? `<span class="st">${tmpl.start}–${tmpl.end}</span>` : ''}
           </div>
         </td>`;
@@ -303,8 +311,11 @@ function cellClick(cellEl, rowIdx, key) {
   picker.className = 'shift-picker';
   picker.id = 'activePicker';
   let html = `<div class="shift-picker-item off-item" onclick="selectCell(${rowIdx},'${key}','')">Off</div>`;
-  TEMPLATES.forEach(t => {
-    html += `<div class="shift-picker-item" onclick="selectCell(${rowIdx},'${key}','${t.id}')">${t.name} <span style="color:var(--text-muted);font-size:.75rem;">${t.start}–${t.end}</span></div>`;
+  ASSIGN_OPTIONS.forEach(t => {
+    const label = t.abbreviation ? `${t.name} (${t.abbreviation})` : `${t.name}`;
+    const time = `${t.start}–${t.end}`;
+    const dot = t.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.color};margin-right:6px;"></span>` : '';
+    html += `<div class="shift-picker-item" onclick="selectCell(${rowIdx},'${key}','${t.id}')">${dot}${label} <span style="color:var(--text-muted);font-size:.75rem;">${time}</span></div>`;
   });
   picker.innerHTML = html;
   cellEl.parentElement.appendChild(picker);
@@ -375,13 +386,5 @@ async function saveRotation() {
 }
 
 render();
-
-// Auto-open builder after creating a new sequence
-const autoName = sessionStorage.getItem('autoOpenBuilder');
-if (autoName) {
-  sessionStorage.removeItem('autoOpenBuilder');
-  const seq = DATA.find(d => d.name === autoName);
-  if (seq) setTimeout(() => openBuilder(seq.id), 300);
-}
 </script>
 {% endblock %}
