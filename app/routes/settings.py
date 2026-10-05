@@ -623,8 +623,14 @@ def toggle_data_feed():
 @admin_required
 def users():
     from app.models import User, Employee
-    all_users = User.query.order_by(User.created_at.desc()).all()
-    all_employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()
+    try:
+        all_users = User.query.order_by(User.created_at.desc()).all()
+        all_employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()
+    except Exception as e:
+        log.warning(f"users query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        all_users, all_employees = [], []
     return render_template("settings/users.html",
         user=get_current_user(),
         users=all_users,
@@ -793,31 +799,44 @@ def customization():
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             Holiday, SkillGroup, AdherenceException, AlertConfig,
                             BrandSetting, LobMapping)
+    from app.models import db as _db
 
-    segments = [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()]
-    shifts = [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()]
-    lob_settings = [s.to_dict() for s in LOBSetting.query.all()]
-    all_lobs = [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
+    def _safe_query(fn, label="query"):
+        try:
+            return fn()
+        except Exception as e:
+            log.warning(f"customization {label} failed: {e}")
+            _db.session.rollback()
+            return []
 
-    # New customization data
-    time_off_types = [t.to_dict() for t in TimeOffType.query.order_by(TimeOffType.sort_order).all()]
-    ot_rules = [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()]
-    sched_rules = [r.to_dict() for r in ScheduleRule.query.order_by(ScheduleRule.name).all()]
+    segments = _safe_query(lambda: [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()], "segments")
+    shifts = _safe_query(lambda: [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()], "shifts")
+    lob_settings = _safe_query(lambda: [s.to_dict() for s in LOBSetting.query.all()], "lob_settings")
+    all_lobs = _safe_query(lambda: [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()], "all_lobs")
+
     from datetime import datetime as dt
     try:
         from zoneinfo import ZoneInfo
         cur_year = dt.now(ZoneInfo("US/Eastern")).year
     except Exception:
         cur_year = dt.utcnow().year
-    holidays = [h.to_dict() for h in Holiday.query.filter_by(year=cur_year).order_by(Holiday.date).all()]
-    skill_groups = [g.to_dict() for g in SkillGroup.query.order_by(SkillGroup.name).all()]
-    adherence_codes = [a.to_dict() for a in AdherenceException.query.order_by(AdherenceException.sort_order).all()]
-    alerts = [a.to_dict() for a in AlertConfig.query.order_by(AlertConfig.name).all()]
-    brand = BrandSetting.query.first()
-    brand_data = brand.to_dict() if brand else {}
-    lob_mappings = [{"id": m.id, "source_name": m.source_name,
+
+    time_off_types = _safe_query(lambda: [t.to_dict() for t in TimeOffType.query.order_by(TimeOffType.sort_order).all()], "time_off_types")
+    ot_rules = _safe_query(lambda: [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()], "ot_rules")
+    sched_rules = _safe_query(lambda: [r.to_dict() for r in ScheduleRule.query.order_by(ScheduleRule.name).all()], "sched_rules")
+    holidays = _safe_query(lambda: [h.to_dict() for h in Holiday.query.filter_by(year=cur_year).order_by(Holiday.date).all()], "holidays")
+    skill_groups = _safe_query(lambda: [g.to_dict() for g in SkillGroup.query.order_by(SkillGroup.name).all()], "skill_groups")
+    adherence_codes = _safe_query(lambda: [a.to_dict() for a in AdherenceException.query.order_by(AdherenceException.sort_order).all()], "adherence_codes")
+    alerts = _safe_query(lambda: [a.to_dict() for a in AlertConfig.query.order_by(AlertConfig.name).all()], "alerts")
+    brand_data = {}
+    try:
+        brand = BrandSetting.query.first()
+        brand_data = brand.to_dict() if brand else {}
+    except Exception:
+        _db.session.rollback()
+    lob_mappings = _safe_query(lambda: [{"id": m.id, "source_name": m.source_name,
                      "planning_unit_name": m.planning_unit_name}
-                    for m in LobMapping.query.order_by(LobMapping.source_name).all()]
+                    for m in LobMapping.query.order_by(LobMapping.source_name).all()], "lob_mappings")
 
     return render_template("settings/customization.html",
         user=user,
@@ -1572,10 +1591,15 @@ def activities():
         from app.demo_data import get_demo_activities
         return render_template("settings/activities.html", items=get_demo_activities())
     from app.models import SegmentCode
-    all_items = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()
-    items = [s.to_dict() for s in all_items]
-    # Build parent options for multi-activity dropdown
-    parents = [{"id": s.id, "label": s.label} for s in all_items if s.is_multi_activity]
+    try:
+        all_items = SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()
+        items = [s.to_dict() for s in all_items]
+        parents = [{"id": s.id, "label": s.label} for s in all_items if s.is_multi_activity]
+    except Exception as e:
+        log.warning(f"activities query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items, parents = [], []
     return render_template("settings/activities.html", items=items, parents=parents)
 
 
@@ -1736,8 +1760,14 @@ def contracts():
         from app.demo_data import get_demo_contracts
         return render_template("settings/contracts.html", items=get_demo_contracts(), schedule_rules=[])
     from app.models import Contract, ScheduleRule
-    items = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
-    schedule_rules = ScheduleRule.query.filter_by(is_active=True).order_by(ScheduleRule.name).all()
+    try:
+        items = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+        schedule_rules = ScheduleRule.query.filter_by(is_active=True).order_by(ScheduleRule.name).all()
+    except Exception as e:
+        log.warning(f"contracts query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items, schedule_rules = [], []
     return render_template("settings/contracts.html", items=items, schedule_rules=schedule_rules)
 
 
@@ -1842,10 +1872,31 @@ def day_models():
         from app.demo_data import get_demo_day_models
         return render_template("settings/day_models.html", items=get_demo_day_models(), activities=[], planning_units=[], shift_templates=[])
     from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
-    items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
-    activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
-    planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-    shift_templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+    try:
+        items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
+    except Exception as e:
+        log.warning(f"day_models query failed (table/columns may not exist yet): {e}")
+        from app.models import db
+        db.session.rollback()
+        items = []
+    try:
+        activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
+    except Exception:
+        from app.models import db
+        db.session.rollback()
+        activities = []
+    try:
+        planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+    except Exception:
+        from app.models import db
+        db.session.rollback()
+        planning_units = []
+    try:
+        shift_templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+    except Exception:
+        from app.models import db
+        db.session.rollback()
+        shift_templates = []
     return render_template("settings/day_models.html", items=items, activities=activities,
                            planning_units=planning_units, shift_templates=shift_templates)
 
@@ -1906,14 +1957,19 @@ def planning_units_page():
         from app.demo_data import get_demo_planning_units_config
         return render_template("settings/planning_units.html", items=get_demo_planning_units_config(), activities=[])
     from app.models import PlanningUnit, Employee, SegmentCode
-    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
-    items = []
-    for pu in pus:
-        d = pu.to_dict()
-        d["employee_count"] = Employee.query.filter_by(planning_unit_id=pu.id).count()
-        items.append(d)
-    # Available activities for assignment dropdown
-    activities = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.label).all()]
+    try:
+        pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+        items = []
+        for pu in pus:
+            d = pu.to_dict()
+            d["employee_count"] = Employee.query.filter_by(planning_unit_id=pu.id).count()
+            items.append(d)
+        activities = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.label).all()]
+    except Exception as e:
+        log.warning(f"planning_units query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items, activities = [], []
     return render_template("settings/planning_units.html", items=items, activities=activities)
 
 
@@ -2043,15 +2099,21 @@ def skills_page():
         from app.demo_data import get_demo_skills_config
         return render_template("settings/skills.html", items=get_demo_skills_config())
     from app.models import SkillGroup, SkillMapping
-    groups = SkillGroup.query.order_by(SkillGroup.name).all()
-    items = []
-    for g in groups:
-        items.append({
-            "id": g.id, "name": g.name,
-            "description": g.description or "",
-            "is_active": g.is_active,
-            "mapping_count": SkillMapping.query.filter_by(skill_group_id=g.id).count(),
-        })
+    try:
+        groups = SkillGroup.query.order_by(SkillGroup.name).all()
+        items = []
+        for g in groups:
+            items.append({
+                "id": g.id, "name": g.name,
+                "description": g.description or "",
+                "is_active": g.is_active,
+                "mapping_count": SkillMapping.query.filter_by(skill_group_id=g.id).count(),
+            })
+    except Exception as e:
+        log.warning(f"skills query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items = []
     return render_template("settings/skills.html", items=items)
 
 
@@ -2102,15 +2164,21 @@ def selections_page():
         from app.demo_data import get_demo_selections
         return render_template("settings/selections.html", items=get_demo_selections())
     from app.models import Selection, SelectionMember
-    sels = Selection.query.order_by(Selection.name).all()
-    items = []
-    for s in sels:
-        items.append({
-            "id": s.id, "name": s.name,
-            "description": s.description or "",
-            "is_active": s.is_active,
-            "member_count": SelectionMember.query.filter_by(selection_id=s.id).count(),
-        })
+    try:
+        sels = Selection.query.order_by(Selection.name).all()
+        items = []
+        for s in sels:
+            items.append({
+                "id": s.id, "name": s.name,
+                "description": s.description or "",
+                "is_active": s.is_active,
+                "member_count": SelectionMember.query.filter_by(selection_id=s.id).count(),
+            })
+    except Exception as e:
+        log.warning(f"selections query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items = []
     return render_template("settings/selections.html", items=items)
 
 
@@ -2164,10 +2232,16 @@ def shift_sequences_page():
                                items=data["items"],
                                shift_templates=data["shift_templates"])
     from app.models import ShiftSequence, ShiftTemplate
-    seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
-    items = [s.to_dict() for s in seqs]
-    templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
-    shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
+    try:
+        seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
+        items = [s.to_dict() for s in seqs]
+        templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+        shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
+    except Exception as e:
+        log.warning(f"shift_sequences query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        items, shift_templates = [], []
     return render_template("settings/shift_sequences.html",
                            items=items, shift_templates=shift_templates)
 
@@ -2268,8 +2342,14 @@ def planning_calendars_page():
         data = get_demo_planning_calendars()
         return render_template("settings/planning_calendars.html", day_types=data["day_types"], calendars=data["calendars"])
     from app.models import DayType, PlanningCalendar
-    day_types = [dt.to_dict() for dt in DayType.query.order_by(DayType.name).all()]
-    calendars = [c.to_dict() for c in PlanningCalendar.query.order_by(PlanningCalendar.name).all()]
+    try:
+        day_types = [dt.to_dict() for dt in DayType.query.order_by(DayType.name).all()]
+        calendars = [c.to_dict() for c in PlanningCalendar.query.order_by(PlanningCalendar.name).all()]
+    except Exception as e:
+        log.warning(f"planning_calendars query failed: {e}")
+        from app.models import db
+        db.session.rollback()
+        day_types, calendars = [], []
     return render_template("settings/planning_calendars.html",
                            day_types=day_types, calendars=calendars)
 
