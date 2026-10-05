@@ -50,8 +50,7 @@ class TestPageLoads:
         "/settings/selections",
         "/settings/shift-sequences",
         "/settings/planning-calendars",
-        "/settings/google-sheets",
-        "/settings/api-connections",
+        "/settings/connections",
         "/settings/activity-log",
     ]
 

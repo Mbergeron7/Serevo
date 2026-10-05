@@ -55,47 +55,106 @@ PROVIDERS = {
         "auth_types": ["bearer", "api_key"],
         "fields": ["base_url", "api_key"],
     },
-    "wfm_legacy": {
-        "label": "WFM Platform (Legacy API)",
-        "auth_types": ["bearer", "api_key"],
-        "fields": ["base_url", "api_key"],
-    },
 }
 
 
 @settings_bp.route("/")
 @admin_required
 def index():
-    from app.models import AppSetting, DataFeed
-    sheets_key = AppSetting.get("google_sheet_key", "")
-    sheets_status = AppSetting.get("google_sheets_status", "not configured")
+    from app.models import AppSetting, DataFeed, APIConnection
     try:
         feeds_active = DataFeed.query.filter_by(is_active=True).count()
     except Exception:
         feeds_active = 0
+    try:
+        conns_active = APIConnection.query.filter_by(is_active=True).count()
+    except Exception:
+        conns_active = 0
     return render_template("settings/index.html",
         user=get_current_user(),
-        sheets_key=sheets_key,
-        sheets_status=sheets_status,
         feeds_active=feeds_active,
+        conns_active=conns_active,
     )
 
 
+# ═══════════════════════════════════════════════════════════════
+# UNIFIED CONNECTIONS PAGE
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/connections")
+@admin_required
+def connections():
+    import json as _json
+    from app.models import DataFeed, APIConnection, AppSetting
+    feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
+    api_conns = APIConnection.query.order_by(APIConnection.created_at.desc()).all()
+    feeds_json = _json.dumps([f.to_dict() for f in feeds])
+    # Build API connections JSON (safe subset — no raw credentials)
+    conns_json = _json.dumps([{
+        "id": c.id, "name": c.name, "provider": c.provider,
+        "base_url": c.base_url, "auth_type": c.auth_type,
+        "is_active": c.is_active,
+        "last_status": c.last_status, "last_error": c.last_error or "",
+        "last_tested": c.last_tested.strftime("%Y-%m-%d %H:%M") if c.last_tested else None,
+    } for c in api_conns])
+    # Check for legacy global service account
+    global_sa = bool(AppSetting.get("google_service_account_json", ""))
+    return render_template("settings/connections.html",
+        user=get_current_user(),
+        feeds=feeds, feeds_json=feeds_json,
+        api_conns=api_conns, conns_json=conns_json,
+        providers=PROVIDERS,
+        global_sa=global_sa,
+    )
+
+
+# Redirects from old pages to unified Connections page
 @settings_bp.route("/google-sheets")
 @admin_required
 def google_sheets():
-    from app.models import AppSetting
-    sheets_key = AppSetting.get("google_sheet_key", "")
-    has_creds = bool(AppSetting.get("google_service_account_json", ""))
-    sheets_status = AppSetting.get("google_sheets_status", "not configured")
-    employee_sheet_key = AppSetting.get("employee_sheet_key", "")
-    return render_template("settings/google_sheets.html",
-        user=get_current_user(),
-        sheets_key=sheets_key,
-        has_creds=has_creds,
-        sheets_status=sheets_status,
-        employee_sheet_key=employee_sheet_key,
-    )
+    from flask import redirect, url_for
+    return redirect(url_for("settings.connections"))
+
+
+@settings_bp.route("/api-connections")
+@admin_required
+def api_connections_redirect():
+    from flask import redirect, url_for
+    return redirect(url_for("settings.connections"))
+
+
+@settings_bp.route("/connections/save-global-sa", methods=["POST"])
+@admin_required
+def save_global_service_account():
+    """Save or update the global Google service account credentials."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, AppSetting
+    data = request.get_json(silent=True) or {}
+    sa_json = (data.get("service_account_json") or "").strip()
+
+    if not sa_json:
+        # Clear it
+        AppSetting.set("google_service_account_json", "")
+        db.session.commit()
+        return jsonify({"success": True, "cleared": True})
+
+    try:
+        parsed = json.loads(sa_json)
+        if "client_email" not in parsed:
+            return jsonify({"success": False, "error": "Invalid service account JSON — missing client_email"})
+    except (json.JSONDecodeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid JSON format"})
+
+    AppSetting.set("google_service_account_json", sa_json)
+    db.session.commit()
+
+    # Reset cached data source
+    import app.data_source as ds
+    ds._INSTANCE = None
+
+    return jsonify({"success": True, "email": parsed.get("client_email", "")})
 
 
 @settings_bp.route("/google-sheets/save", methods=["POST"])
@@ -232,16 +291,7 @@ def disconnect_google_sheets():
     return jsonify({"success": True})
 
 
-@settings_bp.route("/api-connections")
-@admin_required
-def api_connections():
-    from app.models import APIConnection
-    connections = APIConnection.query.order_by(APIConnection.created_at.desc()).all()
-    return render_template("settings/api_connections.html",
-        user=get_current_user(),
-        connections=connections,
-        providers=PROVIDERS,
-    )
+# Old api_connections view removed — redirected above in connections section
 
 
 @settings_bp.route("/api-connections/save", methods=["POST"])
@@ -395,15 +445,8 @@ def toggle_connection():
 @settings_bp.route("/data-feeds")
 @admin_required
 def data_feeds():
-    import json as _json
-    from app.models import DataFeed
-    feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
-    feeds_json = _json.dumps([f.to_dict() for f in feeds])
-    return render_template("settings/data_feeds.html",
-        user=get_current_user(),
-        feeds=feeds,
-        feeds_json=feeds_json,
-    )
+    from flask import redirect, url_for
+    return redirect(url_for("settings.connections"))
 
 
 @settings_bp.route("/data-feeds/save", methods=["POST"])
@@ -424,8 +467,9 @@ def save_data_feed():
 
     if not name:
         return jsonify({"success": False, "error": "Name is required"})
-    if feed_type not in ("call_volume", "agent_status"):
-        return jsonify({"success": False, "error": "Feed type must be call_volume or agent_status"})
+    valid_types = ("call_volume", "agent_status", "planning_data", "employees")
+    if feed_type not in valid_types:
+        return jsonify({"success": False, "error": f"Feed type must be one of: {', '.join(valid_types)}"})
     if source_type == "google_sheet" and not sheet_key:
         return jsonify({"success": False, "error": "Google Sheet key is required"})
 
@@ -446,6 +490,19 @@ def save_data_feed():
     feed.api_headers = (data.get("api_headers") or "").strip()
     feed.is_active = data.get("is_active", True)
 
+    # Service account JSON — validate if provided
+    sa_json = (data.get("service_account_json") or "").strip()
+    if sa_json:
+        try:
+            parsed = json.loads(sa_json)
+            if "client_email" not in parsed:
+                return jsonify({"success": False, "error": "Invalid service account JSON — missing client_email"})
+            feed.service_account_json = sa_json
+        except (json.JSONDecodeError, ValueError):
+            return jsonify({"success": False, "error": "Invalid JSON format for service account"})
+    elif data.get("clear_service_account"):
+        feed.service_account_json = ""
+
     db.session.commit()
     return jsonify({"success": True, "feed": feed.to_dict()})
 
@@ -462,13 +519,26 @@ def test_data_feed():
 
     if feed.source_type == "google_sheet":
         try:
-            from app.routes.realtime_sync import _open_sheet
-            sheet, err = _open_sheet(None, sheet_key_override=feed.sheet_key)
-            if err:
+            import gspread
+            from oauth2client.service_account import ServiceAccountCredentials
+            from app.models import AppSetting
+
+            # Use per-feed SA creds, fall back to global
+            sa_raw = feed.service_account_json or AppSetting.get("google_service_account_json", "")
+            if not sa_raw:
                 feed.last_status = "error"
-                feed.last_error = err
+                feed.last_error = "No service account credentials configured"
                 db.session.commit()
-                return jsonify({"success": False, "error": err})
+                return jsonify({"success": False, "error":
+                    "No service account credentials. Add them in the feed's edit form, "
+                    "or set a global service account on the Connections page."})
+
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                json.loads(sa_raw),
+                ["https://spreadsheets.google.com/feeds",
+                 "https://www.googleapis.com/auth/drive"])
+            gc = gspread.authorize(creds)
+            sheet = gc.open_by_key(feed.sheet_key)
 
             tabs = [ws.title for ws in sheet.worksheets()]
             feed.last_status = "ok"
@@ -477,10 +547,11 @@ def test_data_feed():
             db.session.commit()
             return jsonify({"success": True, "title": sheet.title, "tabs": tabs})
         except Exception as e:
+            err = _friendly_sheet_error(e)
             feed.last_status = "error"
-            feed.last_error = str(e)
+            feed.last_error = err
             db.session.commit()
-            return jsonify({"success": False, "error": str(e)})
+            return jsonify({"success": False, "error": err})
     else:
         return jsonify({"success": False, "error": "API feed testing not yet implemented"})
 

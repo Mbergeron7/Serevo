@@ -546,6 +546,7 @@ class DataFeed(db.Model):
     source_type   = db.Column(db.String(30), nullable=False, default="google_sheet")  # google_sheet | api
     sheet_key     = db.Column(db.String(200), default="")              # Google Sheet key
     sheet_tab     = db.Column(db.String(100), default="")              # specific tab name (optional)
+    service_account_json = db.Column(db.Text, default="")              # per-feed Google SA creds (JSON)
     api_url       = db.Column(db.String(500), default="")              # for API sources
     api_headers   = db.Column(db.Text, default="")                     # JSON headers for API
     is_active     = db.Column(db.Boolean, default=True)
@@ -565,7 +566,8 @@ class DataFeed(db.Model):
             "id": self.id, "name": self.name,
             "feed_type": self.feed_type, "source_type": self.source_type,
             "sheet_key": self.sheet_key, "sheet_tab": self.sheet_tab,
-            "api_url": self.api_url,
+            "has_service_account": bool(self.service_account_json),
+            "api_url": self.api_url, "api_headers": self.api_headers or "",
             "is_active": self.is_active,
             "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
             "last_status": self.last_status,

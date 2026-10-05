@@ -126,6 +126,7 @@ def create_app():
             ("users", "is_demo", "BOOLEAN DEFAULT FALSE"),
             ("users", "wfm_access", "BOOLEAN DEFAULT FALSE"),
             # ── segment_codes columns added in contract config ──
+            ("data_feeds", "service_account_json", "TEXT"),
             ("segment_codes", "activity_type", "VARCHAR(20) DEFAULT 'presence'"),
             ("segment_codes", "activity_category", "VARCHAR(20) DEFAULT 'status'"),
             ("segment_codes", "official_name", "VARCHAR(120)"),

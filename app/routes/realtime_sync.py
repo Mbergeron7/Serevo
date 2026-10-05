@@ -44,9 +44,11 @@ realtime_sync_bp = Blueprint("realtime_sync", __name__, url_prefix="/sync")
 # GOOGLE SHEET CONNECTION
 # ═══════════════════════════════════════════════════════════════
 
-def _get_gspread_client():
+def _get_gspread_client(sa_json_override=None):
     """
     Build an authorized gspread client from stored credentials.
+    If sa_json_override is provided, use it directly (per-feed creds).
+    Otherwise fall back to global AppSetting, then env file.
     Returns (client, error_string).
     """
     try:
@@ -58,23 +60,27 @@ def _get_gspread_client():
             "https://www.googleapis.com/auth/drive",
         ]
 
-        sa_file = os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json")
-        sa_json = ""
+        sa_json = sa_json_override or ""
 
-        # Prefer JSON creds from DB, then file
-        try:
-            sa_json = AppSetting.get("google_service_account_json", "")
-        except Exception:
-            pass
+        if not sa_json:
+            sa_file = os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json")
+            # Prefer JSON creds from DB, then file
+            try:
+                sa_json = AppSetting.get("google_service_account_json", "")
+            except Exception:
+                pass
 
-        if sa_json:
-            creds_dict = json.loads(sa_json)
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        elif sa_file and os.path.exists(sa_file):
-            creds = ServiceAccountCredentials.from_json_keyfile_name(sa_file, scope)
-        else:
-            return None, "No service account credentials configured"
+            if sa_json:
+                pass  # use it below
+            elif sa_file and os.path.exists(sa_file):
+                creds = ServiceAccountCredentials.from_json_keyfile_name(sa_file, scope)
+                client = gspread.authorize(creds)
+                return client, None
+            else:
+                return None, "No service account credentials configured"
 
+        creds_dict = json.loads(sa_json)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         return client, None
 
@@ -82,10 +88,11 @@ def _get_gspread_client():
         return None, f"Could not authorize Google Sheets: {e}"
 
 
-def _open_sheet(key_name, env_fallback=None, sheet_key_override=None):
+def _open_sheet(key_name, env_fallback=None, sheet_key_override=None, sa_json_override=None):
     """
     Open a Google Sheet by its AppSetting key name, or by direct key override.
     Also checks env_fallback for backwards compat.
+    If sa_json_override is provided, use it for this sheet's credentials.
     Returns (spreadsheet, error_string).
     """
     sheet_key = sheet_key_override or ""
@@ -104,7 +111,7 @@ def _open_sheet(key_name, env_fallback=None, sheet_key_override=None):
     if not sheet_key:
         return None, f"No sheet key configured."
 
-    client, err = _get_gspread_client()
+    client, err = _get_gspread_client(sa_json_override=sa_json_override)
     if err:
         return None, err
 
@@ -545,7 +552,8 @@ def run_sync(app=None):
             feed_result = {"id": feed.id, "name": feed.name, "feed_type": feed.feed_type}
             try:
                 if feed.source_type == "google_sheet" and feed.sheet_key:
-                    spreadsheet, err = _open_sheet(None, sheet_key_override=feed.sheet_key)
+                    spreadsheet, err = _open_sheet(None, sheet_key_override=feed.sheet_key,
+                                                    sa_json_override=feed.service_account_json or None)
                     if err:
                         feed.last_status = "error"
                         feed.last_error = err
