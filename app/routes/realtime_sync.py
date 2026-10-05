@@ -804,6 +804,8 @@ def run_sync(app=None):
                         feed.last_sync_at = datetime.utcnow()
                         feed_result.update({"upserted": up, "skipped": skip, "errors": errs[:5]})
                         log.info(f"Feed '{feed.name}': {up} upserted, {skip} skipped, {len(errs)} errors")
+                        if errs:
+                            log.warning(f"Feed '{feed.name}' errors: {'; '.join(errs[:5])}")
                 else:
                     feed.last_status = "error"
                     feed.last_error = "No sheet key or API not yet supported"
