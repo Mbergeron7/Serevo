@@ -128,6 +128,13 @@ def create_app():
             # ── segment_codes columns added in contract config ──
             ("data_feeds", "service_account_json", "TEXT"),
             ("data_feeds", "column_mapping", "TEXT"),
+            ("day_models", "abbreviation", "VARCHAR(20)"),
+            ("day_models", "total_hours", "FLOAT"),
+            ("day_models", "model_type", "VARCHAR(20) DEFAULT 'Fixed'"),
+            ("day_models", "color", "VARCHAR(7) DEFAULT '#4472C4'"),
+            ("day_models", "day_type", "VARCHAR(20) DEFAULT 'any'"),
+            ("day_models", "planning_unit_id", "INTEGER"),
+            ("day_models", "sort_order", "INTEGER DEFAULT 0"),
             ("segment_codes", "activity_type", "VARCHAR(20) DEFAULT 'presence'"),
             ("segment_codes", "activity_category", "VARCHAR(20) DEFAULT 'status'"),
             ("segment_codes", "official_name", "VARCHAR(120)"),
