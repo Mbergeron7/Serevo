@@ -1747,6 +1747,8 @@ def contracts_save():
     from app.models import Contract, db
     d = request.json or {}
     try:
+        if not d.get("name"):
+            return jsonify({"success": False, "error": "Name is required"})
         item = Contract.query.get(int(d["id"])) if d.get("id") else Contract()
         item.name = d["name"]
 
