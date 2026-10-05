@@ -64,7 +64,7 @@ def index():
             for pa in pu.assigned_activities:
                 sc = pa.segment_code
                 if sc:
-                    acts.append({"id": sc.id, "name": sc.name, "color": sc.color or "#6b7280"})
+                    acts.append({"id": sc.id, "name": sc.label, "color": sc.color or "#6b7280"})
             lob_activities[pu.name] = acts
 
     return render_template("forecasting/index.html",
@@ -958,7 +958,7 @@ def list_scenarios():
 @login_required
 def save_scenario():
     """Save current forecast settings as a named scenario."""
-    from app.models import ForecastScenario, PlanningUnit
+    from app.models import db, ForecastScenario, PlanningUnit
     dg = _demo_guard()
     if dg:
         return dg
@@ -1027,7 +1027,7 @@ def save_scenario():
 @login_required
 def delete_scenario():
     """Delete a saved scenario."""
-    from app.models import ForecastScenario
+    from app.models import db, ForecastScenario
     dg = _demo_guard()
     if dg:
         return dg
@@ -1054,7 +1054,7 @@ def push_scenario():
     Re-runs generate + Erlang C with the scenario's saved settings,
     then marks it as the active scenario.
     """
-    from app.models import ForecastScenario, PlanningUnit
+    from app.models import db, ForecastScenario, PlanningUnit
     dg = _demo_guard()
     if dg:
         return dg
