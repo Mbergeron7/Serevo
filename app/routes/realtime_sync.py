@@ -235,11 +235,33 @@ def _resolve_lob_to_pu(lob_name):
 
 
 def _parse_timestamp(date_str, time_str):
-    """Parse date + time strings into a datetime. Handles common formats."""
+    """Parse date + time strings into a datetime. Handles common formats.
+
+    Supports three layouts:
+    1. Separate date and time columns (different values)
+    2. Combined datetime column mapped to both date and time (same value)
+    3. Normal date + time concatenation
+    """
     date_str = str(date_str).strip()
     time_str = str(time_str).strip()
 
-    # Try combined first
+    # If both columns point to the same value (combined datetime column),
+    # try parsing date_str as a full datetime on its own first
+    _combined_fmts = (
+        "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y %I:%M:%S %p",
+        "%m/%d/%Y %I:%M %p", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
+        "%m-%d-%Y %H:%M:%S", "%m-%d-%Y %H:%M",
+        "%m/%d/%y %H:%M:%S", "%m/%d/%y %H:%M", "%m/%d/%y %I:%M %p",
+    )
+    if date_str == time_str:
+        for fmt in _combined_fmts:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except (ValueError, TypeError):
+                continue
+
+    # Try concatenated date + time
     for fmt in ("%m/%d/%Y %H:%M", "%m/%d/%Y %I:%M %p",
                 "%Y-%m-%d %H:%M", "%m-%d-%Y %H:%M",
                 "%m/%d/%y %H:%M", "%m/%d/%y %I:%M %p"):
@@ -258,6 +280,12 @@ def _parse_timestamp(date_str, time_str):
             continue
 
     if dt is None:
+        # Last resort: try date_str as a full datetime (even if time_str differs)
+        for fmt in _combined_fmts:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except (ValueError, TypeError):
+                continue
         raise ValueError(f"Cannot parse date: {date_str}")
 
     for tfmt in ("%H:%M", "%I:%M %p", "%H:%M:%S", "%I:%M:%S %p"):
