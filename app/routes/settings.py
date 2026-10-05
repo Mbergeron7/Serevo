@@ -395,11 +395,14 @@ def toggle_connection():
 @settings_bp.route("/data-feeds")
 @admin_required
 def data_feeds():
+    import json as _json
     from app.models import DataFeed
     feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
+    feeds_json = _json.dumps([f.to_dict() for f in feeds])
     return render_template("settings/data_feeds.html",
         user=get_current_user(),
         feeds=feeds,
+        feeds_json=feeds_json,
     )
 
 
