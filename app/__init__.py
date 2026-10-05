@@ -181,7 +181,10 @@ def create_app():
                     log.info(f"Added column {tbl}.{col}")
             except Exception as e:
                 db.session.rollback()
-                log.warning(f"Could not add {tbl}.{col}: {e}")
+                if "does not exist" in str(e) or "no such table" in str(e):
+                    log.warning(f"Table {tbl} does not exist yet, skipping {col}")
+                else:
+                    log.warning(f"Could not add {tbl}.{col}: {e}")
 
         # ── Widen columns that were originally too narrow ──
         _widen_columns = [
