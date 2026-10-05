@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Data Feeds — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<style>
+  .feed-card{border-radius:10px;padding:1.25rem;border:1px solid var(--border);background:var(--surface);margin-bottom:1rem;}
+  .feed-type-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  .feed-type-badge.call_volume{background:#dbeafe;color:#1e40af;}
+  .feed-type-badge.agent_status{background:#fce7f3;color:#9d174d;}
+  .feed-source{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
+  .feed-stats{display:flex;gap:1.5rem;margin-top:.75rem;font-size:.82rem;color:var(--text-muted);}
+  .feed-stats span{display:flex;align-items:center;gap:4px;}
+  .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .status-dot.ok{background:#10b981;} .status-dot.error{background:#ef4444;} .status-dot.new{background:#9ca3af;}
+  @media(max-width:600px){.feed-actions{flex-direction:column;} .feed-actions .btn{width:100%;}}
+</style>
+
+<div class="page-header">
+  <h1>Data Feeds</h1>
+  <p class="subtitle">Google Sheet and API feeds for real-time call volume and agent status data</p>
+</div>
+
+<div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+  <button class="btn btn-primary" onclick="openModal()">+ Add Feed</button>
+  <a href="/settings/" class="btn btn-outline">&larr; Back to Settings</a>
+</div>
+
+{% if feeds %}
+<div>
+  {% for f in feeds %}
+  <div class="feed-card" id="feed-{{ f.id }}" style="{{ 'opacity:.55;' if not f.is_active else '' }}">
+    <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:.5rem;">
+      <div style="flex:1;min-width:200px;">
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+          <h3 style="margin:0;">{{ f.name }}</h3>
+          <span class="feed-type-badge {{ f.feed_type }}">
+            {{ 'Call Volume' if f.feed_type == 'call_volume' else 'Agent Status' }}
+          </span>
+          {% if not f.is_active %}<span style="font-size:.75rem;color:#9ca3af;">(disabled)</span>{% endif %}
+        </div>
+        <div class="feed-source">
+          {% if f.source_type == 'google_sheet' %}
+            📊 Google Sheet &middot; <code style="font-size:.78rem;">{{ f.sheet_key[:12] }}…</code>
+            {% if f.sheet_tab %} &middot; Tab: {{ f.sheet_tab }}{% endif %}
+          {% else %}
+            🔌 API &middot; {{ f.api_url or 'Not configured' }}
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="status-dot {{ f.last_status }}"></span>
+        <span style="font-size:.8rem;color:var(--text-muted);">{{ f.last_status }}</span>
+      </div>
+    </div>
+
+    <div class="feed-stats">
+      {% if f.last_sync_at %}
+        <span>Last sync: {{ f.last_sync_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        <span>{{ f.last_upserted }} upserted</span>
+        <span>{{ f.last_skipped }} skipped</span>
+      {% else %}
+        <span>Never synced</span>
+      {% endif %}
+      {% if f.last_error %}
+        <span style="color:#ef4444;">{{ f.last_error[:80] }}</span>
+      {% endif %}
+    </div>
+
+    <div class="feed-actions" style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;">
+      <button class="btn btn-sm btn-outline" onclick="testFeed({{ f.id }})">Test</button>
+      <button class="btn btn-sm btn-outline" onclick="editFeed({{ f.id }})">Edit</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleFeed({{ f.id }})">
+        {{ 'Enable' if not f.is_active else 'Disable' }}
+      </button>
+      <button class="btn btn-sm btn-danger" onclick="deleteFeed({{ f.id }}, '{{ f.name }}')">Delete</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:2rem;">
+  <p class="text-muted">No data feeds configured yet.</p>
+  <p>Click <strong>+ Add Feed</strong> to connect a Google Sheet or API for real-time data.<br>
+     Each client or LOB can have its own feed.</p>
+</div>
+{% endif %}
+
+<!-- Add / Edit Modal -->
+<div id="feedModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="modalTitle">Add Data Feed</h2>
+    <form id="feedForm" onsubmit="return saveFeed(event)">
+      <input type="hidden" id="feed_id" value="">
+
+      <div class="form-group">
+        <label for="feed_name">Feed Name</label>
+        <input type="text" class="form-input" id="feed_name" required placeholder="e.g. Acme Corp - Call Volume">
+      </div>
+
+      <div class="form-group">
+        <label for="feed_type">Feed Type</label>
+        <select class="form-input" id="feed_type" required>
+          <option value="call_volume">Call Volume (interval data)</option>
+          <option value="agent_status">Agent Status (agent activity)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="source_type">Source</label>
+        <select class="form-input" id="source_type" onchange="toggleSourceFields()">
+          <option value="google_sheet">Google Sheet</option>
+          <option value="api">API Endpoint</option>
+        </select>
+      </div>
+
+      <div id="sheetFields">
+        <div class="form-group">
+          <label for="sheet_key">Sheet Key</label>
+          <input type="text" class="form-input" id="sheet_key" placeholder="Paste the key from the Google Sheet URL">
+          <small class="text-muted">The long string between <code>/d/</code> and <code>/edit</code> in the sheet URL.</small>
+        </div>
+        <div class="form-group">
+          <label for="sheet_tab">Tab Name <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <input type="text" class="form-input" id="sheet_tab" placeholder="Auto-detect if blank">
+          <small class="text-muted">Leave blank to auto-detect the right tab, or enter the exact tab name.</small>
+        </div>
+      </div>
+
+      <div id="apiFields" style="display:none;">
+        <div class="form-group">
+          <label for="api_url">API URL</label>
+          <input type="text" class="form-input" id="api_url" placeholder="https://api.example.com/data">
+        </div>
+        <div class="form-group">
+          <label for="api_headers">Headers (JSON)</label>
+          <textarea class="form-input" id="api_headers" rows="3" placeholder='{"Authorization": "Bearer xxx"}'></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveBtn">Save Feed</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const FEEDS = {{ feeds | map(attribute='to_dict') | list | tojson }};
+const csrf = document.querySelector('meta[name=csrf-token]')?.content || '';
+
+function toggleSourceFields() {
+  const src = document.getElementById('source_type').value;
+  document.getElementById('sheetFields').style.display = src === 'google_sheet' ? 'block' : 'none';
+  document.getElementById('apiFields').style.display = src === 'api' ? 'block' : 'none';
+}
+
+function openModal(feed) {
+  document.getElementById('modalTitle').textContent = feed ? 'Edit Data Feed' : 'Add Data Feed';
+  document.getElementById('feed_id').value = feed ? feed.id : '';
+  document.getElementById('feed_name').value = feed ? feed.name : '';
+  document.getElementById('feed_type').value = feed ? feed.feed_type : 'call_volume';
+  document.getElementById('source_type').value = feed ? feed.source_type : 'google_sheet';
+  document.getElementById('sheet_key').value = feed ? feed.sheet_key : '';
+  document.getElementById('sheet_tab').value = feed ? feed.sheet_tab : '';
+  document.getElementById('api_url').value = feed ? feed.api_url : '';
+  document.getElementById('api_headers').value = feed ? (feed.api_headers || '') : '';
+  toggleSourceFields();
+  document.getElementById('feedModal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('feedModal').style.display = 'none';
+}
+
+function editFeed(id) {
+  const feed = FEEDS.find(f => f.id === id);
+  if (feed) openModal(feed);
+}
+
+async function saveFeed(e) {
+  e.preventDefault();
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const body = {
+      id: document.getElementById('feed_id').value || null,
+      name: document.getElementById('feed_name').value,
+      feed_type: document.getElementById('feed_type').value,
+      source_type: document.getElementById('source_type').value,
+      sheet_key: document.getElementById('sheet_key').value,
+      sheet_tab: document.getElementById('sheet_tab').value,
+      api_url: document.getElementById('api_url').value,
+      api_headers: document.getElementById('api_headers').value,
+    };
+    const res = await fetch('/settings/data-feeds/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.error || 'Save failed');
+    }
+  } catch(err) {
+    alert('Network error — try again.');
+  }
+  btn.disabled = false; btn.textContent = 'Save Feed';
+}
+
+async function testFeed(id) {
+  const card = document.getElementById('feed-' + id);
+  const btn = card.querySelector('.btn-outline');
+  btn.textContent = 'Testing…'; btn.disabled = true;
+  try {
+    const res = await fetch('/settings/data-feeds/test', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({id}),
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('✓ Connected! Sheet: ' + data.title + '\nTabs: ' + data.tabs.join(', '));
+    } else {
+      alert('✗ ' + (data.error || 'Test failed'));
+    }
+  } catch(err) {
+    alert('Network error');
+  }
+  btn.textContent = 'Test'; btn.disabled = false;
+  location.reload();
+}
+
+async function toggleFeed(id) {
+  await fetch('/settings/data-feeds/toggle', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+    body: JSON.stringify({id}),
+  });
+  location.reload();
+}
+
+async function deleteFeed(id, name) {
+  if (!confirm('Delete feed "' + name + '"? This cannot be undone.')) return;
+  await fetch('/settings/data-feeds/delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+    body: JSON.stringify({id}),
+  });
+  location.reload();
+}
+</script>
+{% endblock %}

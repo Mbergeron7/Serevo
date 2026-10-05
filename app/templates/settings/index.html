@@ -21,6 +21,11 @@
     <h3>API Connections</h3>
     <p>Manage external API credentials for pulling workforce data from platforms like NICE, Genesys, Five9, and others.</p>
   </a>
+  <a href="/settings/data-feeds" class="card card-link">
+    <h3>Data Feeds</h3>
+    <p>Configure Google Sheet or API feeds for real-time call volume and agent status data — one per client or LOB.</p>
+    {% if feeds_active %}<span class="status-badge status-connected">{{ feeds_active }} active</span>{% endif %}
+  </a>
   <a href="/settings/activities" class="card card-link">
     <h3>Activities</h3>
     <p>Activity codes for scheduling — breaks, lunch, training, meetings, coaching. Configure colors, placement rules, and scheduling windows.</p>

@@ -534,6 +534,47 @@ class APIConnection(db.Model):
         return f"<APIConnection {self.name} ({self.provider})>"
 
 
+class DataFeed(db.Model):
+    """A configured data feed — a Google Sheet or API endpoint that provides
+    call volume or agent status data on a recurring sync schedule.
+    Each client/LOB can have its own feeds."""
+    __tablename__ = "data_feeds"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(200), nullable=False)          # e.g. "Acme Corp - Call Volume"
+    feed_type     = db.Column(db.String(30), nullable=False)           # call_volume | agent_status
+    source_type   = db.Column(db.String(30), nullable=False, default="google_sheet")  # google_sheet | api
+    sheet_key     = db.Column(db.String(200), default="")              # Google Sheet key
+    sheet_tab     = db.Column(db.String(100), default="")              # specific tab name (optional)
+    api_url       = db.Column(db.String(500), default="")              # for API sources
+    api_headers   = db.Column(db.Text, default="")                     # JSON headers for API
+    is_active     = db.Column(db.Boolean, default=True)
+    last_sync_at  = db.Column(db.DateTime, nullable=True)
+    last_status   = db.Column(db.String(20), default="new")            # new | ok | error
+    last_error    = db.Column(db.Text, default="")
+    last_upserted = db.Column(db.Integer, default=0)
+    last_skipped  = db.Column(db.Integer, default=0)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+    updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def __repr__(self):
+        return f"<DataFeed {self.name} ({self.feed_type}/{self.source_type})>"
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "feed_type": self.feed_type, "source_type": self.source_type,
+            "sheet_key": self.sheet_key, "sheet_tab": self.sheet_tab,
+            "api_url": self.api_url,
+            "is_active": self.is_active,
+            "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
+            "last_status": self.last_status,
+            "last_error": self.last_error,
+            "last_upserted": self.last_upserted,
+            "last_skipped": self.last_skipped,
+        }
+
+
 # ═══════════════════════════════════════════════════════════════
 # SCHEMA MAPPINGS (saved column-mapping profiles for data imports)
 # ═══════════════════════════════════════════════════════════════

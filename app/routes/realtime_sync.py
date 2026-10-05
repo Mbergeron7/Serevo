@@ -27,6 +27,7 @@ from app.models import (
     AgentStatusEvent,
     AppSetting,
     CallRoute,
+    DataFeed,
     Employee,
     IntervalActual,
     LobMapping,
@@ -81,26 +82,27 @@ def _get_gspread_client():
         return None, f"Could not authorize Google Sheets: {e}"
 
 
-def _open_sheet(key_name, env_fallback=None):
+def _open_sheet(key_name, env_fallback=None, sheet_key_override=None):
     """
-    Open a Google Sheet by its AppSetting key name.
+    Open a Google Sheet by its AppSetting key name, or by direct key override.
     Also checks env_fallback for backwards compat.
     Returns (spreadsheet, error_string).
     """
-    sheet_key = ""
-
-    # Check env first (backwards compat)
-    if env_fallback:
-        sheet_key = os.environ.get(env_fallback, "")
+    sheet_key = sheet_key_override or ""
 
     if not sheet_key:
+        # Check env first (backwards compat)
+        if env_fallback:
+            sheet_key = os.environ.get(env_fallback, "")
+
+    if not sheet_key and key_name:
         try:
             sheet_key = AppSetting.get(key_name, "")
         except Exception:
             log.warning(f"Failed to read {key_name} from DB")
 
     if not sheet_key:
-        return None, f"No sheet key configured for {key_name}."
+        return None, f"No sheet key configured."
 
     client, err = _get_gspread_client()
     if err:
@@ -519,7 +521,8 @@ def sync_agent_activity(spreadsheet):
 
 def run_sync(app=None):
     """
-    Execute a full sync cycle — reads from two separate Google Sheets.
+    Execute a full sync cycle — iterates all active DataFeed records,
+    plus legacy AppSetting keys for backwards compatibility.
     Can be called by the scheduler (with app context) or from a route.
     Returns dict with results.
     """
@@ -529,46 +532,93 @@ def run_sync(app=None):
         app = current_app._get_current_object()
 
     with app.app_context():
-        results = {}
+        results = {"feeds": []}
 
-        # ── Call volume sync ──
-        calls_sheet, err = _open_sheet(
-            "realtime_calls_sheet_key",
-            env_fallback="CALLPOTENTIAL_SHEET_KEY",
-        )
-        if err:
-            results["call_volume"] = {"error": err}
-            log.warning(f"Call volume sheet: {err}")
-        else:
-            try:
-                vol_up, vol_skip, vol_err = sync_call_volume(calls_sheet)
-                results["call_volume"] = {
-                    "upserted": vol_up,
-                    "skipped": vol_skip,
-                    "errors": vol_err[:10],
-                }
-                log.info(f"Call volume sync: {vol_up} upserted, {vol_skip} skipped, {len(vol_err)} errors")
-            except Exception as e:
-                results["call_volume"] = {"error": str(e)}
-                log.error(f"Call volume sync error: {e}", exc_info=True)
+        # ── Sync all active DataFeed records ──
+        try:
+            feeds = DataFeed.query.filter_by(is_active=True).all()
+        except Exception:
+            feeds = []
+            log.warning("DataFeed table not available yet — falling back to AppSettings only")
 
-        # ── Agent status sync ──
-        agents_sheet, err = _open_sheet("realtime_agents_sheet_key")
-        if err:
-            results["agent_activity"] = {"error": err}
-            log.warning(f"Agent status sheet: {err}")
-        else:
+        for feed in feeds:
+            feed_result = {"id": feed.id, "name": feed.name, "feed_type": feed.feed_type}
             try:
-                act_up, act_skip, act_err = sync_agent_activity(agents_sheet)
-                results["agent_activity"] = {
-                    "upserted": act_up,
-                    "skipped": act_skip,
-                    "errors": act_err[:10],
-                }
-                log.info(f"Agent activity sync: {act_up} upserted, {act_skip} skipped, {len(act_err)} errors")
+                if feed.source_type == "google_sheet" and feed.sheet_key:
+                    spreadsheet, err = _open_sheet(None, sheet_key_override=feed.sheet_key)
+                    if err:
+                        feed.last_status = "error"
+                        feed.last_error = err
+                        feed.last_sync_at = datetime.utcnow()
+                        feed_result["error"] = err
+                        log.warning(f"Feed '{feed.name}': {err}")
+                    else:
+                        if feed.feed_type == "call_volume":
+                            up, skip, errs = sync_call_volume(spreadsheet)
+                        else:
+                            up, skip, errs = sync_agent_activity(spreadsheet)
+
+                        feed.last_upserted = up
+                        feed.last_skipped = skip
+                        feed.last_status = "error" if errs else "ok"
+                        feed.last_error = "; ".join(errs[:3]) if errs else ""
+                        feed.last_sync_at = datetime.utcnow()
+                        feed_result.update({"upserted": up, "skipped": skip, "errors": errs[:5]})
+                        log.info(f"Feed '{feed.name}': {up} upserted, {skip} skipped, {len(errs)} errors")
+                else:
+                    feed.last_status = "error"
+                    feed.last_error = "No sheet key or API not yet supported"
+                    feed.last_sync_at = datetime.utcnow()
+                    feed_result["error"] = feed.last_error
             except Exception as e:
-                results["agent_activity"] = {"error": str(e)}
-                log.error(f"Agent activity sync error: {e}", exc_info=True)
+                feed.last_status = "error"
+                feed.last_error = str(e)[:500]
+                feed.last_sync_at = datetime.utcnow()
+                feed_result["error"] = str(e)
+                log.error(f"Feed '{feed.name}' error: {e}", exc_info=True)
+
+            results["feeds"].append(feed_result)
+
+        # ── Legacy: AppSetting-based sheets (backwards compat) ──
+        # Only sync these if no DataFeed records exist for the same type
+        feed_types_covered = {f.feed_type for f in feeds}
+
+        if "call_volume" not in feed_types_covered:
+            calls_sheet, err = _open_sheet(
+                "realtime_calls_sheet_key",
+                env_fallback="CALLPOTENTIAL_SHEET_KEY",
+            )
+            if err:
+                results["call_volume_legacy"] = {"error": err}
+            else:
+                try:
+                    vol_up, vol_skip, vol_err = sync_call_volume(calls_sheet)
+                    results["call_volume_legacy"] = {
+                        "upserted": vol_up, "skipped": vol_skip, "errors": vol_err[:10],
+                    }
+                    log.info(f"Legacy call volume sync: {vol_up} upserted, {vol_skip} skipped")
+                except Exception as e:
+                    results["call_volume_legacy"] = {"error": str(e)}
+
+        if "agent_status" not in feed_types_covered:
+            agents_sheet, err = _open_sheet("realtime_agents_sheet_key")
+            if err:
+                results["agent_activity_legacy"] = {"error": err}
+            else:
+                try:
+                    act_up, act_skip, act_err = sync_agent_activity(agents_sheet)
+                    results["agent_activity_legacy"] = {
+                        "upserted": act_up, "skipped": act_skip, "errors": act_err[:10],
+                    }
+                    log.info(f"Legacy agent activity sync: {act_up} upserted, {act_skip} skipped")
+                except Exception as e:
+                    results["agent_activity_legacy"] = {"error": str(e)}
+
+        # Commit feed status updates
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
         # Store last sync time
         try:

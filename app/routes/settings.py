@@ -66,13 +66,18 @@ PROVIDERS = {
 @settings_bp.route("/")
 @admin_required
 def index():
-    from app.models import AppSetting
+    from app.models import AppSetting, DataFeed
     sheets_key = AppSetting.get("google_sheet_key", "")
     sheets_status = AppSetting.get("google_sheets_status", "not configured")
+    try:
+        feeds_active = DataFeed.query.filter_by(is_active=True).count()
+    except Exception:
+        feeds_active = 0
     return render_template("settings/index.html",
         user=get_current_user(),
         sheets_key=sheets_key,
         sheets_status=sheets_status,
+        feeds_active=feeds_active,
     )
 
 
@@ -381,6 +386,132 @@ def toggle_connection():
     conn.is_active = not conn.is_active
     db.session.commit()
     return jsonify({"success": True, "is_active": conn.is_active})
+
+
+# ═══════════════════════════════════════════════════════════════
+# DATA FEEDS  (Google Sheet / API feeds for real-time sync)
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/data-feeds")
+@admin_required
+def data_feeds():
+    from app.models import DataFeed
+    feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
+    return render_template("settings/data_feeds.html",
+        user=get_current_user(),
+        feeds=feeds,
+    )
+
+
+@settings_bp.route("/data-feeds/save", methods=["POST"])
+@admin_required
+def save_data_feed():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, DataFeed
+
+    data = request.get_json(silent=True) or {}
+    feed_id = data.get("id")
+    name = (data.get("name") or "").strip()
+    feed_type = (data.get("feed_type") or "").strip()
+    source_type = (data.get("source_type") or "google_sheet").strip()
+    sheet_key = (data.get("sheet_key") or "").strip()
+    sheet_tab = (data.get("sheet_tab") or "").strip()
+
+    if not name:
+        return jsonify({"success": False, "error": "Name is required"})
+    if feed_type not in ("call_volume", "agent_status"):
+        return jsonify({"success": False, "error": "Feed type must be call_volume or agent_status"})
+    if source_type == "google_sheet" and not sheet_key:
+        return jsonify({"success": False, "error": "Google Sheet key is required"})
+
+    if feed_id:
+        feed = DataFeed.query.get(feed_id)
+        if not feed:
+            return jsonify({"success": False, "error": "Feed not found"})
+    else:
+        feed = DataFeed()
+        db.session.add(feed)
+
+    feed.name = name
+    feed.feed_type = feed_type
+    feed.source_type = source_type
+    feed.sheet_key = sheet_key
+    feed.sheet_tab = sheet_tab
+    feed.api_url = (data.get("api_url") or "").strip()
+    feed.api_headers = (data.get("api_headers") or "").strip()
+    feed.is_active = data.get("is_active", True)
+
+    db.session.commit()
+    return jsonify({"success": True, "feed": feed.to_dict()})
+
+
+@settings_bp.route("/data-feeds/test", methods=["POST"])
+@admin_required
+def test_data_feed():
+    from app.models import db, DataFeed
+    data = request.get_json(silent=True) or {}
+    feed_id = data.get("id")
+    feed = DataFeed.query.get(feed_id) if feed_id else None
+    if not feed:
+        return jsonify({"success": False, "error": "Feed not found"})
+
+    if feed.source_type == "google_sheet":
+        try:
+            from app.routes.realtime_sync import _open_sheet
+            sheet, err = _open_sheet(None, sheet_key_override=feed.sheet_key)
+            if err:
+                feed.last_status = "error"
+                feed.last_error = err
+                db.session.commit()
+                return jsonify({"success": False, "error": err})
+
+            tabs = [ws.title for ws in sheet.worksheets()]
+            feed.last_status = "ok"
+            feed.last_error = ""
+            feed.last_sync_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({"success": True, "title": sheet.title, "tabs": tabs})
+        except Exception as e:
+            feed.last_status = "error"
+            feed.last_error = str(e)
+            db.session.commit()
+            return jsonify({"success": False, "error": str(e)})
+    else:
+        return jsonify({"success": False, "error": "API feed testing not yet implemented"})
+
+
+@settings_bp.route("/data-feeds/delete", methods=["POST"])
+@admin_required
+def delete_data_feed():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, DataFeed
+    data = request.get_json(silent=True) or {}
+    feed = DataFeed.query.get(data.get("id"))
+    if not feed:
+        return jsonify({"success": False, "error": "Feed not found"})
+    db.session.delete(feed)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+@settings_bp.route("/data-feeds/toggle", methods=["POST"])
+@admin_required
+def toggle_data_feed():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, DataFeed
+    data = request.get_json(silent=True) or {}
+    feed = DataFeed.query.get(data.get("id"))
+    if not feed:
+        return jsonify({"success": False, "error": "Feed not found"})
+    feed.is_active = not feed.is_active
+    db.session.commit()
+    return jsonify({"success": True, "is_active": feed.is_active})
 
 
 # ═══════════════════════════════════════════════════════════════
