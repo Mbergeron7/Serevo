@@ -495,8 +495,9 @@ def profile_assign():
     assign_type = data.get("type")
     emp_id = data.get("employee_id")
     item_id = data.get("item_id")
+    assignment_id = data.get("assignment_id")  # if editing existing
 
-    if not emp_id or not item_id:
+    if not emp_id or (not item_id and not assignment_id):
         return jsonify({"success": False, "error": "Missing employee or item ID."})
 
     valid_from = _dt.datetime.strptime(data["valid_from"], "%Y-%m-%d").date() if data.get("valid_from") else None
@@ -504,37 +505,78 @@ def profile_assign():
 
     try:
         if assign_type == "planning_unit":
-            obj = EmployeePlanningUnit(
-                employee_id=emp_id, planning_unit_id=item_id,
-                priority=int(data.get("priority", 1)),
-                valid_from=valid_from, valid_to=valid_to,
-            )
-            db.session.add(obj)
+            if assignment_id:
+                obj = EmployeePlanningUnit.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.planning_unit_id = item_id
+                obj.priority = int(data.get("priority", 1))
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
+            else:
+                obj = EmployeePlanningUnit(
+                    employee_id=emp_id, planning_unit_id=item_id,
+                    priority=int(data.get("priority", 1)),
+                    valid_from=valid_from, valid_to=valid_to,
+                )
+                db.session.add(obj)
         elif assign_type == "contract":
-            obj = EmployeeContract(
-                employee_id=emp_id, contract_id=item_id,
-                valid_from=valid_from, valid_to=valid_to,
-            )
-            db.session.add(obj)
+            if assignment_id:
+                obj = EmployeeContract.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.contract_id = item_id
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
+            else:
+                obj = EmployeeContract(
+                    employee_id=emp_id, contract_id=item_id,
+                    valid_from=valid_from, valid_to=valid_to,
+                )
+                db.session.add(obj)
         elif assign_type == "selection":
-            obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
-            db.session.add(obj)
+            if assignment_id:
+                obj = SelectionMember.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.selection_id = item_id
+            else:
+                obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
+                db.session.add(obj)
         elif assign_type == "shift_sequence":
             ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
-            obj = EmployeeShiftSequence(
-                employee_id=emp_id, shift_sequence_id=item_id,
-                reference_date=ref_date,
-                valid_from=valid_from, valid_to=valid_to,
-            )
-            db.session.add(obj)
+            if assignment_id:
+                obj = EmployeeShiftSequence.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.shift_sequence_id = item_id
+                obj.reference_date = ref_date
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
+            else:
+                obj = EmployeeShiftSequence(
+                    employee_id=emp_id, shift_sequence_id=item_id,
+                    reference_date=ref_date,
+                    valid_from=valid_from, valid_to=valid_to,
+                )
+                db.session.add(obj)
         elif assign_type == "work_time_pattern":
             ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
-            obj = EmployeeWorkTimePattern(
-                employee_id=emp_id, work_time_pattern_model_id=item_id,
-                reference_date=ref_date,
-                valid_from=valid_from, valid_to=valid_to,
-            )
-            db.session.add(obj)
+            if assignment_id:
+                obj = EmployeeWorkTimePattern.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.work_time_pattern_model_id = item_id
+                obj.reference_date = ref_date
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
+            else:
+                obj = EmployeeWorkTimePattern(
+                    employee_id=emp_id, work_time_pattern_model_id=item_id,
+                    reference_date=ref_date,
+                    valid_from=valid_from, valid_to=valid_to,
+                )
+                db.session.add(obj)
         elif assign_type == "quartile":
             obj = EmployeeQuartile.query.filter_by(employee_id=emp_id).first()
             if not obj:
@@ -547,13 +589,22 @@ def profile_assign():
                 obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
             obj.notes = data.get("notes", "")
         elif assign_type == "skill":
-            obj = SkillMapping(
-                employee_id=emp_id, skill_group_id=item_id,
-                proficiency=int(data.get("proficiency", 3)),
-                priority=int(data.get("priority", 1)),
-                is_active=True,
-            )
-            db.session.add(obj)
+            if assignment_id:
+                obj = SkillMapping.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                if item_id:
+                    obj.skill_group_id = item_id
+                obj.proficiency = int(data.get("proficiency", 3))
+                obj.priority = int(data.get("priority", 1))
+            else:
+                obj = SkillMapping(
+                    employee_id=emp_id, skill_group_id=item_id,
+                    proficiency=int(data.get("proficiency", 3)),
+                    priority=int(data.get("priority", 1)),
+                    is_active=True,
+                )
+                db.session.add(obj)
         else:
             return jsonify({"success": False, "error": f"Unknown assignment type: {assign_type}"})
 

@@ -94,6 +94,11 @@
     font-weight: 600; cursor: pointer;
   }
   .btn-add:hover { opacity: .9; }
+  .btn-outline-sm {
+    background: var(--surface, #f8fafc); color: var(--brand-accent, #2563eb); border: 1px solid var(--brand-accent, #2563eb);
+    padding: 3px 10px; border-radius: 6px; font-size: .75rem; cursor: pointer;
+  }
+  .btn-outline-sm:hover { background: var(--brand-accent, #2563eb); color: #fff; }
   .btn-danger-sm {
     background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
     padding: 3px 10px; border-radius: 6px; font-size: .75rem; cursor: pointer;
@@ -279,7 +284,10 @@
             </td>
             <td>{{ sm.priority }}</td>
             <td>{% if sm.is_active %}<span style="color:#16a34a;">Active</span>{% else %}<span style="color:#9ca3af;">Inactive</span>{% endif %}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('skill', {id:{{ sm.id }}, item_id:{{ sm.skill_group_id }}, proficiency:{{ sm.proficiency }}, priority:{{ sm.priority }}})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -316,7 +324,10 @@
             <td>{{ ca.contract.weekly_hours }}h</td>
             <td>{{ ca.valid_from or '—' }}</td>
             <td>{{ ca.valid_to or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('contract', {{ ca.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('contract', {id:{{ ca.id }}, item_id:{{ ca.contract_id }}, valid_from:'{{ ca.valid_from or '' }}', valid_to:'{{ ca.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('contract', {{ ca.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -347,7 +358,10 @@
           <tr>
             <td style="font-weight:600;">{{ sm.selection.name }}</td>
             <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('selection', {id:{{ sm.id }}, item_id:{{ sm.selection_id }}})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -387,7 +401,10 @@
             </td>
             <td>{{ pa.valid_from or '—' }}</td>
             <td>{{ pa.valid_to or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('planning_unit', {{ pa.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('planning_unit', {id:{{ pa.id }}, item_id:{{ pa.planning_unit_id }}, priority:{{ pa.priority }}, valid_from:'{{ pa.valid_from or '' }}', valid_to:'{{ pa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('planning_unit', {{ pa.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -420,7 +437,10 @@
             <td>{{ sa.reference_date or '—' }}</td>
             <td>{{ sa.valid_from or '—' }}</td>
             <td>{{ sa.valid_to or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('shift_sequence', {{ sa.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('shift_sequence', {id:{{ sa.id }}, item_id:{{ sa.shift_sequence_id }}, reference_date:'{{ sa.reference_date or '' }}', valid_from:'{{ sa.valid_from or '' }}', valid_to:'{{ sa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('shift_sequence', {{ sa.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -450,7 +470,10 @@
             <td>{{ wa.reference_date or '—' }}</td>
             <td>{{ wa.valid_from or '—' }}</td>
             <td>{{ wa.valid_to or '—' }}</td>
-            <td><button class="btn-danger-sm" onclick="removeAssignment('work_time_pattern', {{ wa.id }})">Remove</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('work_time_pattern', {id:{{ wa.id }}, item_id:{{ wa.work_time_pattern_model_id }}, reference_date:'{{ wa.reference_date or '' }}', valid_from:'{{ wa.valid_from or '' }}', valid_to:'{{ wa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('work_time_pattern', {{ wa.id }})">Remove</button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -673,6 +696,7 @@
     <h3 id="assignModalTitle">Add Assignment</h3>
     <form id="assignForm" onsubmit="return saveAssignment(event)">
       <input type="hidden" id="assign_type">
+      <input type="hidden" id="assign_assignment_id" value="">
 
       <div class="form-group" id="assign_item_group">
         <label id="assign_item_label">Select</label>
@@ -946,21 +970,23 @@ async function saveBasicInfo(e) {
 }
 
 // ── Assignment Modal ──
-function openAssignModal(type) {
+function openAssignModal(type, editData) {
+  const isEdit = editData && editData.id;
   document.getElementById('assign_type').value = type;
+  document.getElementById('assign_assignment_id').value = isEdit ? editData.id : '';
   document.getElementById('assignError').style.display = 'none';
   const priorityGrp = document.getElementById('assign_priority_group');
   const refDateGrp = document.getElementById('assign_ref_date_group');
   const fromGrp = document.getElementById('assign_from_group');
   const toGrp = document.getElementById('assign_to_group');
 
-  // Reset
-  document.getElementById('assign_priority').value = 1;
-  document.getElementById('assign_ref_date').value = '';
-  document.getElementById('assign_from').value = '';
-  document.getElementById('assign_to').value = '';
+  // Reset / pre-fill
+  document.getElementById('assign_priority').value = (isEdit && editData.priority) ? editData.priority : 1;
+  document.getElementById('assign_ref_date').value = (isEdit && editData.reference_date) ? editData.reference_date : '';
+  document.getElementById('assign_from').value = (isEdit && editData.valid_from) ? editData.valid_from : '';
+  document.getElementById('assign_to').value = (isEdit && editData.valid_to) ? editData.valid_to : '';
 
-  const titles = {
+  const addTitles = {
     planning_unit: 'Add Planning Unit',
     contract: 'Add Contract',
     selection: 'Add to Selection',
@@ -968,7 +994,16 @@ function openAssignModal(type) {
     skill: 'Add Skill',
     work_time_pattern: 'Add Rotation Model',
   };
-  document.getElementById('assignModalTitle').textContent = titles[type] || 'Add Assignment';
+  const editTitles = {
+    planning_unit: 'Edit Planning Unit',
+    contract: 'Edit Contract',
+    selection: 'Edit Selection',
+    shift_sequence: 'Edit Shift Sequence',
+    skill: 'Edit Skill',
+    work_time_pattern: 'Edit Rotation Model',
+  };
+  document.getElementById('assignModalTitle').textContent = isEdit ? (editTitles[type] || 'Edit Assignment') : (addTitles[type] || 'Add Assignment');
+  document.getElementById('assignSaveBtn').textContent = isEdit ? 'Update' : 'Save';
 
   // Show/hide extra fields
   priorityGrp.style.display = type === 'planning_unit' ? '' : 'none';
@@ -978,8 +1013,8 @@ function openAssignModal(type) {
   profGrp.style.display = type === 'skill' ? '' : 'none';
   skillPriGrp.style.display = type === 'skill' ? '' : 'none';
   if (type === 'skill') {
-    document.getElementById('assign_proficiency').value = '3';
-    document.getElementById('assign_skill_priority').value = 1;
+    document.getElementById('assign_proficiency').value = (isEdit && editData.proficiency) ? editData.proficiency : '3';
+    document.getElementById('assign_skill_priority').value = (isEdit && editData.priority) ? editData.priority : 1;
   }
   // Selection and skill have no validity dates
   const hasValidity = type !== 'selection' && type !== 'skill';
@@ -1008,6 +1043,10 @@ function openAssignModal(type) {
         opt.textContent = item.name;
         sel.appendChild(opt);
       });
+      // Pre-select the current item when editing
+      if (isEdit && editData.item_id) {
+        sel.value = editData.item_id;
+      }
     })
     .catch(() => { sel.innerHTML = '<option value="">Error loading</option>'; });
 
@@ -1019,6 +1058,7 @@ function closeAssignModal() { document.getElementById('assignModal').style.displ
 async function saveAssignment(e) {
   e.preventDefault();
   const type = document.getElementById('assign_type').value;
+  const assignmentId = document.getElementById('assign_assignment_id').value;
   const body = {
     type: type,
     employee_id: EMP_ID,
@@ -1028,6 +1068,7 @@ async function saveAssignment(e) {
     valid_from: document.getElementById('assign_from').value || null,
     valid_to: document.getElementById('assign_to').value || null,
   };
+  if (assignmentId) { body.assignment_id = parseInt(assignmentId); }
   if (type === 'skill') {
     body.proficiency = parseInt(document.getElementById('assign_proficiency').value) || 3;
     body.priority = parseInt(document.getElementById('assign_skill_priority').value) || 1;
