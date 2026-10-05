@@ -1,18 +1,18 @@
 """
-Real-Time Sync — Pull Call Potential Google Sheet data every 5 minutes.
-=====================================================================
+Real-Time Sync — Pull Google Sheet data every 5 minutes.
+=========================================================
 
-The Call Potential sheet contains two key tabs:
-  • Call volume data  → upserts into interval_actuals
-  • Agent activity    → upserts into agent_status_events
+Two separate Google Sheets feed Serevo:
+  • Call volume sheet  → upserts into interval_actuals
+  • Agent status sheet → upserts into agent_status_events
 
-The sheet only retains ~1–1.5 days of data, so we persist everything in
+The sheets only retain ~1–1.5 days of data, so we persist everything in
 Postgres and it becomes the historical source of truth.
 
-Configuration (env vars or AppSettings in DB):
-  CALLPOTENTIAL_SHEET_KEY  — Google Sheet key
-  SERVICE_ACCOUNT_FILE     — path to service account JSON (fallback)
-  google_service_account_json — AppSetting with JSON creds (preferred)
+Configuration (AppSettings in DB):
+  realtime_calls_sheet_key   — Google Sheet key for call volume
+  realtime_agents_sheet_key  — Google Sheet key for agent status
+  google_service_account_json — JSON creds for service account
 """
 
 import json
@@ -43,10 +43,10 @@ realtime_sync_bp = Blueprint("realtime_sync", __name__, url_prefix="/sync")
 # GOOGLE SHEET CONNECTION
 # ═══════════════════════════════════════════════════════════════
 
-def _open_callpotential_sheet():
+def _get_gspread_client():
     """
-    Open the Call Potential Google Sheet.
-    Returns (spreadsheet, error_string).
+    Build an authorized gspread client from stored credentials.
+    Returns (client, error_string).
     """
     try:
         import gspread
@@ -57,21 +57,8 @@ def _open_callpotential_sheet():
             "https://www.googleapis.com/auth/drive",
         ]
 
-        sheet_key = os.environ.get("CALLPOTENTIAL_SHEET_KEY", "")
         sa_file = os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json")
         sa_json = ""
-
-        if not sheet_key:
-            try:
-                sheet_key = AppSetting.get("callpotential_sheet_key", "")
-            except Exception:
-                log.warning("Failed to read callpotential_sheet_key from DB")
-
-        if not sheet_key:
-            return None, (
-                "No Call Potential sheet key configured. "
-                "Set CALLPOTENTIAL_SHEET_KEY in environment or in Settings → Connections."
-            )
 
         # Prefer JSON creds from DB, then file
         try:
@@ -88,18 +75,49 @@ def _open_callpotential_sheet():
             return None, "No service account credentials configured"
 
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(sheet_key)
-        return spreadsheet, None
+        return client, None
 
     except Exception as e:
-        return None, f"Could not open Call Potential sheet: {e}"
+        return None, f"Could not authorize Google Sheets: {e}"
+
+
+def _open_sheet(key_name, env_fallback=None):
+    """
+    Open a Google Sheet by its AppSetting key name.
+    Also checks env_fallback for backwards compat.
+    Returns (spreadsheet, error_string).
+    """
+    sheet_key = ""
+
+    # Check env first (backwards compat)
+    if env_fallback:
+        sheet_key = os.environ.get(env_fallback, "")
+
+    if not sheet_key:
+        try:
+            sheet_key = AppSetting.get(key_name, "")
+        except Exception:
+            log.warning(f"Failed to read {key_name} from DB")
+
+    if not sheet_key:
+        return None, f"No sheet key configured for {key_name}."
+
+    client, err = _get_gspread_client()
+    if err:
+        return None, err
+
+    try:
+        spreadsheet = client.open_by_key(sheet_key)
+        return spreadsheet, None
+    except Exception as e:
+        return None, f"Could not open sheet {sheet_key[:8]}...: {e}"
 
 
 # ═══════════════════════════════════════════════════════════════
 # CALL VOLUME SYNC  (→ interval_actuals)
 # ═══════════════════════════════════════════════════════════════
 
-# Common column name aliases for Call Potential sheets
+# Common column name aliases
 _VOLUME_COL_ALIASES = {
     # date/time
     "date": "date", "interval date": "date",
@@ -370,13 +388,9 @@ def sync_agent_activity(spreadsheet):
             continue
 
     if ws is None:
-        # Try second sheet
-        sheets = spreadsheet.worksheets()
-        if len(sheets) >= 2:
-            ws = sheets[1]
-            log.info("No recognized agent activity tab — using second sheet")
-        else:
-            return 0, 0, ["No agent activity tab found"]
+        # Fall back to first sheet
+        ws = spreadsheet.sheet1
+        log.info("No recognized agent activity tab — using first sheet")
 
     rows = ws.get_all_values()
     if not rows:
@@ -505,7 +519,7 @@ def sync_agent_activity(spreadsheet):
 
 def run_sync(app=None):
     """
-    Execute a full Call Potential sync cycle.
+    Execute a full sync cycle — reads from two separate Google Sheets.
     Can be called by the scheduler (with app context) or from a route.
     Returns dict with results.
     """
@@ -515,42 +529,50 @@ def run_sync(app=None):
         app = current_app._get_current_object()
 
     with app.app_context():
-        spreadsheet, err = _open_callpotential_sheet()
-        if err:
-            log.warning(f"Call Potential sync failed: {err}")
-            return {"ok": False, "error": err}
-
         results = {}
 
-        # Sync call volume
-        try:
-            vol_up, vol_skip, vol_err = sync_call_volume(spreadsheet)
-            results["call_volume"] = {
-                "upserted": vol_up,
-                "skipped": vol_skip,
-                "errors": vol_err[:10],
-            }
-            log.info(f"Call volume sync: {vol_up} upserted, {vol_skip} skipped, {len(vol_err)} errors")
-        except Exception as e:
-            results["call_volume"] = {"error": str(e)}
-            log.error(f"Call volume sync error: {e}", exc_info=True)
+        # ── Call volume sync ──
+        calls_sheet, err = _open_sheet(
+            "realtime_calls_sheet_key",
+            env_fallback="CALLPOTENTIAL_SHEET_KEY",
+        )
+        if err:
+            results["call_volume"] = {"error": err}
+            log.warning(f"Call volume sheet: {err}")
+        else:
+            try:
+                vol_up, vol_skip, vol_err = sync_call_volume(calls_sheet)
+                results["call_volume"] = {
+                    "upserted": vol_up,
+                    "skipped": vol_skip,
+                    "errors": vol_err[:10],
+                }
+                log.info(f"Call volume sync: {vol_up} upserted, {vol_skip} skipped, {len(vol_err)} errors")
+            except Exception as e:
+                results["call_volume"] = {"error": str(e)}
+                log.error(f"Call volume sync error: {e}", exc_info=True)
 
-        # Sync agent activity
-        try:
-            act_up, act_skip, act_err = sync_agent_activity(spreadsheet)
-            results["agent_activity"] = {
-                "upserted": act_up,
-                "skipped": act_skip,
-                "errors": act_err[:10],
-            }
-            log.info(f"Agent activity sync: {act_up} upserted, {act_skip} skipped, {len(act_err)} errors")
-        except Exception as e:
-            results["agent_activity"] = {"error": str(e)}
-            log.error(f"Agent activity sync error: {e}", exc_info=True)
+        # ── Agent status sync ──
+        agents_sheet, err = _open_sheet("realtime_agents_sheet_key")
+        if err:
+            results["agent_activity"] = {"error": err}
+            log.warning(f"Agent status sheet: {err}")
+        else:
+            try:
+                act_up, act_skip, act_err = sync_agent_activity(agents_sheet)
+                results["agent_activity"] = {
+                    "upserted": act_up,
+                    "skipped": act_skip,
+                    "errors": act_err[:10],
+                }
+                log.info(f"Agent activity sync: {act_up} upserted, {act_skip} skipped, {len(act_err)} errors")
+            except Exception as e:
+                results["agent_activity"] = {"error": str(e)}
+                log.error(f"Agent activity sync error: {e}", exc_info=True)
 
         # Store last sync time
         try:
-            AppSetting.set("callpotential_last_sync", datetime.utcnow().isoformat())
+            AppSetting.set("realtime_last_sync", datetime.utcnow().isoformat())
         except Exception:
             pass
 
@@ -571,7 +593,7 @@ def _require_admin():
 
 @realtime_sync_bp.route("/realtime", methods=["POST"])
 def trigger_sync():
-    """Manual trigger for the Call Potential sync.
+    """Manual trigger for the sync.
     Can be called by admins or by the scheduler endpoint."""
     auth_err = _require_admin()
     if auth_err:
@@ -592,24 +614,33 @@ def sync_status():
     if auth_err:
         return auth_err
 
-    sheet_key = os.environ.get("CALLPOTENTIAL_SHEET_KEY", "")
-    if not sheet_key:
+    calls_key = os.environ.get("CALLPOTENTIAL_SHEET_KEY", "")
+    if not calls_key:
         try:
-            sheet_key = AppSetting.get("callpotential_sheet_key", "")
+            calls_key = AppSetting.get("realtime_calls_sheet_key", "")
         except Exception:
             pass
 
+    agents_key = ""
+    try:
+        agents_key = AppSetting.get("realtime_agents_sheet_key", "")
+    except Exception:
+        pass
+
     last_sync = ""
     try:
-        last_sync = AppSetting.get("callpotential_last_sync", "")
+        last_sync = AppSetting.get("realtime_last_sync", "")
+        if not last_sync:
+            last_sync = AppSetting.get("callpotential_last_sync", "")
     except Exception:
         pass
 
     sync_enabled = os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true").lower() == "true"
 
     return jsonify({
-        "configured": bool(sheet_key),
-        "sheet_key": sheet_key[:8] + "..." if sheet_key else "",
+        "configured": bool(calls_key or agents_key),
+        "calls_sheet_key": calls_key[:8] + "..." if calls_key else "",
+        "agents_sheet_key": agents_key[:8] + "..." if agents_key else "",
         "last_sync": last_sync,
         "sync_enabled": sync_enabled,
         "interval_minutes": 5,
@@ -618,29 +649,46 @@ def sync_status():
 
 @realtime_sync_bp.route("/realtime/configure", methods=["POST"])
 def configure_sync():
-    """Save Call Potential sheet key to AppSettings."""
+    """Save sheet keys to AppSettings."""
     auth_err = _require_admin()
     if auth_err:
         return auth_err
 
     data = request.get_json() or {}
-    sheet_key = data.get("sheet_key", "").strip()
-    if not sheet_key:
-        return jsonify({"error": "Sheet key is required"}), 400
+    calls_key = data.get("calls_sheet_key", "").strip()
+    agents_key = data.get("agents_sheet_key", "").strip()
 
-    AppSetting.set("callpotential_sheet_key", sheet_key)
+    # Backwards compat: accept old field name
+    if not calls_key and not agents_key:
+        old_key = data.get("sheet_key", "").strip()
+        if old_key:
+            calls_key = old_key
+
+    if not calls_key and not agents_key:
+        return jsonify({"error": "At least one sheet key is required"}), 400
+
+    tabs_info = {}
+
+    if calls_key:
+        AppSetting.set("realtime_calls_sheet_key", calls_key)
+        sheet, err = _open_sheet("realtime_calls_sheet_key")
+        if err:
+            db.session.rollback()
+            return jsonify({"ok": False, "error": f"Calls sheet: {err}"}), 400
+        tabs_info["calls_tabs"] = [ws.title for ws in sheet.worksheets()]
+
+    if agents_key:
+        AppSetting.set("realtime_agents_sheet_key", agents_key)
+        sheet, err = _open_sheet("realtime_agents_sheet_key")
+        if err:
+            db.session.rollback()
+            return jsonify({"ok": False, "error": f"Agents sheet: {err}"}), 400
+        tabs_info["agents_tabs"] = [ws.title for ws in sheet.worksheets()]
+
     db.session.commit()
-
-    # Test connection
-    spreadsheet, err = _open_callpotential_sheet()
-    if err:
-        return jsonify({"ok": False, "error": err}), 400
-
-    # List available tabs for the user
-    tabs = [ws.title for ws in spreadsheet.worksheets()]
 
     return jsonify({
         "ok": True,
         "message": "Connected successfully",
-        "tabs": tabs,
+        **tabs_info,
     })
