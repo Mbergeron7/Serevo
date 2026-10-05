@@ -2185,7 +2185,7 @@ def shift_sequences_save():
         if not d.get("id"):
             db.session.add(item)
         db.session.commit()
-        return jsonify(success=True)
+        return jsonify(success=True, id=item.id)
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=str(e))

@@ -20,7 +20,7 @@
 </table></div>
 
 <!-- Create / Edit modal -->
-<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface);color:var(--text);">
+<dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:480px;width:90vw;background:var(--surface,#fff);color:var(--text,#111);">
   <h3 id="modalTitle" style="margin:0 0 16px;">Add Shift Sequence</h3>
   <form id="editForm" onsubmit="return false;">
     <input type="hidden" id="f_id" value="">
@@ -37,7 +37,7 @@
 </dialog>
 
 <!-- Pattern editor modal -->
-<dialog id="patternModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:920px;width:96vw;background:var(--surface);color:var(--text);">
+<dialog id="patternModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:920px;width:96vw;background:var(--surface,#fff);color:var(--text,#111);">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h3 id="patternModalTitle" style="margin:0;">Edit Pattern</h3>
     <button type="button" class="btn" onclick="document.getElementById('patternModal').close()" style="font-size:1.2rem;line-height:1;padding:4px 10px;" aria-label="Close">&times;</button>
@@ -54,6 +54,7 @@
 </dialog>
 
 <style>
+  #editModal::backdrop, #patternModal::backdrop { background:rgba(0,0,0,.5); }
   .pattern-table { width:100%; border-collapse:collapse; font-size:.85rem; }
   .pattern-table th { padding:6px 4px; text-align:center; font-weight:600; color:var(--text-muted); font-size:.8rem; }
   .pattern-table td { padding:3px; }
@@ -120,6 +121,7 @@ function openModal(item) {
 function editItem(item) { openModal(item); }
 
 async function saveItem() {
+  const isNew = !document.getElementById('f_id').value;
   const body = {
     id: document.getElementById('f_id').value || null,
     name: document.getElementById('f_name').value,
@@ -128,7 +130,14 @@ async function saveItem() {
   };
   const res = await fetch('/settings/shift-sequences/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();
-  if (data.success) { location.reload(); } else { alert(data.error||'Save failed'); }
+  if (data.success) {
+    dlg.close();
+    // Reload page, and if new, auto-open the pattern editor for it
+    if (isNew) {
+      sessionStorage.setItem('autoOpenPattern', body.name);
+    }
+    location.reload();
+  } else { alert(data.error||'Save failed'); }
 }
 
 async function deleteItem(id) {
@@ -253,5 +262,13 @@ async function savePattern() {
 }
 
 render();
+
+// Auto-open pattern editor after creating a new sequence
+const autoName = sessionStorage.getItem('autoOpenPattern');
+if (autoName) {
+  sessionStorage.removeItem('autoOpenPattern');
+  const seq = DATA.find(d => d.name === autoName);
+  if (seq) { setTimeout(() => openPatternEditor(seq.id), 300); }
+}
 </script>
 {% endblock %}
