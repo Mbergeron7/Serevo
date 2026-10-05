@@ -195,7 +195,7 @@ class Employee(db.Model):
     skill_end        = db.Column(db.Date, nullable=True)
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
-    contract_type    = db.Column(db.String(20), default="Full-Time")    # Full-Time | Part-Time
+    contract_type    = db.Column(db.String(100), default="Full-Time")    # Full-Time | Part-Time
     contract_id      = db.Column(db.Integer, db.ForeignKey("contracts.id"), nullable=True)
     weekly_hours     = db.Column(db.Float, default=42.5)
     days_per_week    = db.Column(db.Integer, default=5)

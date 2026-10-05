@@ -176,6 +176,20 @@ def create_app():
                 db.session.rollback()
                 log.warning(f"Could not add {tbl}.{col}: {e}")
 
+        # ── Widen columns that were originally too narrow ──
+        _widen_columns = [
+            ("employees", "contract_type", "VARCHAR(100)"),
+        ]
+        if dialect != "sqlite":
+            for tbl, col, new_type in _widen_columns:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE {tbl} ALTER COLUMN {col} TYPE {new_type}"
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
     try:
