@@ -169,13 +169,40 @@ _AGENT_COL_ALIASES = {
 }
 
 
-def _match_columns(headers, alias_map):
-    """Map sheet headers to canonical field names using alias dict."""
+def _match_columns(headers, alias_map, custom_mapping=None):
+    """Map sheet headers to canonical field names.
+
+    If *custom_mapping* is provided (a dict of canonical_field → sheet_column_name),
+    it is tried first.  The alias_map is used as a fallback for any canonical field
+    not covered by the custom mapping.
+    """
     mapping = {}
+
+    # Build a quick header-name → index lookup
+    header_idx = {}
+    for idx, h in enumerate(headers):
+        header_idx[h.strip().lower()] = idx
+        header_idx[h.strip()] = idx          # case-sensitive fallback
+
+    # 1) Apply custom mapping first
+    if custom_mapping:
+        for canonical, sheet_col in custom_mapping.items():
+            if not sheet_col:
+                continue
+            # Try exact match first, then case-insensitive
+            if sheet_col in header_idx:
+                mapping[canonical] = header_idx[sheet_col]
+            elif sheet_col.lower() in header_idx:
+                mapping[canonical] = header_idx[sheet_col.lower()]
+
+    # 2) Fill in gaps from alias_map
     for idx, h in enumerate(headers):
         key = h.strip().lower()
         if key in alias_map:
-            mapping[alias_map[key]] = idx
+            canonical = alias_map[key]
+            if canonical not in mapping:
+                mapping[canonical] = idx
+
     return mapping
 
 
@@ -274,23 +301,30 @@ def _safe_float(val):
         return None
 
 
-def sync_call_volume(spreadsheet):
+def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
     """
     Read call volume tab and upsert into interval_actuals.
     Returns (upserted, skipped, errors).
     """
-    # Try common tab names
     ws = None
-    for name in ("Call Volume", "Calls", "Volume", "ACTUALS RAW",
-                 "Interval Data", "ACD Data", "call_volume"):
+    # If a specific tab is configured, use it
+    if tab_name:
         try:
-            ws = spreadsheet.worksheet(name)
-            break
+            ws = spreadsheet.worksheet(tab_name)
         except Exception:
-            continue
+            return 0, 0, [f"Tab '{tab_name}' not found in sheet"]
 
     if ws is None:
-        # Fall back to first sheet
+        # Try common tab names
+        for name in ("Call Volume", "Calls", "Volume", "ACTUALS RAW",
+                     "Interval Data", "ACD Data", "call_volume"):
+            try:
+                ws = spreadsheet.worksheet(name)
+                break
+            except Exception:
+                continue
+
+    if ws is None:
         ws = spreadsheet.sheet1
         log.info("No recognized call volume tab — using first sheet")
 
@@ -299,7 +333,7 @@ def sync_call_volume(spreadsheet):
         return 0, 0, ["Call volume tab is empty"]
 
     headers = rows[0]
-    col_map = _match_columns(headers, _VOLUME_COL_ALIASES)
+    col_map = _match_columns(headers, _VOLUME_COL_ALIASES, custom_mapping=custom_mapping)
 
     # Need date + time + either route_id or lob
     has_identifier = "route_id" in col_map or "lob" in col_map
@@ -381,23 +415,29 @@ def sync_call_volume(spreadsheet):
 # AGENT ACTIVITY SYNC  (→ agent_status_events)
 # ═══════════════════════════════════════════════════════════════
 
-def sync_agent_activity(spreadsheet):
+def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
     """
     Read agent activity tab and upsert into agent_status_events.
     Returns (upserted, skipped, errors).
     """
     ws = None
-    for name in ("Agent Activity", "Agent Status", "Agent States",
-                 "Agents", "agent_activity", "Status Events",
-                 "Real Time", "RealTime"):
+    if tab_name:
         try:
-            ws = spreadsheet.worksheet(name)
-            break
+            ws = spreadsheet.worksheet(tab_name)
         except Exception:
-            continue
+            return 0, 0, [f"Tab '{tab_name}' not found in sheet"]
 
     if ws is None:
-        # Fall back to first sheet
+        for name in ("Agent Activity", "Agent Status", "Agent States",
+                     "Agents", "agent_activity", "Status Events",
+                     "Real Time", "RealTime"):
+            try:
+                ws = spreadsheet.worksheet(name)
+                break
+            except Exception:
+                continue
+
+    if ws is None:
         ws = spreadsheet.sheet1
         log.info("No recognized agent activity tab — using first sheet")
 
@@ -406,7 +446,7 @@ def sync_agent_activity(spreadsheet):
         return 0, 0, ["Agent activity tab is empty"]
 
     headers = rows[0]
-    col_map = _match_columns(headers, _AGENT_COL_ALIASES)
+    col_map = _match_columns(headers, _AGENT_COL_ALIASES, custom_mapping=custom_mapping)
 
     # Need at least agent identifier + status + start time
     has_agent = "agent" in col_map or "agent_id" in col_map
@@ -561,10 +601,18 @@ def run_sync(app=None):
                         feed_result["error"] = err
                         log.warning(f"Feed '{feed.name}': {err}")
                     else:
+                        # Parse custom column mapping if set
+                        custom_map = None
+                        if feed.column_mapping:
+                            try:
+                                custom_map = json.loads(feed.column_mapping)
+                            except (json.JSONDecodeError, ValueError):
+                                pass
+
                         if feed.feed_type == "call_volume":
-                            up, skip, errs = sync_call_volume(spreadsheet)
+                            up, skip, errs = sync_call_volume(spreadsheet, tab_name=feed.sheet_tab, custom_mapping=custom_map)
                         else:
-                            up, skip, errs = sync_agent_activity(spreadsheet)
+                            up, skip, errs = sync_agent_activity(spreadsheet, tab_name=feed.sheet_tab, custom_mapping=custom_map)
 
                         feed.last_upserted = up
                         feed.last_skipped = skip

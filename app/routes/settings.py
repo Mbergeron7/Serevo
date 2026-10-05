@@ -490,6 +490,18 @@ def save_data_feed():
     feed.api_headers = (data.get("api_headers") or "").strip()
     feed.is_active = data.get("is_active", True)
 
+    # Column mapping — JSON dict of canonical_field → sheet_column_name
+    col_mapping = data.get("column_mapping")
+    if col_mapping is not None:
+        if isinstance(col_mapping, dict):
+            # Filter out empty values
+            col_mapping = {k: v for k, v in col_mapping.items() if v}
+            feed.column_mapping = json.dumps(col_mapping) if col_mapping else ""
+        elif isinstance(col_mapping, str):
+            feed.column_mapping = col_mapping.strip()
+        else:
+            feed.column_mapping = ""
+
     # Service account JSON — validate if provided
     sa_json = (data.get("service_account_json") or "").strip()
     if sa_json:
@@ -541,11 +553,26 @@ def test_data_feed():
             sheet = gc.open_by_key(feed.sheet_key)
 
             tabs = [ws.title for ws in sheet.worksheets()]
+
+            # Read headers from the target tab (or first sheet)
+            headers = []
+            sample_row = []
+            try:
+                ws = sheet.worksheet(feed.sheet_tab) if feed.sheet_tab else sheet.sheet1
+                all_vals = ws.get_all_values()
+                if all_vals:
+                    headers = [h for h in all_vals[0] if h.strip()]
+                if len(all_vals) > 1:
+                    sample_row = all_vals[1][:len(headers)]
+            except Exception:
+                pass
+
             feed.last_status = "ok"
             feed.last_error = ""
             feed.last_sync_at = datetime.utcnow()
             db.session.commit()
-            return jsonify({"success": True, "title": sheet.title, "tabs": tabs})
+            return jsonify({"success": True, "title": sheet.title, "tabs": tabs,
+                            "headers": headers, "sample_row": sample_row})
         except Exception as e:
             err = _friendly_sheet_error(e)
             feed.last_status = "error"

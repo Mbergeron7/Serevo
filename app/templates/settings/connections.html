@@ -72,6 +72,7 @@
               📊 Google Sheet &middot; <code style="font-size:.78rem;">{{ f.sheet_key[:12] }}…</code>
               {% if f.sheet_tab %} &middot; Tab: {{ f.sheet_tab }}{% endif %}
               {% if f.service_account_json %} &middot; 🔑 Own credentials{% else %} &middot; Using global credentials{% endif %}
+              {% if f.column_mapping %} &middot; 🗂 Custom mapping{% endif %}
             {% else %}
               🔌 API &middot; {{ f.api_url or 'Not configured' }}
             {% endif %}
@@ -278,6 +279,19 @@
         </div>
       </div>
 
+      <!-- Column Mapping Section -->
+      <div id="colMappingSection" style="margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+          <label style="font-weight:600;margin:0;">Column Mapping</label>
+          <button type="button" class="btn btn-outline" style="font-size:.8rem;padding:4px 12px;" onclick="detectColumns()">Detect Columns</button>
+        </div>
+        <p style="font-size:.82rem;color:var(--text-muted);margin:0 0 .75rem;">
+          Map your sheet's column names to the fields Serevo expects. Click "Detect Columns" after setting up the sheet connection to auto-populate.
+        </p>
+        <div id="colMappingFields"></div>
+        <div id="colDetectStatus" style="font-size:.82rem;margin-top:.5rem;"></div>
+      </div>
+
       <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;">
         <button type="button" class="btn btn-outline" onclick="closeFeedModal()">Cancel</button>
         <button type="submit" class="btn btn-primary" id="feedSaveBtn">Save Feed</button>
@@ -413,6 +427,133 @@ function switchTab(name) {
   });
 }
 
+// ── Column mapping schemas per feed type ──
+const FEED_SCHEMAS = {
+  call_volume: {
+    label: 'Call Volume Fields',
+    fields: [
+      {key: 'date', label: 'Date', required: true, hint: 'Date of the interval'},
+      {key: 'time', label: 'Time', required: true, hint: 'Start time of the interval'},
+      {key: 'route_id', label: 'Route / Queue ID', required: false, hint: 'Numeric queue or route identifier'},
+      {key: 'lob', label: 'LOB / Queue Name', required: false, hint: 'Line of business or queue name'},
+      {key: 'offered', label: 'Offered', required: false, hint: 'Calls offered'},
+      {key: 'answered', label: 'Answered', required: false, hint: 'Calls answered'},
+      {key: 'answered_within', label: 'Answered within SL', required: false, hint: 'Calls answered within service level'},
+      {key: 'abandoned', label: 'Abandoned', required: false, hint: 'Calls abandoned'},
+      {key: 'rolled', label: 'Rolled / Overflow', required: false, hint: 'Calls rolled to another queue'},
+      {key: 'asa', label: 'ASA (seconds)', required: false, hint: 'Average speed of answer'},
+      {key: 'aht', label: 'AHT (seconds)', required: false, hint: 'Average handle time'},
+      {key: 'max_queued', label: 'Max Queued', required: false, hint: 'Maximum calls in queue'},
+    ]
+  },
+  agent_status: {
+    label: 'Agent Status Fields',
+    fields: [
+      {key: 'agent', label: 'Agent Name', required: false, hint: 'Agent full name'},
+      {key: 'agent_id', label: 'Agent ID', required: false, hint: 'Agent numeric ID or extension'},
+      {key: 'status', label: 'Status / State', required: true, hint: 'Current agent status'},
+      {key: 'start', label: 'Start Time', required: true, hint: 'When the status started'},
+      {key: 'end', label: 'End Time', required: false, hint: 'When the status ended'},
+      {key: 'duration', label: 'Duration (seconds)', required: false, hint: 'How long in this status'},
+      {key: 'date', label: 'Date', required: false, hint: 'Date column if separate from start time'},
+    ]
+  },
+  planning_data: {
+    label: 'Planning Data Fields',
+    fields: [
+      {key: 'date', label: 'Date', required: true},
+      {key: 'time', label: 'Time', required: true},
+      {key: 'lob', label: 'LOB / Queue', required: false},
+      {key: 'forecast', label: 'Forecast Volume', required: false},
+      {key: 'requirement', label: 'Staff Required', required: false},
+    ]
+  },
+  employees: {
+    label: 'Employee Fields',
+    fields: [
+      {key: 'employee_id', label: 'Employee ID', required: true},
+      {key: 'first_name', label: 'First Name', required: true},
+      {key: 'last_name', label: 'Last Name', required: true},
+      {key: 'email', label: 'Email', required: false},
+      {key: 'hire_date', label: 'Hire Date', required: false},
+    ]
+  },
+};
+
+let _detectedHeaders = [];   // populated by detectColumns()
+let _currentMapping = {};     // current column_mapping for the feed being edited
+
+function renderMappingFields() {
+  const feedType = document.getElementById('feed_type').value;
+  const schema = FEED_SCHEMAS[feedType];
+  const container = document.getElementById('colMappingFields');
+  if (!schema) { container.innerHTML = ''; return; }
+
+  let html = '<div style="display:grid;gap:.5rem;">';
+  for (const f of schema.fields) {
+    const savedVal = _currentMapping[f.key] || '';
+    html += `<div style="display:flex;align-items:center;gap:.5rem;">
+      <label style="min-width:140px;font-size:.85rem;margin:0;">${f.label}${f.required ? ' *' : ''}</label>`;
+
+    if (_detectedHeaders.length > 0) {
+      html += `<select class="form-input col-map-select" data-field="${f.key}"
+                style="font-size:.85rem;padding:4px 8px;flex:1;">
+                <option value="">— skip —</option>`;
+      for (const h of _detectedHeaders) {
+        const sel = (savedVal === h || (!savedVal && h.toLowerCase() === f.key)) ? ' selected' : '';
+        html += `<option value="${h}"${sel}>${h}</option>`;
+      }
+      html += '</select>';
+    } else {
+      html += `<input type="text" class="form-input col-map-input" data-field="${f.key}"
+                value="${savedVal}" placeholder="${f.hint || f.label}"
+                style="font-size:.85rem;padding:4px 8px;flex:1;">`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getColumnMapping() {
+  const mapping = {};
+  document.querySelectorAll('.col-map-select, .col-map-input').forEach(el => {
+    const field = el.dataset.field;
+    const val = el.value.trim();
+    if (field && val) mapping[field] = val;
+  });
+  return mapping;
+}
+
+async function detectColumns() {
+  const feedId = document.getElementById('feed_id').value;
+  const statusEl = document.getElementById('colDetectStatus');
+
+  if (!feedId) {
+    statusEl.innerHTML = '<span style="color:#d97706;">Save the feed first, then click Detect Columns.</span>';
+    return;
+  }
+
+  statusEl.innerHTML = '<span style="color:var(--text-muted);">Detecting…</span>';
+  try {
+    const res = await fetch('/settings/data-feeds/test', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+      body: JSON.stringify({id: parseInt(feedId)}),
+    });
+    const data = await res.json();
+    if (data.success && data.headers && data.headers.length > 0) {
+      _detectedHeaders = data.headers;
+      renderMappingFields();
+      statusEl.innerHTML = '<span style="color:#059669;">✓ Found ' + data.headers.length + ' columns in "' + data.title + '"</span>';
+    } else {
+      statusEl.innerHTML = '<span style="color:#dc2626;">' + (data.error || 'No headers found.') + '</span>';
+    }
+  } catch(e) {
+    statusEl.innerHTML = '<span style="color:#dc2626;">Network error</span>';
+  }
+}
+
 // ── Feed source fields toggle ──
 function toggleFeedSourceFields() {
   const src = document.getElementById('source_type').value;
@@ -432,10 +573,21 @@ function openFeedModal(feed) {
   document.getElementById('feed_sa_json').value = '';  // never pre-fill credentials
   document.getElementById('feed_api_url').value = feed ? (feed.api_url || '') : '';
   document.getElementById('feed_api_headers').value = feed ? (feed.api_headers || '') : '';
+  // Column mapping
+  _currentMapping = (feed && feed.column_mapping) ? feed.column_mapping : {};
+  _detectedHeaders = [];
+  document.getElementById('colDetectStatus').innerHTML = '';
+  renderMappingFields();
   toggleFeedSourceFields();
   document.getElementById('feedModal').style.display = 'flex';
 }
 function closeFeedModal() { document.getElementById('feedModal').style.display = 'none'; }
+
+// Re-render mapping fields when feed type changes
+document.getElementById('feed_type').addEventListener('change', () => {
+  _currentMapping = {};
+  renderMappingFields();
+});
 
 function editFeed(id) {
   const feed = FEEDS.find(f => f.id === id);
@@ -457,6 +609,7 @@ async function saveFeed(e) {
       service_account_json: document.getElementById('feed_sa_json').value,
       api_url: document.getElementById('feed_api_url').value,
       api_headers: document.getElementById('feed_api_headers').value,
+      column_mapping: getColumnMapping(),
     };
     const res = await fetch('/settings/data-feeds/save', {
       method: 'POST',

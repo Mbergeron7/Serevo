@@ -4,6 +4,7 @@ Serevo — SQLAlchemy models
 All database tables for the production platform.
 """
 
+import json
 from datetime import datetime, date, time, timezone
 
 
@@ -549,6 +550,7 @@ class DataFeed(db.Model):
     service_account_json = db.Column(db.Text, default="")              # per-feed Google SA creds (JSON)
     api_url       = db.Column(db.String(500), default="")              # for API sources
     api_headers   = db.Column(db.Text, default="")                     # JSON headers for API
+    column_mapping = db.Column(db.Text, default="")                    # JSON: {"canonical_field": "sheet_column_name", ...}
     is_active     = db.Column(db.Boolean, default=True)
     last_sync_at  = db.Column(db.DateTime, nullable=True)
     last_status   = db.Column(db.String(20), default="new")            # new | ok | error
@@ -568,6 +570,7 @@ class DataFeed(db.Model):
             "sheet_key": self.sheet_key, "sheet_tab": self.sheet_tab,
             "has_service_account": bool(self.service_account_json),
             "api_url": self.api_url, "api_headers": self.api_headers or "",
+            "column_mapping": json.loads(self.column_mapping) if self.column_mapping else {},
             "is_active": self.is_active,
             "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
             "last_status": self.last_status,
