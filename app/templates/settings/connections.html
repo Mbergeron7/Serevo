@@ -469,13 +469,20 @@ const FEED_SCHEMAS = {
     ]
   },
   employees: {
-    label: 'Employee Fields',
+    label: 'Employee / Headcount Fields',
     fields: [
-      {key: 'employee_id', label: 'Employee ID', required: true},
+      {key: 'employee_id', label: 'Employee ID', required: true, hint: 'Unique identifier for the employee'},
       {key: 'first_name', label: 'First Name', required: true},
       {key: 'last_name', label: 'Last Name', required: true},
+      {key: 'start_date', label: 'Start / Hire Date', required: false},
+      {key: 'end_date', label: 'End / Term Date', required: false},
+      {key: 'planning_unit', label: 'Planning Unit / LOB', required: false, hint: 'Department or skill group'},
+      {key: 'status', label: 'Status', required: false, hint: 'Active, Inactive, Terminated'},
+      {key: 'all_skills', label: 'All Skills', required: false},
+      {key: 'contract_type', label: 'Contract Type', required: false, hint: 'Full-Time, Part-Time'},
       {key: 'email', label: 'Email', required: false},
-      {key: 'hire_date', label: 'Hire Date', required: false},
+      {key: 'external_id_1', label: 'External ID', required: false, hint: 'Secondary ID from another system'},
+      {key: 'title', label: 'Job Title', required: false},
     ]
   },
 };
