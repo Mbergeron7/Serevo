@@ -800,28 +800,27 @@ def forecast_api_intervals():
         )
         rq_map = {r.timestamp.strftime("%H:%M"): round(float(r.agents_required or 0), 1) for r in rq_rows}
 
-        # Merge all time slots — mark each as historic or forecast
+        # Merge all time slots — return both historic and forecast values
         all_times = sorted(set(list(actual_map.keys()) + list(fc_map.keys())))
         intervals = []
         for t in all_times:
             actual = actual_map.get(t)
             fc = fc_map.get(t)
-            if actual:
-                intervals.append({
-                    "time": t,
-                    "offered": actual["offered"],
-                    "aht": actual["aht"],
-                    "agents_required": rq_map.get(t, 0),
-                    "is_historic": True,
-                })
-            elif fc:
-                intervals.append({
-                    "time": t,
-                    "offered": fc["offered"],
-                    "aht": fc["aht"],
-                    "agents_required": rq_map.get(t, 0),
-                    "is_historic": False,
-                })
+            entry = {
+                "time": t,
+                "agents_required": rq_map.get(t, 0),
+                # Historical actuals (null when no actuals exist)
+                "hist_offered": actual["offered"] if actual else None,
+                "hist_aht": actual["aht"] if actual else None,
+                # Forecast values (null when no forecast exists)
+                "fc_offered": fc["offered"] if fc else None,
+                "fc_aht": fc["aht"] if fc else None,
+                # Legacy fields for backward compat
+                "offered": actual["offered"] if actual else (fc["offered"] if fc else 0),
+                "aht": actual["aht"] if actual else (fc["aht"] if fc else 0),
+                "is_historic": bool(actual),
+            }
+            intervals.append(entry)
 
         return jsonify({"success": True, "intervals": intervals})
 

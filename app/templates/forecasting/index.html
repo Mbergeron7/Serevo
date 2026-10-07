@@ -746,7 +746,7 @@ async function loadIntervalData() {
   if (!lobs.length) { renderCharts(); return; }
 
   const dateStr = fmtDate(navAnchor);
-  // Aggregate intervals across selected LOBs
+  // Aggregate intervals across selected LOBs — keep hist + forecast separate
   const combined = {};
   for (const lob of lobs) {
     try {
@@ -758,12 +758,24 @@ async function loadIntervalData() {
       const data = await resp.json();
       if (data.success && data.intervals) {
         for (const iv of data.intervals) {
-          if (!combined[iv.time]) combined[iv.time] = {time: iv.time, offered: 0, aht_w: 0, aht_off: 0, req: 0, is_historic: iv.is_historic};
-          combined[iv.time].offered += iv.offered;
-          combined[iv.time].aht_w += iv.offered * iv.aht;
-          combined[iv.time].aht_off += iv.offered;
-          combined[iv.time].req += iv.agents_required;
-          if (iv.is_historic) combined[iv.time].is_historic = true;
+          if (!combined[iv.time]) combined[iv.time] = {
+            time: iv.time, req: 0,
+            h_off: 0, h_aht_w: 0, h_aht_n: 0, h_any: false,
+            f_off: 0, f_aht_w: 0, f_aht_n: 0, f_any: false,
+          };
+          const c = combined[iv.time];
+          c.req += iv.agents_required;
+          if (iv.hist_offered != null) {
+            c.h_off += iv.hist_offered; c.h_aht_w += iv.hist_offered * iv.hist_aht; c.h_aht_n += iv.hist_offered; c.h_any = true;
+          }
+          if (iv.fc_offered != null) {
+            c.f_off += iv.fc_offered; c.f_aht_w += iv.fc_offered * iv.fc_aht; c.f_aht_n += iv.fc_offered; c.f_any = true;
+          }
+          // Legacy fallback for old API responses without hist_/fc_ fields
+          if (iv.hist_offered == null && iv.fc_offered == null) {
+            if (iv.is_historic) { c.h_off += iv.offered; c.h_aht_w += iv.offered * iv.aht; c.h_aht_n += iv.offered; c.h_any = true; }
+            else { c.f_off += iv.offered; c.f_aht_w += iv.offered * iv.aht; c.f_aht_n += iv.offered; c.f_any = true; }
+          }
         }
       }
     } catch(e) { console.error('Interval load error:', e); }
@@ -771,10 +783,15 @@ async function loadIntervalData() {
 
   intervalData = Object.values(combined).sort((a,b) => a.time.localeCompare(b.time)).map(iv => ({
     time: iv.time,
-    offered: Math.round(iv.offered),
-    aht: iv.aht_off > 0 ? Math.round(iv.aht_w / iv.aht_off) : 0,
+    hist_offered: iv.h_any ? Math.round(iv.h_off) : null,
+    hist_aht: iv.h_any && iv.h_aht_n > 0 ? Math.round(iv.h_aht_w / iv.h_aht_n) : null,
+    fc_offered: iv.f_any ? Math.round(iv.f_off) : null,
+    fc_aht: iv.f_any && iv.f_aht_n > 0 ? Math.round(iv.f_aht_w / iv.f_aht_n) : null,
     agents_required: Math.round(iv.req * 10) / 10,
-    is_historic: !!iv.is_historic,
+    // combined for summary cards
+    offered: Math.round(iv.h_off + iv.f_off),
+    aht: (iv.h_aht_n + iv.f_aht_n) > 0 ? Math.round((iv.h_aht_w + iv.f_aht_w) / (iv.h_aht_n + iv.f_aht_n)) : 0,
+    is_historic: iv.h_any,
   }));
 
   renderCharts();
@@ -1181,19 +1198,17 @@ function renderCharts() {
 // ── Render interval-level charts for Daily view ──
 function renderIntervalCharts() {
   const labels = intervalData.map(iv => iv.time);
-  const hasHist = intervalData.some(iv => iv.is_historic);
-  const hasFc = intervalData.some(iv => !iv.is_historic);
+  const hasHist = intervalData.some(iv => iv.hist_offered != null);
+  const hasFc = intervalData.some(iv => iv.fc_offered != null);
   document.getElementById('dataLegendBanner').style.display = (hasHist || hasFc) ? 'flex' : 'none';
 
-  // Split into historical vs forecast (null where the other applies)
-  const histOffered = intervalData.map(iv => iv.is_historic ? iv.offered : null);
-  const fcOffered   = intervalData.map(iv => iv.is_historic ? null : iv.offered);
-  const histAht     = intervalData.map(iv => iv.is_historic ? iv.aht : null);
-  const fcAht       = intervalData.map(iv => iv.is_historic ? null : iv.aht);
-  const histReq     = intervalData.map(iv => iv.is_historic ? iv.agents_required : null);
-  const fcReq       = intervalData.map(iv => iv.is_historic ? null : iv.agents_required);
+  // Both series always present — null values leave gaps, side-by-side where both exist
+  const histOffered = intervalData.map(iv => iv.hist_offered);
+  const fcOffered   = intervalData.map(iv => iv.fc_offered);
+  const histAht     = intervalData.map(iv => iv.hist_aht);
+  const fcAht       = intervalData.map(iv => iv.fc_aht);
 
-  // Offered chart — bar chart by time-of-day
+  // Offered chart — grouped bar chart by time-of-day
   document.getElementById('offeredSection').style.display = '';
   if (chartOffered) chartOffered.destroy();
   chartOffered = new Chart(document.getElementById('offeredChart'), {
@@ -1251,7 +1266,7 @@ function renderIntervalCharts() {
     options: intervalChartOpts('Seconds', true),
   });
 
-  // Requirements chart — bar by time-of-day
+  // Requirements chart — single dataset (requirements come from Erlang C, not hist/fc split)
   document.getElementById('reqSection').style.display = '';
   if (chartReq) chartReq.destroy();
   chartReq = new Chart(document.getElementById('reqChart'), {
@@ -1259,14 +1274,8 @@ function renderIntervalCharts() {
     data: {
       labels,
       datasets: [{
-        label: '▎Historical',
-        data: histReq,
-        backgroundColor: 'rgba(100,116,139,.6)',
-        borderWidth: 0,
-        borderRadius: 2,
-      },{
-        label: '▎Forecast',
-        data: fcReq,
+        label: '▎Required',
+        data: intervalData.map(iv => iv.agents_required),
         backgroundColor: 'rgba(34,197,94,.65)',
         borderColor: 'rgba(34,197,94,1)',
         borderWidth: 1,
