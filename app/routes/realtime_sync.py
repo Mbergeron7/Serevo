@@ -1465,6 +1465,45 @@ def resync_feed(feed_id):
     return jsonify({"cleared": deleted, "sync": results})
 
 
+@realtime_sync_bp.route("/realtime/debug-volume/<lob_name>", methods=["GET"])
+def debug_volume(lob_name):
+    """Temporary diagnostic: show interval_actuals + call_routes for a LOB."""
+    auth_err = _require_admin()
+    if auth_err:
+        return auth_err
+    from app.data_source import normalize_lob
+    normalized = normalize_lob(lob_name)
+    pu = PlanningUnit.query.filter(
+        db.func.lower(PlanningUnit.name) == normalized.lower()
+    ).first()
+    if not pu:
+        return jsonify({"error": f"No PU for '{lob_name}' (normalized: '{normalized}')",
+                        "all_pus": [p.name for p in PlanningUnit.query.all()]})
+
+    routes = CallRoute.query.filter_by(planning_unit_id=pu.id).all()
+    from sqlalchemy import desc, func as sa_func
+    rows = IntervalActual.query.filter_by(planning_unit_id=pu.id)\
+        .order_by(desc(IntervalActual.timestamp)).limit(100).all()
+
+    # Daily totals
+    daily = {}
+    for r in rows:
+        d = r.timestamp.strftime("%Y-%m-%d")
+        daily[d] = daily.get(d, 0) + (r.offered or 0)
+
+    return jsonify({
+        "planning_unit": {"id": pu.id, "name": pu.name},
+        "call_routes": [{"route_id": r.route_id, "name": r.name, "active": r.is_active} for r in routes],
+        "daily_totals": {k: daily[k] for k in sorted(daily.keys(), reverse=True)},
+        "intervals": [{
+            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M"),
+            "offered": r.offered, "answered": r.answered,
+            "abandoned": r.abandoned, "aht": r.aht_secs,
+            "source": r.source,
+        } for r in rows],
+    })
+
+
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
 def sync_status():
     """Get the current sync configuration and last sync time."""
