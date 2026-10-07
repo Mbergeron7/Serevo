@@ -247,13 +247,33 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
   try {
     const resp = await fetch('/data/upload', {method: 'POST', body: fd});
     const data = await resp.json();
-    showResult(data);
+    if (data.job_id) {
+      btn.textContent = 'Importing… (this may take a few minutes)';
+      const result = await pollJobStatus(data.job_id);
+      showResult(result);
+    } else {
+      showResult(data);
+    }
   } catch (err) {
     alert('Upload error: ' + err.message);
   }
   btn.disabled = false;
   btn.textContent = 'Upload & Import';
 });
+
+async function pollJobStatus(jobId) {
+  while (true) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const resp = await fetch('/data/upload/status/' + jobId);
+      const data = await resp.json();
+      if (data.status === 'complete') return data.result;
+      if (data.status === 'unknown') return {success: false, error: 'Import job lost — please retry'};
+    } catch (err) {
+      return {success: false, error: 'Lost connection while importing: ' + err.message};
+    }
+  }
+}
 
 function showResult(data) {
   const resultDiv = document.getElementById('uploadResult');
@@ -429,7 +449,13 @@ async function confirmImport() {
     });
     const data = await resp.json();
     closeMappingModal();
-    showResult(data);
+    if (data.job_id) {
+      btn.textContent = 'Importing… (this may take a few minutes)';
+      const result = await pollJobStatus(data.job_id);
+      showResult(result);
+    } else {
+      showResult(data);
+    }
     loadSavedSchemas();  // refresh schema dropdown
   } catch(err) {
     alert('Import error: ' + err.message);

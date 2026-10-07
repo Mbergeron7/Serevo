@@ -17,6 +17,7 @@ import json
 import os
 import logging
 import tempfile
+import threading
 import uuid
 from datetime import datetime
 
@@ -28,6 +29,9 @@ from config import cfg
 log = logging.getLogger("serevo.data_import")
 
 data_import_bp = Blueprint("data_import", __name__, url_prefix="/data")
+
+# In-memory job store for background imports (safe with 1 worker)
+_import_jobs = {}  # job_id -> {"status": "running"|"complete"|"failed", "result": {...}}
 
 
 # ── Column alias registry ─────────────────────────────────────
@@ -408,18 +412,58 @@ def upload():
     # Apply the auto-matched aliases: rename headers so import functions work
     rows = _remap_rows(rows, auto_map)
 
-    # Process rows
+    # Process rows in a background thread to avoid worker timeout
     try:
         row_count = len(rows)
     except (TypeError, AttributeError):
         row_count = 0
-    log.info("Upload started: type=%s rows=%s file=%s user=%s", upload_type, row_count or "streaming", file.filename, user.get("email", ""))
-    result = _import_rows(upload_type, rows, user.get("email", ""))
-    if result.get("success"):
-        log.info("Upload complete: type=%s imported=%d skipped=%d", upload_type, result.get("imported", 0), result.get("skipped", 0))
-    else:
-        log.error("Upload failed: type=%s error=%s", upload_type, result.get("error", ""))
-    return jsonify(result)
+
+    job_id = uuid.uuid4().hex
+    _import_jobs[job_id] = {"status": "running", "result": None}
+    user_email = user.get("email", "")
+    filename_for_log = file.filename
+
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    def _run_import():
+        try:
+            with app.app_context():
+                log.info("Upload started: type=%s rows=%s file=%s user=%s",
+                         upload_type, row_count or "streaming", filename_for_log, user_email)
+                result = _import_rows(upload_type, rows, user_email)
+                if result.get("success"):
+                    log.info("Upload complete: type=%s imported=%d skipped=%d",
+                             upload_type, result.get("imported", 0), result.get("skipped", 0))
+                else:
+                    log.error("Upload failed: type=%s error=%s",
+                              upload_type, result.get("error", ""))
+                _import_jobs[job_id] = {"status": "complete", "result": result}
+        except Exception as exc:
+            log.exception("Background import crashed: %s", exc)
+            _import_jobs[job_id] = {
+                "status": "complete",
+                "result": {"success": False, "error": f"Import crashed: {exc}"},
+            }
+
+    t = threading.Thread(target=_run_import, daemon=True)
+    t.start()
+    return jsonify({"success": True, "job_id": job_id, "message": "Import started in background"})
+
+
+@data_import_bp.route("/upload/status/<job_id>")
+@admin_required
+def upload_status(job_id):
+    """Poll endpoint for background import progress."""
+    job = _import_jobs.get(job_id)
+    if not job:
+        return jsonify({"status": "unknown", "error": "Job not found"})
+    if job["status"] == "running":
+        return jsonify({"status": "running"})
+    # Complete — return the result and clean up
+    result = job["result"]
+    _import_jobs.pop(job_id, None)
+    return jsonify({"status": "complete", "result": result})
 
 
 # ── Two-step mapping flow ──────────────────────────────────────
@@ -588,13 +632,34 @@ def upload_confirm():
     # Remap rows using confirmed mapping
     rows = _remap_rows(rows, mapping)
 
-    log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
-             upload_type, len(rows), orig_filename, user.get("email", ""))
-    result = _import_rows(upload_type, rows, user.get("email", ""))
-    if result.get("success"):
-        log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
-                 upload_type, result.get("imported", 0), result.get("skipped", 0))
-    return jsonify(result)
+    row_count = len(rows)
+    user_email = user.get("email", "")
+    job_id = uuid.uuid4().hex
+    _import_jobs[job_id] = {"status": "running", "result": None}
+
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    def _run_import():
+        try:
+            with app.app_context():
+                log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
+                         upload_type, row_count, orig_filename, user_email)
+                result = _import_rows(upload_type, rows, user_email)
+                if result.get("success"):
+                    log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
+                             upload_type, result.get("imported", 0), result.get("skipped", 0))
+                _import_jobs[job_id] = {"status": "complete", "result": result}
+        except Exception as exc:
+            log.exception("Background import crashed: %s", exc)
+            _import_jobs[job_id] = {
+                "status": "complete",
+                "result": {"success": False, "error": f"Import crashed: {exc}"},
+            }
+
+    t = threading.Thread(target=_run_import, daemon=True)
+    t.start()
+    return jsonify({"success": True, "job_id": job_id, "message": "Import started in background"})
 
 
 def _remap_rows(rows, mapping):
