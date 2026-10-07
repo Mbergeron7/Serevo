@@ -92,7 +92,7 @@ class CallRoute(db.Model):
     planning_unit = db.relationship("PlanningUnit", backref=db.backref("call_routes", lazy="select", cascade="all, delete-orphan"))
 
     __table_args__ = (
-        db.UniqueConstraint("route_id", name="uq_call_route_id"),
+        db.UniqueConstraint("planning_unit_id", "route_id", name="uq_call_route_pu"),
     )
 
     def to_dict(self):

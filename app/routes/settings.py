@@ -2033,8 +2033,10 @@ def planning_units_save():
                 valid_to=_parse_date(pa.get("valid_to")),
             ))
 
-        # Sync call routes (replace all)
+        # Sync call routes (replace all — flush delete before re-insert
+        # so the unique constraint on route_id doesn't fire)
         CallRoute.query.filter_by(planning_unit_id=item.id).delete()
+        db.session.flush()
         for cr in (d.get("call_routes") or []):
             route_id = (cr.get("route_id") or "").strip()
             route_name = (cr.get("name") or "").strip()
