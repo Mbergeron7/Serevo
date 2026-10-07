@@ -1068,10 +1068,16 @@ function getDailyData() {
 // ── Render charts ───────────────────────────────
 function renderCharts() {
   // Daily view uses interval data (intraday breakdown)
-  if (currentView === 'daily' && intervalData && intervalData.length) {
-    renderIntervalCharts();
-    updateSummaryCards();
-    return;
+  if (currentView === 'daily') {
+    if (intervalData && intervalData.length) {
+      renderIntervalCharts();
+      updateSummaryCards();
+    } else {
+      // No interval data yet — hide chart sections but stay on daily view
+      ['offeredSection','ahtSection','reqSection'].forEach(id => document.getElementById(id).style.display = 'none');
+      document.getElementById('dataLegendBanner').style.display = 'none';
+    }
+    return;  // Never fall through to weekly/monthly/yearly rendering
   }
 
   const daily = getDailyData();
