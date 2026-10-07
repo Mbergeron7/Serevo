@@ -159,7 +159,7 @@
 {% block content %}
 
 <div style="margin-bottom: 12px;">
-  <a href="/people/" style="font-size:.82rem; color:var(--text-muted); text-decoration:none;">&larr; Back to Roster</a>
+  <a href="/people/" onclick="if(document.referrer.includes('/people')){history.back();return false;}" style="font-size:.82rem; color:var(--text-muted); text-decoration:none;">&larr; Back to Roster</a>
 </div>
 
 <!-- ═══ Header ═══ -->
@@ -938,7 +938,10 @@ function switchTab(tabId, btn) {
   document.querySelectorAll('.profile-tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tabId).classList.add('active');
   btn.classList.add('active');
+  // Persist active tab in URL hash
+  history.replaceState(null, '', '#' + tabId);
 }
+
 
 // ── Basic Info Modal ──
 function openEditBasicModal() { document.getElementById('basicModal').style.display = ''; }
@@ -971,7 +974,7 @@ async function saveBasicInfo(e) {
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (data.success) { location.reload(); }
+    if (data.success) { location.replace(location.href); }
     else { showError('basicError', data.error); }
   } catch(err) { showError('basicError', 'Network error: ' + err.message); }
   return false;
@@ -1123,7 +1126,7 @@ async function saveAssignment(e) {
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (data.success) { location.reload(); }
+    if (data.success) { location.replace(location.href); }
     else { showError('assignError', data.error); }
   } catch(err) { showError('assignError', 'Network error: ' + err.message); }
   return false;
@@ -1137,7 +1140,7 @@ async function removeAssignment(type, assignmentId) {
       body: JSON.stringify({ type: type, assignment_id: assignmentId }),
     });
     const data = await resp.json();
-    if (data.success) { location.reload(); }
+    if (data.success) { location.replace(location.href); }
     else { alert(data.error || 'Error removing assignment.'); }
   } catch(err) { alert('Network error: ' + err.message); }
 }
@@ -1173,7 +1176,7 @@ async function saveQuartile(e) {
       }),
     });
     const data = await resp.json();
-    if (data.success) { location.reload(); }
+    if (data.success) { location.replace(location.href); }
     else {
       const errEl = document.getElementById('quartileError');
       errEl.textContent = data.error || 'Error saving quartile.';
@@ -1214,7 +1217,7 @@ async function saveAvailability(e) {
       body: JSON.stringify({ employee_id: EMP_ID, days: days }),
     });
     const data = await resp.json();
-    if (data.success) { location.reload(); }
+    if (data.success) { location.replace(location.href); }
     else { showError('availError', data.error); }
   } catch(err) { showError('availError', 'Network error: ' + err.message); }
   return false;
@@ -1402,5 +1405,16 @@ switchTab = function(tabId, btn) {
   if (tabId === 'coaching') loadCoachingSessions();
   if (tabId === 'attendance' && !_attLoaded) loadAttendance();
 };
+
+// Restore active tab from URL hash on page load
+(function() {
+  const hash = location.hash.replace('#', '');
+  if (hash) {
+    const tabBtn = Array.from(document.querySelectorAll('#profileTabs button')).find(
+      b => b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + hash + "'")
+    );
+    if (tabBtn) switchTab(hash, tabBtn);
+  }
+})();
 </script>
 {% endblock %}

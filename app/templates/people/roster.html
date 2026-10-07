@@ -534,6 +534,56 @@ function applyContract() {
 let currentPage = 1;
 let pageSize = 50;
 
+// ── Persist filters/pagination/sort in URL params ──
+function syncStateToURL() {
+  const params = new URLSearchParams();
+  const name = document.getElementById('filterName').value;
+  const lob = document.getElementById('filterLOB').value;
+  const status = document.getElementById('filterStatus').value;
+  const tl = document.getElementById('filterTL') ? document.getElementById('filterTL').value : '';
+  if (name) params.set('name', name);
+  if (lob) params.set('lob', lob);
+  if (status) params.set('status', status);
+  if (tl) params.set('tl', tl);
+  if (currentPage > 1) params.set('page', currentPage);
+  if (pageSize !== 50) params.set('size', pageSize);
+  if (currentSort.col) { params.set('sort', currentSort.col); params.set('dir', currentSort.asc ? 'a' : 'd'); }
+  const qs = params.toString();
+  history.replaceState(null, '', qs ? '?' + qs : location.pathname);
+}
+
+function restoreStateFromURL() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('name')) document.getElementById('filterName').value = params.get('name');
+  if (params.get('lob')) document.getElementById('filterLOB').value = params.get('lob');
+  if (params.get('status')) document.getElementById('filterStatus').value = params.get('status');
+  if (params.get('tl') && document.getElementById('filterTL')) document.getElementById('filterTL').value = params.get('tl');
+  if (params.get('page')) currentPage = parseInt(params.get('page')) || 1;
+  if (params.get('size')) { pageSize = parseInt(params.get('size')) || 50; const sel = document.getElementById('pageSizeSelect'); if (sel) sel.value = pageSize; }
+  if (params.get('sort')) {
+    currentSort.col = params.get('sort');
+    currentSort.asc = params.get('dir') !== 'd';
+    // Apply sort visually
+    const th = document.querySelector('#rosterTable thead th[data-col="' + currentSort.col + '"]');
+    if (th) {
+      th.classList.add('sort-active');
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = currentSort.asc ? '▲' : '▼';
+      // Actually sort the rows
+      const tbody = document.querySelector('#rosterTable tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const colIdx = { name: 0, status: 1, eid: 2, lob: 3, tl: 4, skillstart: 5, lang: 6, contract: 7 };
+      const idx = colIdx[currentSort.col] ?? 0;
+      rows.sort((a, b) => {
+        const aText = (a.cells[idx]?.textContent || '').trim().toLowerCase();
+        const bText = (b.cells[idx]?.textContent || '').trim().toLowerCase();
+        return currentSort.asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    }
+  }
+}
+
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
   const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
@@ -572,6 +622,7 @@ function filterTable() {
     });
   }
   updatePaginationUI(total);
+  syncStateToURL();
 }
 
 function updatePaginationUI(total) {
@@ -955,7 +1006,8 @@ document.getElementById('empForm').addEventListener('submit', async function(e) 
   btn.textContent = 'Save Employee';
 });
 
-// Initialize pagination on load
+// Restore filters from URL and initialize
+restoreStateFromURL();
 filterTable();
 </script>
 {% endblock %}
