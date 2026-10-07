@@ -53,7 +53,8 @@ def query():
         # Search planning units
         if user.get("role") in ("admin", "supervisor"):
             units = PlanningUnit.query.filter(
-                PlanningUnit.name.ilike(search_term)
+                PlanningUnit.name.ilike(search_term),
+                PlanningUnit.is_active == True
             ).limit(4).all()
             for pu in units:
                 emp_count = Employee.query.filter_by(

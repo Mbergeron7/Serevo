@@ -1892,7 +1892,7 @@ def get_available_lobs(sheet=None):
         if not lobs:
             try:
                 from app.models import PlanningUnit
-                units = PlanningUnit.query.all()
+                units = PlanningUnit.query.filter_by(is_active=True).all()
                 for u in units:
                     name = (u.name or "").strip()
                     if name:

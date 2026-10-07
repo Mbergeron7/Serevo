@@ -168,7 +168,7 @@ def get_available_lobs(sheet=None):
     if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
         try:
             from app.models import PlanningUnit
-            units = PlanningUnit.query.order_by(PlanningUnit.name).all()
+            units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
             if units:
                 return [u.name for u in units]
         except Exception:

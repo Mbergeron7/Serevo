@@ -831,7 +831,7 @@ def customization():
             return []
 
     segments = _safe_query(lambda: [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()], "segments")
-    all_lobs = _safe_query(lambda: [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()], "all_lobs")
+    all_lobs = _safe_query(lambda: [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()], "all_lobs")
 
     time_off_types = _safe_query(lambda: [t.to_dict() for t in TimeOffType.query.order_by(TimeOffType.sort_order).all()], "time_off_types")
     ot_rules = _safe_query(lambda: [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()], "ot_rules")
