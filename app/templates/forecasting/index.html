@@ -275,10 +275,10 @@
   </div>
   <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
     <div class="view-toggle" id="viewToggle">
-      <button class="vt-btn" data-view="daily" onclick="setView('daily',this)">Daily</button>
+      <button class="vt-btn active" data-view="daily" onclick="setView('daily',this)">Daily</button>
       <button class="vt-btn" data-view="weekly" onclick="setView('weekly',this)">Weekly</button>
       <button class="vt-btn" data-view="monthly" onclick="setView('monthly',this)">Monthly</button>
-      <button class="vt-btn active" data-view="yearly" onclick="setView('yearly',this)">Yearly</button>
+      <button class="vt-btn" data-view="yearly" onclick="setView('yearly',this)">Yearly</button>
     </div>
     <div style="display:flex;align-items:center;gap:6px;">
       <button onclick="navPrev()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:.9rem;">‹</button>
@@ -622,7 +622,7 @@ let chartOffered = null, chartAht = null, chartReq = null;
 let forecastData = {};  // {lob: {daily, totals}}
 const lobActivities = {{ lob_activities | default({}) | tojson }};
 let activeLob = null;
-let currentView = 'yearly';
+let currentView = 'daily';
 let navAnchor = new Date();  // current navigation anchor date
 let intervalData = null;     // interval-level data for daily view
 
@@ -711,7 +711,8 @@ document.getElementById('navDate').addEventListener('change', function() {
 });
 
 async function loadIntervalData() {
-  const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  const selected = getSelectedLobs();
+  const lobs = activeLob ? [activeLob] : (selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData));
   if (!lobs.length) { renderCharts(); return; }
 
   const dateStr = fmtDate(navAnchor);
@@ -957,7 +958,8 @@ function getViewDateRange() {
 }
 
 function getRawDailyData() {
-  const lobs = activeLob ? [activeLob] : Object.keys(forecastData);
+  const selected = getSelectedLobs();
+  const lobs = activeLob ? [activeLob] : (selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData));
   const { from, to } = getViewDateRange();
   const dateMap = {};
   for (const lob of lobs) {
@@ -1245,7 +1247,8 @@ function aggregateLobByView(daily) {
 }
 
 function renderHeatmap() {
-  const lobs = Object.keys(forecastData);
+  const selected = getSelectedLobs();
+  const lobs = selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData);
   if (!lobs.length) return;
 
   // Hide heatmap in daily view (interval data shown in charts instead)
