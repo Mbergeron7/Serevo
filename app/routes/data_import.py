@@ -932,10 +932,16 @@ def _import_employees(rows):
 def _import_forecast(rows):
     """Forecast intervals. Upserts on (LOB, Timestamp).
     Supports either a combined Timestamp column or separate Date + Time columns.
+    Uses batch processing for large files.
     """
     from app.models import db, ForecastInterval
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
     imported, skipped = 0, 0
     errors = []
+    unit_cache = {}
+    BATCH_SIZE = 2000
+    batch = []
+
     for i, row in enumerate(rows, start=2):
         lob = _get_val(row, "LOB")
         if not lob:
@@ -944,19 +950,64 @@ def _import_forecast(rows):
         ts = _resolve_timestamp(row)
         if not ts:
             skipped += 1
-            errors.append(f"Row {i}: bad timestamp")
+            if len(errors) < 50:
+                errors.append(f"Row {i}: bad timestamp")
             continue
-        unit = _get_or_create_unit(lob)
-        rec = ForecastInterval.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
-        if not rec:
-            rec = ForecastInterval(planning_unit_id=unit.id, timestamp=ts, source="upload")
-            db.session.add(rec)
-        rec.offered = _num(_get_val(row, "Offered"))
-        rec.aht = _num(_get_val(row, "AHT"))
-        rec.source = "upload"
-        imported += 1
+        if lob not in unit_cache:
+            unit_cache[lob] = _get_or_create_unit(lob)
+        unit = unit_cache[lob]
+        if not unit:
+            skipped += 1
+            continue
+        batch.append({
+            "planning_unit_id": unit.id,
+            "timestamp": ts,
+            "offered": _num(_get_val(row, "Offered")),
+            "aht": _num(_get_val(row, "AHT")),
+            "source": "upload",
+        })
+        if len(batch) >= BATCH_SIZE:
+            imported += _upsert_forecast_batch(db, ForecastInterval, batch)
+            batch = []
+
+    if batch:
+        imported += _upsert_forecast_batch(db, ForecastInterval, batch)
     db.session.flush()
     return imported, skipped, errors
+
+
+def _upsert_forecast_batch(db, ForecastInterval, batch):
+    """Bulk upsert a batch of forecast rows. Deletes existing matches then bulk inserts."""
+    from sqlalchemy import and_, tuple_
+    try:
+        # Delete existing rows matching (planning_unit_id, timestamp) pairs
+        keys = [(r["planning_unit_id"], r["timestamp"]) for r in batch]
+        ForecastInterval.query.filter(
+            tuple_(ForecastInterval.planning_unit_id, ForecastInterval.timestamp).in_(keys)
+        ).delete(synchronize_session=False)
+        db.session.bulk_insert_mappings(ForecastInterval, batch)
+        db.session.commit()
+        return len(batch)
+    except Exception:
+        db.session.rollback()
+        count = 0
+        for rec_data in batch:
+            try:
+                rec = ForecastInterval.query.filter_by(
+                    planning_unit_id=rec_data["planning_unit_id"],
+                    timestamp=rec_data["timestamp"],
+                ).first()
+                if not rec:
+                    rec = ForecastInterval(**rec_data)
+                    db.session.add(rec)
+                else:
+                    for k, v in rec_data.items():
+                        setattr(rec, k, v)
+                count += 1
+            except Exception:
+                pass
+        db.session.flush()
+        return count
 
 
 def _import_requirements(rows):
@@ -1164,37 +1215,112 @@ def _num(v, default=0):
 def _import_actuals(rows):
     """Interval call actuals. Upserts on (LOB, Timestamp).
     Supports either a combined Timestamp column or separate Date + Time columns.
+    Uses batch processing for large files (176K+ rows).
     """
     from app.models import db, IntervalActual
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
     imported, skipped = 0, 0
     errors = []
+    unit_cache = {}  # lob_name -> unit obj
+    BATCH_SIZE = 2000
+
+    # Pre-parse all rows into records grouped by batch
+    batch = []
     for i, row in enumerate(rows, start=2):
         lob = _get_val(row, "LOB")
         ts = _resolve_timestamp(row)
         if not ts or not lob:
             skipped += 1
             if lob and not ts:
-                errors.append(f"Row {i}: bad timestamp")
+                if len(errors) < 50:  # cap error messages
+                    errors.append(f"Row {i}: bad timestamp")
             continue
-        unit = _get_or_create_unit(lob)
-        rec = IntervalActual.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
-        if not rec:
-            rec = IntervalActual(planning_unit_id=unit.id, timestamp=ts)
-            db.session.add(rec)
-        rec.offered         = int(_num(_get_val(row, "Offered")))
-        rec.answered        = int(_num(_get_val(row, "Answered")))
+
+        # Cache planning units to avoid repeated queries
+        if lob not in unit_cache:
+            unit_cache[lob] = _get_or_create_unit(lob)
+        unit = unit_cache[lob]
+        if not unit:
+            skipped += 1
+            continue
+
+        offered = int(_num(_get_val(row, "Offered")))
+        answered = int(_num(_get_val(row, "Answered")))
         aw = _get_val(row, "Answered Within")
-        rec.answered_within = int(_num(aw)) if aw not in (None, "") else rec.answered
-        rec.abandoned       = int(_num(_get_val(row, "Abandoned")))
-        rec.rolled          = int(_num(_get_val(row, "Rolled")))
+        answered_within = int(_num(aw)) if aw not in (None, "") else answered
+        abandoned = int(_num(_get_val(row, "Abandoned")))
+        rolled = int(_num(_get_val(row, "Rolled")))
         asa = _get_val(row, "ASA"); aht = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
-        rec.asa_secs   = _num(asa) if asa not in (None, "") else None
-        rec.aht_secs   = _num(aht) if aht not in (None, "") else None
-        rec.max_queued = int(_num(mq)) if mq not in (None, "") else None
-        rec.source = "upload"
-        imported += 1
+
+        batch.append({
+            "planning_unit_id": unit.id,
+            "timestamp": ts,
+            "offered": offered,
+            "answered": answered,
+            "answered_within": answered_within,
+            "abandoned": abandoned,
+            "rolled": rolled,
+            "asa_secs": _num(asa) if asa not in (None, "") else None,
+            "aht_secs": _num(aht) if aht not in (None, "") else None,
+            "max_queued": int(_num(mq)) if mq not in (None, "") else None,
+            "source": "upload",
+        })
+
+        if len(batch) >= BATCH_SIZE:
+            imported += _upsert_actuals_batch(db, IntervalActual, batch)
+            batch = []
+
+    # Flush remaining
+    if batch:
+        imported += _upsert_actuals_batch(db, IntervalActual, batch)
+
     db.session.flush()
     return imported, skipped, errors
+
+
+def _upsert_actuals_batch(db, IntervalActual, batch):
+    """Bulk upsert a batch of actuals rows using PostgreSQL ON CONFLICT."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    try:
+        stmt = pg_insert(IntervalActual.__table__).values(batch)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_actual_unit_ts",
+            set_={
+                "offered": stmt.excluded.offered,
+                "answered": stmt.excluded.answered,
+                "answered_within": stmt.excluded.answered_within,
+                "abandoned": stmt.excluded.abandoned,
+                "rolled": stmt.excluded.rolled,
+                "asa_secs": stmt.excluded.asa_secs,
+                "aht_secs": stmt.excluded.aht_secs,
+                "max_queued": stmt.excluded.max_queued,
+                "source": stmt.excluded.source,
+            },
+        )
+        db.session.execute(stmt)
+        db.session.commit()
+        return len(batch)
+    except Exception:
+        db.session.rollback()
+        # Fallback: row-by-row for this batch
+        count = 0
+        for rec_data in batch:
+            try:
+                rec = IntervalActual.query.filter_by(
+                    planning_unit_id=rec_data["planning_unit_id"],
+                    timestamp=rec_data["timestamp"],
+                ).first()
+                if not rec:
+                    rec = IntervalActual(**rec_data)
+                    db.session.add(rec)
+                else:
+                    for k, v in rec_data.items():
+                        setattr(rec, k, v)
+                count += 1
+            except Exception:
+                pass
+        db.session.flush()
+        return count
 
 
 def _import_agent_status(rows):
