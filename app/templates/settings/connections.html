@@ -106,6 +106,7 @@
         <button class="btn btn-sm btn-outline" onclick="toggleFeed({{ f.id }})">
           {{ 'Enable' if not f.is_active else 'Disable' }}
         </button>
+        <button class="btn btn-sm btn-outline" onclick="resyncFeed({{ f.id }}, '{{ f.name }}')">Re-sync</button>
         <button class="btn btn-sm btn-danger" onclick="deleteFeed({{ f.id }}, '{{ f.name }}')">Delete</button>
       </div>
     </div>
@@ -724,6 +725,24 @@ async function deleteFeed(id, name) {
     body: JSON.stringify({id}),
   });
   location.reload();
+}
+
+async function resyncFeed(id, name) {
+  if (!confirm('Clear all synced data for "' + name + '" and re-import? This may take a moment.')) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Re-syncing…';
+  try {
+    const r = await fetch('/realtime/resync/' + id, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
+    });
+    const d = await r.json();
+    alert('Cleared ' + (d.cleared || 0) + ' old rows and re-synced.');
+    location.reload();
+  } catch(e) {
+    alert('Re-sync failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Re-sync';
+  }
 }
 
 // ── Platform Connection modal ──

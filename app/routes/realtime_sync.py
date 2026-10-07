@@ -1425,6 +1425,31 @@ def trigger_sync():
     return jsonify(results)
 
 
+@realtime_sync_bp.route("/realtime/resync/<int:feed_id>", methods=["POST"])
+def resync_feed(feed_id):
+    """Clear all data for a feed and re-sync from scratch.
+    Useful after changing timezone or column mapping."""
+    auth_err = _require_admin()
+    if auth_err:
+        return auth_err
+
+    feed = DataFeed.query.get(feed_id)
+    if not feed:
+        return jsonify({"error": "Feed not found"}), 404
+
+    deleted = 0
+    if feed.feed_type == "call_volume":
+        deleted = IntervalActual.query.filter_by(source="sheet").delete()
+    elif feed.feed_type == "agent_status":
+        deleted = AgentStatusEvent.query.filter_by(source="sheet").delete()
+    db.session.commit()
+    log.info(f"Resync: cleared {deleted} rows for feed '{feed.name}' (type={feed.feed_type})")
+
+    # Now re-sync
+    results = run_sync()
+    return jsonify({"cleared": deleted, "sync": results})
+
+
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
 def sync_status():
     """Get the current sync configuration and last sync time."""
