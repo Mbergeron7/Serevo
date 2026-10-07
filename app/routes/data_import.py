@@ -747,10 +747,10 @@ def _parse_csv(file_obj):
 
 
 def _parse_excel(file_obj):
-    """Parse an Excel upload. Always streams from disk to keep memory low."""
-    import openpyxl
+    """Parse an Excel upload. Uses calamine (Rust) engine for low memory."""
+    import pandas as pd
 
-    # Save to a temp file so we can stream from it
+    # Save to a temp file
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     try:
         file_obj.seek(0)
@@ -760,14 +760,11 @@ def _parse_excel(file_obj):
         tmp.close()
         raise
 
-    # Read just the headers
-    wb = openpyxl.load_workbook(tmp.name, read_only=True, data_only=True)
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
-    headers = [str(c or "").strip() for c in next(rows_iter)]
-    wb.close()
+    # Read just the headers using calamine (Rust-based, no shared-strings OOM)
+    df_header = pd.read_excel(tmp.name, nrows=0, engine="calamine")
+    headers = [str(c).strip() for c in df_header.columns]
 
-    # Always stream — avoids counting rows upfront and loading into memory
+    # Return a streaming wrapper that reads in chunks via calamine
     return _StreamingExcel(tmp.name, headers)
 
 
@@ -791,22 +788,27 @@ class _StreamingExcel:
         return True  # file exists with headers, assume it has data
 
     def __iter__(self):
-        import openpyxl
-        wb = openpyxl.load_workbook(self._path, read_only=True, data_only=True)
-        ws = wb.active
-        rows_iter = ws.iter_rows(values_only=True)
-        next(rows_iter)  # skip header
+        import pandas as pd
         count = 0
-        for row in rows_iter:
+        # Calamine is a Rust-based reader — no Python shared-strings OOM.
+        # Read all rows as strings; memory is held in native Rust, not
+        # in a Python XML tree like openpyxl.
+        df = pd.read_excel(
+            self._path, engine="calamine",
+            dtype=str, keep_default_na=False,
+        )
+        for _, row in df.iterrows():
             d = {}
-            for i, val in enumerate(row):
-                if i < len(self._headers) and self._headers[i]:
-                    d[self._headers[i]] = val if val is not None else ""
-            if any(str(v).strip() for v in d.values()):
+            for col in df.columns:
+                header = str(col).strip()
+                if header:
+                    val = row[col]
+                    d[header] = str(val).strip() if val != "" else ""
+            if any(v for v in d.values()):
                 count += 1
                 yield d
+        del df
         self._iterated_count = count
-        wb.close()
         try:
             os.unlink(self._path)
         except OSError:
