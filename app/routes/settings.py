@@ -795,9 +795,9 @@ def customization():
         demo = get_demo_settings_data()
         return render_template("settings/customization.html", user=user, **demo)
 
-    from app.models import (SegmentCode, ShiftTemplate, LOBSetting,
+    from app.models import (SegmentCode,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
-                            Holiday, SkillGroup, AdherenceException, AlertConfig,
+                            AdherenceException, AlertConfig,
                             BrandSetting, LobMapping)
     from app.models import db as _db
 
@@ -810,22 +810,11 @@ def customization():
             return []
 
     segments = _safe_query(lambda: [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()], "segments")
-    shifts = _safe_query(lambda: [s.to_dict() for s in ShiftTemplate.query.order_by(ShiftTemplate.sort_order, ShiftTemplate.name).all()], "shifts")
-    lob_settings = _safe_query(lambda: [s.to_dict() for s in LOBSetting.query.all()], "lob_settings")
     all_lobs = _safe_query(lambda: [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()], "all_lobs")
-
-    from datetime import datetime as dt
-    try:
-        from zoneinfo import ZoneInfo
-        cur_year = dt.now(ZoneInfo("US/Eastern")).year
-    except Exception:
-        cur_year = dt.utcnow().year
 
     time_off_types = _safe_query(lambda: [t.to_dict() for t in TimeOffType.query.order_by(TimeOffType.sort_order).all()], "time_off_types")
     ot_rules = _safe_query(lambda: [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()], "ot_rules")
     sched_rules = _safe_query(lambda: [r.to_dict() for r in ScheduleRule.query.order_by(ScheduleRule.name).all()], "sched_rules")
-    holidays = _safe_query(lambda: [h.to_dict() for h in Holiday.query.filter_by(year=cur_year).order_by(Holiday.date).all()], "holidays")
-    skill_groups = _safe_query(lambda: [g.to_dict() for g in SkillGroup.query.order_by(SkillGroup.name).all()], "skill_groups")
     adherence_codes = _safe_query(lambda: [a.to_dict() for a in AdherenceException.query.order_by(AdherenceException.sort_order).all()], "adherence_codes")
     alerts = _safe_query(lambda: [a.to_dict() for a in AlertConfig.query.order_by(AlertConfig.name).all()], "alerts")
     brand_data = {}
@@ -840,12 +829,11 @@ def customization():
 
     return render_template("settings/customization.html",
         user=user,
-        segments=segments, shifts=shifts,
-        lob_settings=lob_settings, all_lobs=all_lobs,
+        segments=segments, all_lobs=all_lobs,
         time_off_types=time_off_types, ot_rules=ot_rules,
-        sched_rules=sched_rules, holidays=holidays,
-        skill_groups=skill_groups, adherence_codes=adherence_codes,
-        alerts=alerts, brand_data=brand_data, current_year=cur_year,
+        sched_rules=sched_rules,
+        adherence_codes=adherence_codes,
+        alerts=alerts, brand_data=brand_data,
         lob_mappings=lob_mappings,
     )
 

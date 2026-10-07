@@ -684,6 +684,81 @@ def _get_rotation_shift(employee_db_id, date_obj):
         return None
 
 
+def _get_shift_sequence_shift(employee_db_id, date_obj):
+    """
+    Check if an employee has a shift sequence assignment and return the
+    day model shift for the given date based on their cycle position.
+    Returns shift dict (same format as _get_rotation_shift) or None.
+
+    Pattern keys are 'w{week}_d{day_index}' where week is 1-based and
+    day_index is 0 (Mon) through 6 (Sun). Values are day-model IDs.
+    """
+    try:
+        import json as _json
+        from app.models import EmployeeShiftSequence, DayModel
+
+        assignment = EmployeeShiftSequence.query.filter_by(
+            employee_id=employee_db_id
+        ).first()
+        if not assignment:
+            return None
+
+        # Check validity period
+        if assignment.valid_from and date_obj < assignment.valid_from:
+            return None
+        if assignment.valid_to and date_obj > assignment.valid_to:
+            return None
+
+        seq = assignment.shift_sequence
+        if not seq or not seq.is_active:
+            return None
+
+        # Get the assigned row
+        row = assignment.row
+        if not row:
+            return None
+
+        pattern = _json.loads(row.pattern_json) if row.pattern_json else {}
+        if not pattern:
+            return None
+
+        cycle_weeks = seq.cycle_weeks or 1
+
+        # Calculate which week in the cycle this date falls on
+        ref_date = assignment.reference_date or (seq.created_at.date() if seq.created_at else date_obj)
+        days_elapsed = (date_obj - ref_date).days
+        if days_elapsed < 0:
+            days_elapsed = 0
+        weeks_elapsed = days_elapsed // 7
+        current_week = (weeks_elapsed % cycle_weeks) + 1  # 1-based to match w1, w2, ...
+
+        day_index = date_obj.weekday()  # 0=Mon, 6=Sun
+        key = f"w{current_week}_d{day_index}"
+
+        dm_id = pattern.get(key)
+        if dm_id in (None, "", "off", "0", 0):
+            # Day off in this rotation
+            return {"off": True, "name": seq.name}
+
+        try:
+            dm = DayModel.query.get(int(dm_id))
+        except (TypeError, ValueError):
+            dm = None
+        if not dm:
+            return None
+
+        return {
+            "start": dm.start_time,
+            "end": dm.end_time,
+            "hours": dm.total_hours or dm.paid_hours or 8.0,
+            "type": "full" if (dm.total_hours or 8) > 5 else "half",
+            "name": dm.name,
+        }
+    except Exception as e:
+        log.warning(f"Shift sequence lookup error for employee {employee_db_id}: {e}")
+        return None
+
+
 def _resolve_employee_db_id(employee_ext_id):
     """Look up the DB primary key for an employee by their external employee_id."""
     try:
@@ -1129,9 +1204,11 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 unassigned.append(emp["name"])
                 continue
 
-            # Check for rotation-assigned shift template
+            # Check for rotation-assigned or shift-sequence-assigned shift
             db_id = _resolve_employee_db_id(emp.get("employee_id"))
             rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+            if not rot_shift and db_id:
+                rot_shift = _get_shift_sequence_shift(db_id, date_obj)
             if rot_shift and rot_shift.get("off"):
                 skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
                 unassigned.append(emp["name"])
@@ -1289,6 +1366,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         if db_id is None and ext_id:
             db_id = _resolve_employee_db_id(ext_id)
         rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
+        if not rot_shift and db_id:
+            rot_shift = _get_shift_sequence_shift(db_id, date_obj)
         if rot_shift and rot_shift.get("off"):
             log.info(f"  SKIP {emp['name']} (rotation day off)")
             skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")

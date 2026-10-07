@@ -5,36 +5,18 @@
 {% block content %}
 <div class="page-header">
   <h1>Customization</h1>
-  <p style="color:var(--text-muted,#6b7280);margin:0.25rem 0 0;">Configure every aspect of how your WFM platform works — segment codes, shifts, rules, holidays, branding, and more.</p>
+  <p style="color:var(--text-muted,#6b7280);margin:0.25rem 0 0;">Configure time-off types, overtime rules, schedule constraints, adherence codes, alerts, LOB mappings, and branding.</p>
 </div>
 
 <!-- Tabs -->
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('shifts',this)">Shifts</button>
-  <button class="tab-btn" onclick="switchTab('lob',this)">LOB Settings</button>
-  <button class="tab-btn" onclick="switchTab('timeoff',this)">Time-Off Types</button>
+  <button class="tab-btn active" onclick="switchTab('timeoff',this)">Time-Off Types</button>
   <button class="tab-btn" onclick="switchTab('overtime',this)">Overtime</button>
   <button class="tab-btn" onclick="switchTab('schedrules',this)">Schedule Rules</button>
-  <button class="tab-btn" onclick="switchTab('holidays',this)">Holidays</button>
-  <button class="tab-btn" onclick="switchTab('skills',this)">Skill Groups</button>
   <button class="tab-btn" onclick="switchTab('adherence',this)">Adherence Codes</button>
   <button class="tab-btn" onclick="switchTab('alerts',this)">Alerts</button>
   <button class="tab-btn" onclick="switchTab('lobmap',this)">LOB Mappings</button>
   <button class="tab-btn" onclick="switchTab('branding',this)">Branding</button>
-</div>
-
-<!-- ═══════ TAB: Shift Templates ═══════ -->
-<div class="tab-panel" id="tab-shifts">
-  <div class="tab-header"><h2>Shift Templates</h2><button class="btn btn-primary" onclick="openShiftModal()">+ Add Template</button></div>
-  <p class="tab-desc">Reusable shift definitions — assign to a LOB, day type (weekday/Saturday/Sunday/holiday), and category (opening/closing/mid).</p>
-  <div style="overflow-x:auto"><table class="data-table sortable" id="shifts-table"><thead><tr><th>Name</th><th>LOB</th><th>Day Type</th><th>Category</th><th>Start</th><th>End</th><th>Hours</th><th>Segments</th><th></th></tr></thead><tbody></tbody></table></div>
-</div>
-
-<!-- ═══════ TAB: LOB Settings ═══════ -->
-<div class="tab-panel" id="tab-lob" hidden>
-  <div class="tab-header"><h2>LOB Settings</h2><button class="btn btn-primary" onclick="openLOBModal()">+ Add LOB Setting</button></div>
-  <p class="tab-desc">Per-LOB operational defaults — SLA, shrinkage, occupancy, interval, hours of operation.</p>
-  <div style="overflow-x:auto"><table class="data-table sortable" id="lob-table"><thead><tr><th>LOB</th><th>SL Target</th><th>ASA</th><th>Interval</th><th>Shrinkage</th><th>Occupancy</th><th>Hours</th><th></th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <!-- ═══════ TAB: Time-Off Types ═══════ -->
@@ -56,20 +38,6 @@
   <div class="tab-header"><h2>Schedule Rules</h2><button class="btn btn-primary" onclick="openSchedRuleModal()">+ Add Rule</button></div>
   <p class="tab-desc">Scheduling constraints — min/max hours, consecutive days, rest periods, split shift limits.</p>
   <div style="overflow-x:auto"><table class="data-table sortable" id="schedrules-table"><thead><tr><th>Name</th><th>Min Hrs/Wk</th><th>Max Hrs/Wk</th><th>Max/Day</th><th>Max Consec Days</th><th>Min Rest (hrs)</th><th>Days Off/Wk</th><th></th></tr></thead><tbody></tbody></table></div>
-</div>
-
-<!-- ═══════ TAB: Holidays ═══════ -->
-<div class="tab-panel" id="tab-holidays" hidden>
-  <div class="tab-header"><h2>Holiday Calendar ({{ current_year }})</h2><button class="btn btn-primary" onclick="openHolidayModal()">+ Add Holiday</button></div>
-  <p class="tab-desc">Company holidays that affect scheduling and forecast volume adjustments.</p>
-  <div style="overflow-x:auto"><table class="data-table sortable" id="holidays-table"><thead><tr><th>Date</th><th>Holiday</th><th>Full Day</th><th>Paid</th><th>Forecast Impact</th><th>Recurring</th><th></th></tr></thead><tbody></tbody></table></div>
-</div>
-
-<!-- ═══════ TAB: Skill Groups ═══════ -->
-<div class="tab-panel" id="tab-skills" hidden>
-  <div class="tab-header"><h2>Skill Groups</h2><button class="btn btn-primary" onclick="openSkillGroupModal()">+ Add Group</button></div>
-  <p class="tab-desc">Organize employees by skill proficiency for multi-skill routing and scheduling.</p>
-  <div id="skills-list"></div>
 </div>
 
 <!-- ═══════ TAB: Adherence Exception Codes ═══════ -->
@@ -125,49 +93,6 @@
 <!-- MODALS                                          -->
 <!-- ═══════════════════════════════════════════════ -->
 
-<!-- Shift Template Modal -->
-<div class="modal-overlay" id="shift-modal">
-  <div class="modal" style="max-width:560px;">
-    <h3 id="shift-modal-title">Add Shift Template</h3>
-    <form onsubmit="saveShift(event)">
-      <input type="hidden" id="shift-id">
-      <div class="form-row"><label>Name <input type="text" id="shift-name" required placeholder="e.g. SS TL Weekday Closing"></label></div>
-      <div class="form-row"><label>LOB <select id="shift-lob"><option value="">All LOBs</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label></div>
-      <div class="form-row">
-        <label>Day Type <select id="shift-daytype"><option value="any">Any</option><option value="weekday">Weekday</option><option value="saturday">Saturday</option><option value="sunday">Sunday</option><option value="holiday">Holiday</option></select></label>
-        <label>Category <select id="shift-category"><option value="any">Any</option><option value="opening">Opening</option><option value="closing">Closing</option><option value="mid">Mid</option></select></label>
-      </div>
-      <div class="form-row"><label>Start <input type="time" id="shift-start" required></label><label>End <input type="time" id="shift-end" required></label><label>Hours <input type="number" id="shift-hours" value="8" step="0.5" min="1" max="16"></label></div>
-      <div class="form-row"><label>Type <select id="shift-type"><option value="full">Full</option><option value="half">Half</option><option value="split">Split</option></select></label><label>Order <input type="number" id="shift-sort" value="0" min="0"></label></div>
-      <div style="margin-top:0.75rem;"><label style="font-weight:600;">Segments (break structure)</label><div id="shift-segments-list" style="margin:0.5rem 0;"></div><button type="button" class="btn btn-sm" onclick="addShiftSegment()">+ Add Segment</button></div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('shift-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
-    </form>
-  </div>
-</div>
-
-<!-- LOB Setting Modal -->
-<div class="modal-overlay" id="lob-modal">
-  <div class="modal" style="max-width:520px;">
-    <h3 id="lob-modal-title">Add LOB Setting</h3>
-    <form onsubmit="saveLOBSetting(event)">
-      <input type="hidden" id="lob-id">
-      <div class="form-row"><label>LOB <select id="lob-pu-id" required><option value="">— Select —</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label></div>
-      <div class="form-row"><label>SL Target (%) <input type="number" id="lob-sl" value="80" min="0" max="100"></label><label>ASA (sec) <input type="number" id="lob-asa" value="30" min="0"></label></div>
-      <div class="form-row"><label>Interval <select id="lob-interval"><option value="15">15 min</option><option value="30" selected>30 min</option></select></label><label>Shrinkage (%) <input type="number" id="lob-shrinkage" value="30" min="0" max="100"></label></div>
-      <div class="form-row"><label>Occupancy (%) <input type="number" id="lob-occ" value="85" min="0" max="100"></label><label>Max Occ (%) <input type="number" id="lob-max-occ" value="92" min="0" max="100"></label></div>
-      <div class="form-row"><label>Shift Hrs <input type="number" id="lob-shift-hrs" value="8" step="0.5"></label></div>
-      <fieldset style="border:1px solid var(--border,#d1d5db);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
-        <legend style="font-weight:600;font-size:0.85rem;padding:0 0.5rem;">Hours of Operation</legend>
-        <div class="form-row"><label style="flex:0 0 80px;font-weight:600;align-self:center;">Weekday</label><label>Start <input type="time" id="lob-op-start" value="08:00"></label><label>End <input type="time" id="lob-op-end" value="22:00"></label></div>
-        <div class="form-row"><label style="flex:0 0 80px;font-weight:600;align-self:center;">Saturday</label><label>Start <input type="time" id="lob-sat-start" placeholder="Same as weekday"></label><label>End <input type="time" id="lob-sat-end"></label></div>
-        <div class="form-row"><label style="flex:0 0 80px;font-weight:600;align-self:center;">Sunday</label><label>Start <input type="time" id="lob-sun-start"></label><label>End <input type="time" id="lob-sun-end"></label></div>
-        <p style="font-size:0.75rem;color:var(--text-muted,#999);margin:0.25rem 0 0;">Leave Saturday/Sunday blank to use weekday hours.</p>
-      </fieldset>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('lob-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
-    </form>
-  </div>
-</div>
-
 <!-- Time-Off Type Modal -->
 <div class="modal-overlay" id="timeoff-modal">
   <div class="modal" style="max-width:520px;">
@@ -211,34 +136,6 @@
       <div class="form-row"><label>Min Days Off/Week <input type="number" id="sr-daysoff" value="1" min="0"></label><label>Max Splits/Week <input type="number" id="sr-splits" value="0" min="0"></label></div>
       <div class="form-row"><label><input type="checkbox" id="sr-b2b"> Allow Close-then-Open (back-to-back)</label></div>
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('schedrule-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
-    </form>
-  </div>
-</div>
-
-<!-- Holiday Modal -->
-<div class="modal-overlay" id="holiday-modal">
-  <div class="modal" style="max-width:520px;">
-    <h3 id="holiday-modal-title">Add Holiday</h3>
-    <form onsubmit="saveHoliday(event)">
-      <input type="hidden" id="hol-id">
-      <div class="form-row"><label>Holiday Name <input type="text" id="hol-name" required placeholder="e.g. Christmas Day"></label></div>
-      <div class="form-row"><label>Date <input type="date" id="hol-date" required></label></div>
-      <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="hol-fullday" checked> Full Day</label><label><input type="checkbox" id="hol-paid" checked> Paid</label><label><input type="checkbox" id="hol-recurring" checked> Recurring</label></div>
-      <div class="form-row"><label><input type="checkbox" id="hol-forecast" checked> Affects Forecast</label><label>Volume Factor <input type="number" id="hol-volume" value="0" step="0.1" min="0" max="2" title="0 = closed, 0.5 = half volume, 1 = normal"></label></div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('holiday-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
-    </form>
-  </div>
-</div>
-
-<!-- Skill Group Modal -->
-<div class="modal-overlay" id="skillgroup-modal">
-  <div class="modal" style="max-width:480px;">
-    <h3 id="skillgroup-modal-title">Add Skill Group</h3>
-    <form onsubmit="saveSkillGroup(event)">
-      <input type="hidden" id="sg-id">
-      <div class="form-row"><label>Group Name <input type="text" id="sg-name" required placeholder="e.g. Billing & Payments"></label></div>
-      <div class="form-row"><label>Description <input type="text" id="sg-desc" placeholder="Handles billing inquiries and payment processing"></label></div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('skillgroup-modal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>
   </div>
 </div>
@@ -301,14 +198,10 @@
 <script>
 /* ── Data from server ───────────────────── */
 const SEGMENTS = {{ segments | tojson }};
-const SHIFTS   = {{ shifts | tojson }};
-const LOB_SETTINGS = {{ lob_settings | tojson }};
 const ALL_LOBS = {{ all_lobs | tojson }};
 const TIME_OFF_TYPES = {{ time_off_types | tojson }};
 const OT_RULES = {{ ot_rules | tojson }};
 const SCHED_RULES = {{ sched_rules | tojson }};
-const HOLIDAYS = {{ holidays | tojson }};
-const SKILL_GROUPS = {{ skill_groups | tojson }};
 const ADHERENCE_CODES = {{ adherence_codes | tojson }};
 const ALERTS = {{ alerts | tojson }};
 const BRAND_DATA = {{ brand_data | tojson }};
@@ -340,60 +233,6 @@ async function api(url, body) {
 function upsert(arr, item) { const i=arr.findIndex(x=>x.id===item.id); if(i>=0)arr[i]=item; else arr.push(item); }
 function removeById(arr, id) { const i=arr.findIndex(x=>x.id===id); if(i>=0)arr.splice(i,1); }
 const ck = v => v ? '✓' : '—';
-
-/* ═══ SHIFT TEMPLATES ═════════════════════ */
-const DAY_TYPE_LABELS={any:'Any',weekday:'Weekday',saturday:'Saturday',sunday:'Sunday',holiday:'Holiday'};
-const CAT_LABELS={any:'Any',opening:'Opening',closing:'Closing',mid:'Mid'};
-function renderShifts() {
-  const tb = document.querySelector('#shifts-table tbody');
-  tb.innerHTML = SHIFTS.map(s => `<tr><td>${s.name}</td><td>${s.lob_name||'All'}</td><td>${DAY_TYPE_LABELS[s.day_type]||s.day_type}</td><td>${CAT_LABELS[s.shift_category]||s.shift_category}</td><td>${s.start_time}</td><td>${s.end_time}</td><td>${s.hours}</td><td>${(s.segments||[]).length}</td>
-    <td><button class="btn btn-sm" onclick="editShift(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Del</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty-msg">No shift templates.</td></tr>';
-  if(window.initSortable) initSortable(document.getElementById('shifts-table'));
-}
-let shiftSegments=[];
-function renderShiftSegments(){
-  const el=document.getElementById('shift-segments-list');
-  el.innerHTML=shiftSegments.map((seg,i)=>`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
-    <input type="text" value="${seg.label||''}" placeholder="Label" style="flex:1;" onchange="shiftSegments[${i}].label=this.value">
-    <input type="time" value="${seg.start||''}" onchange="shiftSegments[${i}].start=this.value" style="width:110px;">
-    <input type="time" value="${seg.end||''}" onchange="shiftSegments[${i}].end=this.value" style="width:110px;">
-    <select onchange="shiftSegments[${i}].code=this.value" style="width:110px;"><option value="">Code</option>${SEGMENTS.map(s=>`<option value="${s.code}" ${seg.code===s.code?'selected':''}>${s.label}</option>`).join('')}</select>
-    <button type="button" class="btn btn-sm btn-danger" onclick="shiftSegments.splice(${i},1);renderShiftSegments();">×</button>
-  </div>`).join('')||'<p class="empty-msg" style="font-size:0.85rem;">No segments. Continuous on-call.</p>';
-}
-function addShiftSegment(){shiftSegments.push({label:'',start:'',end:'',code:''});renderShiftSegments();}
-function openShiftModal(s){
-  document.getElementById('shift-modal-title').textContent=s?'Edit Shift':'Add Shift Template';
-  document.getElementById('shift-id').value=s?s.id:''; document.getElementById('shift-name').value=s?s.name:'';
-  document.getElementById('shift-lob').value=s?s.planning_unit_id||'':'';
-  document.getElementById('shift-daytype').value=s?s.day_type||'any':'any';
-  document.getElementById('shift-category').value=s?s.shift_category||'any':'any';
-  document.getElementById('shift-start').value=s?s.start_time:''; document.getElementById('shift-end').value=s?s.end_time:'';
-  document.getElementById('shift-hours').value=s?s.hours:8; document.getElementById('shift-type').value=s?s.shift_type:'full';
-  document.getElementById('shift-sort').value=s?s.sort_order:0;
-  shiftSegments=s?JSON.parse(JSON.stringify(s.segments||[])):[]; renderShiftSegments(); openModal('shift-modal');
-}
-function editShift(id){openShiftModal(SHIFTS.find(s=>s.id===id));}
-async function saveShift(e){e.preventDefault();const res=await api('/settings/customization/shifts/save',{id:document.getElementById('shift-id').value||undefined,name:document.getElementById('shift-name').value,planning_unit_id:document.getElementById('shift-lob').value||null,day_type:document.getElementById('shift-daytype').value,shift_category:document.getElementById('shift-category').value,start_time:document.getElementById('shift-start').value,end_time:document.getElementById('shift-end').value,hours:parseFloat(document.getElementById('shift-hours').value)||8,shift_type:document.getElementById('shift-type').value,sort_order:parseInt(document.getElementById('shift-sort').value)||0,segments:shiftSegments});if(res.success){upsert(SHIFTS,res.shift);renderShifts();closeModal('shift-modal');}else showToast(res.error || 'Something went wrong', 'error');}
-async function deleteShift(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/shifts/delete',{id});if(res.success){removeById(SHIFTS,id);renderShifts();}else showToast(res.error || 'Something went wrong', 'error');}
-
-/* ═══ LOB SETTINGS ════════════════════════ */
-function fmtHours(s){
-  let h=s.operating_start+'–'+s.operating_end;
-  if(s.sat_operating_start)h+='<br><span style="font-size:0.75rem;color:var(--text-muted,#999);">Sat '+s.sat_operating_start+'–'+s.sat_operating_end+'</span>';
-  if(s.sun_operating_start)h+='<br><span style="font-size:0.75rem;color:var(--text-muted,#999);">Sun '+s.sun_operating_start+'–'+s.sun_operating_end+'</span>';
-  return h;
-}
-function renderLOBSettings(){
-  const tb=document.querySelector('#lob-table tbody');
-  tb.innerHTML=LOB_SETTINGS.map(s=>`<tr><td>${s.lob_name}</td><td>${Math.round(s.service_level_target*100)}%</td><td>${s.target_asa}s</td><td>${s.interval_minutes}m</td><td>${Math.round(s.shrinkage_pct*100)}%</td><td>${Math.round(s.occupancy_target*100)}%</td><td>${fmtHours(s)}</td>
-    <td><button class="btn btn-sm" onclick="editLOBSetting(${s.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteLOBSetting(${s.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-msg">No LOB settings. Using defaults.</td></tr>';
-  if(window.initSortable) initSortable(document.getElementById('lob-table'));
-}
-function openLOBModal(s){document.getElementById('lob-modal-title').textContent=s?'Edit LOB Setting':'Add LOB Setting';document.getElementById('lob-id').value=s?s.id:'';document.getElementById('lob-pu-id').value=s?s.planning_unit_id:'';document.getElementById('lob-pu-id').disabled=!!s;document.getElementById('lob-sl').value=s?Math.round(s.service_level_target*100):80;document.getElementById('lob-asa').value=s?s.target_asa:30;document.getElementById('lob-interval').value=s?s.interval_minutes:30;document.getElementById('lob-shrinkage').value=s?Math.round(s.shrinkage_pct*100):30;document.getElementById('lob-occ').value=s?Math.round(s.occupancy_target*100):85;document.getElementById('lob-max-occ').value=s?Math.round(s.max_occupancy*100):92;document.getElementById('lob-shift-hrs').value=s?s.default_shift_hrs:8;document.getElementById('lob-op-start').value=s?s.operating_start:'08:00';document.getElementById('lob-op-end').value=s?s.operating_end:'22:00';document.getElementById('lob-sat-start').value=s?s.sat_operating_start:'';document.getElementById('lob-sat-end').value=s?s.sat_operating_end:'';document.getElementById('lob-sun-start').value=s?s.sun_operating_start:'';document.getElementById('lob-sun-end').value=s?s.sun_operating_end:'';openModal('lob-modal');}
-function editLOBSetting(id){openLOBModal(LOB_SETTINGS.find(s=>s.id===id));}
-async function saveLOBSetting(e){e.preventDefault();const res=await api('/settings/customization/lob-settings/save',{id:document.getElementById('lob-id').value||undefined,planning_unit_id:parseInt(document.getElementById('lob-pu-id').value)||undefined,service_level_target:parseInt(document.getElementById('lob-sl').value)/100,target_asa:parseFloat(document.getElementById('lob-asa').value),interval_minutes:parseInt(document.getElementById('lob-interval').value),shrinkage_pct:parseInt(document.getElementById('lob-shrinkage').value)/100,occupancy_target:parseInt(document.getElementById('lob-occ').value)/100,max_occupancy:parseInt(document.getElementById('lob-max-occ').value)/100,default_shift_hrs:parseFloat(document.getElementById('lob-shift-hrs').value),operating_start:document.getElementById('lob-op-start').value,operating_end:document.getElementById('lob-op-end').value,sat_operating_start:document.getElementById('lob-sat-start').value,sat_operating_end:document.getElementById('lob-sat-end').value,sun_operating_start:document.getElementById('lob-sun-start').value,sun_operating_end:document.getElementById('lob-sun-end').value});if(res.success){upsert(LOB_SETTINGS,res.setting);renderLOBSettings();closeModal('lob-modal');}else showToast(res.error || 'Something went wrong', 'error');}
-async function deleteLOBSetting(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/lob-settings/delete',{id});if(res.success){removeById(LOB_SETTINGS,id);renderLOBSettings();}else showToast(res.error || 'Something went wrong', 'error');}
 
 /* ═══ TIME-OFF TYPES ══════════════════════ */
 function renderTimeOffTypes(){
@@ -430,30 +269,6 @@ function openSchedRuleModal(r){document.getElementById('schedrule-modal-title').
 function editSchedRule(id){openSchedRuleModal(SCHED_RULES.find(r=>r.id===id));}
 async function saveSchedRule(e){e.preventDefault();const res=await api('/settings/customization/schedule-rules/save',{id:document.getElementById('sr-id').value||undefined,name:document.getElementById('sr-name').value,min_hours_week:parseFloat(document.getElementById('sr-minwk').value),max_hours_week:parseFloat(document.getElementById('sr-maxwk').value),max_hours_day:parseFloat(document.getElementById('sr-maxday').value),max_consecutive_days:parseInt(document.getElementById('sr-consec').value),min_rest_between_shifts_hrs:parseFloat(document.getElementById('sr-rest').value),min_days_off_per_week:parseInt(document.getElementById('sr-daysoff').value),max_split_shifts_week:parseInt(document.getElementById('sr-splits').value),allow_back_to_back:document.getElementById('sr-b2b').checked});if(res.success){upsert(SCHED_RULES,res.item);renderSchedRules();closeModal('schedrule-modal');}else showToast(res.error || 'Something went wrong', 'error');}
 async function deleteSchedRule(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/schedule-rules/delete',{id});if(res.success){removeById(SCHED_RULES,id);renderSchedRules();}else showToast(res.error || 'Something went wrong', 'error');}
-
-/* ═══ HOLIDAYS ════════════════════════════ */
-function renderHolidays(){
-  const tb=document.querySelector('#holidays-table tbody');
-  tb.innerHTML=HOLIDAYS.map(h=>`<tr><td>${h.date}</td><td>${h.name}</td><td>${ck(h.is_full_day)}</td><td>${ck(h.is_paid)}</td><td>${h.affects_forecast?h.volume_factor===0?'Closed':h.volume_factor+'× volume':'Normal'}</td><td>${ck(h.is_recurring)}</td>
-    <td><button class="btn btn-sm" onclick="editHoliday(${h.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteHoliday(${h.id})">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-msg">No holidays configured.</td></tr>';
-  if(window.initSortable) initSortable(document.getElementById('holidays-table'));
-}
-function openHolidayModal(h){document.getElementById('holiday-modal-title').textContent=h?'Edit Holiday':'Add Holiday';document.getElementById('hol-id').value=h?h.id:'';document.getElementById('hol-name').value=h?h.name:'';document.getElementById('hol-date').value=h?h.date:'';document.getElementById('hol-fullday').checked=h?h.is_full_day:true;document.getElementById('hol-paid').checked=h?h.is_paid:true;document.getElementById('hol-recurring').checked=h?h.is_recurring:true;document.getElementById('hol-forecast').checked=h?h.affects_forecast:true;document.getElementById('hol-volume').value=h?h.volume_factor:0;openModal('holiday-modal');}
-function editHoliday(id){openHolidayModal(HOLIDAYS.find(h=>h.id===id));}
-async function saveHoliday(e){e.preventDefault();const res=await api('/settings/customization/holidays/save',{id:document.getElementById('hol-id').value||undefined,name:document.getElementById('hol-name').value,date:document.getElementById('hol-date').value,is_full_day:document.getElementById('hol-fullday').checked,is_paid:document.getElementById('hol-paid').checked,is_recurring:document.getElementById('hol-recurring').checked,affects_forecast:document.getElementById('hol-forecast').checked,volume_factor:parseFloat(document.getElementById('hol-volume').value)});if(res.success){upsert(HOLIDAYS,res.item);renderHolidays();closeModal('holiday-modal');}else showToast(res.error || 'Something went wrong', 'error');}
-async function deleteHoliday(id){if(!confirm('Delete?'))return;const res=await api('/settings/customization/holidays/delete',{id});if(res.success){removeById(HOLIDAYS,id);renderHolidays();}else showToast(res.error || 'Something went wrong', 'error');}
-
-/* ═══ SKILL GROUPS ════════════════════════ */
-function renderSkillGroups(){
-  const el=document.getElementById('skills-list');
-  if(!SKILL_GROUPS.length){el.innerHTML='<p class="empty-msg" style="padding:2rem 0;">No skill groups.</p>';return;}
-  el.innerHTML=SKILL_GROUPS.map(g=>`<div class="card" style="margin-bottom:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><h3 style="margin:0;">${g.name}</h3>${g.description?`<p style="margin:0.25rem 0 0;color:var(--text-muted,#999);font-size:0.85rem;">${g.description}</p>`:''}</div><div><button class="btn btn-sm" onclick="editSkillGroup(${g.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteSkillGroup(${g.id})">Del</button></div></div>
-    <p style="font-size:0.8rem;color:var(--text-muted,#999);margin:0.4rem 0 0;">${(g.mappings||[]).length} employee(s) mapped</p></div>`).join('');
-}
-function openSkillGroupModal(g){document.getElementById('skillgroup-modal-title').textContent=g?'Edit Skill Group':'Add Skill Group';document.getElementById('sg-id').value=g?g.id:'';document.getElementById('sg-name').value=g?g.name:'';document.getElementById('sg-desc').value=g?g.description:'';openModal('skillgroup-modal');}
-function editSkillGroup(id){openSkillGroupModal(SKILL_GROUPS.find(g=>g.id===id));}
-async function saveSkillGroup(e){e.preventDefault();const res=await api('/settings/customization/skill-groups/save',{id:document.getElementById('sg-id').value||undefined,name:document.getElementById('sg-name').value,description:document.getElementById('sg-desc').value});if(res.success){upsert(SKILL_GROUPS,res.item);renderSkillGroups();closeModal('skillgroup-modal');}else showToast(res.error || 'Something went wrong', 'error');}
-async function deleteSkillGroup(id){if(!confirm('Delete group and all mappings?'))return;const res=await api('/settings/customization/skill-groups/delete',{id});if(res.success){removeById(SKILL_GROUPS,id);renderSkillGroups();}else showToast(res.error || 'Something went wrong', 'error');}
 
 /* ═══ ADHERENCE CODES ═════════════════════ */
 function renderAdherenceCodes(){
@@ -511,9 +326,8 @@ async function saveBranding(e){
 }
 
 /* ── Initial render ────────────────────── */
-renderShifts(); renderLOBSettings();
-renderTimeOffTypes(); renderOTRules(); renderSchedRules(); renderHolidays();
-renderSkillGroups(); renderAdherenceCodes(); renderAlerts(); renderLobMappings(); loadBranding();
+renderTimeOffTypes(); renderOTRules(); renderSchedRules();
+renderAdherenceCodes(); renderAlerts(); renderLobMappings(); loadBranding();
 </script>
 
 <style>
