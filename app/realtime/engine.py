@@ -34,23 +34,29 @@ def _get_sheet():
 
 
 def get_available_lobs(sheet=None):
-    """Return sorted list of distinct LOB names."""
+    """Return sorted list of distinct LOB names from PlanningUnit table."""
     try:
-        from app.people.manager import get_employees
-        employees, err = get_employees(sheet)
-        if err:
-            return []
-        lobs = set()
-        for emp in employees:
-            status = str(emp.get("Status", "")).strip().lower()
-            if status in ("inactive", "terminated", "deleted"):
-                continue
-            lob = (emp.get("Latest Skill Name") or "").strip()
-            if lob:
-                lobs.add(lob)
-        return sorted(lobs)
+        from app.models import PlanningUnit
+        units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+        return [u.name for u in units]
     except Exception:
-        return []
+        log.warning("Failed to load LOBs from database, falling back to sheet", exc_info=True)
+        try:
+            from app.people.manager import get_employees
+            employees, err = get_employees(sheet)
+            if err:
+                return []
+            lobs = set()
+            for emp in employees:
+                status = str(emp.get("Status", "")).strip().lower()
+                if status in ("inactive", "terminated", "deleted"):
+                    continue
+                lob = (emp.get("Latest Skill Name") or "").strip()
+                if lob:
+                    lobs.add(lob)
+            return sorted(lobs)
+        except Exception:
+            return []
 
 
 def _time_to_minutes(time_str):
@@ -100,21 +106,52 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
     if date_obj is None:
         date_obj = datetime.date.today()
 
-    # Load requirements
+    # Load requirements from database
+    req_intervals = []
+    fc_intervals = []
     try:
-        from app.data_source import SheetSource
-        src = SheetSource()
-        req_intervals, _ = src.get_requirements(lob, date_obj)
-    except Exception:
-        req_intervals = []
+        from app.models import PlanningUnit, RequirementInterval, ForecastInterval
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        if pu:
+            day_start = datetime.datetime.combine(date_obj, datetime.time.min)
+            day_end = datetime.datetime.combine(date_obj, datetime.time.max)
 
-    # Load forecast
-    try:
-        from app.data_source import SheetSource
-        src = SheetSource()
-        fc_intervals, _ = src.get_forecast(lob, date_obj)
+            req_rows = (RequirementInterval.query
+                        .filter_by(planning_unit_id=pu.id)
+                        .filter(RequirementInterval.timestamp >= day_start,
+                                RequirementInterval.timestamp <= day_end)
+                        .order_by(RequirementInterval.timestamp)
+                        .all())
+            req_intervals = [{"time": r.timestamp, "agents_required": r.agents_required}
+                             for r in req_rows]
+
+            fc_rows = (ForecastInterval.query
+                       .filter_by(planning_unit_id=pu.id)
+                       .filter(ForecastInterval.timestamp >= day_start,
+                               ForecastInterval.timestamp <= day_end)
+                       .order_by(ForecastInterval.timestamp)
+                       .all())
+            fc_intervals = [{"time": f.timestamp, "offered": f.offered, "aht": f.aht}
+                            for f in fc_rows]
     except Exception:
-        fc_intervals = []
+        log.warning("Failed to load requirements/forecast from DB", exc_info=True)
+
+    # Fallback to sheet if DB returned nothing
+    if not req_intervals:
+        try:
+            from app.data_source import SheetSource
+            src = SheetSource()
+            req_intervals, _ = src.get_requirements(lob, date_obj)
+        except Exception:
+            req_intervals = []
+
+    if not fc_intervals:
+        try:
+            from app.data_source import SheetSource
+            src = SheetSource()
+            fc_intervals, _ = src.get_forecast(lob, date_obj)
+        except Exception:
+            fc_intervals = []
 
     # Load scheduled shifts
     try:
@@ -128,15 +165,23 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
     # Build requirement map {HH:MM -> agents_required}
     req_map = {}
     for r in (req_intervals or []):
-        ts = str(r.get("time", ""))
-        time_str = ts[11:16] if len(ts) > 10 else ts
+        ts = r.get("time", "")
+        if isinstance(ts, datetime.datetime):
+            time_str = ts.strftime("%H:%M")
+        else:
+            ts = str(ts)
+            time_str = ts[11:16] if len(ts) > 10 else ts
         req_map[time_str] = float(r.get("agents_required", 0) or 0)
 
     # Build forecast map {HH:MM -> {offered, aht}}
     fc_map = {}
     for f in (fc_intervals or []):
-        ts = str(f.get("time", ""))
-        time_str = ts[11:16] if len(ts) > 10 else ts
+        ts = f.get("time", "")
+        if isinstance(ts, datetime.datetime):
+            time_str = ts.strftime("%H:%M")
+        else:
+            ts = str(ts)
+            time_str = ts[11:16] if len(ts) > 10 else ts
         fc_map[time_str] = {
             "offered": float(f.get("offered", 0) or 0),
             "aht": float(f.get("aht", 0) or 0),

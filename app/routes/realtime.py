@@ -21,8 +21,7 @@ def _all_lobs(user):
         from app.demo_data import DEMO_LOBS
         return list(DEMO_LOBS)
     from app.realtime.engine import get_available_lobs
-    sheet = _get_sheet()
-    return get_available_lobs(sheet)
+    return get_available_lobs()
 
 
 from app.routes._utils import get_sheet as _get_sheet
