@@ -732,7 +732,7 @@ async function resyncFeed(id, name) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = 'Re-syncing…';
   try {
-    const r = await fetch('/realtime/resync/' + id, {
+    const r = await fetch('/sync/realtime/resync/' + id, {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
     });
