@@ -280,12 +280,21 @@ class SheetSource:
 class PostgresSource:
     """Reads data from the PostgreSQL database."""
 
+    @staticmethod
+    def _rollback():
+        try:
+            from app import db
+            self._rollback()
+        except Exception:
+            pass
+
     def get_employees(self):
         try:
             from app.models import Employee
             emps = Employee.query.all()
             return [e.to_legacy_dict() for e in emps], None
         except Exception as e:
+            self._rollback()
             return [], str(e)
 
     def get_planning_units(self):
@@ -294,6 +303,7 @@ class PostgresSource:
             units = PlanningUnit.query.filter_by(is_active=True).all()
             return [{"id": u.name, "name": u.name} for u in units], None
         except Exception as e:
+            self._rollback()
             return [], str(e)
 
     def get_requirements(self, unit_id, day):
@@ -310,6 +320,7 @@ class PostgresSource:
             ).order_by(RequirementInterval.timestamp).all()
             return [r.to_legacy_dict() for r in rows], None
         except Exception as e:
+            self._rollback()
             return [], str(e)
 
     def get_forecast(self, workload_id, day):
@@ -326,6 +337,7 @@ class PostgresSource:
             ).order_by(ForecastInterval.timestamp).all()
             return [r.to_legacy_dict() for r in rows], None
         except Exception as e:
+            self._rollback()
             return [], str(e)
 
 
