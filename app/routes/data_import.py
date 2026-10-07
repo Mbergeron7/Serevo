@@ -1235,7 +1235,7 @@ def _parse_ts(ts_str):
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
         try:
             return datetime.strptime(ts_str[:19], fmt)
-        except ValueError:
+        except Exception:
             continue
     return None
 
@@ -1281,7 +1281,7 @@ def _resolve_timestamp(row):
             try:
                 date_part = dt_mod.datetime.strptime(date_str[:19], fmt).date()
                 break
-            except ValueError:
+            except Exception:
                 continue
 
     if not date_part:
@@ -1301,11 +1301,20 @@ def _resolve_timestamp(row):
         t_str = str(t_obj).strip()
         if not t_str:
             continue
+        # Handle Excel serial time (e.g. 0.375 = 09:00, 0.75 = 18:00)
+        try:
+            t_num = float(t_str)
+            if 0 <= t_num < 1:
+                total_secs = int(round(t_num * 86400))
+                time_part = dt_mod.time(total_secs // 3600, (total_secs % 3600) // 60)
+                break
+        except (ValueError, TypeError):
+            pass
         for fmt in ("%H:%M:%S", "%H:%M", "%I:%M %p", "%I:%M:%S %p"):
             try:
                 time_part = dt_mod.datetime.strptime(t_str, fmt).time()
                 break
-            except ValueError:
+            except Exception:
                 continue
         if time_part:
             break
