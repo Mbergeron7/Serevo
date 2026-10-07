@@ -826,6 +826,7 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
                 agent_id = row[col_map["agent_id"]].strip()
                 if agent_id:
                     emp = Employee.query.filter(
+                        (Employee.external_id == agent_id) |
                         (Employee.external_id_2 == agent_id) |
                         (Employee.employee_id == agent_id)
                     ).first()
@@ -1257,6 +1258,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     agent_id = row[agg_col_map["agent_id"]].strip()
                     if agent_id:
                         emp = Employee.query.filter(
+                            (Employee.external_id == agent_id) |
                             (Employee.external_id_2 == agent_id) |
                             (Employee.employee_id == agent_id)
                         ).first()
@@ -1320,6 +1322,14 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     break
 
         db.session.commit()
+        if skipped > 0 and upserted == 0:
+            # Log sample unmatched IDs for debugging
+            sample_ids = set()
+            for row in aggregated[1:6]:  # first 5 rows
+                if "agent_id" in agg_col_map:
+                    sample_ids.add(row[agg_col_map["agent_id"]].strip())
+            log.warning(f"Event sync (agent_status): no employees matched. "
+                        f"Sample agent IDs from feed: {list(sample_ids)}")
         log.info(f"Event sync (agent_status): {upserted} upserted, {skipped} skipped "
                  f"from {len(raw_rows)-1} raw events")
         return upserted, skipped, errors
