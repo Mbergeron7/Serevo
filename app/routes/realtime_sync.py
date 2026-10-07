@@ -29,13 +29,51 @@ from app.models import (
     CallRoute,
     DataFeed,
     Employee,
+    ExternalStatusMapping,
     IntervalActual,
     LobMapping,
     PlanningUnit,
+    SegmentCode,
     db,
 )
 
 log = logging.getLogger("serevo.realtime_sync")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CP ACTIVITY SID → HUMAN-READABLE STATUS NAME
+# ═══════════════════════════════════════════════════════════════
+
+_sid_cache = {}  # populated once per app context
+
+
+def _decode_status(raw_status):
+    """Translate a CP activity SID (e.g. WA9c4e...) to its label (e.g. 'Ready').
+
+    Uses ExternalStatusMapping records seeded from the CP_STATUS_MAP.
+    Falls back to returning the raw value unchanged if no mapping exists.
+    """
+    if not raw_status:
+        return raw_status
+
+    # Already a human-readable name (no WA prefix)? Return as-is.
+    if not raw_status.startswith("WA"):
+        return raw_status
+
+    # Build cache once per request/context
+    if not _sid_cache:
+        try:
+            mappings = (
+                db.session.query(ExternalStatusMapping.external_status, SegmentCode.label)
+                .join(SegmentCode, ExternalStatusMapping.segment_code_id == SegmentCode.id)
+                .all()
+            )
+            for ext, label in mappings:
+                _sid_cache[ext] = label
+        except Exception:
+            log.warning("Could not load ExternalStatusMapping cache", exc_info=True)
+
+    return _sid_cache.get(raw_status, raw_status)
 
 realtime_sync_bp = Blueprint("realtime_sync", __name__, url_prefix="/sync")
 
@@ -815,7 +853,7 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
 
     for i, row in enumerate(rows[1:], start=2):
         try:
-            status = row[col_map["status"]].strip()
+            status = _decode_status(row[col_map["status"]].strip())
             if not status:
                 skipped += 1
                 continue
@@ -1248,7 +1286,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
 
         for i, row in enumerate(aggregated[1:], start=2):
             try:
-                status = row[agg_col_map["status"]].strip()
+                status = _decode_status(row[agg_col_map["status"]].strip())
                 if not status:
                     skipped += 1
                     continue
