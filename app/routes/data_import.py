@@ -599,7 +599,12 @@ def _remap_rows(rows, mapping):
     mapping: {file_header: internal_field_or_None}
     Headers mapped to None are kept as-is (they'll just be ignored
     by the import functions).
+
+    For streaming (large file) inputs, returns a _RemappedStream
+    wrapper that applies the mapping lazily during iteration.
     """
+    if isinstance(rows, _StreamingExcel):
+        return _RemappedStream(rows, mapping)
     remapped = []
     for row in rows:
         new_row = {}
@@ -611,6 +616,42 @@ def _remap_rows(rows, mapping):
                 new_row[k] = v  # keep unmapped columns in case needed
         remapped.append(new_row)
     return remapped
+
+
+class _RemappedStream:
+    """Lazily applies column remapping to a streaming row source."""
+
+    def __init__(self, source, mapping):
+        self._source = source
+        self._mapping = mapping
+
+    def __len__(self):
+        return len(self._source)
+
+    def __bool__(self):
+        return bool(self._source)
+
+    def __iter__(self):
+        for row in self._source:
+            new_row = {}
+            for k, v in row.items():
+                field = self._mapping.get(k.strip())
+                if field:
+                    new_row[field] = v
+                else:
+                    new_row[k] = v
+            yield new_row
+
+    def __getitem__(self, idx):
+        if idx != 0:
+            raise IndexError
+        # Return remapped header template
+        d = self._source[0]
+        new = {}
+        for k, v in d.items():
+            field = self._mapping.get(k.strip())
+            new[field if field else k] = v
+        return new
 
 
 def _apply_schema_mapping(rows, schema_id):
@@ -702,21 +743,96 @@ def _parse_csv(file_obj):
 
 
 def _parse_excel(file_obj):
-    """Parse an Excel upload into a list of dicts."""
+    """Parse an Excel upload into a list of dicts.
+    For large files (>50K rows), returns a _StreamingExcel wrapper
+    that yields rows on demand to avoid loading everything into memory.
+    """
     import openpyxl
-    wb = openpyxl.load_workbook(file_obj, read_only=True, data_only=True)
+
+    # Save to a temp file so we can read it twice if needed
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    try:
+        file_obj.seek(0)
+        tmp.write(file_obj.read())
+        tmp.close()
+    except Exception:
+        tmp.close()
+        raise
+
+    wb = openpyxl.load_workbook(tmp.name, read_only=True, data_only=True)
     ws = wb.active
     rows_iter = ws.iter_rows(values_only=True)
     headers = [str(c or "").strip() for c in next(rows_iter)]
+
+    # Count rows by iterating (read_only mode is lazy per-row)
+    count = 0
+    for _ in rows_iter:
+        count += 1
+    wb.close()
+
+    if count > 50000:
+        # Return a streaming wrapper — don't load into memory
+        return _StreamingExcel(tmp.name, headers, count)
+
+    # Small file — load into memory as before
+    wb2 = openpyxl.load_workbook(tmp.name, read_only=True, data_only=True)
+    ws2 = wb2.active
+    it = ws2.iter_rows(values_only=True)
+    next(it)  # skip header
     result = []
-    for row in rows_iter:
+    for row in it:
         d = {}
         for i, val in enumerate(row):
             if i < len(headers) and headers[i]:
                 d[headers[i]] = val if val is not None else ""
         if any(str(v).strip() for v in d.values()):
             result.append(d)
+    wb2.close()
+    try:
+        os.unlink(tmp.name)
+    except OSError:
+        pass
     return result
+
+
+class _StreamingExcel:
+    """Wrapper that streams Excel rows on demand for large files."""
+
+    def __init__(self, path, headers, count):
+        self._path = path
+        self._headers = headers
+        self._count = count
+
+    def __len__(self):
+        return self._count
+
+    def __bool__(self):
+        return self._count > 0
+
+    def __iter__(self):
+        import openpyxl
+        wb = openpyxl.load_workbook(self._path, read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        next(rows_iter)  # skip header
+        for row in rows_iter:
+            d = {}
+            for i, val in enumerate(row):
+                if i < len(self._headers) and self._headers[i]:
+                    d[self._headers[i]] = val if val is not None else ""
+            if any(str(v).strip() for v in d.values()):
+                yield d
+        wb.close()
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def __getitem__(self, idx):
+        """Support rows[0].keys() for header detection."""
+        if idx != 0:
+            raise IndexError("Streaming only supports index 0")
+        return {h: "" for h in self._headers}
 
 
 def _import_rows(upload_type, rows, uploaded_by=""):
