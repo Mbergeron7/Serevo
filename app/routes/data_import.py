@@ -1048,7 +1048,7 @@ def _import_forecast(rows):
     imported, skipped = 0, 0
     errors = []
     unit_cache = {}
-    BATCH_SIZE = 2000
+    BATCH_SIZE = 500
     batch = []
 
     for i, row in enumerate(rows, start=2):
@@ -1096,6 +1096,7 @@ def _upsert_forecast_batch(db, ForecastInterval, batch):
         ).delete(synchronize_session=False)
         db.session.bulk_insert_mappings(ForecastInterval, batch)
         db.session.commit()
+        db.session.expunge_all()
         return len(batch)
     except Exception:
         db.session.rollback()
@@ -1331,7 +1332,7 @@ def _import_actuals(rows):
     imported, skipped = 0, 0
     errors = []
     unit_cache = {}  # lob_name -> unit obj
-    BATCH_SIZE = 2000
+    BATCH_SIZE = 500
 
     # Pre-parse all rows into records grouped by batch
     batch = []
@@ -1408,6 +1409,7 @@ def _upsert_actuals_batch(db, IntervalActual, batch):
         )
         db.session.execute(stmt)
         db.session.commit()
+        db.session.expunge_all()  # free tracked objects from memory
         return len(batch)
     except Exception:
         db.session.rollback()
