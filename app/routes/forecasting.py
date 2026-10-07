@@ -81,6 +81,7 @@ def forecast_data():
     Returns interval-level forecast + requirements data.
     """
     from app.forecasting.engine import (get_forecast_data, get_requirements_data,
+                                         get_historical_actuals,
                                          compute_requirements_from_forecast,
                                          daily_summary)
     try:
@@ -115,6 +116,7 @@ def forecast_data():
             sheet = _get_sheet()
             forecast, f_err = get_forecast_data(lob, start_date, end_date, sheet)
             requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
+            actuals, _ = get_historical_actuals(lob, start_date, end_date)
 
         # Compute Erlang C requirements from forecast
         sl_target = float(payload.get("service_level", 0.80))
@@ -128,14 +130,17 @@ def forecast_data():
             shrinkage=shrinkage,
         )
 
-        return jsonify({
+        resp = {
             "success": True,
             "forecast": forecast,
             "requirements": requirements,
             "erlang": erlang_results,
             "daily_summary": daily_summary(erlang_results),
             "dates_available": sorted(set(r["date"] for r in forecast)),
-        })
+        }
+        if not (user and user.get("is_demo")):
+            resp["actuals"] = actuals if actuals else []
+        return jsonify(resp)
     except Exception as e:
         log.error(f"Forecast data error: {e}")
         return jsonify({"success": False, "error": str(e)})

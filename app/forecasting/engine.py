@@ -360,6 +360,48 @@ def get_requirements_data(lob, start_date, end_date, sheet=None):
         return [], str(e)
 
 
+def get_historical_actuals(lob, start_date, end_date):
+    """
+    Retrieve actual call volume from IntervalActual for a LOB across a date range.
+    Returns list of {date, time, offered, aht} sorted by timestamp.
+    Used for: displaying actuals on the forecasting page AND as historical
+    input when generating forecasts.
+    """
+    import os
+    if os.environ.get("DATA_SOURCE", "").strip().lower() != "postgres":
+        return [], None
+    try:
+        from app.data_source import normalize_lob
+        from app.models import IntervalActual, PlanningUnit
+        from sqlalchemy import func as sa_func
+        normalized = normalize_lob(str(lob).strip())
+        unit = PlanningUnit.query.filter_by(name=normalized).first()
+        if not unit:
+            return [], f"No planning unit found for '{lob}'"
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+        rows = IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == unit.id,
+            sa_func.date(IntervalActual.timestamp) >= start_str,
+            sa_func.date(IntervalActual.timestamp) <= end_str,
+        ).order_by(IntervalActual.timestamp).all()
+        results = []
+        for r in rows:
+            ts = r.timestamp
+            results.append({
+                "date": ts.strftime("%Y-%m-%d"),
+                "time": ts.strftime("%H:%M"),
+                "offered": float(r.offered or 0),
+                "answered": float(r.answered or 0),
+                "abandoned": float(r.abandoned or 0),
+                "aht": float(r.aht_secs or 0),
+                "asa": float(r.asa_secs or 0),
+            })
+        return results, None
+    except Exception as e:
+        return [], str(e)
+
+
 def get_available_dates(lob, sheet=None):
     """Return sorted list of distinct dates with forecast data for a LOB."""
     try:
@@ -439,7 +481,11 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
     hist_start = today - datetime.timedelta(days=historical_days)
     hist_end = today - datetime.timedelta(days=1)
 
-    historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    # Try actuals first (from IntervalActual / CallPotential sync),
+    # then fall back to stored forecast data
+    historical, err = get_historical_actuals(lob, hist_start, hist_end)
+    if not historical:
+        historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
     if err or not historical:
         return {
             "method": "moving_average",
@@ -518,7 +564,9 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
     hist_start = today - datetime.timedelta(days=historical_days)
     hist_end = today - datetime.timedelta(days=1)
 
-    historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    historical, err = get_historical_actuals(lob, hist_start, hist_end)
+    if not historical:
+        historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
     if err or not historical:
         return {
             "method": "weighted_trend",
@@ -688,7 +736,9 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
     hist_start = today - datetime.timedelta(days=historical_days)
     hist_end = today - datetime.timedelta(days=1)
 
-    historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    historical, err = get_historical_actuals(lob, hist_start, hist_end)
+    if not historical:
+        historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
     if err or not historical:
         return {
             "method": "holt_winters",
@@ -1318,7 +1368,14 @@ def _get_db_historical(lob, historical_days):
     today = datetime.date.today()
     hist_start = today - datetime.timedelta(days=historical_days)
 
-    # --- Try PostgreSQL first ---
+    # --- Try IntervalActual (real actuals) first ---
+    hist_end = today - datetime.timedelta(days=1)
+    actuals, _ = get_historical_actuals(lob, hist_start, hist_end)
+    if actuals:
+        log.info(f"Found {len(actuals)} actual intervals in DB for '{lob}'")
+        return actuals, None
+
+    # --- Fall back to ForecastInterval ---
     try:
         from app.models import ForecastInterval, PlanningUnit
         from sqlalchemy import func as sa_func
@@ -1341,7 +1398,7 @@ def _get_db_historical(lob, historical_days):
                         "offered": float(r.offered or 0),
                         "aht": float(r.aht or 0),
                     })
-                log.info(f"Found {len(results)} historical intervals in DB for '{lob}'")
+                log.info(f"Found {len(results)} historical forecast intervals in DB for '{lob}'")
                 return results, None
     except Exception as e:
         log.info(f"DB historical lookup failed for '{lob}': {e}")
