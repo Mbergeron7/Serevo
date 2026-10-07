@@ -607,7 +607,7 @@ def _remap_rows(rows, mapping):
     For streaming (large file) inputs, returns a _RemappedStream
     wrapper that applies the mapping lazily during iteration.
     """
-    if isinstance(rows, _StreamingExcel):
+    if isinstance(rows, (_StreamingCsv, _RemappedStream)):
         return _RemappedStream(rows, mapping)
     remapped = []
     for row in rows:
@@ -747,67 +747,69 @@ def _parse_csv(file_obj):
 
 
 def _parse_excel(file_obj):
-    """Parse an Excel upload. Uses calamine (Rust) engine for low memory."""
-    import pandas as pd
+    """Parse an Excel upload. Converts xlsx → csv on disk via calamine (Rust),
+    then streams the csv. Peak memory stays low because calamine iterates in
+    Rust and we write each row to csv immediately."""
+    from python_calamine import CalamineWorkbook
 
-    # Save to a temp file
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    # Save upload to a temp xlsx
+    tmp_xlsx = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     try:
         file_obj.seek(0)
-        tmp.write(file_obj.read())
-        tmp.close()
+        tmp_xlsx.write(file_obj.read())
+        tmp_xlsx.close()
     except Exception:
-        tmp.close()
+        tmp_xlsx.close()
         raise
 
-    # Read just the headers using calamine (Rust-based, no shared-strings OOM)
-    df_header = pd.read_excel(tmp.name, nrows=0, engine="calamine")
-    headers = [str(c).strip() for c in df_header.columns]
+    # Convert xlsx → csv row-by-row via calamine (Rust, memory-efficient)
+    tmp_csv = tmp_xlsx.name.replace(".xlsx", ".csv")
+    wb = CalamineWorkbook.from_path(tmp_xlsx.name)
+    ws = wb.get_sheet_by_index(0)
+    with open(tmp_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        for row in ws.iter_rows():
+            writer.writerow([str(v) if v is not None else "" for v in row])
+    wb.close()
 
-    # Return a streaming wrapper that reads in chunks via calamine
-    return _StreamingExcel(tmp.name, headers)
+    # Remove the xlsx — we only need the csv now
+    try:
+        os.unlink(tmp_xlsx.name)
+    except OSError:
+        pass
+
+    # Read headers from the csv
+    with open(tmp_csv, "r", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        headers = [h.strip() for h in next(reader)]
+
+    return _StreamingCsv(tmp_csv, headers)
 
 
-class _StreamingExcel:
-    """Wrapper that streams Excel rows on demand to keep memory low."""
+class _StreamingCsv:
+    """Streams rows from a temporary CSV file, then deletes it."""
 
-    def __init__(self, path, headers, count=None):
+    def __init__(self, path, headers):
         self._path = path
         self._headers = headers
-        self._count = count  # may be None — len() returns estimate
-        self._iterated_count = 0  # set after iteration
+        self._iterated_count = 0
 
     def __len__(self):
-        if self._iterated_count:
-            return self._iterated_count
-        if self._count is not None:
-            return self._count
-        return 0  # unknown until iterated
+        return self._iterated_count if self._iterated_count else 0
 
     def __bool__(self):
-        return True  # file exists with headers, assume it has data
+        return True
 
     def __iter__(self):
-        import pandas as pd
         count = 0
-        # Calamine is a Rust-based reader — no Python shared-strings OOM.
-        # Read all rows as strings; memory is held in native Rust, not
-        # in a Python XML tree like openpyxl.
-        df = pd.read_excel(
-            self._path, engine="calamine",
-            dtype=str, keep_default_na=False,
-        )
-        for _, row in df.iterrows():
-            d = {}
-            for col in df.columns:
-                header = str(col).strip()
-                if header:
-                    val = row[col]
-                    d[header] = str(val).strip() if val != "" else ""
-            if any(v for v in d.values()):
-                count += 1
-                yield d
-        del df
+        with open(self._path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Strip header whitespace and skip empty rows
+                d = {k.strip(): (v.strip() if v else "") for k, v in row.items() if k}
+                if any(v for v in d.values()):
+                    count += 1
+                    yield d
         self._iterated_count = count
         try:
             os.unlink(self._path)
