@@ -660,10 +660,10 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
     skipped = 0
     errors = []
 
-    # Pre-aggregate: multiple routes (e.g. "SS Sales Combined", "SS Sales EN")
-    # can map to the same planning unit. We keep the row with the highest
-    # offered count per (pu_id, timestamp) to avoid sub-routes overwriting
-    # the correct "Combined" total.
+    # Pre-aggregate: multiple routes can map to the same planning unit
+    # (e.g. SS Sales has 44+ sub-queues). SUM count fields across all
+    # routes per (pu_id, timestamp) and compute weighted averages for
+    # rate fields (ASA weighted by answered, AHT weighted by answered).
     aggregated = {}  # (pu_id, timestamp) -> vals dict
 
     for i, row in enumerate(rows[1:], start=2):
@@ -689,22 +689,41 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
                 row[col_map["time"]],
             )
 
-            vals = dict(
-                offered=_safe_int(row[col_map["offered"]]) if "offered" in col_map else 0,
-                answered=_safe_int(row[col_map["answered"]]) if "answered" in col_map else 0,
-                answered_within=_safe_int(row[col_map["answered_within"]]) if "answered_within" in col_map else 0,
-                abandoned=_safe_int(row[col_map["abandoned"]]) if "abandoned" in col_map else 0,
-                rolled=_safe_int(row[col_map["rolled"]]) if "rolled" in col_map else 0,
-                asa_secs=_safe_float(row[col_map["asa"]]) if "asa" in col_map else None,
-                aht_secs=_safe_float(row[col_map["aht"]]) if "aht" in col_map else None,
-                max_queued=_safe_int(row[col_map["max_queued"]]) if "max_queued" in col_map else None,
-                source="sheet",
-            )
+            offered = _safe_int(row[col_map["offered"]]) if "offered" in col_map else 0
+            answered = _safe_int(row[col_map["answered"]]) if "answered" in col_map else 0
+            answered_within = _safe_int(row[col_map["answered_within"]]) if "answered_within" in col_map else 0
+            abandoned = _safe_int(row[col_map["abandoned"]]) if "abandoned" in col_map else 0
+            rolled = _safe_int(row[col_map["rolled"]]) if "rolled" in col_map else 0
+            asa = _safe_float(row[col_map["asa"]]) if "asa" in col_map else None
+            aht = _safe_float(row[col_map["aht"]]) if "aht" in col_map else None
+            max_q = _safe_int(row[col_map["max_queued"]]) if "max_queued" in col_map else None
 
             key = (pu.id, ts)
             prev = aggregated.get(key)
-            if prev is None or vals["offered"] > prev["offered"]:
-                aggregated[key] = vals
+            if prev is None:
+                aggregated[key] = dict(
+                    offered=offered, answered=answered,
+                    answered_within=answered_within, abandoned=abandoned,
+                    rolled=rolled, max_queued=max_q,
+                    _asa_sum=((asa or 0) * answered) if asa is not None else 0,
+                    _aht_sum=((aht or 0) * answered) if aht is not None else 0,
+                    _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
+                    source="sheet",
+                )
+            else:
+                prev["offered"] += offered
+                prev["answered"] += answered
+                prev["answered_within"] += answered_within
+                prev["abandoned"] += abandoned
+                prev["rolled"] += rolled
+                if max_q is not None:
+                    prev["max_queued"] = max(prev["max_queued"] or 0, max_q)
+                if asa is not None:
+                    prev["_asa_sum"] += (asa * answered)
+                if aht is not None:
+                    prev["_aht_sum"] += (aht * answered)
+                if asa is not None or aht is not None:
+                    prev["_ans_for_avg"] += answered
 
         except Exception as e:
             errors.append(f"Row {i}: {e}")
@@ -712,8 +731,13 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
                 errors.append("... (truncated)")
                 break
 
-    # Now upsert the de-duplicated records
+    # Finalize weighted averages and upsert
     for (pu_id, ts), vals in aggregated.items():
+        ans = vals.pop("_ans_for_avg", 0)
+        asa_sum = vals.pop("_asa_sum", 0)
+        aht_sum = vals.pop("_aht_sum", 0)
+        vals["asa_secs"] = round(asa_sum / ans, 1) if ans > 0 and asa_sum else None
+        vals["aht_secs"] = round(aht_sum / ans, 1) if ans > 0 and aht_sum else None
         try:
             existing = IntervalActual.query.filter_by(
                 planning_unit_id=pu_id, timestamp=ts
@@ -1104,6 +1128,8 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
         skipped = 0
         errors = []
 
+        # Pre-aggregate across routes that map to the same PU
+        evt_aggregated = {}
         for i, row in enumerate(aggregated[1:], start=2):
             try:
                 pu = None
@@ -1126,39 +1152,66 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     row[agg_col_map["time"]],
                 )
 
-                existing = IntervalActual.query.filter_by(
-                    planning_unit_id=pu.id, timestamp=ts
-                ).first()
+                offered = _safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0
+                answered = _safe_int(row[agg_col_map["answered"]]) if "answered" in agg_col_map else 0
+                abandoned = _safe_int(row[agg_col_map["abandoned"]]) if "abandoned" in agg_col_map else 0
+                rolled = _safe_int(row[agg_col_map["rolled"]]) if "rolled" in agg_col_map else 0
+                asa = _safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None
+                aht = _safe_float(row[agg_col_map["aht"]]) if "aht" in agg_col_map else None
 
-                vals = dict(
-                    offered=_safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0,
-                    answered=_safe_int(row[agg_col_map["answered"]]) if "answered" in agg_col_map else 0,
-                    abandoned=_safe_int(row[agg_col_map["abandoned"]]) if "abandoned" in agg_col_map else 0,
-                    rolled=_safe_int(row[agg_col_map["rolled"]]) if "rolled" in agg_col_map else 0,
-                    asa_secs=_safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None,
-                    aht_secs=_safe_float(row[agg_col_map["aht"]]) if "aht" in agg_col_map else None,
-                    source="sheet",
-                )
-
-                if existing:
-                    for k, v in vals.items():
-                        setattr(existing, k, v)
-                    existing.uploaded_at = datetime.utcnow()
-                else:
-                    rec = IntervalActual(
-                        planning_unit_id=pu.id,
-                        timestamp=ts,
-                        **vals,
+                key = (pu.id, ts)
+                prev = evt_aggregated.get(key)
+                if prev is None:
+                    evt_aggregated[key] = dict(
+                        offered=offered, answered=answered,
+                        abandoned=abandoned, rolled=rolled,
+                        _asa_sum=((asa or 0) * answered) if asa is not None else 0,
+                        _aht_sum=((aht or 0) * answered) if aht is not None else 0,
+                        _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
+                        source="sheet",
                     )
-                    db.session.add(rec)
-
-                upserted += 1
+                else:
+                    prev["offered"] += offered
+                    prev["answered"] += answered
+                    prev["abandoned"] += abandoned
+                    prev["rolled"] += rolled
+                    if asa is not None:
+                        prev["_asa_sum"] += (asa * answered)
+                    if aht is not None:
+                        prev["_aht_sum"] += (aht * answered)
+                    if asa is not None or aht is not None:
+                        prev["_ans_for_avg"] += answered
 
             except Exception as e:
                 errors.append(f"Aggregated row {i}: {e}")
                 if len(errors) > 50:
                     errors.append("... (truncated)")
                     break
+
+        # Finalize and upsert
+        for (pu_id, ts), vals in evt_aggregated.items():
+            ans = vals.pop("_ans_for_avg", 0)
+            asa_sum = vals.pop("_asa_sum", 0)
+            aht_sum = vals.pop("_aht_sum", 0)
+            vals["asa_secs"] = round(asa_sum / ans, 1) if ans > 0 and asa_sum else None
+            vals["aht_secs"] = round(aht_sum / ans, 1) if ans > 0 and aht_sum else None
+
+            try:
+                existing = IntervalActual.query.filter_by(
+                    planning_unit_id=pu_id, timestamp=ts
+                ).first()
+                if existing:
+                    for k, v in vals.items():
+                        setattr(existing, k, v)
+                    existing.uploaded_at = datetime.utcnow()
+                else:
+                    rec = IntervalActual(
+                        planning_unit_id=pu_id, timestamp=ts, **vals,
+                    )
+                    db.session.add(rec)
+                upserted += 1
+            except Exception as e:
+                errors.append(f"PU {pu_id} @ {ts}: {e}")
 
         db.session.commit()
         log.info(f"Event sync (call_volume): {upserted} upserted, {skipped} skipped "

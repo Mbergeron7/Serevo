@@ -1409,7 +1409,8 @@ def _import_actuals(rows):
     unit_id_cache = {}  # lob_name -> unit.id (int, survives expunge)
     BATCH_SIZE = 500
 
-    # Pre-aggregate: keep highest-offered row per (pu_id, timestamp)
+    # Pre-aggregate: SUM count fields across all routes per (pu_id, timestamp)
+    # and compute weighted averages for rate fields (ASA/AHT weighted by answered).
     batch_dedup = {}
     for i, row in enumerate(rows, start=2):
         lob = _get_val(row, "LOB")
@@ -1417,11 +1418,10 @@ def _import_actuals(rows):
         if not ts or not lob:
             skipped += 1
             if lob and not ts:
-                if len(errors) < 50:  # cap error messages
+                if len(errors) < 50:
                     errors.append(f"Row {i}: bad timestamp")
             continue
 
-        # Cache planning unit IDs to avoid repeated queries
         if lob not in unit_id_cache:
             unit = _get_or_create_unit(lob)
             unit_id_cache[lob] = unit.id if unit else None
@@ -1436,40 +1436,62 @@ def _import_actuals(rows):
         answered_within = int(_num(aw)) if aw not in (None, "") else answered
         abandoned = int(_num(_get_val(row, "Abandoned")))
         rolled = int(_num(_get_val(row, "Rolled")))
-        asa = _get_val(row, "ASA"); aht = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
+        asa_raw = _get_val(row, "ASA"); aht_raw = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
+        asa = _num(asa_raw) if asa_raw not in (None, "") else None
+        aht = _num(aht_raw) if aht_raw not in (None, "") else None
+        max_q = int(_num(mq)) if mq not in (None, "") else None
 
-        rec_data = {
-            "planning_unit_id": unit_id,
-            "timestamp": ts,
-            "offered": offered,
-            "answered": answered,
-            "answered_within": answered_within,
-            "abandoned": abandoned,
-            "rolled": rolled,
-            "asa_secs": _num(asa) if asa not in (None, "") else None,
-            "aht_secs": _num(aht) if aht not in (None, "") else None,
-            "max_queued": int(_num(mq)) if mq not in (None, "") else None,
-            "source": "upload",
-        }
-
-        # Multiple routes (e.g. "SS Sales Combined" + "SS Sales EN") can
-        # map to the same planning unit. Keep the row with the highest
-        # offered count to avoid sub-routes overwriting the combined total.
         key = (unit_id, ts)
         prev = batch_dedup.get(key)
-        if prev is None or rec_data["offered"] > prev["offered"]:
-            batch_dedup[key] = rec_data
+        if prev is None:
+            batch_dedup[key] = {
+                "planning_unit_id": unit_id, "timestamp": ts,
+                "offered": offered, "answered": answered,
+                "answered_within": answered_within, "abandoned": abandoned,
+                "rolled": rolled, "max_queued": max_q,
+                "asa_secs": asa, "aht_secs": aht,
+                "_asa_sum": ((asa or 0) * answered) if asa is not None else 0,
+                "_aht_sum": ((aht or 0) * answered) if aht is not None else 0,
+                "_ans_for_avg": answered if (asa is not None or aht is not None) else 0,
+                "source": "upload",
+            }
+        else:
+            prev["offered"] += offered
+            prev["answered"] += answered
+            prev["answered_within"] += answered_within
+            prev["abandoned"] += abandoned
+            prev["rolled"] += rolled
+            if max_q is not None:
+                prev["max_queued"] = max(prev["max_queued"] or 0, max_q)
+            if asa is not None:
+                prev["_asa_sum"] += (asa * answered)
+            if aht is not None:
+                prev["_aht_sum"] += (aht * answered)
+            if asa is not None or aht is not None:
+                prev["_ans_for_avg"] += answered
 
         if len(batch_dedup) >= BATCH_SIZE:
+            _finalize_aggregated_batch(batch_dedup)
             imported += _upsert_actuals_batch(db, IntervalActual, list(batch_dedup.values()))
             batch_dedup = {}
 
     # Flush remaining
     if batch_dedup:
+        _finalize_aggregated_batch(batch_dedup)
         imported += _upsert_actuals_batch(db, IntervalActual, list(batch_dedup.values()))
 
     db.session.flush()
     return imported, skipped, errors
+
+
+def _finalize_aggregated_batch(batch_dedup):
+    """Compute weighted averages and remove internal tracking fields."""
+    for vals in batch_dedup.values():
+        ans = vals.pop("_ans_for_avg", 0)
+        asa_sum = vals.pop("_asa_sum", 0)
+        aht_sum = vals.pop("_aht_sum", 0)
+        vals["asa_secs"] = round(asa_sum / ans, 1) if ans > 0 and asa_sum else None
+        vals["aht_secs"] = round(aht_sum / ans, 1) if ans > 0 and aht_sum else None
 
 
 def _upsert_actuals_batch(db, IntervalActual, batch):
