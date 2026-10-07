@@ -2037,11 +2037,15 @@ def planning_units_save():
         # so the unique constraint on route_id doesn't fire)
         CallRoute.query.filter_by(planning_unit_id=item.id).delete()
         db.session.flush()
+        seen_route_ids = set()
         for cr in (d.get("call_routes") or []):
             route_id = (cr.get("route_id") or "").strip()
             route_name = (cr.get("name") or "").strip()
             if not route_id or not route_name:
                 continue
+            if route_id in seen_route_ids:
+                continue  # skip duplicate route IDs within the same planning unit
+            seen_route_ids.add(route_id)
             db.session.add(CallRoute(
                 planning_unit_id=item.id,
                 route_id=route_id,
