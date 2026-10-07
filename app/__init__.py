@@ -128,6 +128,8 @@ def create_app():
             # ── segment_codes columns added in contract config ──
             ("data_feeds", "service_account_json", "TEXT"),
             ("data_feeds", "column_mapping", "TEXT"),
+            ("data_feeds", "data_format", "VARCHAR(20) DEFAULT 'interval'"),
+            ("data_feeds", "interval_minutes", "INTEGER DEFAULT 15"),
             ("day_models", "abbreviation", "VARCHAR(20)"),
             ("day_models", "total_hours", "FLOAT"),
             ("day_models", "model_type", "VARCHAR(20) DEFAULT 'Fixed'"),

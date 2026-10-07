@@ -329,6 +329,270 @@ def _safe_float(val):
         return None
 
 
+# ═══════════════════════════════════════════════════════════════
+# EVENT-FORMAT COLUMN ALIASES
+# ═══════════════════════════════════════════════════════════════
+# When data_format == "event", each row is a raw call or agent event.
+# These aliases map common raw-event column names to canonical fields
+# that the aggregation layer uses.
+
+_EVENT_CALL_COL_ALIASES = {
+    # timestamp of the event
+    "date_created": "timestamp", "date created": "timestamp",
+    "call_date": "timestamp", "call date": "timestamp",
+    "datetime": "timestamp", "timestamp": "timestamp",
+    "created": "timestamp", "date": "timestamp", "time": "timestamp",
+    "start_time": "timestamp", "start time": "timestamp",
+    # call identifier (for dedup)
+    "log_id": "call_id", "log id": "call_id", "logid": "call_id",
+    "call_id": "call_id", "call id": "call_id", "callid": "call_id",
+    "session_id": "call_id", "session id": "call_id",
+    "unique_id": "call_id", "uniqueid": "call_id",
+    # queue / LOB identifier
+    "queue_id": "queue", "queue id": "queue", "queueid": "queue",
+    "queue": "queue", "queue_name": "queue", "queue name": "queue",
+    "skill_id": "queue", "skill id": "queue",
+    "route_id": "queue", "route id": "queue",
+    "lob": "queue", "line of business": "queue",
+    # abandon flag
+    "is_abandoned": "is_abandoned", "is abandoned": "is_abandoned",
+    "abandoned": "is_abandoned", "abandon": "is_abandoned",
+    "disposition": "is_abandoned",
+    # rolled / overflow flag
+    "is_rolled_over": "is_rolled", "is rolled over": "is_rolled",
+    "is_rolled": "is_rolled", "rolled": "is_rolled",
+    "overflow": "is_rolled", "overflowed": "is_rolled",
+    # queue wait time (seconds)
+    "queue_time": "wait_time", "queue time": "wait_time",
+    "wait_time": "wait_time", "wait time": "wait_time",
+    "speed_of_answer": "wait_time", "speed of answer": "wait_time",
+    "ring_time": "wait_time", "ring time": "wait_time",
+    # talk / handle duration (seconds)
+    "duration": "duration", "talk_time": "duration", "talk time": "duration",
+    "handle_time": "duration", "handle time": "duration",
+    "call_duration": "duration", "call duration": "duration",
+    "connected_time": "duration", "connected time": "duration",
+}
+
+_EVENT_AGENT_COL_ALIASES = {
+    # agent identifier
+    "user_id": "agent_id", "user id": "agent_id",
+    "agent_id": "agent_id", "agent id": "agent_id",
+    "employee_id": "agent_id", "employee id": "agent_id",
+    "ext": "agent_id", "extension": "agent_id",
+    "id": "agent_id",
+    # agent name
+    "agent_name": "agent", "agent name": "agent",
+    "name": "agent", "agent": "agent",
+    "employee": "agent", "rep": "agent",
+    # timestamp
+    "start_time": "timestamp", "start time": "timestamp",
+    "timestamp": "timestamp", "datetime": "timestamp",
+    "date_created": "timestamp", "date created": "timestamp",
+    "event_time": "timestamp", "event time": "timestamp",
+    # status / activity
+    "c_activity_sid": "status", "activity_sid": "status",
+    "activity_id": "status", "activity id": "status",
+    "status": "status", "state": "status",
+    "agent_status": "status", "agent status": "status",
+    "agent_state": "status", "agent state": "status",
+    # end time
+    "end_time": "end", "end time": "end",
+    "ended": "end", "end": "end",
+    # duration
+    "duration": "duration", "time_in_status": "duration",
+    "duration_sec": "duration", "duration (sec)": "duration",
+}
+
+
+# ═══════════════════════════════════════════════════════════════
+# EVENT-FORMAT AGGREGATION
+# ═══════════════════════════════════════════════════════════════
+
+def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=None):
+    """
+    Convert raw per-call event rows into interval-aggregated rows
+    that sync_call_volume can process.
+
+    Each raw row is one call. We:
+    1) Map columns using event-specific aliases
+    2) Deduplicate by call_id (keep first occurrence per call)
+    3) Bucket into time intervals by queue
+    4) Count Offered, Answered, Abandoned; average Duration (AHT), WaitTime (ASA)
+
+    Returns a list of header + data rows in the format sync_call_volume expects.
+    """
+    col_map = _match_columns(headers, _EVENT_CALL_COL_ALIASES, custom_mapping=custom_mapping)
+
+    if "timestamp" not in col_map:
+        return [["date", "time", "lob", "offered", "answered", "abandoned",
+                 "rolled", "asa", "aht"]]  # just headers, no data
+
+    # Parse all events, dedup by call_id
+    events = []
+    seen_calls = set()
+    for row in rows[1:]:
+        try:
+            ts_str = row[col_map["timestamp"]].strip()
+            if not ts_str:
+                continue
+
+            ts = _parse_datetime(ts_str)
+
+            # Dedup by call_id if available
+            call_id = None
+            if "call_id" in col_map:
+                call_id = row[col_map["call_id"]].strip()
+                if call_id and call_id in seen_calls:
+                    continue
+                if call_id:
+                    seen_calls.add(call_id)
+
+            queue = row[col_map["queue"]].strip() if "queue" in col_map else "default"
+            is_abn = _safe_int(row[col_map["is_abandoned"]]) if "is_abandoned" in col_map else 0
+            is_rolled = _safe_int(row[col_map["is_rolled"]]) if "is_rolled" in col_map else 0
+            wait = _safe_float(row[col_map["wait_time"]]) if "wait_time" in col_map else None
+            dur = _safe_float(row[col_map["duration"]]) if "duration" in col_map else None
+
+            events.append({
+                "ts": ts, "queue": queue,
+                "is_abandoned": is_abn > 0,
+                "is_rolled": is_rolled > 0,
+                "wait_time": wait, "duration": dur,
+            })
+        except Exception:
+            continue
+
+    if not events:
+        return [["date", "time", "lob", "offered", "answered", "abandoned",
+                 "rolled", "asa", "aht"]]
+
+    # Bucket into intervals
+    buckets = {}  # (queue, bucket_start) → list of events
+    for evt in events:
+        # Floor to interval boundary
+        minute = (evt["ts"].minute // interval_minutes) * interval_minutes
+        bucket_start = evt["ts"].replace(minute=minute, second=0, microsecond=0)
+        key = (evt["queue"], bucket_start)
+        buckets.setdefault(key, []).append(evt)
+
+    # Build aggregated rows
+    result_rows = [["date", "time", "route_id", "offered", "answered",
+                    "abandoned", "rolled", "asa", "aht"]]
+
+    for (queue, bucket_start), bucket_events in sorted(buckets.items()):
+        offered = len(bucket_events)
+        abandoned = sum(1 for e in bucket_events if e["is_abandoned"])
+        answered = offered - abandoned
+        rolled = sum(1 for e in bucket_events if e["is_rolled"])
+
+        # Average wait time (ASA) — only for answered calls
+        waits = [e["wait_time"] for e in bucket_events
+                 if not e["is_abandoned"] and e["wait_time"] is not None]
+        asa = round(sum(waits) / len(waits), 1) if waits else ""
+
+        # Average duration (AHT) — only for answered calls
+        durs = [e["duration"] for e in bucket_events
+                if not e["is_abandoned"] and e["duration"] is not None]
+        aht = round(sum(durs) / len(durs), 1) if durs else ""
+
+        result_rows.append([
+            bucket_start.strftime("%m/%d/%Y"),
+            bucket_start.strftime("%H:%M"),
+            str(queue),
+            str(offered),
+            str(answered),
+            str(abandoned),
+            str(rolled),
+            str(asa),
+            str(aht),
+        ])
+
+    log.info(f"Aggregated {len(events)} call events into {len(result_rows)-1} interval rows "
+             f"({interval_minutes}-min buckets)")
+    return result_rows
+
+
+def _aggregate_agent_events(rows, headers, interval_minutes=15, custom_mapping=None):
+    """
+    Convert raw per-event agent status rows into the format
+    sync_agent_activity can process.
+
+    Raw rows have (agent_id, start_time, activity_sid).
+    We compute durations by sorting events per agent and measuring
+    the gap between consecutive status changes.
+
+    Returns a list of header + data rows with columns sync_agent_activity expects.
+    """
+    col_map = _match_columns(headers, _EVENT_AGENT_COL_ALIASES, custom_mapping=custom_mapping)
+
+    if "timestamp" not in col_map:
+        return [["agent_id", "status", "start", "end", "duration"]]
+
+    has_agent = "agent_id" in col_map or "agent" in col_map
+
+    if not has_agent or "status" not in col_map:
+        return [["agent_id", "status", "start", "end", "duration"]]
+
+    # Parse all events
+    events = []
+    for row in rows[1:]:
+        try:
+            ts_str = row[col_map["timestamp"]].strip()
+            if not ts_str:
+                continue
+            ts = _parse_datetime(ts_str)
+
+            agent_id = ""
+            if "agent_id" in col_map:
+                agent_id = row[col_map["agent_id"]].strip()
+            agent_name = ""
+            if "agent" in col_map:
+                agent_name = row[col_map["agent"]].strip()
+
+            status = row[col_map["status"]].strip() if "status" in col_map else ""
+
+            events.append({
+                "ts": ts, "agent_id": agent_id, "agent_name": agent_name,
+                "status": status,
+            })
+        except Exception:
+            continue
+
+    if not events:
+        return [["agent_id", "status", "start", "end", "duration"]]
+
+    # Group by agent, sort by time, compute durations from gaps
+    from collections import defaultdict
+    by_agent = defaultdict(list)
+    for evt in events:
+        key = evt["agent_id"] or evt["agent_name"]
+        by_agent[key].append(evt)
+
+    result_rows = [["agent_id", "status", "start", "end", "duration"]]
+
+    for agent_key, agent_events in by_agent.items():
+        agent_events.sort(key=lambda e: e["ts"])
+        for i, evt in enumerate(agent_events):
+            # End time = next event's start time (or None if last)
+            end_ts = agent_events[i + 1]["ts"] if i + 1 < len(agent_events) else None
+            duration = ""
+            if end_ts:
+                duration = str(int((end_ts - evt["ts"]).total_seconds()))
+
+            result_rows.append([
+                evt["agent_id"] or evt["agent_name"],
+                evt["status"],
+                evt["ts"].strftime("%Y-%m-%d %H:%M:%S"),
+                end_ts.strftime("%Y-%m-%d %H:%M:%S") if end_ts else "",
+                duration,
+            ])
+
+    log.info(f"Processed {len(events)} agent events into {len(result_rows)-1} status spans "
+             f"for {len(by_agent)} agents")
+    return result_rows
+
+
 def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
     """
     Read call volume tab and upsert into interval_actuals.
@@ -744,6 +1008,230 @@ def sync_employees(spreadsheet, tab_name=None, custom_mapping=None):
 
 
 # ═══════════════════════════════════════════════════════════════
+# EVENT-FORMAT SYNC WRAPPER
+# ═══════════════════════════════════════════════════════════════
+
+def _sync_event_format(spreadsheet, feed_type, tab_name=None,
+                       custom_mapping=None, interval_minutes=15):
+    """
+    Read raw event rows from a sheet, aggregate them into interval format,
+    then run the standard sync function on the aggregated data.
+
+    This bridges event-level sources (like CallPotential) to the existing
+    interval-based sync engine without modifying that engine.
+
+    Returns (upserted, skipped, errors).
+    """
+    # Find the worksheet
+    ws = None
+    if tab_name:
+        try:
+            ws = spreadsheet.worksheet(tab_name)
+        except Exception:
+            return 0, 0, [f"Tab '{tab_name}' not found"]
+
+    if ws is None:
+        ws = spreadsheet.sheet1
+
+    raw_rows = ws.get_all_values()
+    if not raw_rows or len(raw_rows) < 2:
+        return 0, 0, ["Sheet is empty or has no data rows"]
+
+    headers = raw_rows[0]
+
+    if feed_type == "call_volume":
+        aggregated = _aggregate_call_events(
+            raw_rows, headers,
+            interval_minutes=interval_minutes,
+            custom_mapping=custom_mapping,
+        )
+        if len(aggregated) <= 1:
+            return 0, 0, ["No call events could be parsed. Check column mapping."]
+
+        # The aggregated data has standard headers; sync_call_volume reads
+        # from a worksheet object, but we can call its inner logic directly.
+        # We'll create a synthetic worksheet-like result and call the sync.
+        agg_headers = aggregated[0]
+        agg_col_map = _match_columns(agg_headers, _VOLUME_COL_ALIASES)
+
+        has_identifier = "route_id" in agg_col_map or "lob" in agg_col_map
+        has_time = "date" in agg_col_map and "time" in agg_col_map
+        if not has_identifier:
+            return 0, 0, [f"Aggregation produced no queue/LOB column. Raw headers: {headers}"]
+        if not has_time:
+            return 0, 0, [f"Aggregation produced no date/time columns. Raw headers: {headers}"]
+
+        upserted = 0
+        skipped = 0
+        errors = []
+
+        for i, row in enumerate(aggregated[1:], start=2):
+            try:
+                pu = None
+                if "route_id" in agg_col_map:
+                    rid = row[agg_col_map["route_id"]].strip()
+                    if rid:
+                        pu = _resolve_route_to_pu(rid)
+
+                if not pu and "lob" in agg_col_map:
+                    lob_name = row[agg_col_map["lob"]].strip()
+                    if lob_name:
+                        pu = _resolve_lob_to_pu(lob_name)
+
+                if not pu:
+                    skipped += 1
+                    continue
+
+                ts = _parse_timestamp(
+                    row[agg_col_map["date"]],
+                    row[agg_col_map["time"]],
+                )
+
+                existing = IntervalActual.query.filter_by(
+                    planning_unit_id=pu.id, timestamp=ts
+                ).first()
+
+                vals = dict(
+                    offered=_safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0,
+                    answered=_safe_int(row[agg_col_map["answered"]]) if "answered" in agg_col_map else 0,
+                    abandoned=_safe_int(row[agg_col_map["abandoned"]]) if "abandoned" in agg_col_map else 0,
+                    rolled=_safe_int(row[agg_col_map["rolled"]]) if "rolled" in agg_col_map else 0,
+                    asa_secs=_safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None,
+                    aht_secs=_safe_float(row[agg_col_map["aht"]]) if "aht" in agg_col_map else None,
+                    source="sheet",
+                )
+
+                if existing:
+                    for k, v in vals.items():
+                        setattr(existing, k, v)
+                    existing.uploaded_at = datetime.utcnow()
+                else:
+                    rec = IntervalActual(
+                        planning_unit_id=pu.id,
+                        timestamp=ts,
+                        **vals,
+                    )
+                    db.session.add(rec)
+
+                upserted += 1
+
+            except Exception as e:
+                errors.append(f"Aggregated row {i}: {e}")
+                if len(errors) > 50:
+                    errors.append("... (truncated)")
+                    break
+
+        db.session.commit()
+        log.info(f"Event sync (call_volume): {upserted} upserted, {skipped} skipped "
+                 f"from {len(raw_rows)-1} raw events")
+        return upserted, skipped, errors
+
+    elif feed_type == "agent_status":
+        aggregated = _aggregate_agent_events(
+            raw_rows, headers,
+            interval_minutes=interval_minutes,
+            custom_mapping=custom_mapping,
+        )
+        if len(aggregated) <= 1:
+            return 0, 0, ["No agent events could be parsed. Check column mapping."]
+
+        # Sync agent status spans using existing logic
+        agg_headers = aggregated[0]
+        agg_col_map = _match_columns(agg_headers, _AGENT_COL_ALIASES)
+
+        has_agent = "agent" in agg_col_map or "agent_id" in agg_col_map
+        if not has_agent or "status" not in agg_col_map or "start" not in agg_col_map:
+            return 0, 0, [
+                f"Aggregation produced incomplete columns. Raw headers: {headers}"
+            ]
+
+        upserted = 0
+        skipped = 0
+        errors = []
+
+        for i, row in enumerate(aggregated[1:], start=2):
+            try:
+                status = row[agg_col_map["status"]].strip()
+                if not status:
+                    skipped += 1
+                    continue
+
+                emp = None
+                if "agent_id" in agg_col_map:
+                    agent_id = row[agg_col_map["agent_id"]].strip()
+                    if agent_id:
+                        emp = Employee.query.filter(
+                            (Employee.external_id_2 == agent_id) |
+                            (Employee.employee_id == agent_id)
+                        ).first()
+
+                if not emp and "agent" in agg_col_map:
+                    agent_name = row[agg_col_map["agent"]].strip()
+                    if agent_name:
+                        parts = agent_name.split()
+                        if len(parts) >= 2:
+                            emp = Employee.query.filter(
+                                db.func.lower(Employee.first_name) == parts[0].lower(),
+                                db.func.lower(Employee.last_name) == parts[-1].lower(),
+                            ).first()
+
+                if not emp:
+                    skipped += 1
+                    continue
+
+                start_str = row[agg_col_map["start"]].strip()
+                if not start_str:
+                    skipped += 1
+                    continue
+                start_ts = _parse_datetime(start_str)
+
+                end_ts = None
+                if "end" in agg_col_map:
+                    end_str = row[agg_col_map["end"]].strip()
+                    if end_str:
+                        end_ts = _parse_datetime(end_str)
+
+                if end_ts is None and "duration" in agg_col_map:
+                    dur_val = _safe_float(row[agg_col_map["duration"]])
+                    if dur_val is not None and dur_val > 0:
+                        end_ts = start_ts + timedelta(seconds=dur_val)
+
+                existing = AgentStatusEvent.query.filter_by(
+                    employee_id=emp.id, start_ts=start_ts
+                ).first()
+
+                if existing:
+                    existing.status = status
+                    existing.end_ts = end_ts
+                    existing.source = "sheet"
+                    existing.uploaded_at = datetime.utcnow()
+                else:
+                    evt = AgentStatusEvent(
+                        employee_id=emp.id,
+                        status=status,
+                        start_ts=start_ts,
+                        end_ts=end_ts,
+                        source="sheet",
+                    )
+                    db.session.add(evt)
+
+                upserted += 1
+
+            except Exception as e:
+                errors.append(f"Aggregated row {i}: {e}")
+                if len(errors) > 50:
+                    errors.append("... (truncated)")
+                    break
+
+        db.session.commit()
+        log.info(f"Event sync (agent_status): {upserted} upserted, {skipped} skipped "
+                 f"from {len(raw_rows)-1} raw events")
+        return upserted, skipped, errors
+
+    return 0, 0, [f"Event format not supported for feed_type: {feed_type}"]
+
+
+# ═══════════════════════════════════════════════════════════════
 # COMBINED SYNC FUNCTION (called by scheduler + manual endpoint)
 # ═══════════════════════════════════════════════════════════════
 
@@ -790,7 +1278,18 @@ def run_sync(app=None):
                             except (json.JSONDecodeError, ValueError):
                                 pass
 
-                        if feed.feed_type == "call_volume":
+                        data_fmt = getattr(feed, "data_format", "interval") or "interval"
+                        ivl_min = getattr(feed, "interval_minutes", 15) or 15
+
+                        if data_fmt == "event" and feed.feed_type in ("call_volume", "agent_status"):
+                            # Event format: read raw rows, aggregate, then sync
+                            up, skip, errs = _sync_event_format(
+                                spreadsheet, feed.feed_type,
+                                tab_name=feed.sheet_tab,
+                                custom_mapping=custom_map,
+                                interval_minutes=ivl_min,
+                            )
+                        elif feed.feed_type == "call_volume":
                             up, skip, errs = sync_call_volume(spreadsheet, tab_name=feed.sheet_tab, custom_mapping=custom_map)
                         elif feed.feed_type == "employees":
                             up, skip, errs = sync_employees(spreadsheet, tab_name=feed.sheet_tab, custom_mapping=custom_map)

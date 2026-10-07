@@ -547,6 +547,8 @@ class DataFeed(db.Model):
     source_type   = db.Column(db.String(30), nullable=False, default="google_sheet")  # google_sheet | api
     sheet_key     = db.Column(db.String(200), default="")              # Google Sheet key
     sheet_tab     = db.Column(db.String(100), default="")              # specific tab name (optional)
+    data_format   = db.Column(db.String(20), default="interval")       # interval | event
+    interval_minutes = db.Column(db.Integer, default=15)               # aggregation bucket size for event format
     service_account_json = db.Column(db.Text, default="")              # per-feed Google SA creds (JSON)
     api_url       = db.Column(db.String(500), default="")              # for API sources
     api_headers   = db.Column(db.Text, default="")                     # JSON headers for API
@@ -568,6 +570,8 @@ class DataFeed(db.Model):
             "id": self.id, "name": self.name,
             "feed_type": self.feed_type, "source_type": self.source_type,
             "sheet_key": self.sheet_key, "sheet_tab": self.sheet_tab,
+            "data_format": self.data_format or "interval",
+            "interval_minutes": self.interval_minutes or 15,
             "has_service_account": bool(self.service_account_json),
             "api_url": self.api_url, "api_headers": self.api_headers or "",
             "column_mapping": json.loads(self.column_mapping) if self.column_mapping else {},

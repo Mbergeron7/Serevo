@@ -490,6 +490,23 @@ def save_data_feed():
     feed.api_headers = (data.get("api_headers") or "").strip()
     feed.is_active = data.get("is_active", True)
 
+    # Data format: interval (pre-aggregated) or event (raw per-call/per-agent)
+    data_format = (data.get("data_format") or "interval").strip()
+    if data_format not in ("interval", "event"):
+        data_format = "interval"
+    feed.data_format = data_format
+
+    # Interval minutes for event aggregation
+    interval_minutes = data.get("interval_minutes")
+    if interval_minutes is not None:
+        try:
+            interval_minutes = int(interval_minutes)
+            if interval_minutes not in (5, 10, 15, 30, 60):
+                interval_minutes = 15
+        except (ValueError, TypeError):
+            interval_minutes = 15
+        feed.interval_minutes = interval_minutes
+
     # Column mapping — JSON dict of canonical_field → sheet_column_name
     col_mapping = data.get("column_mapping")
     if col_mapping is not None:

@@ -36,6 +36,9 @@
           <span class="feed-type-badge {{ f.feed_type }}">
             {{ 'Call Volume' if f.feed_type == 'call_volume' else 'Agent Status' }}
           </span>
+          {% if (f.data_format or 'interval') == 'event' %}
+            <span class="feed-type-badge" style="background:#fef3c7;color:#92400e;">Event → {{ f.interval_minutes or 15 }}m</span>
+          {% endif %}
           {% if not f.is_active %}<span style="font-size:.75rem;color:#9ca3af;">(disabled)</span>{% endif %}
         </div>
         <div class="feed-source">
@@ -106,6 +109,27 @@
       </div>
 
       <div class="form-group">
+        <label for="data_format">Data Format</label>
+        <select class="form-input" id="data_format" onchange="toggleIntervalField()">
+          <option value="interval">Pre-aggregated (interval rows)</option>
+          <option value="event">Raw events (per-call / per-event rows)</option>
+        </select>
+        <small class="text-muted">Use <strong>Raw events</strong> when each row is a single call or agent event that needs aggregation.</small>
+      </div>
+
+      <div class="form-group" id="intervalGroup" style="display:none;">
+        <label for="interval_minutes">Aggregation Interval</label>
+        <select class="form-input" id="interval_minutes">
+          <option value="5">5 minutes</option>
+          <option value="10">10 minutes</option>
+          <option value="15" selected>15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
+        <small class="text-muted">Raw events will be bucketed into intervals of this size.</small>
+      </div>
+
+      <div class="form-group">
         <label for="source_type">Source</label>
         <select class="form-input" id="source_type" onchange="toggleSourceFields()">
           <option value="google_sheet">Google Sheet</option>
@@ -155,6 +179,11 @@ function toggleSourceFields() {
   document.getElementById('apiFields').style.display = src === 'api' ? 'block' : 'none';
 }
 
+function toggleIntervalField() {
+  const fmt = document.getElementById('data_format').value;
+  document.getElementById('intervalGroup').style.display = fmt === 'event' ? 'block' : 'none';
+}
+
 function openModal(feed) {
   document.getElementById('modalTitle').textContent = feed ? 'Edit Data Feed' : 'Add Data Feed';
   document.getElementById('feed_id').value = feed ? feed.id : '';
@@ -165,7 +194,10 @@ function openModal(feed) {
   document.getElementById('sheet_tab').value = feed ? feed.sheet_tab : '';
   document.getElementById('api_url').value = feed ? feed.api_url : '';
   document.getElementById('api_headers').value = feed ? (feed.api_headers || '') : '';
+  document.getElementById('data_format').value = feed ? (feed.data_format || 'interval') : 'interval';
+  document.getElementById('interval_minutes').value = feed ? (feed.interval_minutes || 15) : 15;
   toggleSourceFields();
+  toggleIntervalField();
   document.getElementById('feedModal').style.display = 'flex';
 }
 
@@ -192,6 +224,8 @@ async function saveFeed(e) {
       sheet_tab: document.getElementById('sheet_tab').value,
       api_url: document.getElementById('api_url').value,
       api_headers: document.getElementById('api_headers').value,
+      data_format: document.getElementById('data_format').value,
+      interval_minutes: parseInt(document.getElementById('interval_minutes').value) || 15,
     };
     const res = await fetch('/settings/data-feeds/save', {
       method: 'POST',
