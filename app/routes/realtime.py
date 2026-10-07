@@ -24,7 +24,12 @@ def _all_lobs(user):
     return get_available_lobs()
 
 
-from app.routes._utils import get_sheet as _get_sheet
+# Google Sheet is no longer needed — DATA_SOURCE=postgres reads from the DB.
+# Engine functions accept sheet=None and use DB first, with sheet fallback.
+def _get_sheet():
+    """Legacy helper — returns None so engine functions use the DB.
+    The engine's own fallback will try Google Sheets if DB returns nothing."""
+    return None
 
 
 # ── "All LOBs" aggregation helpers ─────────────────────────

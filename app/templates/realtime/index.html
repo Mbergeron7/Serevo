@@ -533,10 +533,16 @@ async function api(url, body) {
   return r.json();
 }
 function selectedLobs() { return [$('selLob').value || 'All']; }
+let _activeView = 'intraday';
+const _loaded = {};  // track which tabs have data loaded
+
 function showView(name) {
   document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
   document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === 'view-' + name));
   try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  _activeView = name;
+  // Lazy-load tab data on first view
+  if (!_loaded[name] && name !== 'intraday') loadTab(name);
 }
 const fmt = (v, d=0) => (v === null || v === undefined) ? '—' : Number(v).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
 const pct = v => (v === null || v === undefined) ? '—' : fmt(v, 1) + '%';
@@ -559,46 +565,114 @@ function noData(el, msg, hint) { el.innerHTML = `<div class="report-card"><div c
 const IMPORT_HINT = 'Upload <em>Call Actuals</em> and <em>Agent Status Events</em> in Data Import, add the ACTUALS RAW / AGENT STATUS RAW tabs to your Google Sheet, or connect an API.';
 
 /* ══════════════════════════════════════════════════
-   LOAD ALL
+   TAB LOADERS  (lazy — each tab fetches only when viewed)
+   ══════════════════════════════════════════════════ */
+const TAB_LOADERS = {
+  async dashboard() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.dashboard = await api('/realtime/reports/dashboard', body).catch(e => ({success:false, error:e.message}));
+    renderDashboard(DATA.dashboard);
+    const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
+    $('asOf').textContent = asOf ? `As of ${asOf}` : '';
+  },
+  async forecast() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.forecast = await api('/realtime/reports/forecast', body).catch(e => ({success:false, error:e.message}));
+    renderForecast(DATA.forecast);
+  },
+  async interval() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.interval = await api('/realtime/reports/interval', body).catch(e => ({success:false, error:e.message}));
+    renderInterval(DATA.interval);
+  },
+  async svl() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.svl = await api('/realtime/reports/svl', body).catch(e => ({success:false, error:e.message}));
+    renderSvl(DATA.svl);
+  },
+  async absent() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.absenteeism = await api('/realtime/reports/absenteeism', body).catch(e => ({success:false, error:e.message}));
+    renderAbsent(DATA.absenteeism);
+  },
+  async status() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA['agent-status'] = await api('/realtime/reports/agent-status', body).catch(e => ({success:false, error:e.message}));
+    renderStatus(DATA['agent-status']);
+  },
+  async eff() {
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    DATA.efficiency = await api('/realtime/reports/efficiency', body).catch(e => ({success:false, error:e.message}));
+    renderEff(DATA.efficiency);
+  },
+  async netstaffing() { renderNetStaffing(); },
+  async optimizer()    { renderOptimizer(); },
+  async gamify()       { renderGamify(); },
+  async liveagents()   { /* rendered from adherence data, already loaded */ },
+};
+
+async function loadTab(name) {
+  const loader = TAB_LOADERS[name];
+  if (loader) { await loader(); _loaded[name] = true; }
+}
+
+/* ══════════════════════════════════════════════════
+   LOAD ALL  (core intraday only — other tabs lazy-load)
    ══════════════════════════════════════════════════ */
 async function loadAll(silent) {
   const lob = $('selLob').value;
   const date = $('inpDate').value;
   if (!silent) showLoading('Loading real-time data…');
+
+  // Reset loaded flags so tabs re-fetch on next view
+  Object.keys(_loaded).forEach(k => delete _loaded[k]);
+
   try {
-    // Load intraday + reports in parallel
-    const body = { lobs: selectedLobs(), date, lob };
-    const [snap, adh, sl, ...reps] = await Promise.all([
+    // Only load core intraday data (3 calls instead of 13)
+    const [snap, adh, sl] = await Promise.all([
       api('/realtime/snapshot', { lob, date }),
       api('/realtime/adherence', { lob, date }),
       api('/realtime/service-level', { lob, date }),
-      ...['dashboard','forecast','interval','svl','absenteeism','agent-status','efficiency']
-        .map(n => api('/realtime/reports/' + n, body).catch(e => ({success:false, error:e.message}))),
     ]);
     if (!silent) hideLoading();
 
-    // Intraday
     INTRA.snapshot = snap.success ? snap : null;
     INTRA.adherence = adh.success ? adh : null;
     INTRA.sl = sl.success ? sl : null;
     renderIntraday();
+    _loaded.intraday = true;
 
-    // Reports
-    const names = ['dashboard','forecast','interval','svl','absenteeism','agent-status','efficiency'];
-    names.forEach((n, i) => DATA[n] = reps[i]);
-    renderDashboard(DATA.dashboard); renderForecast(DATA.forecast); renderInterval(DATA.interval);
-    renderSvl(DATA.svl); renderAbsent(DATA.absenteeism); renderStatus(DATA['agent-status']); renderEff(DATA.efficiency);
-    renderNetStaffing(); renderOptimizer(); renderGamify();
-
-    const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
-    $('asOf').textContent = asOf ? `As of ${asOf}` : '';
+    // If the user is on a different tab, load that tab's data too
+    if (_activeView !== 'intraday') loadTab(_activeView);
   } catch (e) {
     if (!silent) { hideLoading(); }
   }
   clearInterval(timer);
   if ($('chkAuto').checked) timer = setInterval(() => loadAll(true), 60000);
 }
-$('chkAuto').addEventListener('change', function(){ clearInterval(timer); if (this.checked && (DATA.dashboard || INTRA.snapshot)) timer = setInterval(() => loadAll(true), 60000); });
+$('chkAuto').addEventListener('change', function(){ clearInterval(timer); if (this.checked && (DATA.dashboard || INTRA.snapshot)) timer = setInterval(() => refreshActive(), 60000); });
+
+async function refreshActive() {
+  // Silently refresh only the active tab's data
+  const lob = $('selLob').value, date = $('inpDate').value;
+  try {
+    // Always refresh core intraday (lightweight)
+    const [snap, adh, sl] = await Promise.all([
+      api('/realtime/snapshot', { lob, date }),
+      api('/realtime/adherence', { lob, date }),
+      api('/realtime/service-level', { lob, date }),
+    ]);
+    INTRA.snapshot = snap.success ? snap : null;
+    INTRA.adherence = adh.success ? adh : null;
+    INTRA.sl = sl.success ? sl : null;
+    if (_activeView === 'intraday') renderIntraday();
+    // Refresh active tab if it's not intraday
+    if (_activeView !== 'intraday') {
+      delete _loaded[_activeView];
+      loadTab(_activeView);
+    }
+  } catch (e) { /* silent */ }
+}
 
 /* ══════════════════════════════════════════════════
    SVG CHARTS
