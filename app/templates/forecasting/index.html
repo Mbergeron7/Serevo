@@ -748,11 +748,12 @@ async function loadIntervalData() {
       const data = await resp.json();
       if (data.success && data.intervals) {
         for (const iv of data.intervals) {
-          if (!combined[iv.time]) combined[iv.time] = {time: iv.time, offered: 0, aht_w: 0, aht_off: 0, req: 0};
+          if (!combined[iv.time]) combined[iv.time] = {time: iv.time, offered: 0, aht_w: 0, aht_off: 0, req: 0, is_historic: iv.is_historic};
           combined[iv.time].offered += iv.offered;
           combined[iv.time].aht_w += iv.offered * iv.aht;
           combined[iv.time].aht_off += iv.offered;
           combined[iv.time].req += iv.agents_required;
+          if (iv.is_historic) combined[iv.time].is_historic = true;
         }
       }
     } catch(e) { console.error('Interval load error:', e); }
@@ -763,6 +764,7 @@ async function loadIntervalData() {
     offered: Math.round(iv.offered),
     aht: iv.aht_off > 0 ? Math.round(iv.aht_w / iv.aht_off) : 0,
     agents_required: Math.round(iv.req * 10) / 10,
+    is_historic: !!iv.is_historic,
   }));
 
   renderCharts();
@@ -1169,6 +1171,17 @@ function renderCharts() {
 // ── Render interval-level charts for Daily view ──
 function renderIntervalCharts() {
   const labels = intervalData.map(iv => iv.time);
+  const hasHist = intervalData.some(iv => iv.is_historic);
+  const hasFc = intervalData.some(iv => !iv.is_historic);
+  document.getElementById('dataLegendBanner').style.display = (hasHist || hasFc) ? 'flex' : 'none';
+
+  // Split into historical vs forecast (null where the other applies)
+  const histOffered = intervalData.map(iv => iv.is_historic ? iv.offered : null);
+  const fcOffered   = intervalData.map(iv => iv.is_historic ? null : iv.offered);
+  const histAht     = intervalData.map(iv => iv.is_historic ? iv.aht : null);
+  const fcAht       = intervalData.map(iv => iv.is_historic ? null : iv.aht);
+  const histReq     = intervalData.map(iv => iv.is_historic ? iv.agents_required : null);
+  const fcReq       = intervalData.map(iv => iv.is_historic ? null : iv.agents_required);
 
   // Offered chart — bar chart by time-of-day
   document.getElementById('offeredSection').style.display = '';
@@ -1178,14 +1191,21 @@ function renderIntervalCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'Offered Calls',
-        data: intervalData.map(iv => iv.offered),
-        backgroundColor: 'rgba(59,130,246,.7)',
+        label: '▎Historical',
+        data: histOffered,
+        backgroundColor: 'rgba(100,116,139,.75)',
         borderWidth: 0,
+        borderRadius: 2,
+      },{
+        label: '▎Forecast',
+        data: fcOffered,
+        backgroundColor: 'rgba(59,130,246,.75)',
+        borderColor: 'rgba(59,130,246,1)',
+        borderWidth: 1,
         borderRadius: 2,
       }]
     },
-    options: intervalChartOpts('Calls'),
+    options: intervalChartOpts('Calls', true),
   });
 
   // AHT chart — line by time-of-day
@@ -1196,17 +1216,29 @@ function renderIntervalCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'AHT (s)',
-        data: intervalData.map(iv => iv.aht),
-        borderColor: 'rgba(234,88,12,.8)',
-        backgroundColor: 'rgba(234,88,12,.1)',
+        label: '▎Historical',
+        data: histAht,
+        borderColor: 'rgba(100,116,139,.8)',
+        backgroundColor: 'rgba(100,116,139,.08)',
         borderWidth: 2,
         fill: true,
         pointRadius: 2,
         tension: .3,
+        spanGaps: false,
+      },{
+        label: '▎Forecast',
+        data: fcAht,
+        borderColor: 'rgba(234,88,12,.85)',
+        backgroundColor: 'rgba(234,88,12,.08)',
+        borderWidth: 2,
+        borderDash: [6, 3],
+        fill: true,
+        pointRadius: 2,
+        tension: .3,
+        spanGaps: false,
       }]
     },
-    options: intervalChartOpts('Seconds'),
+    options: intervalChartOpts('Seconds', true),
   });
 
   // Requirements chart — bar by time-of-day
@@ -1217,23 +1249,35 @@ function renderIntervalCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'Agents Required',
-        data: intervalData.map(iv => iv.agents_required),
-        backgroundColor: 'rgba(34,197,94,.6)',
+        label: '▎Historical',
+        data: histReq,
+        backgroundColor: 'rgba(100,116,139,.6)',
         borderWidth: 0,
+        borderRadius: 2,
+      },{
+        label: '▎Forecast',
+        data: fcReq,
+        backgroundColor: 'rgba(34,197,94,.65)',
+        borderColor: 'rgba(34,197,94,1)',
+        borderWidth: 1,
         borderRadius: 2,
       }]
     },
-    options: intervalChartOpts('Agents'),
+    options: intervalChartOpts('Agents', true),
   });
 }
 
-function intervalChartOpts(yLabel) {
+function intervalChartOpts(yLabel, showLegend) {
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: showLegend !== false,
+        position: 'top',
+        align: 'end',
+        labels: { usePointStyle: true, pointStyle: 'rect', padding: 16, font: { size: 12, weight: '600' } }
+      },
       tooltip: {
         callbacks: {
           title: arr => arr[0].label,

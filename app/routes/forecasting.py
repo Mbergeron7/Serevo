@@ -700,32 +700,6 @@ def forecast_api_data():
 
 
 # ── Debug: check what data exists per planning unit ────────
-@forecasting_bp.route("/api/debug-data", methods=["GET"])
-@login_required
-def debug_data():
-    """Temporary debug endpoint to check IntervalActual data per planning unit."""
-    from app.models import PlanningUnit, IntervalActual
-    from sqlalchemy import func as sa_func
-    try:
-        units = PlanningUnit.query.all()
-        result = []
-        for u in units:
-            count = IntervalActual.query.filter_by(planning_unit_id=u.id).count()
-            min_ts = IntervalActual.query.filter_by(planning_unit_id=u.id).with_entities(
-                sa_func.min(IntervalActual.timestamp)).scalar()
-            max_ts = IntervalActual.query.filter_by(planning_unit_id=u.id).with_entities(
-                sa_func.max(IntervalActual.timestamp)).scalar()
-            result.append({
-                "id": u.id, "name": u.name,
-                "interval_actual_count": count,
-                "min_date": str(min_ts) if min_ts else None,
-                "max_date": str(max_ts) if max_ts else None,
-            })
-        return jsonify({"units": result})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-
 # ── Interval-level data API (for daily intraday chart) ────────
 @forecasting_bp.route("/api/intervals", methods=["POST"])
 @login_required
@@ -775,9 +749,9 @@ def forecast_api_intervals():
         day_start = datetime.datetime.combine(target_date, datetime.time.min)
         day_end = datetime.datetime.combine(target_date, datetime.time.max)
 
-        intervals = []
+        # Build actuals map for historical dates
+        actual_map = {}
         if target_date <= today:
-            # Historical — use actuals
             rows = (
                 IntervalActual.query
                 .filter(
@@ -789,13 +763,13 @@ def forecast_api_intervals():
                 .all()
             )
             for row in rows:
-                intervals.append({
-                    "time": row.timestamp.strftime("%H:%M"),
+                t = row.timestamp.strftime("%H:%M")
+                actual_map[t] = {
                     "offered": round(float(row.offered or 0), 1),
                     "aht": round(float(row.aht_secs or 0), 1),
-                    "agents_required": 0,
-                })
-        # Overlay forecast intervals
+                }
+
+        # Load forecast intervals
         fc_rows = (
             ForecastInterval.query
             .filter(
@@ -806,6 +780,14 @@ def forecast_api_intervals():
             .order_by(ForecastInterval.timestamp)
             .all()
         )
+        fc_map = {}
+        for row in fc_rows:
+            t = row.timestamp.strftime("%H:%M")
+            fc_map[t] = {
+                "offered": round(float(row.offered or 0), 1),
+                "aht": round(float(row.aht or 0), 1),
+            }
+
         rq_rows = (
             RequirementInterval.query
             .filter(
@@ -818,21 +800,28 @@ def forecast_api_intervals():
         )
         rq_map = {r.timestamp.strftime("%H:%M"): round(float(r.agents_required or 0), 1) for r in rq_rows}
 
-        if not intervals and fc_rows:
-            # Future day — use forecast data
-            for row in fc_rows:
-                t = row.timestamp.strftime("%H:%M")
+        # Merge all time slots — mark each as historic or forecast
+        all_times = sorted(set(list(actual_map.keys()) + list(fc_map.keys())))
+        intervals = []
+        for t in all_times:
+            actual = actual_map.get(t)
+            fc = fc_map.get(t)
+            if actual:
                 intervals.append({
                     "time": t,
-                    "offered": round(float(row.offered or 0), 1),
-                    "aht": round(float(row.aht or 0), 1),
+                    "offered": actual["offered"],
+                    "aht": actual["aht"],
                     "agents_required": rq_map.get(t, 0),
+                    "is_historic": True,
                 })
-        elif intervals:
-            # Merge requirement data into actuals
-            for iv in intervals:
-                if iv["agents_required"] == 0:
-                    iv["agents_required"] = rq_map.get(iv["time"], 0)
+            elif fc:
+                intervals.append({
+                    "time": t,
+                    "offered": fc["offered"],
+                    "aht": fc["aht"],
+                    "agents_required": rq_map.get(t, 0),
+                    "is_historic": False,
+                })
 
         return jsonify({"success": True, "intervals": intervals})
 
