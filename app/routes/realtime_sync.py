@@ -660,6 +660,12 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
     skipped = 0
     errors = []
 
+    # Pre-aggregate: multiple routes (e.g. "SS Sales Combined", "SS Sales EN")
+    # can map to the same planning unit. We keep the row with the highest
+    # offered count per (pu_id, timestamp) to avoid sub-routes overwriting
+    # the correct "Combined" total.
+    aggregated = {}  # (pu_id, timestamp) -> vals dict
+
     for i, row in enumerate(rows[1:], start=2):
         try:
             # Resolve to planning unit: try route_id first, then LOB name
@@ -683,11 +689,6 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
                 row[col_map["time"]],
             )
 
-            # Upsert: check for existing record
-            existing = IntervalActual.query.filter_by(
-                planning_unit_id=pu.id, timestamp=ts
-            ).first()
-
             vals = dict(
                 offered=_safe_int(row[col_map["offered"]]) if "offered" in col_map else 0,
                 answered=_safe_int(row[col_map["answered"]]) if "answered" in col_map else 0,
@@ -700,25 +701,39 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
                 source="sheet",
             )
 
-            if existing:
-                for k, v in vals.items():
-                    setattr(existing, k, v)
-                existing.uploaded_at = datetime.utcnow()
-            else:
-                rec = IntervalActual(
-                    planning_unit_id=pu.id,
-                    timestamp=ts,
-                    **vals,
-                )
-                db.session.add(rec)
-
-            upserted += 1
+            key = (pu.id, ts)
+            prev = aggregated.get(key)
+            if prev is None or vals["offered"] > prev["offered"]:
+                aggregated[key] = vals
 
         except Exception as e:
             errors.append(f"Row {i}: {e}")
             if len(errors) > 50:
                 errors.append("... (truncated)")
                 break
+
+    # Now upsert the de-duplicated records
+    for (pu_id, ts), vals in aggregated.items():
+        try:
+            existing = IntervalActual.query.filter_by(
+                planning_unit_id=pu_id, timestamp=ts
+            ).first()
+
+            if existing:
+                for k, v in vals.items():
+                    setattr(existing, k, v)
+                existing.uploaded_at = datetime.utcnow()
+            else:
+                rec = IntervalActual(
+                    planning_unit_id=pu_id,
+                    timestamp=ts,
+                    **vals,
+                )
+                db.session.add(rec)
+
+            upserted += 1
+        except Exception as e:
+            errors.append(f"PU {pu_id} @ {ts}: {e}")
 
     db.session.commit()
     return upserted, skipped, errors

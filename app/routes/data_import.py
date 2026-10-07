@@ -1409,8 +1409,8 @@ def _import_actuals(rows):
     unit_id_cache = {}  # lob_name -> unit.id (int, survives expunge)
     BATCH_SIZE = 500
 
-    # Pre-parse all rows into records grouped by batch
-    batch = []
+    # Pre-aggregate: keep highest-offered row per (pu_id, timestamp)
+    batch_dedup = {}
     for i, row in enumerate(rows, start=2):
         lob = _get_val(row, "LOB")
         ts = _resolve_timestamp(row)
@@ -1438,7 +1438,7 @@ def _import_actuals(rows):
         rolled = int(_num(_get_val(row, "Rolled")))
         asa = _get_val(row, "ASA"); aht = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
 
-        batch.append({
+        rec_data = {
             "planning_unit_id": unit_id,
             "timestamp": ts,
             "offered": offered,
@@ -1450,15 +1450,23 @@ def _import_actuals(rows):
             "aht_secs": _num(aht) if aht not in (None, "") else None,
             "max_queued": int(_num(mq)) if mq not in (None, "") else None,
             "source": "upload",
-        })
+        }
 
-        if len(batch) >= BATCH_SIZE:
-            imported += _upsert_actuals_batch(db, IntervalActual, batch)
-            batch = []
+        # Multiple routes (e.g. "SS Sales Combined" + "SS Sales EN") can
+        # map to the same planning unit. Keep the row with the highest
+        # offered count to avoid sub-routes overwriting the combined total.
+        key = (unit_id, ts)
+        prev = batch_dedup.get(key)
+        if prev is None or rec_data["offered"] > prev["offered"]:
+            batch_dedup[key] = rec_data
+
+        if len(batch_dedup) >= BATCH_SIZE:
+            imported += _upsert_actuals_batch(db, IntervalActual, list(batch_dedup.values()))
+            batch_dedup = {}
 
     # Flush remaining
-    if batch:
-        imported += _upsert_actuals_batch(db, IntervalActual, batch)
+    if batch_dedup:
+        imported += _upsert_actuals_batch(db, IntervalActual, list(batch_dedup.values()))
 
     db.session.flush()
     return imported, skipped, errors
