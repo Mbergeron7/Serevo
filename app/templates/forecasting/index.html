@@ -730,9 +730,19 @@ document.getElementById('navDate').addEventListener('change', function() {
   }
 });
 
+let _refreshTimer = null;
+function startAutoRefresh() {
+  stopAutoRefresh();
+  _refreshTimer = setInterval(() => {
+    if (currentView === 'daily') loadIntervalData();
+    else loadExistingData();
+  }, 60000);  // every 60 seconds
+}
+function stopAutoRefresh() { if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; } }
+
 async function loadIntervalData() {
   const selected = getSelectedLobs();
-  const lobs = activeLob ? [activeLob] : (selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData));
+  const lobs = activeLob ? [activeLob] : (selected.length ? selected : Object.keys(forecastData));
   if (!lobs.length) { renderCharts(); return; }
 
   const dateStr = fmtDate(navAnchor);
@@ -1477,9 +1487,13 @@ function toggleHeatActivities(row) {
 
 // ── Auto-load on page ready ─────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  loadExistingData();
+  loadExistingData().then(() => {
+    // For daily view, also load interval data directly (works even without generated forecasts)
+    if (currentView === 'daily') loadIntervalData();
+  });
   const lobs = getSelectedLobs();
   if (lobs.length) loadScenarios(lobs[0]);
+  startAutoRefresh();
 });
 
 document.getElementById('yearSelect').addEventListener('change', function() {
