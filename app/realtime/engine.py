@@ -284,14 +284,73 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
 # ADHERENCE
 # ═══════════════════════════════════════════════════════════════
 
+def _get_actual_statuses(date_obj):
+    """Load latest AgentStatusEvent per employee for the given date.
+
+    Returns dict: employee_id -> {status, start_ts, end_ts, is_productive}
+    """
+    from app.models import AgentStatusEvent, SegmentCode, db
+    import sqlalchemy as sa
+
+    day_start = datetime.datetime.combine(date_obj, datetime.time.min)
+    day_end = datetime.datetime.combine(date_obj, datetime.time.max)
+
+    # Subquery: latest event per employee today
+    sub = (
+        db.session.query(
+            AgentStatusEvent.employee_id,
+            sa.func.max(AgentStatusEvent.start_ts).label("max_ts"),
+        )
+        .filter(AgentStatusEvent.start_ts >= day_start,
+                AgentStatusEvent.start_ts <= day_end)
+        .group_by(AgentStatusEvent.employee_id)
+        .subquery()
+    )
+
+    events = (
+        db.session.query(AgentStatusEvent)
+        .join(sub, sa.and_(
+            AgentStatusEvent.employee_id == sub.c.employee_id,
+            AgentStatusEvent.start_ts == sub.c.max_ts,
+        ))
+        .all()
+    )
+
+    # Build SegmentCode lookup for productive flag
+    seg_lookup = {}
+    try:
+        for sc in SegmentCode.query.all():
+            seg_lookup[sc.label.lower()] = sc
+    except Exception:
+        pass
+
+    result = {}
+    for ev in events:
+        sc = seg_lookup.get((ev.status or "").lower())
+        result[ev.employee_id] = {
+            "status": ev.status or "Unknown",
+            "start_ts": ev.start_ts,
+            "end_ts": ev.end_ts,
+            "is_productive": sc.is_productive if sc else False,
+        }
+    return result
+
+
+# Productive statuses for efficiency calculation (matching old portal)
+_PRODUCTIVE_STATUSES = {
+    "ready", "on-call", "cool-down", "ooq training", "ooq meeting",
+    "ooq coaching", "leader on duty",
+}
+
+
 def get_adherence_snapshot(lob, date_obj=None, sheet=None):
     """
     Build adherence data: for each scheduled agent, show their
-    scheduled shift vs expected state at the current time.
+    scheduled shift vs actual CP status at the current time.
 
     Returns list of {
         employee, employee_id, shift_start, shift_end, shift_type,
-        expected_state, current_interval, is_on_shift
+        expected_state, actual_status, is_adherent, current_interval, is_on_shift
     }
     """
     if date_obj is None:
@@ -307,7 +366,13 @@ def get_adherence_snapshot(lob, date_obj=None, sheet=None):
     cur_time = _current_interval()
     cur_mins = _time_to_minutes(cur_time)
 
+    # Load actual CP statuses for today
+    actual_map = _get_actual_statuses(date_obj)
+
     adherence = []
+    adherent_count = 0
+    productive_count = 0
+
     for s in shifts:
         s_min = _time_to_minutes(s["start"])
         e_min = _time_to_minutes(s["end"])
@@ -320,14 +385,39 @@ def get_adherence_snapshot(lob, date_obj=None, sheet=None):
         else:
             expected = "Shift Ended"
 
+        # Look up actual status from AgentStatusEvent
+        emp_id = s.get("employee_id", "")
+        actual = actual_map.get(int(emp_id)) if emp_id else None
+        actual_status = actual["status"] if actual else None
+        is_productive = actual["is_productive"] if actual else False
+
+        # Determine adherence
+        if not is_on:
+            is_adherent = None  # N/A when not on shift
+        elif actual_status is None:
+            is_adherent = False  # On shift but no status data
+        elif expected == "On Queue":
+            # Should be in a productive status
+            is_adherent = is_productive
+        else:
+            is_adherent = None
+
+        if is_on and is_adherent:
+            adherent_count += 1
+        if is_on and is_productive:
+            productive_count += 1
+
         adherence.append({
             "employee": s["employee"],
-            "employee_id": s.get("employee_id", ""),
+            "employee_id": emp_id,
             "shift_start": s["start"],
             "shift_end": s["end"],
             "shift_type": s.get("type", "full"),
             "hours": s.get("hours", 0),
             "expected_state": expected,
+            "actual_status": actual_status,
+            "is_adherent": is_adherent,
+            "is_productive": is_productive,
             "current_interval": cur_time,
             "is_on_shift": is_on,
         })
@@ -335,12 +425,18 @@ def get_adherence_snapshot(lob, date_obj=None, sheet=None):
     # Sort: on-shift first, then by name
     adherence.sort(key=lambda a: (0 if a["is_on_shift"] else 1, a["employee"]))
 
+    on_shift = sum(1 for a in adherence if a["is_on_shift"])
+    adherence_pct = round(adherent_count / on_shift * 100, 1) if on_shift else 0
+
     return {
         "adherence": adherence,
         "unassigned": unassigned,
         "current_interval": cur_time,
-        "on_shift_count": sum(1 for a in adherence if a["is_on_shift"]),
+        "on_shift_count": on_shift,
         "total_scheduled": len(adherence),
+        "adherent_count": adherent_count,
+        "adherence_pct": adherence_pct,
+        "productive_count": productive_count,
     }
 
 

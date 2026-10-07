@@ -729,8 +729,12 @@ def net_staffing():
         else:
             lobs = [lob]
 
-        from app.realtime.engine import get_intraday_snapshot
+        from app.realtime.engine import get_intraday_snapshot, _get_actual_statuses
         from app.forecasting.engine import _service_level, _erlang_c
+
+        # Get actual productive agent count for today
+        actual_statuses = _get_actual_statuses(date_obj)
+        actual_productive = sum(1 for v in actual_statuses.values() if v["is_productive"])
 
         results = []
         for l in lobs:
@@ -762,7 +766,9 @@ def net_staffing():
                     "time": iv["time"],
                     "required": iv["required"],
                     "scheduled": iv["scheduled"],
+                    "actual": actual_productive,
                     "net": round(iv["gap"], 1),
+                    "actual_net": actual_productive - req if req else 0,
                     "coverage_pct": iv["coverage_pct"],
                     "est_sl": est_sl,
                     "forecast_offered": offered,
