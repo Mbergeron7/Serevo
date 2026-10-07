@@ -156,8 +156,10 @@ _VOLUME_COL_ALIASES = {
 _AGENT_COL_ALIASES = {
     "agent": "agent", "agent name": "agent", "name": "agent",
     "employee": "agent", "rep": "agent", "representative": "agent",
-    "agent id": "agent_id", "employee id": "agent_id", "id": "agent_id",
+    "agent id": "agent_id", "agent_id": "agent_id",
+    "employee id": "agent_id", "id": "agent_id",
     "ext": "agent_id", "extension": "agent_id",
+    "user_id": "agent_id", "user id": "agent_id",
     "status": "status", "state": "status", "agent status": "status",
     "agent state": "status", "current status": "status",
     "start": "start", "start time": "start", "started": "start",
