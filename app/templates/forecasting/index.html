@@ -376,6 +376,9 @@
     <button class="btn-secondary" onclick="loadExistingData()">
       Load Saved
     </button>
+    <button class="btn-secondary" id="btnRetro" onclick="generateRetrospective()" title="Backfill forecast data for past dates so you can compare forecast vs actual on historical days">
+      ↩ Backfill Past Forecasts
+    </button>
   </div>
 </div>
 
@@ -888,6 +891,48 @@ async function generateForecasts() {
   setTimeout(hideStatus, 5000);
   renderDashboard();
   if (lobs.length) loadScenarios(lobs[0]);
+}
+
+// ── Backfill retrospective forecasts for past dates ────
+async function generateRetrospective() {
+  const lobs = getSelectedLobs();
+  if (!lobs.length) { showStatus('Select at least one LOB.', 'error'); return; }
+
+  const days = prompt('How many days back to backfill forecasts?', '30');
+  if (!days) return;
+  const daysBack = parseInt(days);
+  if (isNaN(daysBack) || daysBack < 1) { showStatus('Invalid number of days.', 'error'); return; }
+
+  const btn = document.getElementById('btnRetro');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Backfilling…';
+
+  const method = document.getElementById('methodSelect').value;
+  let totalDays = 0;
+
+  for (const lob of lobs) {
+    showStatus(`Backfilling retrospective forecast for ${lob}…`, 'info');
+    try {
+      const resp = await fetch('/forecasting/generate-retrospective', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ lob, days_back: daysBack, method }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        totalDays += data.days_generated || 0;
+      } else {
+        console.warn(`Retro forecast failed for ${lob}:`, data.error);
+      }
+    } catch (e) {
+      console.error(`Error backfilling ${lob}:`, e);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '↩ Backfill Past Forecasts';
+  showStatus(`Retrospective forecast generated for ${totalDays} day(s). Historical intraday views will now show forecast vs actual.`, 'success');
+  setTimeout(hideStatus, 8000);
 }
 
 // ── Load existing saved data ────────────────────

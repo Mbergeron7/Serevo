@@ -1664,6 +1664,198 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     }
 
 
+def generate_retrospective_forecast(lob, start_date, end_date,
+                                     method="weighted", historical_days=90,
+                                     window=7):
+    """
+    Generate forecast data for past dates so users can compare forecast
+    vs actuals on historical days.  For each target date, uses only
+    historical actuals from *before* that date (simulating what the
+    forecast would have predicted).
+
+    Saves as ForecastInterval with source='retrospective'.
+    Skips dates that already have forecast data.
+    """
+    from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
+    from app.data_source import normalize_lob
+    from sqlalchemy import func as sa_func
+
+    lob_normalized = normalize_lob(str(lob).strip())
+    unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+    if not unit:
+        return {"ok": False, "error": f"No planning unit '{lob}'"}
+
+    # Dates that already have forecast records — skip them
+    existing = set()
+    rows = (
+        db.session.query(sa_func.date(ForecastInterval.timestamp))
+        .filter(
+            ForecastInterval.planning_unit_id == unit.id,
+            sa_func.date(ForecastInterval.timestamp) >= start_date,
+            sa_func.date(ForecastInterval.timestamp) <= end_date,
+        )
+        .distinct()
+        .all()
+    )
+    for (d,) in rows:
+        existing.add(str(d))
+
+    lob_setting = _get_lob_setting(lob)
+
+    # Erlang C params from LOB settings
+    sl_target = lob_setting.service_level_target if lob_setting else None
+    asa_target = lob_setting.target_asa if lob_setting else None
+    shrinkage_val = lob_setting.shrinkage_pct if lob_setting else None
+
+    fc_total = 0
+    rq_total = 0
+    days_generated = 0
+    current = start_date
+
+    while current <= end_date:
+        date_str = current.strftime("%Y-%m-%d")
+        if date_str in existing:
+            current += datetime.timedelta(days=1)
+            continue
+
+        # Get actuals from BEFORE this date only (simulate real prediction)
+        hist_start = current - datetime.timedelta(days=historical_days)
+        hist_end = current - datetime.timedelta(days=1)
+        actuals, _ = get_historical_actuals(lob, hist_start, hist_end)
+        if not actuals:
+            current += datetime.timedelta(days=1)
+            continue
+
+        # Group actuals by day-of-week + time
+        by_dow_time = defaultdict(list)
+        for row in actuals:
+            try:
+                d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+                dow = d.weekday()
+                by_dow_time[(dow, row["time"])].append((row, d))
+            except Exception:
+                continue
+
+        target_dow = current.weekday()
+        day_rows = []
+        time_slots = set(ts for (_, ts) in by_dow_time.keys())
+
+        if method == "moving_average":
+            for time_str in sorted(time_slots):
+                entries = by_dow_time.get((target_dow, time_str), [])
+                if not entries:
+                    for dw in range(7):
+                        entries = by_dow_time.get((dw, time_str), [])
+                        if entries:
+                            break
+                if not entries:
+                    continue
+                recent = sorted(entries, key=lambda x: x[1], reverse=True)[:window]
+                avg_offered = sum(r[0]["offered"] for r in recent) / len(recent)
+                total_w = sum(r[0]["offered"] for r in recent)
+                avg_aht = (sum(r[0]["offered"] * r[0]["aht"] for r in recent) / total_w
+                           if total_w > 0 else 0)
+                day_rows.append({
+                    "date": date_str,
+                    "time": time_str,
+                    "offered": round(avg_offered, 2),
+                    "aht": round(avg_aht, 1),
+                })
+        else:
+            # Weighted (default)
+            def calc_weight(row_date, ref_date):
+                delta = (ref_date - row_date).days
+                return 1.0 / (1.0 + 0.1 * max(delta, 0))
+
+            for time_str in sorted(time_slots):
+                entries = by_dow_time.get((target_dow, time_str), [])
+                if not entries:
+                    for dw in range(7):
+                        entries = by_dow_time.get((dw, time_str), [])
+                        if entries:
+                            break
+                if not entries:
+                    continue
+                total_w = 0
+                w_offered = 0
+                w_aht_num = 0
+                for row, row_date in entries:
+                    w = calc_weight(row_date, current)
+                    total_w += w
+                    w_offered += w * row["offered"]
+                    w_aht_num += w * row["offered"] * row["aht"]
+                if total_w > 0:
+                    avg_offered = w_offered / total_w
+                    avg_aht = w_aht_num / w_offered if w_offered > 0 else 0
+                else:
+                    avg_offered = 0
+                    avg_aht = 0
+                day_rows.append({
+                    "date": date_str,
+                    "time": time_str,
+                    "offered": round(avg_offered, 2),
+                    "aht": round(avg_aht, 1),
+                })
+
+        day_rows = _fill_operating_hours(day_rows, lob_setting, current)
+
+        if not day_rows:
+            current += datetime.timedelta(days=1)
+            continue
+
+        # Compute requirements via Erlang C
+        requirements = compute_requirements_from_forecast(
+            day_rows,
+            service_level_target=sl_target,
+            target_asa=asa_target,
+            shrinkage=shrinkage_val,
+        )
+
+        # Save forecast intervals
+        for row in day_rows:
+            try:
+                ts = datetime.datetime.strptime(f"{row['date']} {row['time']}",
+                                                 "%Y-%m-%d %H:%M")
+            except (ValueError, KeyError):
+                continue
+            db.session.add(ForecastInterval(
+                planning_unit_id=unit.id,
+                timestamp=ts,
+                offered=row["offered"],
+                aht=row["aht"],
+                source="retrospective",
+            ))
+            fc_total += 1
+
+        # Save requirement intervals
+        for row in requirements:
+            try:
+                ts = datetime.datetime.strptime(f"{row['date']} {row['time']}",
+                                                 "%Y-%m-%d %H:%M")
+            except (ValueError, KeyError):
+                continue
+            db.session.add(RequirementInterval(
+                planning_unit_id=unit.id,
+                timestamp=ts,
+                agents_required=row["agents_required"],
+                source="retrospective",
+            ))
+            rq_total += 1
+
+        days_generated += 1
+        current += datetime.timedelta(days=1)
+
+    db.session.commit()
+    return {
+        "ok": True,
+        "lob": lob,
+        "days_generated": days_generated,
+        "forecast_count": fc_total,
+        "requirements_count": rq_total,
+        "message": f"Generated retrospective forecast for {days_generated} days ({fc_total} intervals)",
+    }
+
+
 def generate_all_forecasts(method="weighted", historical_days=90,
                             forecast_days=90, window=7):
     """

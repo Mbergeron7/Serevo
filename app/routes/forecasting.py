@@ -830,6 +830,62 @@ def forecast_api_intervals():
 
 
 # ═══════════════════════════════════════════════════════════════
+# RETROSPECTIVE FORECAST (backfill past dates for comparison)
+# ═══════════════════════════════════════════════════════════════
+
+@forecasting_bp.route("/generate-retrospective", methods=["POST"])
+@login_required
+def generate_retrospective():
+    """Generate forecast data for past dates so the intraday view can
+    show forecast-vs-actual comparisons on historical days.
+
+    POST JSON: {lob, start_date?, end_date?, method?, days_back?}
+    - lob: required
+    - start_date / end_date: optional YYYY-MM-DD (defaults to last 30 days)
+    - days_back: alternative to start_date — go back N days from today
+    - method: "weighted" (default) or "moving_average"
+    """
+    from app.forecasting.engine import generate_retrospective_forecast
+    import datetime as dt_mod
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        today = date.today()
+        days_back = int(payload.get("days_back", 30))
+        start_str = payload.get("start_date")
+        end_str = payload.get("end_date")
+
+        if start_str:
+            start_date = dt_mod.datetime.strptime(start_str[:10], "%Y-%m-%d").date()
+        else:
+            start_date = today - datetime.timedelta(days=days_back)
+
+        end_date = (dt_mod.datetime.strptime(end_str[:10], "%Y-%m-%d").date()
+                    if end_str else today - datetime.timedelta(days=1))
+
+        # Clamp to past only
+        if end_date >= today:
+            end_date = today - datetime.timedelta(days=1)
+        if start_date > end_date:
+            return jsonify({"success": False, "error": "start_date must be before end_date"})
+
+        method = payload.get("method", "weighted")
+        result = generate_retrospective_forecast(
+            lob, start_date, end_date, method=method
+        )
+        result["success"] = result.get("ok", False)
+        return jsonify(result)
+
+    except Exception as e:
+        log.exception("Retrospective forecast error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
 # MID-DAY REFORECASTING
 # ═══════════════════════════════════════════════════════════════
 
