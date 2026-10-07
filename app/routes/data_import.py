@@ -409,7 +409,11 @@ def upload():
     rows = _remap_rows(rows, auto_map)
 
     # Process rows
-    log.info("Upload started: type=%s rows=%d file=%s user=%s", upload_type, len(rows), file.filename, user.get("email", ""))
+    try:
+        row_count = len(rows)
+    except (TypeError, AttributeError):
+        row_count = 0
+    log.info("Upload started: type=%s rows=%s file=%s user=%s", upload_type, row_count or "streaming", file.filename, user.get("email", ""))
     result = _import_rows(upload_type, rows, user.get("email", ""))
     if result.get("success"):
         log.info("Upload complete: type=%s imported=%d skipped=%d", upload_type, result.get("imported", 0), result.get("skipped", 0))
@@ -743,13 +747,10 @@ def _parse_csv(file_obj):
 
 
 def _parse_excel(file_obj):
-    """Parse an Excel upload into a list of dicts.
-    For large files (>50K rows), returns a _StreamingExcel wrapper
-    that yields rows on demand to avoid loading everything into memory.
-    """
+    """Parse an Excel upload. Always streams from disk to keep memory low."""
     import openpyxl
 
-    # Save to a temp file so we can read it twice if needed
+    # Save to a temp file so we can stream from it
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     try:
         file_obj.seek(0)
@@ -759,55 +760,35 @@ def _parse_excel(file_obj):
         tmp.close()
         raise
 
+    # Read just the headers
     wb = openpyxl.load_workbook(tmp.name, read_only=True, data_only=True)
     ws = wb.active
     rows_iter = ws.iter_rows(values_only=True)
     headers = [str(c or "").strip() for c in next(rows_iter)]
-
-    # Count rows by iterating (read_only mode is lazy per-row)
-    count = 0
-    for _ in rows_iter:
-        count += 1
     wb.close()
 
-    if count > 50000:
-        # Return a streaming wrapper — don't load into memory
-        return _StreamingExcel(tmp.name, headers, count)
-
-    # Small file — load into memory as before
-    wb2 = openpyxl.load_workbook(tmp.name, read_only=True, data_only=True)
-    ws2 = wb2.active
-    it = ws2.iter_rows(values_only=True)
-    next(it)  # skip header
-    result = []
-    for row in it:
-        d = {}
-        for i, val in enumerate(row):
-            if i < len(headers) and headers[i]:
-                d[headers[i]] = val if val is not None else ""
-        if any(str(v).strip() for v in d.values()):
-            result.append(d)
-    wb2.close()
-    try:
-        os.unlink(tmp.name)
-    except OSError:
-        pass
-    return result
+    # Always stream — avoids counting rows upfront and loading into memory
+    return _StreamingExcel(tmp.name, headers)
 
 
 class _StreamingExcel:
-    """Wrapper that streams Excel rows on demand for large files."""
+    """Wrapper that streams Excel rows on demand to keep memory low."""
 
-    def __init__(self, path, headers, count):
+    def __init__(self, path, headers, count=None):
         self._path = path
         self._headers = headers
-        self._count = count
+        self._count = count  # may be None — len() returns estimate
+        self._iterated_count = 0  # set after iteration
 
     def __len__(self):
-        return self._count
+        if self._iterated_count:
+            return self._iterated_count
+        if self._count is not None:
+            return self._count
+        return 0  # unknown until iterated
 
     def __bool__(self):
-        return self._count > 0
+        return True  # file exists with headers, assume it has data
 
     def __iter__(self):
         import openpyxl
@@ -815,13 +796,16 @@ class _StreamingExcel:
         ws = wb.active
         rows_iter = ws.iter_rows(values_only=True)
         next(rows_iter)  # skip header
+        count = 0
         for row in rows_iter:
             d = {}
             for i, val in enumerate(row):
                 if i < len(self._headers) and self._headers[i]:
                     d[self._headers[i]] = val if val is not None else ""
             if any(str(v).strip() for v in d.values()):
+                count += 1
                 yield d
+        self._iterated_count = count
         wb.close()
         try:
             os.unlink(self._path)
@@ -841,10 +825,14 @@ def _import_rows(upload_type, rows, uploaded_by=""):
     from app.models import Accommodation, PTOEntry
     from app.models import ForecastInterval, RequirementInterval
 
+    try:
+        rows_total = len(rows)
+    except (TypeError, AttributeError):
+        rows_total = 0
     upload = DataUpload(
         filename=f"upload_{upload_type}",
         upload_type=upload_type,
-        rows_total=len(rows),
+        rows_total=rows_total,
         status="processing",
         uploaded_by=uploaded_by,
     )
@@ -877,6 +865,7 @@ def _import_rows(upload_type, rows, uploaded_by=""):
         elif upload_type == "planning_units":
             imported, skipped, errors = _import_planning_units(rows)
 
+        upload.rows_total = imported + skipped
         upload.rows_imported = imported
         upload.rows_skipped = skipped
         upload.status = "complete"
@@ -888,7 +877,7 @@ def _import_rows(upload_type, rows, uploaded_by=""):
             "success": True,
             "imported": imported,
             "skipped": skipped,
-            "total": len(rows),
+            "total": imported + skipped,
             "errors": errors[:10],
         }
     except Exception as e:
