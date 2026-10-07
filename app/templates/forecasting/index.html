@@ -816,7 +816,18 @@ function onLobCheckChange() {
   if (currentView === 'daily') {
     loadIntervalData();
   } else {
-    renderDashboard();
+    // Check if any selected LOBs need data loaded
+    const selected = getSelectedLobs();
+    if (!selected.length) {
+      renderDashboard();
+      return;
+    }
+    const missing = selected.filter(l => !forecastData[l]);
+    if (missing.length) {
+      loadExistingData();  // reloads all selected LOBs
+    } else {
+      renderDashboard();
+    }
   }
 }
 
