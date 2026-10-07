@@ -78,9 +78,11 @@ COLUMN_ALIASES = {
                          "separation date", "end"],
     "Title":            ["title", "job title", "position", "role"],
 
-    # ── Forecast ──
-    "Timestamp":        ["timestamp", "date", "datetime", "date time", "time",
+    # ── Forecast / Actuals ──
+    "Timestamp":        ["timestamp", "datetime", "date time",
                          "interval", "interval start", "period"],
+    "Date":             ["date", "call date", "interval date"],
+    "Time":             ["time", "interval time", "start time"],
     "Offered":          ["offered", "calls offered", "contacts offered",
                          "volume", "inbound"],
     "AHT":              ["aht", "average handle time", "avg handle time",
@@ -259,8 +261,8 @@ UPLOAD_TYPES = {
     },
     "forecast": {
         "label": "Forecast Data",
-        "required": ["Timestamp", "LOB", "Offered", "AHT"],
-        "optional": [],
+        "required": ["LOB", "Offered", "AHT"],
+        "optional": ["Timestamp", "Date", "Time"],
     },
     "requirements": {
         "label": "Requirements Data",
@@ -280,8 +282,9 @@ UPLOAD_TYPES = {
     },
     "actuals": {
         "label": "Call Actuals (ACD intervals)",
-        "required": ["Timestamp", "LOB", "Offered", "Answered"],
-        "optional": ["Answered Within", "Abandoned", "Rolled", "ASA", "AHT", "Max Queued"],
+        "required": ["LOB", "Offered"],
+        "optional": ["Timestamp", "Date", "Time", "Answered", "Answered Within",
+                      "Abandoned", "Rolled", "ASA", "AHT", "Max Queued"],
     },
     "agent_status": {
         "label": "Agent Status Events",
@@ -927,22 +930,23 @@ def _import_employees(rows):
 
 
 def _import_forecast(rows):
-    """Forecast intervals. Upserts on (LOB, Timestamp)."""
+    """Forecast intervals. Upserts on (LOB, Timestamp).
+    Supports either a combined Timestamp column or separate Date + Time columns.
+    """
     from app.models import db, ForecastInterval
     imported, skipped = 0, 0
     errors = []
     for i, row in enumerate(rows, start=2):
-        ts_str  = _get_val(row, "Timestamp")
-        lob     = _get_val(row, "LOB")
-        if not ts_str or not lob:
+        lob = _get_val(row, "LOB")
+        if not lob:
             skipped += 1
             continue
-        unit = _get_or_create_unit(lob)
-        ts = _parse_ts(ts_str)
+        ts = _resolve_timestamp(row)
         if not ts:
             skipped += 1
-            errors.append(f"Row {i}: bad timestamp '{ts_str}'")
+            errors.append(f"Row {i}: bad timestamp")
             continue
+        unit = _get_or_create_unit(lob)
         rec = ForecastInterval.query.filter_by(planning_unit_id=unit.id, timestamp=ts).first()
         if not rec:
             rec = ForecastInterval(planning_unit_id=unit.id, timestamp=ts, source="upload")
@@ -1074,6 +1078,82 @@ def _parse_ts(ts_str):
     return None
 
 
+def _resolve_timestamp(row):
+    """Resolve a timestamp from either a single Timestamp column or separate Date + Time columns.
+
+    Handles:
+      - Combined Timestamp column: "2023-01-01 09:00" (a full datetime)
+      - Separate Date + Time columns: Date="2023-01-01", Time/Timestamp="09:00"
+      - Excel datetime/time objects in either column
+    Returns datetime or None.
+    """
+    import datetime as dt_mod
+
+    # Grab raw values (before string conversion) to detect Excel types
+    ts_raw_obj = row.get("Timestamp") or row.get("timestamp") or None
+    date_raw_obj = row.get("Date") or row.get("date") or None
+    time_raw_obj = row.get("Time") or row.get("time") or None
+
+    # If Timestamp is a full datetime (not just a time), use it directly
+    if isinstance(ts_raw_obj, dt_mod.datetime):
+        return ts_raw_obj
+    if isinstance(ts_raw_obj, str) and ts_raw_obj.strip():
+        ts = _parse_ts(ts_raw_obj)
+        if ts and ts.hour + ts.minute > 0:
+            return ts
+        # If it parsed to midnight with no time component, it might be just a date
+        if ts and date_raw_obj is None:
+            return ts
+
+    # We have separate Date + Time (or Timestamp is just a time value)
+    # Resolve the date part
+    date_part = None
+    if isinstance(date_raw_obj, dt_mod.datetime):
+        date_part = date_raw_obj.date()
+    elif isinstance(date_raw_obj, dt_mod.date):
+        date_part = date_raw_obj
+    elif date_raw_obj:
+        date_str = str(date_raw_obj).strip()
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y",
+                    "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                date_part = dt_mod.datetime.strptime(date_str[:19], fmt).date()
+                break
+            except ValueError:
+                continue
+
+    if not date_part:
+        return None
+
+    # Resolve the time part — check Time column first, then Timestamp column
+    time_part = None
+    for t_obj in (time_raw_obj, ts_raw_obj):
+        if t_obj is None:
+            continue
+        if isinstance(t_obj, dt_mod.time):
+            time_part = t_obj
+            break
+        if isinstance(t_obj, dt_mod.datetime):
+            time_part = t_obj.time()
+            break
+        t_str = str(t_obj).strip()
+        if not t_str:
+            continue
+        for fmt in ("%H:%M:%S", "%H:%M", "%I:%M %p", "%I:%M:%S %p"):
+            try:
+                time_part = dt_mod.datetime.strptime(t_str, fmt).time()
+                break
+            except ValueError:
+                continue
+        if time_part:
+            break
+
+    if not time_part:
+        time_part = dt_mod.time(0, 0)
+
+    return dt_mod.datetime.combine(date_part, time_part)
+
+
 def _num(v, default=0):
     try:
         return float(str(v).replace(",", "").strip())
@@ -1082,13 +1162,15 @@ def _num(v, default=0):
 
 
 def _import_actuals(rows):
-    """Interval call actuals. Upserts on (LOB, Timestamp)."""
+    """Interval call actuals. Upserts on (LOB, Timestamp).
+    Supports either a combined Timestamp column or separate Date + Time columns.
+    """
     from app.models import db, IntervalActual
     imported, skipped = 0, 0
     errors = []
     for i, row in enumerate(rows, start=2):
-        ts = _parse_ts(_get_val(row, "Timestamp"))
         lob = _get_val(row, "LOB")
+        ts = _resolve_timestamp(row)
         if not ts or not lob:
             skipped += 1
             if lob and not ts:
