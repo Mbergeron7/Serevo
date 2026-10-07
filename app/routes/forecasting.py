@@ -699,6 +699,33 @@ def forecast_api_data():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Debug: check what data exists per planning unit ────────
+@forecasting_bp.route("/api/debug-data", methods=["GET"])
+@login_required
+def debug_data():
+    """Temporary debug endpoint to check IntervalActual data per planning unit."""
+    from app.models import PlanningUnit, IntervalActual
+    from sqlalchemy import func as sa_func
+    try:
+        units = PlanningUnit.query.all()
+        result = []
+        for u in units:
+            count = IntervalActual.query.filter_by(planning_unit_id=u.id).count()
+            min_ts = IntervalActual.query.filter_by(planning_unit_id=u.id).with_entities(
+                sa_func.min(IntervalActual.timestamp)).scalar()
+            max_ts = IntervalActual.query.filter_by(planning_unit_id=u.id).with_entities(
+                sa_func.max(IntervalActual.timestamp)).scalar()
+            result.append({
+                "id": u.id, "name": u.name,
+                "interval_actual_count": count,
+                "min_date": str(min_ts) if min_ts else None,
+                "max_date": str(max_ts) if max_ts else None,
+            })
+        return jsonify({"units": result})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 # ── Interval-level data API (for daily intraday chart) ────────
 @forecasting_bp.route("/api/intervals", methods=["POST"])
 @login_required
