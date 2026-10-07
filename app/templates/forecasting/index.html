@@ -139,6 +139,18 @@
     border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── Data-type legend banner ───────────────── */
+  .data-legend-banner {
+    display: flex; align-items: center; gap: 20px; padding: 10px 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 16px; font-size: .82rem; font-weight: 600;
+  }
+  .data-legend-banner .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .legend-swatch.hist { background: rgba(100,116,139,.75); }
+  .legend-swatch.fc { background: rgba(59,130,246,.75); border: 2px dashed rgba(59,130,246,1); box-sizing: border-box; }
+  .data-legend-banner .legend-divider { width: 1px; height: 18px; background: var(--border); }
+
 
   /* ── Reforecast section ──────────────────── */
   .reforecast-section {
@@ -441,12 +453,20 @@
 </div>
 
 
+<!-- ═══ Data type legend ═══ -->
+<div class="data-legend-banner" id="dataLegendBanner" style="display:none;">
+  <span style="color:var(--text-muted);font-weight:400;">Chart data:</span>
+  <div class="legend-item"><div class="legend-swatch hist"></div> Historical (actual data)</div>
+  <div class="legend-divider"></div>
+  <div class="legend-item"><div class="legend-swatch fc"></div> Forecast (projected)</div>
+</div>
+
 <!-- ═══ Offered Calls chart ═══ -->
 <div class="chart-section" id="offeredSection" style="display:none;">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>
       <h2>Offered Calls</h2>
-      <div class="chart-sub" id="offeredSub">Daily call volume — historical (grey) vs forecast (blue)</div>
+      <div class="chart-sub" id="offeredSub">Daily call volume</div>
     </div>
   </div>
   <div class="chart-wrap"><canvas id="offeredChart"></canvas></div>
@@ -457,7 +477,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>
       <h2>AHT</h2>
-      <div class="chart-sub" id="ahtSub">Average handle time in seconds — historical vs forecast</div>
+      <div class="chart-sub" id="ahtSub">Average handle time in seconds</div>
     </div>
   </div>
   <div class="chart-wrap"><canvas id="ahtChart"></canvas></div>
@@ -636,8 +656,8 @@ function setView(view, btn) {
   updateNavLabel();
 
   const viewLabel = {daily:'Intraday',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[view];
-  document.getElementById('offeredSub').textContent = viewLabel + ' call volume — historical (grey) vs forecast (blue)';
-  document.getElementById('ahtSub').textContent = viewLabel + ' average handle time in seconds — historical vs forecast';
+  document.getElementById('offeredSub').textContent = viewLabel + ' call volume';
+  document.getElementById('ahtSub').textContent = viewLabel + ' average handle time in seconds';
   document.getElementById('reqSub').textContent = viewLabel + ' agents required based on Erlang C calculation';
 
   if (view === 'daily') {
@@ -1028,16 +1048,38 @@ function renderCharts() {
   const daily = getDailyData();
   if (!daily.length) {
     ['offeredSection','ahtSection','reqSection'].forEach(id => document.getElementById(id).style.display = 'none');
+    document.getElementById('dataLegendBanner').style.display = 'none';
     return;
   }
+
+  // Show legend banner when we have both historic and forecast data
+  const hasHist = daily.some(d => d.is_historic);
+  const hasFc = daily.some(d => !d.is_historic);
+  document.getElementById('dataLegendBanner').style.display = (hasHist || hasFc) ? 'flex' : 'none';
 
   updateSummaryCards();
 
   const labels = daily.map(d => d.label || d.date);
 
-  // Color arrays: grey for historic, colored for forecast
-  const offeredColors = daily.map(d => d.is_historic ? 'rgba(156,163,175,.7)' : 'rgba(59,130,246,.7)');
-  const reqColors = daily.map(d => d.is_historic ? 'rgba(156,163,175,.5)' : 'rgba(34,197,94,.6)');
+  // Split data into historical and forecast series (null where the other applies)
+  const histOffered = daily.map(d => d.is_historic ? Math.round(d.offered) : null);
+  const fcOffered   = daily.map(d => d.is_historic ? null : Math.round(d.offered));
+  const histReq     = daily.map(d => d.is_historic ? Math.round(d.req * 10) / 10 : null);
+  const fcReq       = daily.map(d => d.is_historic ? null : Math.round(d.req * 10) / 10);
+  const histAht     = daily.map(d => d.is_historic ? Math.round(d.aht) : null);
+  const fcAht       = daily.map(d => d.is_historic ? null : Math.round(d.aht));
+
+  // Find the boundary index (last historic + 1) to bridge the gap between series
+  let boundaryIdx = -1;
+  for (let i = 0; i < daily.length; i++) {
+    if (daily[i].is_historic) boundaryIdx = i;
+  }
+  // Duplicate boundary point so both series connect visually
+  if (boundaryIdx >= 0 && boundaryIdx < daily.length - 1) {
+    fcOffered[boundaryIdx] = histOffered[boundaryIdx];
+    fcReq[boundaryIdx] = histReq[boundaryIdx];
+    fcAht[boundaryIdx] = histAht[boundaryIdx];
+  }
 
   // Offered chart
   document.getElementById('offeredSection').style.display = '';
@@ -1047,17 +1089,25 @@ function renderCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'Offered Calls',
-        data: daily.map(d => Math.round(d.offered)),
-        backgroundColor: offeredColors,
+        label: '▎Historical',
+        data: histOffered,
+        backgroundColor: 'rgba(100,116,139,.75)',
         borderWidth: 0,
         borderRadius: 2,
+      },{
+        label: '▎Forecast',
+        data: fcOffered,
+        backgroundColor: 'rgba(59,130,246,.75)',
+        borderColor: 'rgba(59,130,246,1)',
+        borderWidth: 1,
+        borderRadius: 2,
+        borderDash: [3, 2],
       }]
     },
-    options: chartOpts('Calls', false),
+    options: chartOpts('Calls', false, true),
   });
 
-  // AHT chart
+  // AHT chart — two line series
   document.getElementById('ahtSection').style.display = '';
   if (chartAht) chartAht.destroy();
   chartAht = new Chart(document.getElementById('ahtChart'), {
@@ -1065,21 +1115,29 @@ function renderCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'AHT (s)',
-        data: daily.map(d => Math.round(d.aht)),
-        borderColor: 'rgba(234,88,12,.8)',
-        backgroundColor: 'rgba(234,88,12,.1)',
+        label: '▎Historical',
+        data: histAht,
+        borderColor: 'rgba(100,116,139,.8)',
+        backgroundColor: 'rgba(100,116,139,.08)',
         borderWidth: 2,
         fill: true,
         pointRadius: 0,
         tension: .3,
-        segment: {
-          borderColor: ctx => daily[ctx.p0DataIndex]?.is_historic ? 'rgba(156,163,175,.6)' : 'rgba(234,88,12,.8)',
-          backgroundColor: ctx => daily[ctx.p0DataIndex]?.is_historic ? 'rgba(156,163,175,.08)' : 'rgba(234,88,12,.1)',
-        }
+        spanGaps: false,
+      },{
+        label: '▎Forecast',
+        data: fcAht,
+        borderColor: 'rgba(234,88,12,.85)',
+        backgroundColor: 'rgba(234,88,12,.08)',
+        borderWidth: 2,
+        borderDash: [6, 3],
+        fill: true,
+        pointRadius: 0,
+        tension: .3,
+        spanGaps: false,
       }]
     },
-    options: chartOpts('Seconds', true),
+    options: chartOpts('Seconds', true, true),
   });
 
   // Requirements chart
@@ -1090,14 +1148,21 @@ function renderCharts() {
     data: {
       labels,
       datasets: [{
-        label: 'Agents Required',
-        data: daily.map(d => Math.round(d.req * 10) / 10),
-        backgroundColor: reqColors,
+        label: '▎Historical',
+        data: histReq,
+        backgroundColor: 'rgba(100,116,139,.6)',
         borderWidth: 0,
+        borderRadius: 2,
+      },{
+        label: '▎Forecast',
+        data: fcReq,
+        backgroundColor: 'rgba(34,197,94,.65)',
+        borderColor: 'rgba(34,197,94,1)',
+        borderWidth: 1,
         borderRadius: 2,
       }]
     },
-    options: chartOpts('Agents', false),
+    options: chartOpts('Agents', false, true),
   });
 }
 
@@ -1189,12 +1254,22 @@ function intervalChartOpts(yLabel) {
   };
 }
 
-function chartOpts(yLabel, isLine) {
+function chartOpts(yLabel, isLine, showLegend) {
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: showLegend !== false,
+        position: 'top',
+        align: 'end',
+        labels: {
+          usePointStyle: true,
+          pointStyle: 'rect',
+          padding: 16,
+          font: { size: 12, weight: '600' },
+        }
+      },
       tooltip: {
         callbacks: {
           title: arr => {
