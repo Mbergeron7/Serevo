@@ -1047,7 +1047,7 @@ def _import_forecast(rows):
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     imported, skipped = 0, 0
     errors = []
-    unit_cache = {}
+    unit_id_cache = {}
     BATCH_SIZE = 500
     batch = []
 
@@ -1062,14 +1062,15 @@ def _import_forecast(rows):
             if len(errors) < 50:
                 errors.append(f"Row {i}: bad timestamp")
             continue
-        if lob not in unit_cache:
-            unit_cache[lob] = _get_or_create_unit(lob)
-        unit = unit_cache[lob]
-        if not unit:
+        if lob not in unit_id_cache:
+            unit = _get_or_create_unit(lob)
+            unit_id_cache[lob] = unit.id if unit else None
+        unit_id = unit_id_cache[lob]
+        if not unit_id:
             skipped += 1
             continue
         batch.append({
-            "planning_unit_id": unit.id,
+            "planning_unit_id": unit_id,
             "timestamp": ts,
             "offered": _num(_get_val(row, "Offered")),
             "aht": _num(_get_val(row, "AHT")),
@@ -1331,7 +1332,7 @@ def _import_actuals(rows):
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     imported, skipped = 0, 0
     errors = []
-    unit_cache = {}  # lob_name -> unit obj
+    unit_id_cache = {}  # lob_name -> unit.id (int, survives expunge)
     BATCH_SIZE = 500
 
     # Pre-parse all rows into records grouped by batch
@@ -1346,11 +1347,12 @@ def _import_actuals(rows):
                     errors.append(f"Row {i}: bad timestamp")
             continue
 
-        # Cache planning units to avoid repeated queries
-        if lob not in unit_cache:
-            unit_cache[lob] = _get_or_create_unit(lob)
-        unit = unit_cache[lob]
-        if not unit:
+        # Cache planning unit IDs to avoid repeated queries
+        if lob not in unit_id_cache:
+            unit = _get_or_create_unit(lob)
+            unit_id_cache[lob] = unit.id if unit else None
+        unit_id = unit_id_cache[lob]
+        if not unit_id:
             skipped += 1
             continue
 
@@ -1363,7 +1365,7 @@ def _import_actuals(rows):
         asa = _get_val(row, "ASA"); aht = _get_val(row, "AHT"); mq = _get_val(row, "Max Queued")
 
         batch.append({
-            "planning_unit_id": unit.id,
+            "planning_unit_id": unit_id,
             "timestamp": ts,
             "offered": offered,
             "answered": answered,
