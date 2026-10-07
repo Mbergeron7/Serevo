@@ -2088,12 +2088,35 @@ def _parse_date(val):
 @settings_bp.route("/planning-units/delete", methods=["POST"])
 @admin_required
 def planning_units_delete():
-    from app.models import PlanningUnit, Employee, db
+    from app.models import PlanningUnit, db
     d = request.json or {}
     try:
-        item = PlanningUnit.query.get(int(d["id"]))
+        pu_id = int(d["id"])
+        item = PlanningUnit.query.get(pu_id)
         if item:
-            Employee.query.filter_by(planning_unit_id=item.id).update({"planning_unit_id": None})
+            # Clear ALL FK references via raw SQL to avoid loading models
+            # with potentially missing columns
+            stmts = [
+                "UPDATE employees SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+                "DELETE FROM requirement_intervals WHERE planning_unit_id = :pid",
+                "DELETE FROM forecast_intervals WHERE planning_unit_id = :pid",
+                "DELETE FROM planning_unit_business_hours WHERE planning_unit_id = :pid",
+                "DELETE FROM planning_unit_activities WHERE planning_unit_id = :pid",
+                "DELETE FROM planning_unit_parameters WHERE planning_unit_id = :pid",
+                "DELETE FROM call_routes WHERE planning_unit_id = :pid",
+                "DELETE FROM interval_actuals WHERE planning_unit_id = :pid",
+                "DELETE FROM forecast_scenarios WHERE planning_unit_id = :pid",
+                "UPDATE week_time_patterns SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+                "UPDATE day_models SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+                "UPDATE contracts SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+                "UPDATE shift_sequences SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+                "UPDATE agent_status_events SET planning_unit_id = NULL WHERE planning_unit_id = :pid",
+            ]
+            for sql in stmts:
+                try:
+                    db.session.execute(db.text(sql), {"pid": pu_id})
+                except Exception:
+                    pass  # table may not exist yet
             db.session.delete(item)
             db.session.commit()
         return jsonify(success=True)
