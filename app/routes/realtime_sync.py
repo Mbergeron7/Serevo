@@ -864,7 +864,7 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
                 agent_id = row[col_map["agent_id"]].strip()
                 if agent_id:
                     emp = Employee.query.filter(
-                        (Employee.external_id == agent_id) |
+                        (Employee.external_id_1 == agent_id) |
                         (Employee.external_id_2 == agent_id) |
                         (Employee.employee_id == agent_id)
                     ).first()
@@ -1296,7 +1296,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     agent_id = row[agg_col_map["agent_id"]].strip()
                     if agent_id:
                         emp = Employee.query.filter(
-                            (Employee.external_id == agent_id) |
+                            (Employee.external_id_1 == agent_id) |
                             (Employee.external_id_2 == agent_id) |
                             (Employee.employee_id == agent_id)
                         ).first()
