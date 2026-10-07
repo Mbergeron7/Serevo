@@ -298,17 +298,36 @@ def _parse_timestamp(date_str, time_str):
     raise ValueError(f"Cannot parse time: {time_str}")
 
 
-def _parse_datetime(val):
-    """Parse a single datetime string."""
+def _parse_datetime(val, source_tz=None, target_tz=None):
+    """Parse a single datetime string, optionally converting timezones.
+
+    source_tz: pytz timezone the data is in (e.g. "US/Central")
+    target_tz: pytz timezone to convert to (defaults to "US/Eastern")
+    """
     val = str(val).strip()
+    dt = None
     for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y %I:%M:%S %p",
                 "%m/%d/%Y %I:%M %p", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
                 "%m/%d/%y %H:%M:%S", "%m/%d/%y %H:%M"):
         try:
-            return datetime.strptime(val, fmt)
+            dt = datetime.strptime(val, fmt)
+            break
         except (ValueError, TypeError):
             continue
-    raise ValueError(f"Cannot parse datetime: {val}")
+    if dt is None:
+        raise ValueError(f"Cannot parse datetime: {val}")
+
+    # Convert timezone if source_tz is provided
+    if source_tz:
+        try:
+            from zoneinfo import ZoneInfo
+            src = ZoneInfo(source_tz)
+            tgt = ZoneInfo(target_tz) if target_tz else ZoneInfo("US/Eastern")
+            dt = dt.replace(tzinfo=src).astimezone(tgt).replace(tzinfo=None)
+        except Exception:
+            pass  # If tz is invalid, use as-is
+
+    return dt
 
 
 def _safe_int(val):
@@ -409,7 +428,8 @@ _EVENT_AGENT_COL_ALIASES = {
 # EVENT-FORMAT AGGREGATION
 # ═══════════════════════════════════════════════════════════════
 
-def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=None):
+def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=None,
+                           source_timezone=None, target_timezone=None):
     """
     Convert raw per-call event rows into interval-aggregated rows
     that sync_call_volume can process.
@@ -437,7 +457,7 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             if not ts_str:
                 continue
 
-            ts = _parse_datetime(ts_str)
+            ts = _parse_datetime(ts_str, source_tz=source_timezone, target_tz=target_timezone)
 
             # Dedup by call_id if available
             call_id = None
@@ -513,7 +533,8 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
     return result_rows
 
 
-def _aggregate_agent_events(rows, headers, interval_minutes=15, custom_mapping=None):
+def _aggregate_agent_events(rows, headers, interval_minutes=15, custom_mapping=None,
+                            source_timezone=None, target_timezone=None):
     """
     Convert raw per-event agent status rows into the format
     sync_agent_activity can process.
@@ -541,7 +562,7 @@ def _aggregate_agent_events(rows, headers, interval_minutes=15, custom_mapping=N
             ts_str = row[col_map["timestamp"]].strip()
             if not ts_str:
                 continue
-            ts = _parse_datetime(ts_str)
+            ts = _parse_datetime(ts_str, source_tz=source_timezone, target_tz=target_timezone)
 
             agent_id = ""
             if "agent_id" in col_map:
@@ -1012,7 +1033,8 @@ def sync_employees(spreadsheet, tab_name=None, custom_mapping=None):
 # ═══════════════════════════════════════════════════════════════
 
 def _sync_event_format(spreadsheet, feed_type, tab_name=None,
-                       custom_mapping=None, interval_minutes=15):
+                       custom_mapping=None, interval_minutes=15,
+                       source_timezone=None, target_timezone=None):
     """
     Read raw event rows from a sheet, aggregate them into interval format,
     then run the standard sync function on the aggregated data.
@@ -1044,6 +1066,8 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
             raw_rows, headers,
             interval_minutes=interval_minutes,
             custom_mapping=custom_mapping,
+            source_timezone=source_timezone,
+            target_timezone=target_timezone,
         )
         if len(aggregated) <= 1:
             return 0, 0, ["No call events could be parsed. Check column mapping."]
@@ -1131,6 +1155,8 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
             raw_rows, headers,
             interval_minutes=interval_minutes,
             custom_mapping=custom_mapping,
+            source_timezone=source_timezone,
+            target_timezone=target_timezone,
         )
         if len(aggregated) <= 1:
             return 0, 0, ["No agent events could be parsed. Check column mapping."]
@@ -1283,11 +1309,13 @@ def run_sync(app=None):
 
                         if data_fmt == "event" and feed.feed_type in ("call_volume", "agent_status"):
                             # Event format: read raw rows, aggregate, then sync
+                            src_tz = getattr(feed, "source_timezone", "") or ""
                             up, skip, errs = _sync_event_format(
                                 spreadsheet, feed.feed_type,
                                 tab_name=feed.sheet_tab,
                                 custom_mapping=custom_map,
                                 interval_minutes=ivl_min,
+                                source_timezone=src_tz if src_tz else None,
                             )
                         elif feed.feed_type == "call_volume":
                             up, skip, errs = sync_call_volume(spreadsheet, tab_name=feed.sheet_tab, custom_mapping=custom_map)

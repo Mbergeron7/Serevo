@@ -507,6 +507,10 @@ def save_data_feed():
             interval_minutes = 15
         feed.interval_minutes = interval_minutes
 
+    # Source timezone (IANA name, e.g. "US/Central")
+    source_tz = (data.get("source_timezone") or "").strip()
+    feed.source_timezone = source_tz
+
     # Column mapping — JSON dict of canonical_field → sheet_column_name
     col_mapping = data.get("column_mapping")
     if col_mapping is not None:

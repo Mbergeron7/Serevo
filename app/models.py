@@ -549,6 +549,7 @@ class DataFeed(db.Model):
     sheet_tab     = db.Column(db.String(100), default="")              # specific tab name (optional)
     data_format   = db.Column(db.String(20), default="interval")       # interval | event
     interval_minutes = db.Column(db.Integer, default=15)               # aggregation bucket size for event format
+    source_timezone  = db.Column(db.String(60), default="")            # IANA tz of source data, e.g. "US/Central"
     service_account_json = db.Column(db.Text, default="")              # per-feed Google SA creds (JSON)
     api_url       = db.Column(db.String(500), default="")              # for API sources
     api_headers   = db.Column(db.Text, default="")                     # JSON headers for API
@@ -572,6 +573,7 @@ class DataFeed(db.Model):
             "sheet_key": self.sheet_key, "sheet_tab": self.sheet_tab,
             "data_format": self.data_format or "interval",
             "interval_minutes": self.interval_minutes or 15,
+            "source_timezone": self.source_timezone or "",
             "has_service_account": bool(self.service_account_json),
             "api_url": self.api_url, "api_headers": self.api_headers or "",
             "column_mapping": json.loads(self.column_mapping) if self.column_mapping else {},
