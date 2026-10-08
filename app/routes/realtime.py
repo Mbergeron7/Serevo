@@ -1554,20 +1554,29 @@ def api_live_agents():
             log.warning("No agent status data from sheet — returning empty")
             return jsonify({"by_lob": {}, "pre_shift": []})
 
+        log.info(f"Sheet returned {len(agent_now)} unique agents with activity today")
+
         # Load active employees and join by external_id_1 (= CP user_id)
         employees = Employee.query.filter_by(status="Active").all()
         ext_id_map = {}
         for emp in employees:
             if emp.external_id_1:
                 ext_id_map[emp.external_id_1.strip()] = emp
+            # Also map by employee_id for fallback
+            if emp.employee_id:
+                ext_id_map[str(emp.employee_id).strip()] = emp
 
         by_lob = {}
         pre_shift = []
+        matched = 0
+        unmatched_uids = []
 
         for uid, ag in agent_now.items():
             emp = ext_id_map.get(uid)
             if not emp:
+                unmatched_uids.append(uid)
                 continue
+            matched += 1
 
             pu = emp.planning_unit
             lob = pu.name if pu else "Unassigned"
@@ -1588,6 +1597,11 @@ def api_live_agents():
             }
 
             by_lob.setdefault(lob, []).append(agent)
+
+        if unmatched_uids:
+            log.warning(f"Live agents: {matched} matched, {len(unmatched_uids)} unmatched UIDs: {unmatched_uids[:10]}")
+        else:
+            log.info(f"Live agents: {matched} matched, 0 unmatched")
 
         return jsonify({"by_lob": by_lob, "pre_shift": pre_shift})
 
