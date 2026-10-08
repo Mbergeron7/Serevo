@@ -8,7 +8,7 @@ blueprints (to be added as modules are ported in).
 import logging
 import sys
 from datetime import timedelta
-from flask import Flask
+from flask import Flask, jsonify
 from flask_bcrypt import Bcrypt
 from flask_wtf.csrf import CSRFProtect
 from config import cfg
@@ -294,18 +294,36 @@ def create_app():
     _start_scheduler(app)
 
     # ---- error handlers ----
+    def _wants_json():
+        """True when the caller expects JSON, not an HTML error page."""
+        from app.auth import _is_api_request
+        return _is_api_request()
+
+    @app.errorhandler(400)
+    def bad_request(e):
+        if _wants_json():
+            return jsonify({"success": False, "error": "Bad request"}), 400
+        from flask import render_template
+        return render_template("404.html"), 400
+
     @app.errorhandler(403)
     def forbidden(e):
+        if _wants_json():
+            return jsonify({"success": False, "error": "Forbidden"}), 403
         from flask import render_template
         return render_template("403.html"), 403
 
     @app.errorhandler(404)
     def not_found(e):
+        if _wants_json():
+            return jsonify({"success": False, "error": "Not found"}), 404
         from flask import render_template
         return render_template("404.html"), 404
 
     @app.errorhandler(500)
     def server_error(e):
+        if _wants_json():
+            return jsonify({"success": False, "error": "Internal server error"}), 500
         from flask import render_template
         return render_template("500.html"), 500
 

@@ -1454,8 +1454,13 @@ function loadSchedule() {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lob, start_date: start, end_date: end}),
   })
-  .then(r => r.json())
+  .then(r => {
+    if (!r.ok && r.status === 401) { window.location.href = '/login'; return Promise.reject('Session expired'); }
+    if (!r.ok) return r.text().then(t => Promise.reject('Server error ' + r.status));
+    return r.json();
+  })
   .then(data => {
+    if (!data) return;
     hideLoading();
     if (!data.success) { showToast('Load error: ' + data.error, 'error'); return; }
     const shifts = data.shifts || [];
@@ -1563,8 +1568,13 @@ function saveSchedule() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({lob, start_date: start, end_date: end}),
       })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok && r.status === 401) { window.location.href = '/login'; return Promise.reject('Session expired'); }
+        if (!r.ok) return Promise.reject('Server error ' + r.status);
+        return r.json();
+      })
       .then(data => {
+        if (!data) return;
         hideLoading();
         if (data.success && data.shifts) {
           scheduleData = convertSavedToScheduleData(data.shifts, lob, start, end);
