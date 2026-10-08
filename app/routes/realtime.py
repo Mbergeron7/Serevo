@@ -1377,43 +1377,47 @@ def api_live_agents():
     # Real data: pull from AgentStatusEvent model
     try:
         from app.models import db, Employee, AgentStatusEvent, PlanningUnit
+        from sqlalchemy import func
         import datetime as dt
 
         now = dt.datetime.now()
         today = now.date()
+        day_start = dt.datetime.combine(today, dt.time.min)
 
-        # Get all active employees with their LOBs
-        employees = Employee.query.filter_by(status="Active").all()
+        # Single query: latest status event per active employee today
+        latest_sub = (db.session.query(
+            AgentStatusEvent.employee_id,
+            func.max(AgentStatusEvent.start_ts).label("max_ts")
+        ).filter(AgentStatusEvent.start_ts >= day_start)
+         .group_by(AgentStatusEvent.employee_id)
+         .subquery())
+
+        rows = (db.session.query(Employee, AgentStatusEvent)
+                .join(latest_sub, Employee.id == latest_sub.c.employee_id)
+                .join(AgentStatusEvent, db.and_(
+                    AgentStatusEvent.employee_id == latest_sub.c.employee_id,
+                    AgentStatusEvent.start_ts == latest_sub.c.max_ts))
+                .filter(Employee.status == "Active")
+                .all())
 
         by_lob = {}
         pre_shift = []
 
-        for emp in employees:
+        for emp, evt in rows:
             pu = emp.planning_unit
             lob = pu.name if pu else "Unassigned"
 
-            # Get the latest status event for this employee
-            latest_event = (AgentStatusEvent.query
-                           .filter_by(employee_id=emp.id)
-                           .filter(AgentStatusEvent.start_ts >= dt.datetime.combine(today, dt.time.min))
-                           .order_by(AgentStatusEvent.start_ts.desc())
-                           .first())
-
-            if not latest_event:
-                continue
-
-            # Calculate minutes in status
-            if latest_event.end_ts:
-                mins_in = (latest_event.end_ts - latest_event.start_ts).total_seconds() / 60
+            if evt.end_ts:
+                mins_in = (evt.end_ts - evt.start_ts).total_seconds() / 60
             else:
-                mins_in = (now - latest_event.start_ts).total_seconds() / 60
+                mins_in = (now - evt.start_ts).total_seconds() / 60
 
             agent = {
                 "name": emp.full_name,
                 "user_id": emp.employee_id,
-                "status": latest_event.status or "Unknown",
+                "status": evt.status or "Unknown",
                 "minutes_in_status": round(mins_in),
-                "current_since": latest_event.start_ts.strftime("%H:%M"),
+                "current_since": evt.start_ts.strftime("%H:%M"),
                 "lob": lob,
                 "shift_start": "",
                 "shift_end": "",
