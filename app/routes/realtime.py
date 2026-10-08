@@ -1379,9 +1379,11 @@ def api_live_agents():
         from app.models import db, Employee, AgentStatusEvent, PlanningUnit
         from sqlalchemy import func
         import datetime as dt
+        from zoneinfo import ZoneInfo
 
-        now = dt.datetime.now()
-        today = now.date()
+        tz = ZoneInfo("America/Toronto")
+        now_local = dt.datetime.now(tz).replace(tzinfo=None)  # naive local time to match DB
+        today = now_local.date()
         day_start = dt.datetime.combine(today, dt.time.min)
 
         # Single query: latest status event per active employee today
@@ -1410,7 +1412,7 @@ def api_live_agents():
             if evt.end_ts:
                 mins_in = (evt.end_ts - evt.start_ts).total_seconds() / 60
             else:
-                mins_in = (now - evt.start_ts).total_seconds() / 60
+                mins_in = (now_local - evt.start_ts).total_seconds() / 60
 
             agent = {
                 "name": emp.full_name,
