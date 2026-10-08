@@ -2431,9 +2431,9 @@ class ShiftSwapRequest(db.Model):
 
     id               = db.Column(db.Integer, primary_key=True)
     requester_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
-    requester_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=False)
+    requester_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False)
     target_id        = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)  # null = open offer
-    target_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=True)
+    target_schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id", ondelete="SET NULL"), nullable=True)
     status           = db.Column(db.String(20), default="pending")  # pending | accepted | approved | declined | cancelled
     reason           = db.Column(db.Text, default="")
     reviewed_by      = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
