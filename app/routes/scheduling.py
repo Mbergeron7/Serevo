@@ -1965,6 +1965,7 @@ def get_schedule_score():
     """
     try:
         from app.scheduling.engine import score_schedule
+        from app.models import PlanningUnit
         payload = request.get_json(silent=True) or {}
 
         days_data = payload.get("days")
@@ -1983,11 +1984,14 @@ def get_schedule_score():
         end_dt = datetime.datetime.strptime(end or start, "%Y-%m-%d").date()
 
         # Load saved schedule
-        schedules = Schedule.query.filter(
-            Schedule.lob == lob,
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        sched_filter = [
             Schedule.schedule_date >= start_dt,
             Schedule.schedule_date <= end_dt,
-        ).all()
+        ]
+        if pu:
+            sched_filter.append(Schedule.planning_unit_id == pu.id)
+        schedules = Schedule.query.filter(*sched_filter).all()
 
         if not schedules:
             return jsonify({"success": False, "error": "No saved schedule found"})
@@ -1996,11 +2000,12 @@ def get_schedule_score():
         by_date = defaultdict(list)
         for s in schedules:
             d = s.schedule_date.strftime("%Y-%m-%d")
+            emp = s.employee
             by_date[d].append({
-                "employee": s.employee_name or "",
-                "employee_id": s.employee_ext_id or "",
-                "start": s.start_time.strftime("%H:%M") if s.start_time else "08:00",
-                "end": s.end_time.strftime("%H:%M") if s.end_time else "16:30",
+                "employee": emp.full_name if emp else "",
+                "employee_id": emp.employee_id if emp else "",
+                "start": s.shift_start.strftime("%H:%M") if s.shift_start else "08:00",
+                "end": s.shift_end.strftime("%H:%M") if s.shift_end else "16:30",
                 "hours": s.hours or 0,
                 "type": s.shift_type or "full",
                 "effectiveness": 1.0,
@@ -2044,7 +2049,7 @@ def publish_schedule():
     except ValueError:
         return jsonify(success=False, error="Invalid date format")
 
-    from app.models import db, Schedule, Employee, PlanningUnit, Notification
+    from app.models import db, Schedule, Employee, PlanningUnit, Notification, User
 
     q = Schedule.query.filter(
         Schedule.schedule_date >= start_dt,
@@ -2065,11 +2070,16 @@ def publish_schedule():
 
     for emp_id in emp_ids:
         emp = Employee.query.get(emp_id)
-        if not emp or not emp.user_id:
+        if not emp:
+            continue
+        # Find the user account linked to this employee
+        linked_user = User.query.filter_by(employee_id=emp.id).first()
+        if not linked_user:
             continue
         notif = Notification(
-            user_id=emp.user_id,
-            action="schedule_published",
+            user_id=linked_user.id,
+            category="schedule",
+            title="Schedule Published",
             message=f"Your schedule for {start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d')} has been published.",
             link="/my-schedule/",
         )
