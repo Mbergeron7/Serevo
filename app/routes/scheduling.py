@@ -15,7 +15,7 @@ import uuid
 from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, admin_required, get_current_user
 from app.models import db, Schedule, ShiftSegment, Employee
 
 log = logging.getLogger("serevo.scheduling")
