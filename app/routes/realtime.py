@@ -1546,7 +1546,7 @@ def api_live_agents():
 
     # Real data: read directly from Google Sheets for near-real-time status
     try:
-        from app.models import db, Employee
+        from app.models import db, Employee, Schedule, ShiftSegment
 
         agent_now, now_est = _get_live_agents_from_sheet()
 
@@ -1559,8 +1559,10 @@ def api_live_agents():
         # Load active employees and build lookup by all ID fields
         # (CP user_id can match external_id_1, external_id_2, or employee_id)
         employees = Employee.query.filter_by(status="Active").all()
-        ext_id_map = {}
+        ext_id_map = {}   # external id → Employee
+        emp_id_set = set() # all employee IDs for schedule query
         for emp in employees:
+            emp_id_set.add(emp.id)
             if emp.external_id_1:
                 ext_id_map[emp.external_id_1.strip()] = emp
             if getattr(emp, "external_id_2", None):
@@ -1568,10 +1570,38 @@ def api_live_agents():
             if emp.employee_id:
                 ext_id_map[str(emp.employee_id).strip()] = emp
 
+        # ── Load today's schedules ─────────────────────────────
+        today = now_est.date()
+        now_time = now_est.time()
+        schedules = Schedule.query.filter(
+            Schedule.schedule_date == today,
+            Schedule.status == "scheduled",
+        ).all()  # segments are eager-loaded (lazy="joined" on model)
+
+        # Build schedule lookup: employee_id → Schedule
+        sched_by_emp = {}
+        for s in schedules:
+            sched_by_emp[s.employee_id] = s
+
+        # Helper: what activity should the agent be doing right now?
+        def _sched_now(sched):
+            """Return 'break', 'lunch', or '' based on current segment."""
+            if not sched or not sched.segments:
+                return ""
+            for seg in sched.segments:
+                if seg.start_time <= now_time < seg.end_time:
+                    if seg.activity_type == "break":
+                        return "break"
+                    if seg.activity_type == "lunch":
+                        return "lunch"
+            return ""
+
+        # ── Build response ─────────────────────────────────────
         by_lob = {}
         pre_shift = []
         matched = 0
         unmatched_uids = []
+        logged_in_emp_ids = set()  # track who IS logged in
 
         for uid, ag in agent_now.items():
             emp = ext_id_map.get(uid)
@@ -1579,9 +1609,20 @@ def api_live_agents():
                 unmatched_uids.append(uid)
                 continue
             matched += 1
+            logged_in_emp_ids.add(emp.id)
 
             pu = emp.planning_unit
             lob = pu.name if pu else "Unassigned"
+
+            sched = sched_by_emp.get(emp.id)
+            shift_start = sched.shift_start.strftime("%H:%M") if sched and sched.shift_start else ""
+            shift_end = sched.shift_end.strftime("%H:%M") if sched and sched.shift_end else ""
+
+            # Determine schedule flags
+            not_scheduled = sched is None
+            is_pre_shift = bool(sched and sched.shift_start and now_time < sched.shift_start)
+            is_shift_done = bool(sched and sched.shift_end and now_time > sched.shift_end)
+            sched_now_val = _sched_now(sched)
 
             agent = {
                 "name": emp.full_name,
@@ -1590,15 +1631,56 @@ def api_live_agents():
                 "minutes_in_status": round(ag["minutes_in_status"]),
                 "current_since": ag["current_since"],
                 "lob": lob,
-                "shift_start": "",
-                "shift_end": "",
-                "shift_done": False,
-                "sched_now": "",
-                "not_scheduled": False,
-                "pre_shift": False,
+                "shift_start": shift_start,
+                "shift_end": shift_end,
+                "shift_done": is_shift_done,
+                "sched_now": sched_now_val,
+                "not_scheduled": not_scheduled,
+                "pre_shift": is_pre_shift,
             }
 
             by_lob.setdefault(lob, []).append(agent)
+
+        # ── Build "Scheduled — Not Logged In" list ─────────────
+        PRE_SHIFT_LOOKAHEAD_MINS = 60  # show agents up to 60 min before shift
+        for s in schedules:
+            if s.employee_id in logged_in_emp_ids:
+                continue  # already logged in, skip
+            if not s.shift_start:
+                continue
+            emp = s.employee
+            if not emp or emp.status != "Active":
+                continue
+            pu = emp.planning_unit
+            lob = pu.name if pu else "Unassigned"
+
+            start_dt = datetime.datetime.combine(today, s.shift_start)
+            mins_until = (start_dt - now_est).total_seconds() / 60
+
+            if now_time > s.shift_start:
+                # Past start time — absent
+                mins_late = round((now_est - start_dt).total_seconds() / 60)
+                if s.shift_end and now_time > s.shift_end:
+                    continue  # shift is over, don't show
+                pre_shift.append({
+                    "name": emp.full_name,
+                    "lob": lob,
+                    "shift_start": s.shift_start.strftime("%H:%M"),
+                    "indicator": "absent",
+                    "mins_late": mins_late,
+                })
+            elif mins_until <= PRE_SHIFT_LOOKAHEAD_MINS:
+                # Upcoming within lookahead window — not yet started
+                pre_shift.append({
+                    "name": emp.full_name,
+                    "lob": lob,
+                    "shift_start": s.shift_start.strftime("%H:%M"),
+                    "indicator": "not_yet_started",
+                    "mins_late": 0,
+                })
+
+        # Sort pre_shift: absent first (by mins_late desc), then not_yet_started (by shift_start asc)
+        pre_shift.sort(key=lambda x: (0 if x["indicator"] == "absent" else 1, -x.get("mins_late", 0), x["shift_start"]))
 
         if unmatched_uids:
             log.warning(f"Live agents: {matched} matched, {len(unmatched_uids)} unmatched UIDs: {unmatched_uids[:10]}")
@@ -1629,7 +1711,80 @@ def api_agent_detail():
         from app.demo_data import get_demo_agent_detail
         return jsonify(get_demo_agent_detail(uid))
 
-    return jsonify(error="Agent detail not available for live data yet"), 501
+    # Real data: look up agent's schedule + current status from sheet
+    try:
+        from app.models import db, Employee, Schedule
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("America/Toronto")
+        now_est = datetime.datetime.now(tz).replace(tzinfo=None)
+        today = now_est.date()
+
+        # Find the employee by uid
+        emp = Employee.query.filter(
+            (Employee.external_id_1 == uid) |
+            (Employee.external_id_2 == uid) |
+            (db.cast(Employee.employee_id, db.String) == uid)
+        ).filter_by(status="Active").first()
+
+        if not emp:
+            return jsonify(error="Agent not found"), 404
+        sched = Schedule.query.filter_by(
+            employee_id=emp.id, schedule_date=today, status="scheduled"
+        ).first()
+
+        schedule_blocks = []
+        if sched and sched.segments:
+            for seg in sched.segments:
+                schedule_blocks.append({
+                    "activity": seg.activity_type,
+                    "start": seg.start_time.strftime("%H:%M") if seg.start_time else "",
+                    "end": seg.end_time.strftime("%H:%M") if seg.end_time else "",
+                    "duration_mins": seg.duration_mins,
+                })
+
+        # Get status timeline from sheet
+        agent_now, _ = _get_live_agents_from_sheet()
+        rows = _read_agent_status_sheet()
+        today_str = now_est.strftime("%Y-%m-%d")
+        yesterday_str = (now_est.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        timeline = []
+        for r in rows:
+            r_uid = str(r.get("user_id", "") or "").strip()
+            if r_uid != uid:
+                continue
+            st = str(r.get("start_time", "") or "").strip()
+            sid = str(r.get("c_activity_sid", "") or "").strip()
+            if not st.startswith(today_str) and not st.startswith(yesterday_str):
+                continue
+            dt_cst = _parse_datetime_str(st)
+            if not dt_cst:
+                continue
+            dt_est = dt_cst + datetime.timedelta(hours=CP_TZ_OFFSET_HOURS)
+            if dt_est.date() != today:
+                continue
+            status = CP_STATUS_MAP.get(sid, sid[:20] if sid else "Unknown")
+            timeline.append({
+                "time": dt_est.strftime("%H:%M"),
+                "status": status,
+            })
+        timeline.sort(key=lambda x: x["time"])
+
+        current = agent_now.get(uid, {})
+
+        return jsonify({
+            "name": emp.full_name,
+            "lob": emp.planning_unit.name if emp.planning_unit else "Unassigned",
+            "shift_start": sched.shift_start.strftime("%H:%M") if sched and sched.shift_start else "",
+            "shift_end": sched.shift_end.strftime("%H:%M") if sched and sched.shift_end else "",
+            "schedule_blocks": schedule_blocks,
+            "timeline": timeline,
+            "current_status": current.get("status", "Offline"),
+            "current_since": current.get("current_since", ""),
+            "minutes_in_status": round(current.get("minutes_in_status", 0)),
+        })
+    except Exception as e:
+        log.exception("agent-detail error")
+        return jsonify(error=str(e)), 500
 
 
 @realtime_bp.route("/vto-ot/delete", methods=["POST"])
