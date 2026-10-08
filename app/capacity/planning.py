@@ -67,30 +67,44 @@ WORKLOADS = _load_workloads()
 # HELPERS
 # =========================================================
 
-def _connection_token():
-    """Token from the saved WFM API connection (Settings → API Connections).
-    Falls back to the WFM_API_TOKEN environment variable."""
+def _get_wfm_connection():
+    """Return (base_url, token) from the saved WFM API connection
+    (Settings → Connections).  Falls back to environment variables."""
+    db_url = ""
+    db_token = ""
     try:
         import json as _json
         from app.models import APIConnection
-        # Try wfm_legacy first, then legacy WFM key for backwards compat
         conn = (APIConnection.query
-                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),  # "injixo" kept for DB backwards compat
+                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),
                         APIConnection.is_active == True)
                 .order_by(APIConnection.updated_at.desc()).first())
-        if conn and conn.credentials:
-            creds = _json.loads(conn.credentials)
-            raw = creds.get("access_token") or creds.get("api_key", "")
-            if raw:
-                from app.routes.settings import _clean_token
-                return _clean_token(raw)
+        if conn:
+            if conn.base_url:
+                db_url = conn.base_url.rstrip("/")
+            if conn.credentials:
+                creds = _json.loads(conn.credentials)
+                raw = creds.get("access_token") or creds.get("api_key", "")
+                if raw:
+                    from app.routes.settings import _clean_token
+                    db_token = _clean_token(raw)
     except Exception as e:
         log.debug(f"No saved WFM connection: {e}")
-    return ""
+
+    url = db_url or API_LEGACY
+    token = db_token or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
+    return url, token
+
+
+def _connection_token():
+    """Token from the saved WFM API connection (Settings → API Connections).
+    Falls back to the WFM_API_TOKEN environment variable."""
+    _, token = _get_wfm_connection()
+    return token
 
 
 def _wfm_headers():
-    token = _connection_token() or WFM_TOKEN or os.environ.get("WFM_API_TOKEN", "")
+    token = _connection_token()
     return {
         "Authorization": f"Bearer {token}",
         "Accept":        "application/json",
@@ -336,7 +350,8 @@ def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
 
 def _legacy_get(session, path, **kw):
     try:
-        r = session.get(f"{API_LEGACY}/{path}", headers=_wfm_headers(), timeout=25, **kw)
+        base, _ = _get_wfm_connection()
+        r = session.get(f"{base}/{path}", headers=_wfm_headers(), timeout=25, **kw)
         if r.ok:
             try:
                 return r.json()
