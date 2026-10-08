@@ -1015,32 +1015,59 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
     employees = [e for e in employees if e.get("employee_id") is not None]
     log.info(f"WFM schedule fetch: {len(employees)} employees × {len(days)} days")
 
-    import time as _time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
 
     out = []
     api_ok = 0
     api_fail = 0
-    call_count = 0
+    total_calls = len(employees) * len(days)
+    done_count = 0
+    lock = threading.Lock()
 
-    # Sequential calls with a single reused session to avoid
-    # rate-limiting / 401 errors from the API.
-    for emp in employees:
+    def _fetch_one(emp, day):
+        """Fetch schedule for one employee-day using a thread-local session."""
+        if not hasattr(_tls, 'session'):
+            _tls.session = requests.Session()
         eid = str(emp.get("employee_id"))
-        for day in days:
-            data = _legacy_get(session, f"employees/{eid}/schedule/{day.isoformat()}") or {}
-            schedules = data.get("schedules", []) if isinstance(data, dict) else []
-            if schedules:
-                api_ok += 1
-            else:
+        data = _legacy_get(_tls.session, f"employees/{eid}/schedule/{day.isoformat()}") or {}
+        schedules = data.get("schedules", []) if isinstance(data, dict) else []
+        blocks = _parse_blocks(schedules)
+        shift = _build_shift(eid, day, blocks)
+        return shift, bool(schedules)
+
+    _tls = threading.local()
+
+    # Use 6 concurrent workers — fast enough without hammering the API.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {}
+        for emp in employees:
+            for day in days:
+                f = pool.submit(_fetch_one, emp, day)
+                futures[f] = (emp, day)
+
+        for f in as_completed(futures):
+            try:
+                shift, had_data = f.result()
+                if had_data:
+                    api_ok += 1
+                else:
+                    api_fail += 1
+                if shift:
+                    out.append(shift)
+            except Exception:
                 api_fail += 1
-            call_count += 1
-            blocks = _parse_blocks(schedules)
-            shift = _build_shift(eid, day, blocks)
-            if shift:
-                out.append(shift)
-            # Small delay every 50 calls to stay under rate limits
-            if call_count % 50 == 0:
-                _time.sleep(0.5)
+            done_count += 1
+            # Update progress every 10 calls
+            if done_count % 10 == 0 or done_count == total_calls:
+                import sys
+                me = sys.modules[__name__]
+                status = getattr(me, '_import_status', None)
+                if isinstance(status, dict):
+                    status["message"] = (
+                        f"Fetching schedules… {done_count}/{total_calls} "
+                        f"({done_count * 100 // total_calls}%)"
+                    )
 
     log.info(f"WFM schedule results: {api_ok} with data, {api_fail} no data, {len(out)} shifts built")
     return out
