@@ -55,7 +55,7 @@ def _start_scheduler(app):
         scheduler.add_job(
             func=run_sync,
             trigger="interval",
-            minutes=5,
+            minutes=2,
             id="callpotential_sync",
             kwargs={"app": app},
             replace_existing=True,
@@ -63,7 +63,7 @@ def _start_scheduler(app):
         )
         scheduler.start()
         _scheduler_started = True
-        log.info("Call Potential auto-sync started (every 5 minutes)")
+        log.info("Call Potential auto-sync started (every 2 minutes)")
     except ImportError:
         log.warning("APScheduler not installed — Call Potential auto-sync disabled. "
                      "Install with: pip install APScheduler")
