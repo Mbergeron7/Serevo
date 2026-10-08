@@ -31,6 +31,13 @@
     <a href="#training" class="help-chip" onclick="openSection('training')">Training</a>
     <a href="#wfm-tickets" class="help-chip" onclick="openSection('wfm-tickets')">Tickets</a>
     <a href="#settings" class="help-chip" onclick="openSection('settings')">Settings</a>
+    <a href="#shift-notes" class="help-chip" onclick="openSection('shift-notes')">Shift Notes</a>
+    <a href="#team-calendar" class="help-chip" onclick="openSection('team-calendar')">Calendar</a>
+    <a href="#announcements" class="help-chip" onclick="openSection('announcements')">Announcements</a>
+    <a href="#documents" class="help-chip" onclick="openSection('documents')">Documents</a>
+    <a href="#data-import" class="help-chip" onclick="openSection('data-import')">Data Import</a>
+    <a href="#global-search" class="help-chip" onclick="openSection('global-search')">Search</a>
+    <a href="#audit-log" class="help-chip" onclick="openSection('audit-log')">Audit Log</a>
     <a href="#agent-portal" class="help-chip" onclick="openSection('agent-portal')">Agent Portal</a>
     <a href="#support" class="help-chip" onclick="openSection('support')">Support</a>
   </div>
@@ -1074,6 +1081,268 @@
         <li><strong>Endpoints</strong> — configure the URLs and authentication details for data import/export</li>
         <li><strong>OAuth / Social Login</strong> — enable Google and/or Microsoft sign-in for your users by entering OAuth client credentials (Client ID and Client Secret from Google Cloud Console or Azure AD)</li>
       </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SHIFT NOTES -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="shift-notes" data-keywords="shift notes memo comment supervisor handoff log daily note create resolve delete pin">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Shift Notes</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>Shift Notes let supervisors and admins leave important notes for the team — shift handoff info, daily reminders, known issues, or anything the next shift needs to know.</p>
+
+      <h3>Creating a Shift Note</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Shift Notes</strong> from the navigation bar.</li>
+        <li>Click <strong>+ New Note</strong>.</li>
+        <li>Enter a title and the note body. Use the rich text formatting if needed.</li>
+        <li>Optionally select a <strong>planning unit</strong> to target the note to a specific team.</li>
+        <li>Choose a priority level: Normal or Urgent. Urgent notes display with a highlighted border.</li>
+        <li>Click <strong>Save</strong>. The note appears immediately for anyone viewing that team's notes.</li>
+      </ol>
+
+      <h3>Viewing &amp; Filtering Notes</h3>
+      <p>All active shift notes display in reverse chronological order (newest first). Use the planning unit dropdown to filter notes for a specific team. Urgent notes always appear at the top.</p>
+
+      <h3>Resolving a Note</h3>
+      <p>When a note is no longer relevant (the issue was fixed, the shift handoff is complete), click <strong>Resolve</strong> on the note. Resolved notes move to the <em>Resolved</em> tab so they're preserved for reference but don't clutter the active view.</p>
+
+      <h3>Deleting a Note</h3>
+      <p>Admins can permanently delete a note by clicking the trash icon. This cannot be undone. Supervisors can delete only notes they created.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TEAM CALENDAR -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="team-calendar" data-keywords="team calendar schedule view monthly weekly daily visual overview color coded shifts time off coverage">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Team Calendar</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>The Team Calendar provides a visual overview of who is working, who is off, and where coverage gaps exist — all in a familiar calendar layout.</p>
+
+      <h3>Accessing the Calendar</h3>
+      <p>Click <strong>Calendar</strong> in the navigation bar or use the calendar icon on the Scheduling page. The calendar shows published schedules, approved time-off, and holidays.</p>
+
+      <h3>Calendar Views</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Monthly View</strong> — high-level overview showing shift counts per day and color-coded markers for time-off and holidays.</li>
+        <li><strong>Weekly View</strong> — detailed breakdown with each employee's shifts displayed as bars across the week.</li>
+        <li><strong>Daily View</strong> — hour-by-hour timeline showing exactly who is scheduled and when, including break placement.</li>
+      </ul>
+
+      <h3>Filtering the Calendar</h3>
+      <p>Use the filter bar to narrow the calendar to a specific planning unit, team lead, or employee status. This is especially useful for large teams where the full roster would be too crowded.</p>
+
+      <h3>Understanding the Colors</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Blue</strong> — scheduled shift (normal)</li>
+        <li><strong>Green</strong> — approved time off</li>
+        <li><strong>Yellow</strong> — pending time-off request</li>
+        <li><strong>Red</strong> — unplanned absence or coverage gap</li>
+        <li><strong>Gray</strong> — holiday or non-working day</li>
+      </ul>
+      <p>Click any shift bar or time-off block to see its details.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ANNOUNCEMENTS -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="announcements" data-keywords="announcements news bulletin post pin schedule expire broadcast message organization admin supervisor create edit delete">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Announcements</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>Announcements let admins and supervisors broadcast important messages to the entire organization. Agents see announcements in their portal.</p>
+
+      <h3>Creating an Announcement</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Announcements</strong> from the navigation bar.</li>
+        <li>Click <strong>+ New Announcement</strong>.</li>
+        <li>Enter a title and body. The body supports basic formatting.</li>
+        <li>Set a <strong>category</strong> (General, Policy Update, Schedule Change, Urgent, etc.) to help recipients understand the nature of the announcement.</li>
+        <li>Optionally set a <strong>start date</strong> to schedule the announcement for the future (it won't be visible until that date).</li>
+        <li>Optionally set an <strong>expiry date</strong> so the announcement automatically hides after a certain date.</li>
+        <li>Toggle <strong>Pin</strong> if you want the announcement to stay at the top of the list.</li>
+        <li>Click <strong>Publish</strong>.</li>
+      </ol>
+
+      <h3>Managing Announcements</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Edit</strong> — click on any announcement to update its content, dates, or pin status.</li>
+        <li><strong>Pin / Unpin</strong> — pinned announcements stay at the top regardless of age. Useful for ongoing policies or reminders.</li>
+        <li><strong>Delete</strong> — permanently remove an announcement. Only admins can delete announcements created by other users.</li>
+      </ul>
+
+      <h3>Where Agents See Announcements</h3>
+      <p>Active announcements appear in the Agent Portal under the Announcements section. Pinned announcements show first. Expired announcements are automatically hidden.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- EMPLOYEE DOCUMENTS -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="documents" data-keywords="documents files upload download employee document pdf attachment store record category filter search delete management">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Employee Documents</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>The Documents section lets admins and supervisors store and organize files associated with employees — onboarding paperwork, certifications, performance reviews, policy acknowledgments, and more.</p>
+
+      <h3>Uploading a Document</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Documents</strong> from the navigation bar, or open an employee's profile and click the <strong>Documents</strong> tab.</li>
+        <li>Click <strong>+ Upload Document</strong>.</li>
+        <li>Select the employee the document belongs to (if you're not already on their profile).</li>
+        <li>Choose a <strong>category</strong> (Onboarding, Certification, Performance, Policy, Other).</li>
+        <li>Enter an optional <strong>description</strong> to help identify the document later.</li>
+        <li>Click <strong>Choose File</strong> and select the file from your computer. Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG.</li>
+        <li>Click <strong>Upload</strong>. The file is stored securely and associated with the employee's record.</li>
+      </ol>
+
+      <h3>Viewing &amp; Downloading</h3>
+      <p>All documents for an employee are listed on their profile's Documents tab. Click a document name to preview it (if supported) or click the download icon to save it to your computer.</p>
+
+      <h3>Filtering Documents</h3>
+      <p>On the main Documents page, use the filters to find documents by:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Employee</strong> — search by name or employee ID</li>
+        <li><strong>Category</strong> — filter to a specific document type</li>
+        <li><strong>Date range</strong> — find documents uploaded within a specific period</li>
+      </ul>
+
+      <h3>Deleting a Document</h3>
+      <p>Click the trash icon next to any document to delete it. This permanently removes the file and cannot be undone. Only admins can delete documents uploaded by other users.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- DATA IMPORT -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="data-import" data-keywords="data import csv upload column mapping schema template preview bulk employee forecast volume historical background process manual entry">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Data Import</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>Data Import is how you bring bulk data into {{ brand_name }} — employee rosters, historical call volumes, forecast data, attendance records, and more. You can upload CSV files and map their columns to the fields {{ brand_name }} expects.</p>
+
+      <h3>Step-by-Step CSV Import</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Data Import</strong> from the navigation bar (or use the import button on pages like People or Forecasting).</li>
+        <li>Select the <strong>import type</strong> — what kind of data you're importing (Employees, Historical Volumes, Attendance, etc.).</li>
+        <li>Click <strong>Choose File</strong> and select your CSV file. The file is uploaded and the first few rows are previewed.</li>
+        <li><strong>Map columns:</strong> for each column in your CSV, select the {{ brand_name }} field it corresponds to. For example, map your "Agent Name" column to "First Name" and "Last Name", or map "Call Date" to "Date". Columns you don't need can be left as "Skip".</li>
+        <li>Review the <strong>preview</strong> — the preview table shows how the first rows will look after mapping. Verify the data looks correct.</li>
+        <li>Click <strong>Import</strong>. The data is processed in the background. Large files may take a minute.</li>
+        <li>When complete, a summary shows how many records were imported, how many were skipped (duplicates or errors), and any warnings.</li>
+      </ol>
+
+      <h3>Saved Schemas</h3>
+      <p>If you regularly import files with the same column layout, you can save your column mapping as a <strong>schema</strong>. Next time you import the same type of file, select the saved schema to auto-fill the column mapping — no need to re-map every time.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>After mapping your columns, click <strong>Save Schema</strong>.</li>
+        <li>Give it a name (e.g., "ACD Weekly Volume Export").</li>
+        <li>On future imports, select it from the <strong>Saved Schemas</strong> dropdown before uploading your file.</li>
+      </ol>
+
+      <h3>Manual Entry</h3>
+      <p>For small additions or corrections, you can also add data manually instead of importing a file. Go to the relevant page (People, Forecasting, etc.) and use the <strong>+ Add</strong> button to create individual records.</p>
+
+      <h3>Tips for Successful Imports</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Use <strong>CSV format</strong> — Excel files (.xlsx) must be saved as CSV first.</li>
+        <li>Include a <strong>header row</strong> — column names in the first row help with mapping.</li>
+        <li>Use consistent <strong>date formats</strong> — {{ brand_name }} accepts YYYY-MM-DD, MM/DD/YYYY, and DD/MM/YYYY.</li>
+        <li>Remove blank rows at the bottom of your file to avoid empty records.</li>
+        <li>For employee imports, the <strong>Employee ID</strong> field is used to match existing records. If an ID already exists, the record is updated instead of duplicated.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- GLOBAL SEARCH -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="global-search" data-keywords="global search quick find employee page action command palette keyboard shortcut ctrl k">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Global Search</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>Global Search lets you quickly find employees, navigate to any page, or jump to common actions from anywhere in {{ brand_name }}.</p>
+
+      <h3>How to Open</h3>
+      <p>Click the search icon in the top navigation bar, or use the keyboard shortcut <kbd>Ctrl+K</kbd> (Windows/Linux) or <kbd>&#8984;K</kbd> (Mac). The search overlay appears instantly.</p>
+
+      <h3>What You Can Search</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Employees</strong> — type any part of an employee's first name, last name, or employee ID. Click a result to go directly to their profile.</li>
+        <li><strong>Pages</strong> — type a page name (e.g., "scheduling", "forecasting", "settings") to jump directly there.</li>
+        <li><strong>Actions</strong> — type an action like "add employee", "new schedule", or "import data" to go straight to that workflow.</li>
+      </ul>
+
+      <h3>Tips</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Results appear as you type — no need to press Enter.</li>
+        <li>Use arrow keys to navigate results and Enter to select.</li>
+        <li>Press <kbd>Esc</kbd> to close the search overlay.</li>
+        <li>Search is available on every page, so you never need to navigate back to find something.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- AUDIT LOG -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="audit-log" data-keywords="audit log trail history activity track who changed what when action record compliance security review admin">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Audit Log</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p>The Audit Log records every significant action taken in {{ brand_name }} — who did what, when, and on which record. It's available to admins only and is essential for compliance, troubleshooting, and security review.</p>
+
+      <h3>What Gets Logged</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>User account creation, role changes, and deactivation</li>
+        <li>Employee record creation, edits, and status changes</li>
+        <li>Schedule creation, publication, and modifications</li>
+        <li>PTO requests, approvals, and denials</li>
+        <li>Shift swap requests and resolutions</li>
+        <li>Shift bidding posts and selections</li>
+        <li>Data imports and bulk operations</li>
+        <li>Settings changes (activities, contracts, planning units, day models, etc.)</li>
+        <li>Login and logout events</li>
+        <li>Document uploads and deletions</li>
+      </ul>
+
+      <h3>Using the Audit Log</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Audit Log</strong> from the navigation bar (admin only).</li>
+        <li>Browse the log in reverse chronological order (newest first).</li>
+        <li>Use the <strong>filters</strong> to narrow results by:
+          <ul style="margin:4px 0 4px 16px;">
+            <li><strong>User</strong> — who performed the action</li>
+            <li><strong>Action type</strong> — e.g., "create", "update", "delete", "login"</li>
+            <li><strong>Entity type</strong> — e.g., "employee", "schedule", "user"</li>
+            <li><strong>Date range</strong> — when the action occurred</li>
+          </ul>
+        </li>
+        <li>Click any log entry to see full details including the specific fields that were changed.</li>
+      </ol>
+
+      <h3>Payroll CSV Export</h3>
+      <p>To export payroll data as a CSV file for your payroll provider:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Payroll</strong> from the navigation bar.</li>
+        <li>Select the <strong>pay period</strong> you want to export.</li>
+        <li>Review the hours summary for accuracy — verify regular hours, overtime, and any adjustments.</li>
+        <li>Click <strong>Export CSV</strong>. The download includes employee IDs, names, regular hours, overtime hours, and total hours for the selected period.</li>
+        <li>Upload the CSV to your payroll system or share it with your payroll administrator.</li>
+      </ol>
+      <p>Tip: always finalize attendance corrections and clock-in/out edits <em>before</em> exporting payroll to ensure the data is accurate.</p>
     </div>
   </div>
 
