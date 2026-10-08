@@ -1264,7 +1264,7 @@ def import_wfm():
                             "done": True, "success": False,
                         }
                         return
-                    created, replaced, skipped = cp.upsert_pw_schedules(shifts)
+                    created, replaced, skipped = cp.upsert_pw_schedules(shifts, sd, ed)
                     msg = f"Imported {created} shift(s)"
                     if replaced:
                         msg += f", replaced {replaced} existing"

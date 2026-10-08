@@ -1060,9 +1060,14 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
     return out
 
 
-def upsert_pw_schedules(shifts):
+def upsert_pw_schedules(shifts, start_date=None, end_date=None):
     """Write pulled schedules into Serevo's Schedule/ShiftSegment tables.
-    Replaces any existing schedule for the same employee+date.
+
+    If start_date and end_date are given, clears ALL existing schedules for
+    matched employees across the entire date range first. This ensures that
+    employees whose schedules were removed in PeopleWare (e.g., day off)
+    don't keep stale shifts in Serevo.
+
     Returns (created, replaced, skipped_unknown_employee)."""
     from app.models import db, Employee, Schedule, ShiftSegment
     created = replaced = skipped = 0
@@ -1079,19 +1084,39 @@ def upsert_pw_schedules(shifts):
         emp = Employee.query.filter_by(external_id_2=ext_id).first()
         return emp
 
+    # First pass: resolve all employee IDs and count skipped
+    resolved = []  # list of (emp, shift_dict)
+    seen_ext_ids = set()
     for s in shifts:
         ext = str(s["employee_id"])
         if ext not in emp_cache:
             emp_cache[ext] = _find_employee(ext)
         emp = emp_cache[ext]
         if not emp:
-            skipped += 1
+            if ext not in seen_ext_ids:
+                skipped += 1
+                seen_ext_ids.add(ext)
             continue
-        day = datetime.date.fromisoformat(s["date"])
-        existing = Schedule.query.filter_by(employee_id=emp.id, schedule_date=day).all()
-        for ex_ in existing:
+        seen_ext_ids.add(ext)
+        resolved.append((emp, s))
+
+    # Bulk-clear existing schedules for all matched employees in the date range
+    # This removes shifts for employees who are now OFF in PeopleWare
+    matched_emp_ids = {emp.id for emp, _ in resolved}
+    if start_date and end_date and matched_emp_ids:
+        old = Schedule.query.filter(
+            Schedule.employee_id.in_(matched_emp_ids),
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).all()
+        replaced = len(old)
+        for ex_ in old:
             db.session.delete(ex_)
-            replaced += 1
+        db.session.flush()
+
+    # Insert new shifts
+    for emp, s in resolved:
+        day = datetime.date.fromisoformat(s["date"])
         sh, sm = map(int, s["start"].split(":"))
         eh, em = map(int, s["end"].split(":"))
         sched = Schedule(
@@ -1111,7 +1136,7 @@ def upsert_pw_schedules(shifts):
             ))
         created += 1
     db.session.commit()
-    log.info(f"WFM upsert: {created} created, {replaced} replaced, {skipped} skipped (unmatched)")
+    log.info(f"WFM upsert: {created} created, {replaced} cleared, {skipped} skipped (unmatched)")
     return created, replaced, skipped
 
 
