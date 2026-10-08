@@ -1067,10 +1067,22 @@ def upsert_pw_schedules(shifts):
     from app.models import db, Employee, Schedule, ShiftSegment
     created = replaced = skipped = 0
     emp_cache = {}
+
+    def _find_employee(ext_id):
+        """Match a WFM employee_id against Serevo's employee_id, external_id_1, or external_id_2."""
+        emp = Employee.query.filter_by(employee_id=ext_id).first()
+        if emp:
+            return emp
+        emp = Employee.query.filter_by(external_id_1=ext_id).first()
+        if emp:
+            return emp
+        emp = Employee.query.filter_by(external_id_2=ext_id).first()
+        return emp
+
     for s in shifts:
         ext = str(s["employee_id"])
         if ext not in emp_cache:
-            emp_cache[ext] = Employee.query.filter_by(employee_id=ext).first()
+            emp_cache[ext] = _find_employee(ext)
         emp = emp_cache[ext]
         if not emp:
             skipped += 1
@@ -1099,6 +1111,7 @@ def upsert_pw_schedules(shifts):
             ))
         created += 1
     db.session.commit()
+    log.info(f"WFM upsert: {created} created, {replaced} replaced, {skipped} skipped (unmatched)")
     return created, replaced, skipped
 
 
