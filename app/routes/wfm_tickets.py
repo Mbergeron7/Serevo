@@ -19,6 +19,14 @@ log = logging.getLogger(__name__)
 wfm_tickets_bp = Blueprint("wfm_tickets", __name__, url_prefix="/wfm-tickets")
 
 
+def _demo_guard():
+    """Return a mock-success JSON response if the current user is a demo user, else None."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, demo=True, message="Changes are not saved in demo mode.")
+    return None
+
+
 def _utcnow():
     return datetime.now(timezone.utc)
 
@@ -136,6 +144,9 @@ def list_tickets():
 @wfm_tickets_bp.route("/api/tickets/create", methods=["POST"])
 @login_required
 def create_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _has_wfm_access(user):
         return jsonify(success=False, error="No WFM access"), 403
@@ -212,6 +223,9 @@ def get_ticket(ticket_id):
 @wfm_tickets_bp.route("/api/tickets/update", methods=["POST"])
 @login_required
 def update_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _has_wfm_access(user):
         return jsonify(success=False, error="No WFM access"), 403
@@ -272,6 +286,9 @@ def update_ticket():
 @wfm_tickets_bp.route("/api/tickets/quick-assign", methods=["POST"])
 @login_required
 def quick_assign():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
@@ -298,6 +315,9 @@ def quick_assign():
 @wfm_tickets_bp.route("/api/tickets/archive", methods=["POST"])
 @login_required
 def archive_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
@@ -316,6 +336,9 @@ def archive_ticket():
 @wfm_tickets_bp.route("/api/tickets/restore", methods=["POST"])
 @login_required
 def restore_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
@@ -335,6 +358,9 @@ def restore_ticket():
 @wfm_tickets_bp.route("/api/tickets/delete", methods=["POST"])
 @login_required
 def delete_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
@@ -353,6 +379,9 @@ def delete_ticket():
 @wfm_tickets_bp.route("/api/tickets/permanent-delete", methods=["POST"])
 @login_required
 def permanent_delete_ticket():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if user.get("role") != "admin":
         return jsonify(success=False, error="Admin only"), 403
@@ -373,6 +402,9 @@ def ticket_history():
     user = get_current_user()
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
+
+    if user and user.get("is_demo"):
+        return jsonify(success=True, history=[])
 
     data = request.get_json(silent=True) or {}
     ticket_filter = data.get("ticket_id")
@@ -563,6 +595,9 @@ def download_csv():
 @wfm_tickets_bp.route("/api/tickets/comment", methods=["POST"])
 @login_required
 def add_comment():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if not _has_wfm_access(user):
         return jsonify(success=False, error="No WFM access"), 403
@@ -601,6 +636,9 @@ def add_comment():
 @wfm_tickets_bp.route("/api/users/wfm-access", methods=["POST"])
 @login_required
 def toggle_wfm_access():
+    dg = _demo_guard()
+    if dg:
+        return dg
     user = get_current_user()
     if user.get("role") != "admin":
         return jsonify(success=False, error="Admin only"), 403
@@ -628,6 +666,16 @@ def list_wfm_users():
     user = get_current_user()
     if user.get("role") != "admin":
         return jsonify(success=False, error="Admin only"), 403
+
+    if user.get("is_demo"):
+        demo_users = [
+            {"id": i + 1, "email": f"user{i+1}@demo.serevo.app", "display_name": n,
+             "role": "agent", "wfm_access": i < 5}
+            for i, n in enumerate(["Alex Morgan", "Jordan Rivera", "Casey Chen",
+                                   "Sam Patel", "Taylor Kim", "Drew Nguyen",
+                                   "Riley Brooks", "Priya Sharma"])
+        ]
+        return jsonify(success=True, users=demo_users)
 
     users = User.query.filter_by(is_active=True).order_by(User.display_name).all()
     return jsonify(success=True, users=[{

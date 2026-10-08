@@ -70,6 +70,24 @@ def _parse_datetime(date_str, time_str):
 @login_required
 def list_employees():
     """Return all employees as JSON (for modal population)."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_EMPLOYEES
+        return jsonify({"employees": [{
+            "id": i + 1, "employee_id": e["Employee ID"],
+            "first_name": e["First Name"], "last_name": e["Last Name"],
+            "status": e["Status"], "lob": e["Latest Skill Name"],
+            "all_skills": e.get("All Skills", ""), "skill_start": e.get("Latest Skill Start", ""),
+            "skill_end": e.get("Latest Skill End", ""), "end_date": e.get("End Date", ""),
+            "languages": e.get("Languages", "English"),
+            "contract_type": e.get("Contract Type", "Full-Time"),
+            "weekly_hours": e.get("Weekly Hours", 40.0),
+            "days_per_week": e.get("Days Per Week", 5),
+            "hours_per_day": e.get("Hours Per Day", 8.0),
+            "timezone": e.get("Timezone", "America/New_York"),
+            "schedule_excluded": bool(e.get("Schedule Excluded")),
+        } for i, e in enumerate(DEMO_EMPLOYEES)]})
     emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
     result = []
     for e in emps:
@@ -198,6 +216,13 @@ def delete_employee():
 @manual_entry_bp.route("/planning-units", methods=["GET"])
 @login_required
 def list_planning_units():
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({"units": [
+            {"id": 1, "name": "Sales Support"}, {"id": 2, "name": "Billing"},
+            {"id": 3, "name": "Tech Support"}, {"id": 4, "name": "Retention"},
+        ]})
     units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
     return jsonify({"units": [{"id": u.id, "name": u.name} for u in units]})
 
@@ -343,6 +368,24 @@ def save_requirement_interval():
 @login_required
 def get_availability(emp_id):
     """Return availability entries for an employee."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        avail = []
+        idx = emp_id - 1  # 0-based index for varying start times
+        for d in range(7):
+            if d >= 5:
+                avail.append({"id": emp_id*7+d, "employee_id": emp_id, "day_of_week": d,
+                    "day_name": DAY_NAMES[d], "is_available": False,
+                    "earliest_start": None, "latest_start": None, "latest_end": None, "notes": "Weekend"})
+            else:
+                es_h = 7 + (idx % 3)
+                avail.append({"id": emp_id*7+d, "employee_id": emp_id, "day_of_week": d,
+                    "day_name": DAY_NAMES[d], "is_available": True,
+                    "earliest_start": f"{es_h:02d}:00", "latest_start": f"{es_h+1:02d}:00",
+                    "latest_end": f"{es_h+9:02d}:00", "notes": ""})
+        return jsonify({"availability": avail})
     entries = EmployeeAvailability.query.filter_by(employee_id=emp_id)\
         .order_by(EmployeeAvailability.day_of_week).all()
     return jsonify({"availability": [e.to_dict() for e in entries]})
@@ -401,6 +444,11 @@ def save_availability():
 @login_required
 def employees_with_availability():
     """Return list of employee IDs that have availability entries."""
+    from app.auth import get_current_user
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_EMPLOYEES
+        return jsonify({"employee_ids": list(range(1, len(DEMO_EMPLOYEES) + 1))})
     rows = db.session.query(EmployeeAvailability.employee_id)\
         .distinct().all()
     return jsonify({"employee_ids": [r[0] for r in rows]})

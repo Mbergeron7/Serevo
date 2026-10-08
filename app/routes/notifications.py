@@ -66,6 +66,8 @@ def mark_read():
         payload = request.get_json(silent=True) or {}
         notif_id = payload.get("id")
         user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify(success=True, demo=True)
         if notif_id == "all":
             Notification.query.filter_by(
                 user_id=user["id"], is_read=False
@@ -90,6 +92,8 @@ def clear_notifications():
     """Delete all read notifications for current user."""
     try:
         user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify(success=True, demo=True)
         Notification.query.filter_by(
             user_id=user["id"], is_read=True
         ).delete()

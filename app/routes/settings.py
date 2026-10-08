@@ -61,6 +61,10 @@ PROVIDERS = {
 @settings_bp.route("/")
 @admin_required
 def index():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return render_template("settings/index.html",
+            user=user, feeds_active=2, conns_active=1)
     from app.models import AppSetting, DataFeed, APIConnection
     try:
         feeds_active = DataFeed.query.filter_by(is_active=True).count()
@@ -71,7 +75,7 @@ def index():
     except Exception:
         conns_active = 0
     return render_template("settings/index.html",
-        user=get_current_user(),
+        user=user,
         feeds_active=feeds_active,
         conns_active=conns_active,
     )
@@ -85,6 +89,25 @@ def index():
 @admin_required
 def connections():
     import json as _json
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        demo_feeds = _json.dumps([
+            {"id": 1, "name": "Forecast Import", "sheet_id": "demo-sheet-id",
+             "tab_name": "Forecast", "feed_type": "forecast", "is_active": True,
+             "last_status": "success", "last_run": "2026-10-06 08:00", "last_error": ""},
+            {"id": 2, "name": "Actuals Import", "sheet_id": "demo-sheet-id",
+             "tab_name": "Actuals", "feed_type": "actuals", "is_active": True,
+             "last_status": "success", "last_run": "2026-10-06 08:15", "last_error": ""},
+        ])
+        demo_conns = _json.dumps([
+            {"id": 1, "name": "Call Potential", "provider": "call_potential",
+             "base_url": "https://api.callpotential.com", "auth_type": "api_key",
+             "is_active": True, "last_status": "ok", "last_error": "", "last_tested": "2026-10-06 09:00"},
+        ])
+        return render_template("settings/connections.html",
+            user=user, feeds=[], feeds_json=demo_feeds,
+            api_conns=[], conns_json=demo_conns,
+            providers=PROVIDERS, global_sa=True)
     from app.models import DataFeed, APIConnection, AppSetting
     feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
     api_conns = APIConnection.query.order_by(APIConnection.created_at.desc()).all()
@@ -100,7 +123,7 @@ def connections():
     # Check for legacy global service account
     global_sa = bool(AppSetting.get("google_service_account_json", ""))
     return render_template("settings/connections.html",
-        user=get_current_user(),
+        user=user,
         feeds=feeds, feeds_json=feeds_json,
         api_conns=api_conns, conns_json=conns_json,
         providers=PROVIDERS,
@@ -643,6 +666,26 @@ def toggle_data_feed():
 @settings_bp.route("/users")
 @admin_required
 def users():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        # Provide fake user/employee lists for demo mode
+        class _DemoUser:
+            def __init__(self, **kw):
+                for k, v in kw.items():
+                    setattr(self, k, v)
+        demo_users = [
+            _DemoUser(id=1, email="demo@serevo.app", display_name="Demo Admin",
+                      role="admin", is_active=True, is_demo=True,
+                      employee_id=None, created_at="2026-01-01"),
+            _DemoUser(id=2, email="supervisor@demo.serevo.app", display_name="Lisa Tran",
+                      role="supervisor", is_active=True, is_demo=True,
+                      employee_id=None, created_at="2026-01-01"),
+            _DemoUser(id=3, email="agent@demo.serevo.app", display_name="Alex Morgan",
+                      role="agent", is_active=True, is_demo=True,
+                      employee_id=1, created_at="2026-02-01"),
+        ]
+        return render_template("settings/users.html",
+            user=user, users=demo_users, employees=[])
     from app.models import User, Employee
     try:
         all_users = User.query.order_by(User.created_at.desc()).all()
@@ -653,7 +696,7 @@ def users():
         db.session.rollback()
         all_users, all_employees = [], []
     return render_template("settings/users.html",
-        user=get_current_user(),
+        user=user,
         users=all_users,
         employees=all_employees,
     )
@@ -2673,6 +2716,11 @@ def activity_log():
 @admin_required
 def activity_log_data():
     """Return paginated audit log entries."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_audit_log
+        entries = get_demo_audit_log()
+        return jsonify(success=True, entries=entries, total=len(entries), page=1, per_page=50)
     try:
         from app.models import AuditLog
         payload = request.get_json(silent=True) or {}

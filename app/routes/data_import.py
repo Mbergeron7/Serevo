@@ -337,6 +337,9 @@ UPLOAD_TYPES = {
 @admin_required
 def index():
     user = get_current_user()
+    if user and user.get("is_demo"):
+        return render_template("data_import/index.html",
+            user=user, upload_types=UPLOAD_TYPES, recent_uploads=[])
     from app.models import DataUpload
     recent = DataUpload.query.order_by(DataUpload.created_at.desc()).limit(20).all()
     return render_template("data_import/index.html",
@@ -741,6 +744,9 @@ def _apply_schema_mapping(rows, schema_id):
 @admin_required
 def list_schemas():
     """List saved schema mapping profiles."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify({"schemas": []})
     from app.models import SchemaMapping
     upload_type = request.args.get("upload_type")
     q = SchemaMapping.query
