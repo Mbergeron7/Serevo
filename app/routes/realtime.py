@@ -42,6 +42,12 @@ AGENT_STATUS_SHEET_ID = "15k9ahqgtuaigy4c7YNe2qy-OimAsjlbDQqd6F3VEt_g"
 _SHEET_CACHE_TTL = 30  # seconds — short TTL for near-real-time data
 _sheet_cache = {}       # key -> (timestamp, data)
 _sheet_cache_lock = threading.Lock()
+_sheet_fetch_lock = threading.Lock()  # prevents thundering-herd fetches
+
+# Response-level cache for live-agents (avoids DB queries on every poll)
+_live_agents_cache = {}  # key -> (timestamp, response_dict)
+_live_agents_cache_lock = threading.Lock()
+_LIVE_AGENTS_CACHE_TTL = 15  # seconds
 
 # Dialer status SID → human-readable name
 CP_STATUS_MAP = {
@@ -100,9 +106,12 @@ def _parse_datetime_str(s):
 def _read_agent_status_sheet():
     """Read agent status rows directly from Google Sheets with caching.
     Returns list of dicts with keys: user_id, start_time, c_activity_sid.
-    Uses a 30-second cache to avoid hammering the API."""
+    Uses a 30-second cache to avoid hammering the API.
+    A fetch lock prevents thundering-herd: only one thread fetches at a time,
+    others wait and then get the freshly cached result."""
     cache_key = "agent_status"
 
+    # Fast path: return cached data if fresh
     with _sheet_cache_lock:
         entry = _sheet_cache.get(cache_key)
         if entry:
@@ -110,42 +119,51 @@ def _read_agent_status_sheet():
             if time.time() - ts < _SHEET_CACHE_TTL:
                 return data
 
-    # Cache miss — fetch from Google Sheets
-    try:
-        from app.routes.realtime_sync import _get_gspread_client
-        client, err = _get_gspread_client()
-        if err:
-            log.warning(f"Sheet auth failed: {err}")
-            # Return stale data if available
-            with _sheet_cache_lock:
-                entry = _sheet_cache.get(cache_key)
-                return entry[1] if entry else []
-
-        doc = client.open_by_key(AGENT_STATUS_SHEET_ID)
-        ws = doc.get_worksheet(0)
-        rows = ws.get_all_records()
-        log.info(f"Agent status sheet: fetched {len(rows)} rows directly")
-
-        # Don't cache suspiciously small results — serve stale
-        if len(rows) < 5:
-            with _sheet_cache_lock:
-                entry = _sheet_cache.get(cache_key)
-                if entry and len(entry[1]) >= 5:
-                    log.warning(f"Sheet returned only {len(rows)} rows — serving stale")
-                    return entry[1]
-
-        with _sheet_cache_lock:
-            _sheet_cache[cache_key] = (time.time(), rows)
-        return rows
-
-    except Exception as e:
-        log.error(f"Direct sheet read failed: {e}")
+    # Serialize fetches so only one thread hits Google Sheets
+    with _sheet_fetch_lock:
+        # Re-check cache — another thread may have just populated it
         with _sheet_cache_lock:
             entry = _sheet_cache.get(cache_key)
             if entry:
-                log.warning("Serving stale cache after sheet error")
-                return entry[1]
-        return []
+                ts, data = entry
+                if time.time() - ts < _SHEET_CACHE_TTL:
+                    return data
+
+        # Cache miss — fetch from Google Sheets
+        try:
+            from app.routes.realtime_sync import _get_gspread_client
+            client, err = _get_gspread_client()
+            if err:
+                log.warning(f"Sheet auth failed: {err}")
+                with _sheet_cache_lock:
+                    entry = _sheet_cache.get(cache_key)
+                    return entry[1] if entry else []
+
+            doc = client.open_by_key(AGENT_STATUS_SHEET_ID)
+            ws = doc.get_worksheet(0)
+            rows = ws.get_all_records()
+            log.info(f"Agent status sheet: fetched {len(rows)} rows directly")
+
+            # Don't cache suspiciously small results — serve stale
+            if len(rows) < 5:
+                with _sheet_cache_lock:
+                    entry = _sheet_cache.get(cache_key)
+                    if entry and len(entry[1]) >= 5:
+                        log.warning(f"Sheet returned only {len(rows)} rows — serving stale")
+                        return entry[1]
+
+            with _sheet_cache_lock:
+                _sheet_cache[cache_key] = (time.time(), rows)
+            return rows
+
+        except Exception as e:
+            log.error(f"Direct sheet read failed: {e}")
+            with _sheet_cache_lock:
+                entry = _sheet_cache.get(cache_key)
+                if entry:
+                    log.warning("Serving stale cache after sheet error")
+                    return entry[1]
+            return []
 
 
 def _get_live_agents_from_sheet():
@@ -1545,6 +1563,14 @@ def api_live_agents():
         return jsonify(data)
 
     # Real data: read directly from Google Sheets for near-real-time status
+    # Check response-level cache first (shared across all users)
+    with _live_agents_cache_lock:
+        _la_entry = _live_agents_cache.get("result")
+        if _la_entry:
+            _la_ts, _la_data = _la_entry
+            if time.time() - _la_ts < _LIVE_AGENTS_CACHE_TTL:
+                return jsonify(_la_data)
+
     try:
         from app.models import db, Employee, Schedule, ShiftSegment
 
@@ -1554,7 +1580,7 @@ def api_live_agents():
             log.warning("No agent status data from sheet — returning empty")
             return jsonify({"by_lob": {}, "pre_shift": []})
 
-        log.info(f"Sheet returned {len(agent_now)} unique agents with activity today")
+        log.debug(f"Sheet returned {len(agent_now)} unique agents with activity today")
 
         # Load active employees and build lookup by all ID fields
         # (CP user_id can match external_id_1, external_id_2, or employee_id)
@@ -1685,9 +1711,12 @@ def api_live_agents():
         if unmatched_uids:
             log.warning(f"Live agents: {matched} matched, {len(unmatched_uids)} unmatched UIDs: {unmatched_uids[:10]}")
         else:
-            log.info(f"Live agents: {matched} matched, 0 unmatched")
+            log.debug(f"Live agents: {matched} matched, 0 unmatched")
 
-        return jsonify({"by_lob": by_lob, "pre_shift": pre_shift})
+        result = {"by_lob": by_lob, "pre_shift": pre_shift}
+        with _live_agents_cache_lock:
+            _live_agents_cache["result"] = (time.time(), result)
+        return jsonify(result)
 
     except Exception as e:
         log.exception("live-agents error")

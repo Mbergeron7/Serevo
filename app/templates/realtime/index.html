@@ -1486,11 +1486,15 @@ function laApplyStatusFilter(){
 
 // Auto-refresh
 function laStartCountdown(){
-  la_secondsLeft=30;
+  la_secondsLeft=45;
   const el=document.getElementById("laCountdown");el.style.display="inline";
+  el.textContent="(next in 45s)";
+  if(la_countdown){clearInterval(la_countdown);la_countdown=null;}
   la_countdown=setInterval(()=>{
-    la_secondsLeft--;el.textContent="(next in "+la_secondsLeft+"s)";
-    if(la_secondsLeft<=0){clearInterval(la_countdown);laLoadAgents(false).then(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();});}
+    la_secondsLeft--;
+    if(la_secondsLeft<0) la_secondsLeft=0;
+    el.textContent="(next in "+la_secondsLeft+"s)";
+    if(la_secondsLeft<=0){clearInterval(la_countdown);la_countdown=null;el.textContent="(refreshing…)";laLoadAgents(false).then(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();}).catch(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();});}
   },1000);
 }
 function laStopCountdown(){if(la_countdown){clearInterval(la_countdown);la_countdown=null;}const el=document.getElementById("laCountdown");if(el)el.style.display="none";}
