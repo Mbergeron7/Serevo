@@ -1229,7 +1229,7 @@ let la_lastData = {};
 const la_sortState = {};
 let la_allLobs = [], la_selectedLobs = null;
 let la_allStatuses = [], la_selectedStatuses = null;
-let la_countdown = null, la_secondsLeft = 60;
+let la_countdown = null, la_secondsLeft = 30;
 let la_loaded = false;
 
 function laFmtDur(m) {
@@ -1484,7 +1484,7 @@ function laApplyStatusFilter(){
 
 // Auto-refresh
 function laStartCountdown(){
-  la_secondsLeft=60;
+  la_secondsLeft=30;
   const el=document.getElementById("laCountdown");el.style.display="inline";
   la_countdown=setInterval(()=>{
     la_secondsLeft--;el.textContent="(next in "+la_secondsLeft+"s)";
