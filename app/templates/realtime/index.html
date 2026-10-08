@@ -647,7 +647,9 @@ async function loadAll(silent) {
     // If the user is on a different tab, load that tab's data too
     if (_activeView !== 'intraday') loadTab(_activeView);
   } catch (e) {
+    console.error("loadAll error:", e);
     if (!silent) { hideLoading(); }
+    renderIntraday();
   }
   clearInterval(timer);
   if ($('chkAuto').checked) timer = setInterval(() => loadAll(true), 60000);
@@ -1491,7 +1493,7 @@ function laStartCountdown(){
     if(la_secondsLeft<=0){clearInterval(la_countdown);laLoadAgents(false).then(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();});}
   },1000);
 }
-function laStopCountdown(){if(la_countdown)clearInterval(la_countdown);document.getElementById("laCountdown").style.display="none";}
+function laStopCountdown(){if(la_countdown){clearInterval(la_countdown);la_countdown=null;}const el=document.getElementById("laCountdown");if(el)el.style.display="none";}
 function laToggleAuto(on){if(on)laStartCountdown();else laStopCountdown();}
 function laManualRefresh(){
   const btn=document.getElementById("laRefreshBtn");btn.textContent="⏳ Refreshing…";btn.disabled=true;laStopCountdown();
@@ -1551,6 +1553,6 @@ if (_origShowView) {
 }
 
 // Deep link (#interval etc.) + auto-load
-(function(){ const h = (location.hash || '').replace('#',''); if (h) showView(h); loadAll(); })();
+(function(){ try { const h = (location.hash || '').replace('#',''); if (h) showView(h); } catch(e) { console.error("showView init error:", e); } loadAll(); })();
 </script>
 {% endblock %}
