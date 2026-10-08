@@ -461,7 +461,7 @@ def submit_bid():
             f"Shift Bid: {emp.full_name}",
             f"{emp.full_name} bid on shift post #{post_id}.",
             category="info",
-            link="/portal/",
+            link="/approvals/",
         )
     except Exception:
         log.warning("Failed to notify admins of shift bid", exc_info=True)
@@ -547,7 +547,7 @@ def submit_swap():
             f"Shift Swap Request: {emp.full_name}",
             f"{emp.full_name} submitted a shift swap request.",
             category="info",
-            link="/portal/",
+            link="/approvals/",
         )
     except Exception:
         log.warning("Failed to notify admins of shift swap request", exc_info=True)
@@ -690,7 +690,7 @@ def signup_vto_ot():
             f"{post_type} Signup: {emp.full_name}",
             f"{emp.full_name} signed up for {post_type} on {post.schedule_date.isoformat()}.",
             category="info",
-            link="/portal/",
+            link="/approvals/",
         )
     except Exception:
         log.warning("Failed to notify admins of VTO/OT signup", exc_info=True)

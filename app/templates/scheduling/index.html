@@ -652,6 +652,15 @@
   </div>
 </div>
 
+<!-- ── Pending approvals banner ────────────────────────────── -->
+<div id="approvalsBanner" style="display:none;margin-bottom:12px;padding:10px 16px;background:color-mix(in srgb, var(--brand-accent) 10%, transparent);border:1px solid color-mix(in srgb, var(--brand-accent) 30%, transparent);border-radius:var(--radius);font-size:.85rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+  <span style="font-weight:600;">Pending Approvals:</span>
+  <span id="approvalsPto" style="display:none">🗓 <b id="approvalsPtoN">0</b> PTO</span>
+  <span id="approvalsBids" style="display:none">📋 <b id="approvalsBidsN">0</b> Shift Bids</span>
+  <span id="approvalsSwaps" style="display:none">🔄 <b id="approvalsSwapsN">0</b> Shift Swaps</span>
+  <a href="/approvals/" style="margin-left:auto;font-weight:600;color:var(--brand-accent);text-decoration:none;">Review All →</a>
+</div>
+
 <!-- ── Global warnings ────────────────────────────────────── -->
 <div id="globalWarnings" class="warning-list" style="display:none;margin-bottom:12px;padding:12px 16px;background:color-mix(in srgb, #d97706 10%, transparent);border-radius:var(--radius);font-size:.85rem;"></div>
 
@@ -4112,5 +4121,18 @@ function submitCopyWeek() {
     result.innerHTML = '<span style="color:#dc2626;font-size:.82rem">Failed: ' + e + '</span>';
   });
 }
+
+// ── Load pending approvals banner ──
+(function loadApprovalsBanner() {
+  fetch('/approvals/api/counts', {method:'POST', headers:{'Content-Type':'application/json'}})
+  .then(r => r.json()).then(d => {
+    if (!d.success || !d.total) return;
+    const banner = document.getElementById('approvalsBanner');
+    if (d.pto) { document.getElementById('approvalsPtoN').textContent = d.pto; document.getElementById('approvalsPto').style.display = ''; }
+    if (d.bids) { document.getElementById('approvalsBidsN').textContent = d.bids; document.getElementById('approvalsBids').style.display = ''; }
+    if (d.swaps) { document.getElementById('approvalsSwapsN').textContent = d.swaps; document.getElementById('approvalsSwaps').style.display = ''; }
+    banner.style.display = 'flex';
+  }).catch(() => {});
+})();
 </script>
 {% endblock %}
