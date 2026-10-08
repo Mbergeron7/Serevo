@@ -1547,7 +1547,7 @@ function saveSchedule() {
   const promises = scheduleData.days.map(day => {
     return fetch('/scheduling/save', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
       body: JSON.stringify({ lob, date: day.date, shifts: day.shifts }),
     }).then(r => r.json());
   });

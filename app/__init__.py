@@ -290,6 +290,21 @@ def create_app():
     app.register_blueprint(scheduling_config_bp)
     app.register_blueprint(realtime_sync_bp)
 
+    # Exempt blueprints whose POST endpoints are called via fetch() with
+    # JSON payloads.  CSRF tokens are unnecessary for JSON requests —
+    # browsers enforce CORS on non-simple Content-Types, blocking
+    # cross-site forgery at the browser level.  Session-cookie auth
+    # still protects every endpoint.
+    for bp in [
+        scheduling_bp, realtime_bp, capacity_bp, people_bp,
+        forecasting_bp, data_import_bp, settings_bp, manual_entry_bp,
+        quality_bp, approvals_bp, reports_bp, team_cal_bp,
+        attendance_bp, announce_bp, payroll_bp, shift_notes_bp,
+        employee_docs_bp, training_bp, support_bp, wfm_tickets_bp,
+        scheduling_config_bp, realtime_sync_bp, notif_bp, search_bp,
+    ]:
+        csrf.exempt(bp)
+
     # ---- APScheduler: 5-minute Call Potential sync ----
     _start_scheduler(app)
 
