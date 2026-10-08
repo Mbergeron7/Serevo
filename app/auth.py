@@ -6,7 +6,7 @@ Usage:
 """
 
 from functools import wraps
-from flask import session, redirect, url_for, request
+from flask import session, redirect, url_for, request, jsonify
 
 
 # Demo accounts are identified by email — no database column needed.
@@ -55,24 +55,43 @@ def get_current_user():
         return None
 
 
+def _is_api_request():
+    """True when the caller expects JSON, not a page redirect."""
+    if request.path.startswith("/api/") or "/api/" in request.path:
+        return True
+    if request.is_json:
+        return True
+    accept = request.headers.get("Accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return True
+    xhr = request.headers.get("X-Requested-With", "")
+    return xhr.lower() == "xmlhttprequest"
+
+
 def login_required(f):
-    """Redirect to /login if no active session."""
+    """Redirect to /login if no active session (JSON 401 for API calls)."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not get_current_user():
+            if _is_api_request():
+                return jsonify({"success": False, "error": "Not authenticated"}), 401
             return redirect(url_for("auth.login", next=request.path))
         return f(*args, **kwargs)
     return decorated
 
 
 def admin_required(f):
-    """Redirect to / if user is not an admin."""
+    """Redirect to / if user is not an admin (JSON 401/403 for API calls)."""
     @wraps(f)
     def decorated(*args, **kwargs):
         user = get_current_user()
         if not user:
+            if _is_api_request():
+                return jsonify({"success": False, "error": "Not authenticated"}), 401
             return redirect(url_for("auth.login", next=request.path))
         if not user["is_admin"]:
+            if _is_api_request():
+                return jsonify({"success": False, "error": "Admin access required"}), 403
             return redirect("/")
         return f(*args, **kwargs)
     return decorated
