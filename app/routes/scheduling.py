@@ -1248,13 +1248,15 @@ def import_wfm():
             return jsonify({"success": False,
                             "error": f"An import is already in progress. {status.get('message', '')}"})
 
+        # Reset status BEFORE starting the thread so polls don't see old results
+        cp._import_running = True
+        cp._import_status = {"message": "Fetching schedules from API...", "done": False}
+
         # Run the import in a background thread to avoid Render's 30s timeout.
         # ~450 employees × 7 days = ~3,150 API calls which takes several minutes.
         def _bg_import(app, sd, ed):
             with app.app_context():
                 try:
-                    cp._import_running = True
-                    cp._import_status = {"message": "Fetching schedules from API..."}
                     shifts = cp.fetch_pw_schedules(sd, ed)
                     if not shifts:
                         cp._import_status = {
