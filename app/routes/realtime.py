@@ -6,6 +6,8 @@ Live queue monitoring, adherence, and staffing alerts.
 
 import logging
 import datetime
+import time
+import threading
 
 from flask import (Blueprint, render_template, request, jsonify)
 from app.auth import login_required, get_current_user
@@ -30,6 +32,174 @@ def _get_sheet():
     """Legacy helper — returns None so engine functions use the DB.
     The engine's own fallback will try Google Sheets if DB returns nothing."""
     return None
+
+
+# ── Direct Google Sheet reading for live agent status ─────────
+# Bypasses the 2-minute DB sync for near-real-time agent status,
+# matching the old portal's approach of reading the sheet directly.
+
+AGENT_STATUS_SHEET_ID = "15k9ahqgtuaigy4c7YNe2qy-OimAsjlbDQqd6F3VEt_g"
+_SHEET_CACHE_TTL = 30  # seconds — short TTL for near-real-time data
+_sheet_cache = {}       # key -> (timestamp, data)
+_sheet_cache_lock = threading.Lock()
+
+# Call Potential status SID → human-readable name
+CP_STATUS_MAP = {
+    "WA9c4e93d1de9b472ebb7e3b89426df574": "Ready",
+    "WAd1f6c9952f3d04482bb9b6b28dd9819e": "Offline",
+    "WA9a7153cbe2257eb452ff60067002087b": "On-call",
+    "WA55e3a3eb3b9df10c69b902682ee87fbf": "Cool-Down",
+    "WA3f5159a6c417b72f73c8128f5d3cc0ed": "Unavailable",
+    "WA4090114d9b863e27e396b747e7071d7b": "No-Answer",
+    "WAa8d8e71d8d79415ba585a53ca493521f": "Rejected",
+    "WA960ed92496da0b023b5e69e4f5c783a2": "On Break",
+    "WAa513fc91db454de83aefda3f5b689c5e": "Lunch",
+    "WA009e46be32c8efb7132cfda1b5a42ea8": "ooq Client Account Work",
+    "WA641c3fceafe43e72da443995033777a0": "No-Mic",
+    "WA17446c1b845fe8159134a9e2da69dc8c": "Web Leads",
+    "WA84686f853061b6271f6a43dd6a3c6384": "Long Distance",
+    "WA0d324b251da94519738a9ee65fb89152": "eChat",
+    "WA8cb16293fa633f5b155a5579c4199992": "Leader on Duty",
+    "WAea2d79d49903a266c61e67a346ecf926": "ooq Meeting",
+    "WA61f0205ad33fc03a62d1b21c6edd4cf5": "ooq Training",
+    "WA1eb894d4d481b80387166e248bea38c4": "ooq Coaching",
+    "WAaaf8f99bad17314f6908a2b20faf208a": "ooq After Shift",
+    "WAcafc4a5f5503c8fbab4e19697b81edb3": "ooq System Issue",
+    "WA2a678c82745f6019e3b4fdc994af7f18": "ooq Personal",
+    "WA3f5159a6c417b72f73c8128f5d3cc0ed Duplicate": "Cascade",
+}
+
+# CST → EST offset (Call Potential times are in CST)
+CP_TZ_OFFSET_HOURS = 1
+
+
+def _parse_datetime_str(s):
+    """Parse a datetime string from the agent status sheet."""
+    s = str(s or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    # Handle single-digit seconds like "2024-10-07 8:30:5"
+    parts = s.split(" ")
+    if len(parts) == 2:
+        time_parts = parts[1].split(":")
+        if len(time_parts) >= 2:
+            padded = parts[0] + " " + ":".join(p.zfill(2) for p in time_parts)
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+                try:
+                    return datetime.datetime.strptime(padded, fmt)
+                except ValueError:
+                    pass
+    return None
+
+
+def _read_agent_status_sheet():
+    """Read agent status rows directly from Google Sheets with caching.
+    Returns list of dicts with keys: user_id, start_time, c_activity_sid.
+    Uses a 30-second cache to avoid hammering the API."""
+    cache_key = "agent_status"
+
+    with _sheet_cache_lock:
+        entry = _sheet_cache.get(cache_key)
+        if entry:
+            ts, data = entry
+            if time.time() - ts < _SHEET_CACHE_TTL:
+                return data
+
+    # Cache miss — fetch from Google Sheets
+    try:
+        from app.routes.realtime_sync import _get_gspread_client
+        client, err = _get_gspread_client()
+        if err:
+            log.warning(f"Sheet auth failed: {err}")
+            # Return stale data if available
+            with _sheet_cache_lock:
+                entry = _sheet_cache.get(cache_key)
+                return entry[1] if entry else []
+
+        doc = client.open_by_key(AGENT_STATUS_SHEET_ID)
+        ws = doc.get_worksheet(0)
+        rows = ws.get_all_records()
+        log.info(f"Agent status sheet: fetched {len(rows)} rows directly")
+
+        # Don't cache suspiciously small results — serve stale
+        if len(rows) < 5:
+            with _sheet_cache_lock:
+                entry = _sheet_cache.get(cache_key)
+                if entry and len(entry[1]) >= 5:
+                    log.warning(f"Sheet returned only {len(rows)} rows — serving stale")
+                    return entry[1]
+
+        with _sheet_cache_lock:
+            _sheet_cache[cache_key] = (time.time(), rows)
+        return rows
+
+    except Exception as e:
+        log.error(f"Direct sheet read failed: {e}")
+        with _sheet_cache_lock:
+            entry = _sheet_cache.get(cache_key)
+            if entry:
+                log.warning("Serving stale cache after sheet error")
+                return entry[1]
+        return []
+
+
+def _get_live_agents_from_sheet():
+    """Process agent status sheet rows into per-agent current status.
+    Returns dict: { user_id: { status, current_since, minutes_in_status } }
+    """
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("America/Toronto")
+    now_est = datetime.datetime.now(tz).replace(tzinfo=None)
+    today_str = now_est.strftime("%Y-%m-%d")
+    yesterday_str = (now_est.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+    rows = _read_agent_status_sheet()
+    if not rows:
+        return {}, now_est
+
+    by_uid = {}
+    for r in rows:
+        uid = str(r.get("user_id", "") or "").strip()
+        st = str(r.get("start_time", "") or "").strip()
+        sid = str(r.get("c_activity_sid", "") or "").strip()
+        if not uid:
+            continue
+
+        is_today = st.startswith(today_str)
+        is_yesterday_cst = st.startswith(yesterday_str)
+        if not is_today and not is_yesterday_cst:
+            continue
+
+        dt_cst = _parse_datetime_str(st)
+        if not dt_cst:
+            continue
+        dt_est = dt_cst + datetime.timedelta(hours=CP_TZ_OFFSET_HOURS)
+
+        # For yesterday CST rows, only include if they fall on today in EST
+        if is_yesterday_cst and dt_est.date() != now_est.date():
+            continue
+
+        status = CP_STATUS_MAP.get(sid, sid[:20] if sid else "Unknown")
+        by_uid.setdefault(uid, []).append({"dt": dt_est, "status": status})
+
+    # Derive current status per agent (latest event)
+    agent_now = {}
+    for uid, events in by_uid.items():
+        events.sort(key=lambda x: x["dt"])
+        last = events[-1]
+        mins = round((now_est - last["dt"]).total_seconds() / 60, 1)
+        agent_now[uid] = {
+            "status": last["status"],
+            "current_since": last["dt"].strftime("%H:%M"),
+            "minutes_in_status": max(0, mins),
+        }
+
+    return agent_now, now_est
 
 
 # ── "All LOBs" aggregation helpers ─────────────────────────
@@ -1374,52 +1544,40 @@ def api_live_agents():
         data = get_demo_live_agents()
         return jsonify(data)
 
-    # Real data: pull from AgentStatusEvent model
+    # Real data: read directly from Google Sheets for near-real-time status
     try:
-        from app.models import db, Employee, AgentStatusEvent, PlanningUnit
-        from sqlalchemy import func
-        import datetime as dt
-        from zoneinfo import ZoneInfo
+        from app.models import db, Employee
 
-        tz = ZoneInfo("America/Toronto")
-        now_local = dt.datetime.now(tz).replace(tzinfo=None)  # naive local time to match DB
-        today = now_local.date()
-        day_start = dt.datetime.combine(today, dt.time.min)
+        agent_now, now_est = _get_live_agents_from_sheet()
 
-        # Single query: latest status event per active employee today
-        latest_sub = (db.session.query(
-            AgentStatusEvent.employee_id,
-            func.max(AgentStatusEvent.start_ts).label("max_ts")
-        ).filter(AgentStatusEvent.start_ts >= day_start)
-         .group_by(AgentStatusEvent.employee_id)
-         .subquery())
+        if not agent_now:
+            log.warning("No agent status data from sheet — returning empty")
+            return jsonify({"by_lob": {}, "pre_shift": []})
 
-        rows = (db.session.query(Employee, AgentStatusEvent)
-                .join(latest_sub, Employee.id == latest_sub.c.employee_id)
-                .join(AgentStatusEvent, db.and_(
-                    AgentStatusEvent.employee_id == latest_sub.c.employee_id,
-                    AgentStatusEvent.start_ts == latest_sub.c.max_ts))
-                .filter(Employee.status == "Active")
-                .all())
+        # Load active employees and join by external_id_1 (= CP user_id)
+        employees = Employee.query.filter_by(status="Active").all()
+        ext_id_map = {}
+        for emp in employees:
+            if emp.external_id_1:
+                ext_id_map[emp.external_id_1.strip()] = emp
 
         by_lob = {}
         pre_shift = []
 
-        for emp, evt in rows:
+        for uid, ag in agent_now.items():
+            emp = ext_id_map.get(uid)
+            if not emp:
+                continue
+
             pu = emp.planning_unit
             lob = pu.name if pu else "Unassigned"
 
-            if evt.end_ts:
-                mins_in = (evt.end_ts - evt.start_ts).total_seconds() / 60
-            else:
-                mins_in = (now_local - evt.start_ts).total_seconds() / 60
-
             agent = {
                 "name": emp.full_name,
-                "user_id": emp.employee_id,
-                "status": evt.status or "Unknown",
-                "minutes_in_status": round(mins_in),
-                "current_since": evt.start_ts.strftime("%H:%M"),
+                "user_id": uid,
+                "status": ag["status"],
+                "minutes_in_status": round(ag["minutes_in_status"]),
+                "current_since": ag["current_since"],
                 "lob": lob,
                 "shift_start": "",
                 "shift_end": "",
