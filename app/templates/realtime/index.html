@@ -628,17 +628,19 @@ async function loadAll(silent) {
   Object.keys(_loaded).forEach(k => delete _loaded[k]);
 
   try {
-    // Only load core intraday data (3 calls instead of 13)
-    const [snap, adh, sl] = await Promise.all([
-      api('/realtime/snapshot', { lob, date }),
-      api('/realtime/adherence', { lob, date }),
-      api('/realtime/service-level', { lob, date }),
-    ]);
+    // Single bundled call instead of 3 separate requests
+    const bundle = await api('/realtime/api/bundle', { lob, date });
     if (!silent) hideLoading();
 
-    INTRA.snapshot = snap.success ? snap : null;
-    INTRA.adherence = adh.success ? adh : null;
-    INTRA.sl = sl.success ? sl : null;
+    if (bundle.success) {
+      INTRA.snapshot = bundle.snapshot;
+      INTRA.adherence = bundle.adherence;
+      INTRA.sl = bundle.service_level;
+    } else {
+      INTRA.snapshot = null;
+      INTRA.adherence = null;
+      INTRA.sl = null;
+    }
     renderIntraday();
     _loaded.intraday = true;
 
@@ -656,15 +658,12 @@ async function refreshActive() {
   // Silently refresh only the active tab's data
   const lob = $('selLob').value, date = $('inpDate').value;
   try {
-    // Always refresh core intraday (lightweight)
-    const [snap, adh, sl] = await Promise.all([
-      api('/realtime/snapshot', { lob, date }),
-      api('/realtime/adherence', { lob, date }),
-      api('/realtime/service-level', { lob, date }),
-    ]);
-    INTRA.snapshot = snap.success ? snap : null;
-    INTRA.adherence = adh.success ? adh : null;
-    INTRA.sl = sl.success ? sl : null;
+    const bundle = await api('/realtime/api/bundle', { lob, date });
+    if (bundle.success) {
+      INTRA.snapshot = bundle.snapshot;
+      INTRA.adherence = bundle.adherence;
+      INTRA.sl = bundle.service_level;
+    }
     if (_activeView === 'intraday') renderIntraday();
     // Refresh active tab if it's not intraday
     if (_activeView !== 'intraday') {

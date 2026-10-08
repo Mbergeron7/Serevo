@@ -1127,6 +1127,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                     use_proficiency=True):
     """
     Generate shift assignments for a LOB on a given date.
+    Results are cached per (lob, date) within the same Flask request
+    so multiple realtime endpoints don't repeat the work.
 
     Algorithm:
     1. Load interval requirements for the date
@@ -1142,6 +1144,16 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         unassigned: list of employee names with no shift
         warnings: list of strings
     """
+    # ── Request-scoped cache (avoids 3× generate_shifts per page load) ──
+    if not employee_ids:  # Only cache default (unfiltered) calls
+        try:
+            from flask import g
+            cache_key = f"shifts_{lob}_{date_obj}"
+            if hasattr(g, '_shift_cache') and cache_key in g._shift_cache:
+                return g._shift_cache[cache_key]
+        except RuntimeError:
+            pass  # Outside Flask request context
+
     if shift_length_hrs is None:
         shift_length_hrs = DEFAULT_SHIFT_LENGTH_HRS
 
@@ -1290,7 +1302,9 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         if skip_reasons:
             warnings.append(f"Skipped {len(skip_reasons)} employee(s): " +
                             "; ".join(skip_reasons))
-        return shifts, unassigned, warnings
+        result = (shifts, unassigned, warnings)
+        _cache_shifts(lob, date_obj, employee_ids, result)
+        return result
 
     # Sort requirements by time
     requirements.sort(key=lambda r: r["time"])
@@ -1585,7 +1599,22 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         warnings.append(f"Skipped {len(skip_reasons)} employee(s): " +
                         "; ".join(skip_reasons))
 
-    return shifts, unassigned, warnings
+    result = (shifts, unassigned, warnings)
+    _cache_shifts(lob, date_obj, employee_ids, result)
+    return result
+
+
+def _cache_shifts(lob, date_obj, employee_ids, result):
+    """Store result in Flask g for same-request reuse."""
+    if employee_ids:
+        return
+    try:
+        from flask import g
+        if not hasattr(g, '_shift_cache'):
+            g._shift_cache = {}
+        g._shift_cache[f"shifts_{lob}_{date_obj}"] = result
+    except RuntimeError:
+        pass
 
 
 def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):

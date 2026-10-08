@@ -228,6 +228,71 @@ def index():
                            today=datetime.date.today().isoformat())
 
 
+# ── Combined bundle (snapshot + adherence + service level in one call) ──
+@realtime_bp.route("/api/bundle", methods=["POST"])
+@login_required
+def api_bundle():
+    """Single endpoint returning snapshot, adherence, and service-level data.
+    Avoids 3 separate round-trips and triples generate_shifts calls."""
+    from app.realtime.engine import (get_intraday_snapshot,
+                                      get_adherence_snapshot,
+                                      get_service_level_intraday)
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        date_str = payload.get("date", "")
+        if not lob:
+            return jsonify({"success": False, "error": "LOB is required"})
+
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+        user = get_current_user()
+        is_demo = user and user.get("is_demo")
+        sheet = None if is_demo else _get_sheet()
+
+        # Snapshot
+        if lob == "All":
+            snap = _aggregate_snapshots(user, date_obj)
+        elif is_demo:
+            from app.demo_data import get_demo_realtime_snapshot
+            snap = get_demo_realtime_snapshot(lob, date_obj)
+        else:
+            snap = get_intraday_snapshot(lob, date_obj, sheet)
+        snap["success"] = True
+
+        # Adherence (generate_shifts is cached from snapshot call)
+        if lob == "All":
+            adh = _aggregate_adherence(user, date_obj)
+        elif is_demo:
+            from app.demo_data import get_demo_adherence
+            adh = get_demo_adherence(lob, date_obj)
+        else:
+            adh = get_adherence_snapshot(lob, date_obj, sheet)
+        if isinstance(adh, dict):
+            adh["success"] = True
+            adh_result = adh
+        else:
+            adh_result = {"success": True, "adherence": adh}
+
+        # Service level (reuses snapshot data via cache)
+        if is_demo:
+            from app.demo_data import get_demo_service_level
+            sl_data = get_demo_service_level(lob, date_obj)
+        else:
+            sl_data = get_service_level_intraday(lob, date_obj, sheet)
+        sl_result = {"success": True, "intervals": sl_data}
+
+        return jsonify({
+            "success": True,
+            "snapshot": snap,
+            "adherence": adh_result,
+            "service_level": sl_result,
+        })
+    except Exception as e:
+        log.error(f"Bundle API error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Intraday snapshot (API) ────────────────────────────────
 @realtime_bp.route("/snapshot", methods=["POST"])
 @login_required
