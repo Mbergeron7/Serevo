@@ -1556,13 +1556,15 @@ def api_live_agents():
 
         log.info(f"Sheet returned {len(agent_now)} unique agents with activity today")
 
-        # Load active employees and join by external_id_1 (= CP user_id)
+        # Load active employees and build lookup by all ID fields
+        # (CP user_id can match external_id_1, external_id_2, or employee_id)
         employees = Employee.query.filter_by(status="Active").all()
         ext_id_map = {}
         for emp in employees:
             if emp.external_id_1:
                 ext_id_map[emp.external_id_1.strip()] = emp
-            # Also map by employee_id for fallback
+            if getattr(emp, "external_id_2", None):
+                ext_id_map[emp.external_id_2.strip()] = emp
             if emp.employee_id:
                 ext_id_map[str(emp.employee_id).strip()] = emp
 
