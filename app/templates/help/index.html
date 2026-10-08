@@ -1064,23 +1064,103 @@
 
       <!-- Google Sheets Integration -->
       <h3>Google Sheets Integration</h3>
+      <p>{{ brand_name }} connects to Google Sheets to pull in live data for capacity planning, employee headcount, agent status, and call metrics. Each data source uses its own Google Sheet. The connection uses a secure <strong>service account</strong> — a special Google identity that {{ brand_name }} uses to read and write data on your behalf, without needing your personal Google login.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Initial Setup (One-Time)</h4>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Go to <strong>Settings &rarr; Google Sheets</strong>.</li>
-        <li>Copy the <strong>service account email</strong> displayed on the page.</li>
-        <li>Open your Google Sheet and click <strong>Share</strong>. Paste the service account email and give it <strong>Editor</strong> access.</li>
-        <li>Copy the <strong>sheet key</strong> from your Google Sheet's URL (the long string between <code>/d/</code> and <code>/edit</code>).</li>
-        <li>Paste the sheet key into the settings field and click <strong>Save</strong>.</li>
-        <li>Click <strong>Test Connection</strong> to verify. Once connected, capacity data can be synced between {{ brand_name }} and the sheet.</li>
+        <li>At the top of the page you'll see a <strong>service account email</strong> (ending in <code>@...iam.gserviceaccount.com</code>). Copy this email — you'll need it for every sheet you connect.</li>
+        <li>Open the Google Sheet you want to connect in your browser.</li>
+        <li>Click the <strong>Share</strong> button (top right of the Google Sheet).</li>
+        <li>Paste the service account email into the "Add people" field.</li>
+        <li>Set the permission to <strong>Editor</strong> (so {{ brand_name }} can both read and write data).</li>
+        <li>Click <strong>Send</strong> (or <strong>Share</strong>). The sheet is now accessible to {{ brand_name }}.</li>
       </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Finding Your Sheet Key</h4>
+      <p>Every Google Sheet has a unique key in its URL. Open the sheet and look at the address bar:</p>
+      <p style="margin:6px 0;font-size:.85rem;font-family:monospace;word-break:break-all;background:var(--bg);padding:8px 12px;border-radius:6px;">https://docs.google.com/spreadsheets/d/<strong style="color:var(--brand-accent);">1ABC123xyz_your_sheet_key_here</strong>/edit</p>
+      <p>The sheet key is the long string between <code>/d/</code> and <code>/edit</code>. Copy this entire string.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Connecting Each Data Source</h4>
+      <p>Back in <strong>Settings &rarr; Google Sheets</strong>, you'll see fields for each type of data connection:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Capacity Planning Sheet</strong> — the sheet where capacity/staffing requirements are synced. Used by the Capacity Planning page.</li>
+        <li><strong>Employee Headcount Sheet</strong> — tracks employee counts, hires, and attrition over time. Feeds into headcount trend charts.</li>
+        <li><strong>Agent Status Sheet</strong> — real-time or near-real-time agent status data (logged in, on call, on break, etc.). Used by the Real-Time Management page.</li>
+        <li><strong>Call Status Sheet</strong> — live call/contact volume metrics (calls in queue, calls handled, wait times). Used on the Real-Time dashboard.</li>
+      </ul>
+      <p>For each one: paste the sheet key into the corresponding field and click <strong>Save</strong>. Then click <strong>Test Connection</strong> to verify {{ brand_name }} can access the sheet. A green checkmark confirms success; a red error means the sheet hasn't been shared with the service account yet (go back and re-share it).</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Sheet Format Requirements</h4>
+      <p>Each Google Sheet must follow a specific layout so {{ brand_name }} can read the data correctly. When you click <strong>Test Connection</strong>, {{ brand_name }} checks the headers and shows warnings if columns are missing. In general:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Row 1 must contain <strong>column headers</strong></li>
+        <li>Data starts on row 2</li>
+        <li>Don't leave blank rows between data rows</li>
+        <li>Date columns should use a consistent format (YYYY-MM-DD is preferred)</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Troubleshooting</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>"Permission denied"</strong> — the sheet hasn't been shared with the service account email, or was shared with Viewer access instead of Editor. Re-share with Editor.</li>
+        <li><strong>"Sheet not found"</strong> — the sheet key is incorrect. Double-check you copied the full string from the URL.</li>
+        <li><strong>Data not updating</strong> — {{ brand_name }} syncs data periodically (every 2 minutes for real-time sheets). If data seems stale, click <strong>Sync Now</strong> to force an immediate refresh.</li>
+      </ul>
 
       <!-- API Connections / OAuth -->
       <h3>API Connections / OAuth</h3>
-      <p>Configure connections to external systems for automated data exchange:</p>
-      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>API Keys</strong> — generate or enter API keys for connecting to ACD/telephony systems, HRIS platforms, or other data sources</li>
-        <li><strong>Endpoints</strong> — configure the URLs and authentication details for data import/export</li>
-        <li><strong>OAuth / Social Login</strong> — enable Google and/or Microsoft sign-in for your users by entering OAuth client credentials (Client ID and Client Secret from Google Cloud Console or Azure AD)</li>
-      </ul>
+      <p>{{ brand_name }} can connect to external systems (ACD/telephony platforms, HRIS, and other data sources) via API, and supports social login via Google or Microsoft for your users.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">API Keys</h4>
+      <p>API keys let external systems push data into {{ brand_name }} or let {{ brand_name }} pull data from them.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; API / OAuth</strong>.</li>
+        <li>Under <strong>API Keys</strong>, click <strong>+ Generate Key</strong>.</li>
+        <li>Give the key a descriptive name (e.g., "ACD Volume Import", "HRIS Sync").</li>
+        <li>Copy the generated key immediately — it is shown only once. Store it securely.</li>
+        <li>Use this key in your external system's configuration to authenticate requests to {{ brand_name }}'s API endpoints.</li>
+      </ol>
+      <p>To revoke a key, click the trash icon next to it. Any system using that key will immediately lose access.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">API Endpoints</h4>
+      <p>Configure the URLs and authentication details for importing data from external systems:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>+ Add Endpoint</strong>.</li>
+        <li>Enter a name for the connection (e.g., "Connected System — Volumes").</li>
+        <li>Enter the <strong>Base URL</strong> of the external API.</li>
+        <li>Select the <strong>authentication method</strong> (API Key, Bearer Token, or Basic Auth) and enter the credentials.</li>
+        <li>Click <strong>Test Connection</strong> to verify the endpoint is reachable and credentials are valid.</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+      <p>Once configured, you can use these endpoints in Data Import to pull data automatically on a schedule rather than uploading CSV files manually.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">OAuth / Social Login</h4>
+      <p>Enable Google and/or Microsoft sign-in so your users can log in with their existing corporate accounts instead of a separate password.</p>
+
+      <p><strong>Setting up Google Sign-In:</strong></p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--brand-accent);">Google Cloud Console</a> and create a project (or use an existing one).</li>
+        <li>Navigate to <strong>APIs &amp; Services &rarr; Credentials</strong>.</li>
+        <li>Click <strong>+ Create Credentials &rarr; OAuth Client ID</strong>.</li>
+        <li>Select <strong>Web application</strong> as the application type.</li>
+        <li>Under <strong>Authorized redirect URIs</strong>, add your {{ brand_name }} URL followed by <code>/auth/google/callback</code> (e.g., <code>https://yourapp.com/auth/google/callback</code>).</li>
+        <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong>.</li>
+        <li>In {{ brand_name }}, go to <strong>Settings &rarr; API / OAuth</strong>, paste both values into the Google OAuth section, and click <strong>Save</strong>.</li>
+        <li>Users will now see a <strong>"Sign in with Google"</strong> button on the login page.</li>
+      </ol>
+
+      <p><strong>Setting up Microsoft Sign-In:</strong></p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <a href="https://portal.azure.com" target="_blank" style="color:var(--brand-accent);">Azure Portal</a> and navigate to <strong>Azure Active Directory &rarr; App Registrations</strong>.</li>
+        <li>Click <strong>+ New Registration</strong>.</li>
+        <li>Enter a name (e.g., "{{ brand_name }} Login").</li>
+        <li>Under <strong>Redirect URI</strong>, select "Web" and enter your {{ brand_name }} URL followed by <code>/auth/microsoft/callback</code>.</li>
+        <li>After creation, copy the <strong>Application (client) ID</strong>.</li>
+        <li>Go to <strong>Certificates &amp; Secrets &rarr; + New Client Secret</strong>, create a secret, and copy its value.</li>
+        <li>In {{ brand_name }}, paste the Client ID and Client Secret into the Microsoft OAuth section and click <strong>Save</strong>.</li>
+        <li>Users will now see a <strong>"Sign in with Microsoft"</strong> button on the login page.</li>
+      </ol>
     </div>
   </div>
 
