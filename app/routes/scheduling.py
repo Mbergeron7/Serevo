@@ -1301,6 +1301,16 @@ def import_wfm_status():
     return jsonify({"running": running, **status})
 
 
+@scheduling_bp.route("/import/wfm/reset", methods=["POST"])
+@admin_required
+def import_wfm_reset():
+    """Force-clear a stuck import flag so a new import can start."""
+    from app.capacity import planning as cp
+    cp._import_running = False
+    cp._import_status = {"message": "Import cancelled by admin.", "done": True, "success": False}
+    return jsonify({"success": True, "message": "Import flag cleared."})
+
+
 # ── Helpers for manual shift entry ──────────────────────────
 @scheduling_bp.route("/segments/auto", methods=["POST"])
 @login_required
