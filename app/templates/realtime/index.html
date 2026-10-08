@@ -1538,9 +1538,14 @@ if (_origShowView) {
   const __showView = showView;
   showView = function(name) {
     __showView(name);
-    if (name === 'liveagents' && !la_loaded) {
+    if (name === 'liveagents') {
+      laStopCountdown();
       la_loaded = true;
-      laLoadAgents(true);
+      laLoadAgents(true).then(()=>{
+        if(document.getElementById("laAutoToggle") && document.getElementById("laAutoToggle").checked) laStartCountdown();
+      });
+    } else {
+      laStopCountdown();
     }
   };
 }

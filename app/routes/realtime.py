@@ -1719,27 +1719,44 @@ def api_agent_detail():
         now_est = datetime.datetime.now(tz).replace(tzinfo=None)
         today = now_est.date()
 
-        # Find the employee by uid
-        emp = Employee.query.filter(
-            (Employee.external_id_1 == uid) |
-            (Employee.external_id_2 == uid) |
-            (db.cast(Employee.employee_id, db.String) == uid)
-        ).filter_by(status="Active").first()
+        # Find the employee by uid — match against all external ID fields
+        emp = None
+        employees = Employee.query.filter_by(status="Active").all()
+        for e in employees:
+            if (e.external_id_1 and e.external_id_1.strip() == uid) or \
+               (getattr(e, "external_id_2", None) and e.external_id_2.strip() == uid) or \
+               (e.employee_id and str(e.employee_id).strip() == uid):
+                emp = e
+                break
 
         if not emp:
             return jsonify(error="Agent not found"), 404
+
+        now_time = now_est.time()
         sched = Schedule.query.filter_by(
             employee_id=emp.id, schedule_date=today, status="scheduled"
         ).first()
 
-        schedule_blocks = []
+        segments = []
         if sched and sched.segments:
             for seg in sched.segments:
-                schedule_blocks.append({
+                # Determine adherence class
+                if seg.end_time and now_time > seg.end_time:
+                    adh_class = "ok"
+                    adherence = "✓ Done"
+                elif seg.start_time and seg.end_time and seg.start_time <= now_time < seg.end_time:
+                    adh_class = "active"
+                    adherence = "● Now"
+                else:
+                    adh_class = "upcoming"
+                    adherence = "Upcoming"
+                segments.append({
                     "activity": seg.activity_type,
                     "start": seg.start_time.strftime("%H:%M") if seg.start_time else "",
                     "end": seg.end_time.strftime("%H:%M") if seg.end_time else "",
                     "duration_mins": seg.duration_mins,
+                    "adh_class": adh_class,
+                    "adherence": adherence,
                 })
 
         # Get status timeline from sheet
@@ -1776,7 +1793,7 @@ def api_agent_detail():
             "lob": emp.planning_unit.name if emp.planning_unit else "Unassigned",
             "shift_start": sched.shift_start.strftime("%H:%M") if sched and sched.shift_start else "",
             "shift_end": sched.shift_end.strftime("%H:%M") if sched and sched.shift_end else "",
-            "schedule_blocks": schedule_blocks,
+            "segments": segments,
             "timeline": timeline,
             "current_status": current.get("status", "Offline"),
             "current_since": current.get("current_since", ""),
