@@ -1015,7 +1015,6 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
     employees = [e for e in employees if e.get("employee_id") is not None]
     log.info(f"WFM schedule fetch: {len(employees)} employees × {len(days)} days")
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     import time as _time
 
     out = []
@@ -1034,38 +1033,28 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
                 f"({done_count * 100 // total_calls}%)"
             )
 
-    # Process employees sequentially, but fetch their days concurrently
-    # (3 workers). This avoids flooding the API with too many parallel
-    # requests while still being ~3× faster than fully sequential.
-    for ei, emp in enumerate(employees):
+    # Sequential calls with a single reused session — requests.Session
+    # is NOT thread-safe, so concurrent approaches cause silent failures.
+    for emp in employees:
         eid = str(emp.get("employee_id"))
-
-        def _fetch_day(day, _eid=eid):
-            data = _legacy_get(session, f"employees/{_eid}/schedule/{day.isoformat()}") or {}
+        for day in days:
+            data = _legacy_get(session, f"employees/{eid}/schedule/{day.isoformat()}") or {}
             schedules = data.get("schedules", []) if isinstance(data, dict) else []
+            if schedules:
+                api_ok += 1
+            else:
+                api_fail += 1
+            done_count += 1
             blocks = _parse_blocks(schedules)
-            shift = _build_shift(_eid, day, blocks)
-            return shift, bool(schedules)
-
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = {pool.submit(_fetch_day, day): day for day in days}
-            for f in as_completed(futures):
-                try:
-                    shift, had_data = f.result()
-                    if had_data:
-                        api_ok += 1
-                    else:
-                        api_fail += 1
-                    if shift:
-                        out.append(shift)
-                except Exception:
-                    api_fail += 1
-                done_count += 1
-
-        _update_progress()
-        # Brief pause between employees to avoid rate limits
-        if ei < len(employees) - 1:
-            _time.sleep(0.3)
+            shift = _build_shift(eid, day, blocks)
+            if shift:
+                out.append(shift)
+            # Update progress every 5 calls
+            if done_count % 5 == 0 or done_count == total_calls:
+                _update_progress()
+            # Small delay every 50 calls to stay under rate limits
+            if done_count % 50 == 0:
+                _time.sleep(0.5)
 
     log.info(f"WFM schedule results: {api_ok} with data, {api_fail} no data, {len(out)} shifts built")
     return out
