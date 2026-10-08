@@ -43,7 +43,7 @@ _SHEET_CACHE_TTL = 30  # seconds — short TTL for near-real-time data
 _sheet_cache = {}       # key -> (timestamp, data)
 _sheet_cache_lock = threading.Lock()
 
-# Call Potential status SID → human-readable name
+# Dialer status SID → human-readable name
 CP_STATUS_MAP = {
     "WA9c4e93d1de9b472ebb7e3b89426df574": "Ready",
     "WAd1f6c9952f3d04482bb9b6b28dd9819e": "Offline",
@@ -69,7 +69,7 @@ CP_STATUS_MAP = {
     "WA3f5159a6c417b72f73c8128f5d3cc0ed Duplicate": "Cascade",
 }
 
-# CST → EST offset (Call Potential times are in CST)
+# CST → EST offset (dialer timestamps are in CST)
 CP_TZ_OFFSET_HOURS = 1
 
 
