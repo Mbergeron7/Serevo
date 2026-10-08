@@ -128,7 +128,25 @@ def save_announcement():
     else:
         ann.expires_at = None
 
+    is_new = ann_id is None
     db.session.commit()
+
+    # Notify all users when a new announcement is created
+    if is_new:
+        try:
+            from app.routes.notifications import notify
+            all_users = User.query.filter_by(is_active=True).all()
+            for u in all_users:
+                notify(
+                    u.id,
+                    f"New Announcement: {ann.title}",
+                    (ann.body or "")[:200],
+                    category="info",
+                    link="/portal/",
+                )
+        except Exception:
+            log.warning("Failed to notify users of new announcement", exc_info=True)
+
     return jsonify(success=True, id=ann.id)
 
 

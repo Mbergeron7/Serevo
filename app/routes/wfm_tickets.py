@@ -185,6 +185,19 @@ def create_ticket():
     db.session.commit()
 
     log.info(f"WFM ticket #{ticket.id} created by {user.get('email')} [{category}]")
+
+    # Notify WFM analysts about new ticket
+    try:
+        from app.routes.notifications import notify_all_admins
+        notify_all_admins(
+            f"WFM Ticket: {subject}",
+            f"New {priority} priority WFM ticket ({category}) from {user.get('display_name', user.get('email', 'a user'))}.",
+            category="info",
+            link="/wfm-tickets/",
+        )
+    except Exception:
+        log.warning("Failed to notify analysts of WFM ticket", exc_info=True)
+
     return jsonify(success=True, ticket=ticket.to_dict())
 
 
@@ -278,6 +291,21 @@ def update_ticket():
             ticket.description = data["description"]
 
     db.session.commit()
+
+    # Notify the submitter when an analyst changes the status
+    if "status" in data and ticket.submitted_by != user["id"]:
+        try:
+            from app.routes.notifications import notify
+            notify(
+                ticket.submitted_by,
+                f"WFM Ticket Updated: {ticket.subject}",
+                f"Your WFM ticket status changed to '{ticket.status}'.",
+                category="success" if ticket.status in ("resolved", "closed") else "info",
+                link="/wfm-tickets/",
+            )
+        except Exception:
+            log.warning("Failed to notify submitter of WFM ticket status change", exc_info=True)
+
     return jsonify(success=True, ticket=ticket.to_dict(strip_internal=not _is_wfm_analyst(user)))
 
 

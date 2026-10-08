@@ -202,6 +202,24 @@ def assign_training():
         created += 1
 
     db.session.commit()
+
+    # Notify assigned employees about new training
+    try:
+        from app.routes.notifications import notify
+        for eid in employee_ids:
+            u = User.query.filter_by(employee_id=eid).first()
+            if u:
+                notify(
+                    u.id,
+                    f"Training Assigned: {mod.title}",
+                    f"You have been assigned the training module '{mod.title}'."
+                    + (f" Due by {due_date.isoformat()}." if due_date else ""),
+                    category="info",
+                    link="/portal/",
+                )
+    except Exception:
+        log.warning("Failed to notify employees of training assignment", exc_info=True)
+
     try:
         from app.audit import audit_log
         audit_log("assign", "training", module_id, f"Assigned {created} employees to '{mod.title}'")

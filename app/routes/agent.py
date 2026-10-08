@@ -453,6 +453,19 @@ def submit_bid():
     )
     db.session.add(bid)
     db.session.commit()
+
+    # Notify admins about the shift bid
+    try:
+        from app.routes.notifications import notify_all_admins
+        notify_all_admins(
+            f"Shift Bid: {emp.full_name}",
+            f"{emp.full_name} bid on shift post #{post_id}.",
+            category="info",
+            link="/portal/",
+        )
+    except Exception:
+        log.warning("Failed to notify admins of shift bid", exc_info=True)
+
     return jsonify(ok=True, id=bid.id)
 
 
@@ -526,6 +539,19 @@ def submit_swap():
     )
     db.session.add(swap)
     db.session.commit()
+
+    # Notify admins about the shift swap request
+    try:
+        from app.routes.notifications import notify_all_admins
+        notify_all_admins(
+            f"Shift Swap Request: {emp.full_name}",
+            f"{emp.full_name} submitted a shift swap request.",
+            category="info",
+            link="/portal/",
+        )
+    except Exception:
+        log.warning("Failed to notify admins of shift swap request", exc_info=True)
+
     return jsonify(ok=True, id=swap.id)
 
 
@@ -655,6 +681,20 @@ def signup_vto_ot():
     if post.slots_filled >= post.slots:
         post.status = "filled"
     db.session.commit()
+
+    # Notify admins about VTO/OT signup
+    try:
+        from app.routes.notifications import notify_all_admins
+        post_type = post.post_type.upper() if hasattr(post, 'post_type') else "VTO/OT"
+        notify_all_admins(
+            f"{post_type} Signup: {emp.full_name}",
+            f"{emp.full_name} signed up for {post_type} on {post.schedule_date.isoformat()}.",
+            category="info",
+            link="/portal/",
+        )
+    except Exception:
+        log.warning("Failed to notify admins of VTO/OT signup", exc_info=True)
+
     return jsonify(ok=True, id=signup.id)
 
 

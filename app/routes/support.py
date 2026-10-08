@@ -83,6 +83,19 @@ def create_ticket():
     db.session.commit()
 
     log.info(f"Support ticket #{ticket.id} created by {user.get('email')}")
+
+    # Notify admins about new support ticket
+    try:
+        from app.routes.notifications import notify_all_admins
+        notify_all_admins(
+            f"Support Ticket: {subject}",
+            f"New {priority} priority support ticket from {user.get('display_name', user.get('email', 'a user'))}.",
+            category="info",
+            link=f"/support/",
+        )
+    except Exception:
+        log.warning("Failed to notify admins of support ticket", exc_info=True)
+
     return jsonify(success=True, ticket=ticket.to_dict())
 
 
@@ -173,5 +186,19 @@ def add_comment():
     )
     db.session.add(comment)
     db.session.commit()
+
+    # Notify the ticket creator when someone else responds
+    if ticket.submitted_by != user["id"]:
+        try:
+            from app.routes.notifications import notify
+            notify(
+                ticket.submitted_by,
+                f"Response on Ticket: {ticket.subject}",
+                body[:200],
+                category="info",
+                link=f"/support/",
+            )
+        except Exception:
+            log.warning("Failed to notify ticket creator of response", exc_info=True)
 
     return jsonify(success=True, comment=comment.to_dict())
