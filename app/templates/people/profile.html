@@ -497,38 +497,7 @@
     </div>
   </div>
 
-  <!-- Rotation Models -->
-  <div class="section-card">
-    <div class="section-card-header">
-      Rotation Models
-      <button class="btn-add" onclick="openAssignModal('work_time_pattern')">+ Add</button>
-    </div>
-    <div class="section-card-body">
-      {% if wtp_assignments %}
-      <div style="overflow-x:auto"><table class="assign-table">
-        <thead>
-          <tr><th>Rotation Model</th><th>Reference Date</th><th>Valid From</th><th>Valid To</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for wa in wtp_assignments %}
-          <tr>
-            <td style="font-weight:600;">{{ wa.work_time_pattern_model.name }}</td>
-            <td>{{ wa.reference_date or '—' }}</td>
-            <td>{{ wa.valid_from or '—' }}</td>
-            <td>{{ wa.valid_to or '—' }}</td>
-            <td style="white-space:nowrap;">
-              <button class="btn-outline-sm" onclick="openAssignModal('work_time_pattern', {id:{{ wa.id }}, item_id:{{ wa.work_time_pattern_model_id }}, reference_date:'{{ wa.reference_date or '' }}', valid_from:'{{ wa.valid_from or '' }}', valid_to:'{{ wa.valid_to or '' }}'})">Edit</button>
-              <button class="btn-danger-sm" onclick="removeAssignment('work_time_pattern', {{ wa.id }})">Remove</button>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table></div>
-      {% else %}
-      <p style="color:var(--text-muted); font-size:.85rem;">No rotation model assigned. Assign one to define which shift patterns this employee rotates through.</p>
-      {% endif %}
-    </div>
-  </div>
+  {# Rotation Models — hidden; only Shift Sequences are used #}
 
   <!-- Quartile Assignment -->
   <div class="section-card">

@@ -125,7 +125,7 @@
 <div class="view-tabs" id="mainTabs">
   <button class="view-tab active" data-tab="dm">Day Models</button>
   <button class="view-tab" data-tab="wtp">Week Patterns</button>
-  <button class="view-tab" data-tab="wtpm">Rotation Models</button>
+  <button class="view-tab" data-tab="wtpm" style="display:none">Rotation Models</button>
   <button class="view-tab" data-tab="eq">Employee Quartiles</button>
 </div>
 
@@ -166,7 +166,7 @@
 <!-- ═══════════════════════════════════════════════════════════════
      TAB 3: Rotation Models
      ═══════════════════════════════════════════════════════════════ -->
-<div id="panel-wtpm" class="tab-panel">
+<div id="panel-wtpm" class="tab-panel" style="display:none">
   <div class="panel-toolbar">
     <button class="btn btn-primary" onclick="wtpm_openModal()">+ Add Rotation Model</button>
   </div>
@@ -277,43 +277,7 @@
   </form>
 </dialog>
 
-<!-- Rotation Model Modal -->
-<dialog id="wtpm-modal">
-  <h3 id="wtpm-modal-title">Add Rotation Model</h3>
-  <form onsubmit="return false;">
-    <input type="hidden" id="wtpm_f_id">
-    <div class="form-grid">
-      <div class="form-row2">
-        <label>Name<input id="wtpm_f_name" class="form-input" required></label>
-        <label>Abbreviation<input id="wtpm_f_abbreviation" class="form-input" maxlength="10"></label>
-      </div>
-      <div class="form-row2">
-        <label>Type
-          <select id="wtpm_f_model_type" class="form-input">
-            <option value="Fixed">Fixed</option>
-            <option value="Variable">Variable</option>
-          </select>
-        </label>
-        <label>Planning Unit
-          <select id="wtpm_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
-        </label>
-      </div>
-      <label>Description<textarea id="wtpm_f_description" class="form-input" rows="2"></textarea></label>
-      <label>Exception Week Pattern
-        <select id="wtpm_f_exception_wtp_id" class="form-input"><option value="">— None —</option></select>
-      </label>
-      <label class="inline"><input id="wtpm_f_is_active" type="checkbox" checked> Active</label>
-      <div class="assign-section">
-        <h4>Assign Week Patterns</h4>
-        <div class="assign-pool" id="wtpm-wtp-pool"></div>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn" onclick="document.getElementById('wtpm-modal').close()">Cancel</button>
-      <button type="button" class="btn btn-primary" onclick="wtpm_save()">Save</button>
-    </div>
-  </form>
-</dialog>
+<!-- Rotation Model Modal — hidden; only Shift Sequences are used -->
 
 <!-- Employee Quartile Modal -->
 <dialog id="eq-modal">
