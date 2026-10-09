@@ -343,6 +343,15 @@ def create_app():
         from flask import render_template
         return render_template("500.html"), 500
 
+    # ---- prevent browser caching of HTML pages ----
+    @app.after_request
+    def _no_cache_html(response):
+        if response.content_type and "text/html" in response.content_type:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
     # ---- health check ----
     @app.route("/health")
     def health():

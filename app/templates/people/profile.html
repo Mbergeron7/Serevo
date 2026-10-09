@@ -1071,7 +1071,7 @@ async function saveBasicInfo(e) {
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (data.success) { location.replace(location.href); }
+    if (data.success) { window.location.href = window.location.pathname + '?_=' + Date.now(); }
     else { showError('basicError', data.error); }
   } catch(err) { showError('basicError', 'Network error: ' + err.message); }
   return false;
@@ -1233,7 +1233,11 @@ async function saveAssignment(e) {
       return false;
     }
     const data = await resp.json();
-    if (data.success) { window.location.reload(true); }
+    if (data.success) {
+      saveBtn.textContent = 'Saved ✓';
+      closeAssignModal();
+      window.location.href = window.location.pathname + '?_=' + Date.now();
+    }
     else { showError('assignError', data.error || 'Unknown error'); saveBtn.textContent = origText; saveBtn.disabled = false; }
   } catch(err) { showError('assignError', 'Network error: ' + err.message); saveBtn.textContent = origText; saveBtn.disabled = false; }
   return false;
@@ -1249,7 +1253,7 @@ async function removeAssignment(type, assignmentId) {
       body: JSON.stringify({ type: type, assignment_id: assignmentId }),
     });
     const data = await resp.json();
-    if (data.success) { location.replace(location.href); }
+    if (data.success) { window.location.href = window.location.pathname + '?_=' + Date.now(); }
     else { alert(data.error || 'Error removing assignment.'); }
   } catch(err) { alert('Network error: ' + err.message); }
 }
@@ -1292,7 +1296,7 @@ async function saveQuartile(e) {
       }),
     });
     const data = await resp.json();
-    if (data.success) { location.replace(location.href); }
+    if (data.success) { window.location.href = window.location.pathname + '?_=' + Date.now(); }
     else {
       const errEl = document.getElementById('quartileError');
       errEl.textContent = data.error || 'Error saving quartile.';
@@ -1333,7 +1337,7 @@ async function saveAvailability(e) {
       body: JSON.stringify({ employee_id: EMP_ID, days: days }),
     });
     const data = await resp.json();
-    if (data.success) { location.replace(location.href); }
+    if (data.success) { window.location.href = window.location.pathname + '?_=' + Date.now(); }
     else { showError('availError', data.error); }
   } catch(err) { showError('availError', 'Network error: ' + err.message); }
   return false;
