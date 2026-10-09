@@ -246,6 +246,64 @@ class Employee(db.Model):
             "Email": self.email or "",
         }
 
+    def planning_unit_id_on(self, target_date):
+        """Return the planning_unit_id this employee belonged to on *target_date*.
+
+        Uses the EmployeePlanningUnit junction table history.  Falls back to
+        the legacy direct FK when no junction record covers the date.
+        """
+        # Current assignment (no end date) whose start <= target_date
+        epu = EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.employee_id == self.id,
+            EmployeePlanningUnit.valid_to.is_(None),
+            EmployeePlanningUnit.valid_from <= target_date,
+        ).first()
+        if epu:
+            return epu.planning_unit_id
+        # Historical assignment that spans the target_date
+        epu = EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.employee_id == self.id,
+            EmployeePlanningUnit.valid_from <= target_date,
+            EmployeePlanningUnit.valid_to >= target_date,
+        ).order_by(EmployeePlanningUnit.valid_from.desc()).first()
+        if epu:
+            return epu.planning_unit_id
+        # No junction record — fall back to legacy FK
+        return self.planning_unit_id
+
+    @staticmethod
+    def employees_for_planning_unit(pu_id, target_date, status="Active"):
+        """Return employees assigned to *pu_id* on *target_date* via junction history.
+
+        Falls back to the legacy FK for employees with no junction records.
+        """
+        import sqlalchemy as sa
+
+        # Employees with a junction record covering target_date
+        junction_ids = db.session.query(EmployeePlanningUnit.employee_id).filter(
+            EmployeePlanningUnit.planning_unit_id == pu_id,
+            EmployeePlanningUnit.valid_from <= target_date,
+            db.or_(
+                EmployeePlanningUnit.valid_to.is_(None),
+                EmployeePlanningUnit.valid_to >= target_date,
+            ),
+        ).subquery()
+
+        # Also include employees with no junction records at all, using legacy FK
+        has_any_junction = db.session.query(EmployeePlanningUnit.employee_id).subquery()
+
+        q = Employee.query.filter(
+            Employee.status == status,
+            db.or_(
+                Employee.id.in_(sa.select(junction_ids.c.employee_id)),
+                db.and_(
+                    ~Employee.id.in_(sa.select(has_any_junction.c.employee_id)),
+                    Employee.planning_unit_id == pu_id,
+                ),
+            ),
+        ).order_by(Employee.last_name, Employee.first_name)
+        return q.all()
+
     def __repr__(self):
         return f"<Employee {self.employee_id} {self.full_name}>"
 

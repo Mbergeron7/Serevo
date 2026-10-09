@@ -61,14 +61,15 @@ def api_data():
     week_end = week_start + timedelta(days=6)
     dates = [week_start + timedelta(days=i) for i in range(7)]
 
-    # Get employees for this LOB
-    emp_q = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name)
+    # Get employees for this LOB (date-aware: uses junction table history)
     if lob:
         pu = PlanningUnit.query.filter_by(name=lob).first()
         if pu:
-            emp_q = emp_q.filter_by(planning_unit_id=pu.id)
-
-    employees = emp_q.all()
+            employees = Employee.employees_for_planning_unit(pu.id, week_start)
+        else:
+            employees = []
+    else:
+        employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
 
     # Get schedules for the week
     sched_q = Schedule.query.filter(
