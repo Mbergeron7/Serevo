@@ -34,19 +34,24 @@ from app.routes._utils import get_sheet as _get_sheet
 @people_bp.route("/api/sync-planning-units", methods=["POST"])
 @login_required
 def sync_planning_units():
-    """Sync Employee.planning_unit_id to match current (non-end-dated) junction records."""
+    """Sync Employee.planning_unit_id to match current (active today) junction records.
+    Also transfers schedules from each assignment's valid_from date onward."""
     updated = 0
-    current_assignments = EmployeePlanningUnit.query.filter(
-        EmployeePlanningUnit.valid_to.is_(None)
-    ).all()
     _today = _dt.date.today()
+    current_assignments = EmployeePlanningUnit.query.filter(
+        EmployeePlanningUnit.valid_to.is_(None),
+        db.or_(
+            EmployeePlanningUnit.valid_from.is_(None),
+            EmployeePlanningUnit.valid_from <= _today,
+        ),
+    ).all()
     for a in current_assignments:
         emp = Employee.query.get(a.employee_id)
         if emp and emp.planning_unit_id != a.planning_unit_id:
-            # Move future schedules to the new planning unit
+            effective = a.valid_from or _today
             Schedule.query.filter(
                 Schedule.employee_id == emp.id,
-                Schedule.schedule_date >= _today,
+                Schedule.schedule_date >= effective,
             ).update({Schedule.planning_unit_id: a.planning_unit_id}, synchronize_session="fetch")
             emp.planning_unit_id = a.planning_unit_id
             updated += 1
@@ -570,49 +575,52 @@ def profile_assign():
 
     try:
         if assign_type == "planning_unit":
+            _today = _dt.date.today()
+            effective = valid_from or _today  # when the new assignment takes effect
+
             if assignment_id:
                 obj = EmployeePlanningUnit.query.get(int(assignment_id))
                 if not obj:
                     return jsonify({"success": False, "error": "Assignment not found."})
+                old_pu_id_before = obj.planning_unit_id
                 obj.planning_unit_id = item_id
                 obj.priority = int(data.get("priority", 1))
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
-                # Keep legacy direct FK in sync if this is the current assignment
-                if not valid_to:
+                # Keep legacy direct FK in sync if this assignment is currently active
+                if not valid_to and effective <= _today:
                     emp = Employee.query.get(emp_id)
-                    if emp:
-                        old_pu_id = emp.planning_unit_id
+                    if emp and emp.planning_unit_id != item_id:
                         emp.planning_unit_id = item_id
-                        # Move future schedules when LOB changes via edit
-                        if old_pu_id != item_id:
-                            _today = _dt.date.today()
-                            Schedule.query.filter(
-                                Schedule.employee_id == emp_id,
-                                Schedule.schedule_date >= _today,
-                            ).update({Schedule.planning_unit_id: item_id}, synchronize_session="fetch")
+                # Transfer schedules from effective date onward
+                if old_pu_id_before != item_id:
+                    Schedule.query.filter(
+                        Schedule.employee_id == emp_id,
+                        Schedule.schedule_date >= effective,
+                    ).update({Schedule.planning_unit_id: item_id}, synchronize_session="fetch")
             else:
-                # End-date any current assignments (no valid_to) for this employee
-                _today = _dt.date.today()
+                # End-date any current assignments — day before new one starts
+                end_date = effective - _dt.timedelta(days=1)
                 current = EmployeePlanningUnit.query.filter_by(
                     employee_id=emp_id
                 ).filter(EmployeePlanningUnit.valid_to.is_(None)).all()
                 for c in current:
-                    c.valid_to = _today
+                    c.valid_to = end_date
                 obj = EmployeePlanningUnit(
                     employee_id=emp_id, planning_unit_id=item_id,
                     priority=int(data.get("priority", 1)),
-                    valid_from=valid_from or _today, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
-                # Keep legacy direct FK in sync so LOB filtering works everywhere
-                emp = Employee.query.get(emp_id)
-                if emp:
-                    emp.planning_unit_id = item_id
-                # Move future schedules to the new planning unit
+                # Keep legacy direct FK in sync if effective today or earlier
+                if effective <= _today:
+                    emp = Employee.query.get(emp_id)
+                    if emp:
+                        emp.planning_unit_id = item_id
+                # Transfer schedules from effective date onward
                 Schedule.query.filter(
                     Schedule.employee_id == emp_id,
-                    Schedule.schedule_date >= _today,
+                    Schedule.schedule_date >= effective,
                 ).update({Schedule.planning_unit_id: item_id}, synchronize_session="fetch")
         elif assign_type == "contract":
             if assignment_id:
