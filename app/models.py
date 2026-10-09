@@ -1303,13 +1303,11 @@ class SkillMapping(db.Model):
     proficiency   = db.Column(db.Integer, default=3)          # 1-5 scale
     priority      = db.Column(db.Integer, default=1)          # routing priority (1 = primary)
     is_active     = db.Column(db.Boolean, default=True)
+    valid_from    = db.Column(db.Date, nullable=True)
+    valid_to      = db.Column(db.Date, nullable=True)
     created_at    = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="skill_mappings")
-
-    __table_args__ = (
-        db.UniqueConstraint("skill_group_id", "employee_id", name="uq_skill_employee"),
-    )
 
     def to_dict(self):
         emp = self.employee
@@ -1603,13 +1601,11 @@ class SelectionMember(db.Model):
                              nullable=False, index=True)
     employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
                              nullable=False, index=True)
+    valid_from   = db.Column(db.Date, nullable=True)
+    valid_to     = db.Column(db.Date, nullable=True)
     created_at   = db.Column(db.DateTime, default=_utcnow)
 
     employee = db.relationship("Employee", backref="selection_memberships")
-
-    __table_args__ = (
-        db.UniqueConstraint("selection_id", "employee_id", name="uq_sel_emp"),
-    )
 
     def to_dict(self):
         emp = self.employee

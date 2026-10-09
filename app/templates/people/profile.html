@@ -271,7 +271,7 @@
       {% if skill_mappings %}
       <div style="overflow-x:auto"><table class="assign-table">
         <thead>
-          <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th><th></th></tr>
+          <tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>Status</th><th>From</th><th></th></tr>
         </thead>
         <tbody>
           {% for sm in skill_mappings %}
@@ -284,9 +284,10 @@
             </td>
             <td>{{ sm.priority }}</td>
             <td>{% if sm.is_active %}<span style="color:#16a34a;">Active</span>{% else %}<span style="color:#9ca3af;">Inactive</span>{% endif %}</td>
+            <td>{{ sm.valid_from or '—' }}</td>
             <td style="white-space:nowrap;">
               <button class="btn-outline-sm" onclick="openAssignModal('skill', {id:{{ sm.id }}, item_id:{{ sm.skill_group_id }}, proficiency:{{ sm.proficiency }}, priority:{{ sm.priority }}})">Edit</button>
-              <button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">Remove</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">End</button>
             </td>
           </tr>
           {% endfor %}
@@ -294,6 +295,33 @@
       </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No skills assigned yet.</p>
+      {% endif %}
+      {% if skill_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ skill_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>From</th><th>To</th></tr></thead>
+          <tbody>
+          {% for sm in skill_history %}
+          <tr>
+            <td>{{ sm.skill_group.name }}</td>
+            <td>
+              {% for i in range(5) %}
+                {% if i < sm.proficiency %}<span style="color:#f59e0b;">★</span>{% else %}<span style="color:var(--border);">★</span>{% endif %}
+              {% endfor %}
+            </td>
+            <td>{{ sm.priority }}</td>
+            <td>{{ sm.valid_from or '—' }}</td>
+            <td>{{ sm.valid_to or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>
@@ -351,16 +379,17 @@
       {% if selection_memberships %}
       <div style="overflow-x:auto"><table class="assign-table">
         <thead>
-          <tr><th>Selection</th><th>Description</th><th></th></tr>
+          <tr><th>Selection</th><th>Description</th><th>From</th><th></th></tr>
         </thead>
         <tbody>
           {% for sm in selection_memberships %}
           <tr>
             <td style="font-weight:600;">{{ sm.selection.name }}</td>
             <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
+            <td>{{ sm.valid_from or '—' }}</td>
             <td style="white-space:nowrap;">
               <button class="btn-outline-sm" onclick="openAssignModal('selection', {id:{{ sm.id }}, item_id:{{ sm.selection_id }}})">Edit</button>
-              <button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">Remove</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">End</button>
             </td>
           </tr>
           {% endfor %}
@@ -368,6 +397,28 @@
       </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">Not part of any selections.</p>
+      {% endif %}
+      {% if selection_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ selection_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Selection</th><th>Description</th><th>From</th><th>To</th></tr></thead>
+          <tbody>
+          {% for sm in selection_history %}
+          <tr>
+            <td>{{ sm.selection.name }}</td>
+            <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
+            <td>{{ sm.valid_from or '—' }}</td>
+            <td>{{ sm.valid_to or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>

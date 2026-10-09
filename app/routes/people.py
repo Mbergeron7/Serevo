@@ -426,8 +426,10 @@ def employee_profile(emp_id):
             user=user,
             emp=emp,
             skill_mappings=[],
+            skill_history=[],
             contract_assignments=[],
             selection_memberships=[],
+            selection_history=[],
             pu_assignments=[],
             pu_history=[],
             ss_assignments=[],
@@ -441,9 +443,21 @@ def employee_profile(emp_id):
     emp_id = int(emp_id)
     emp = Employee.query.get_or_404(emp_id)
 
-    skill_mappings = SkillMapping.query.filter_by(employee_id=emp.id).all()
+    skill_mappings = SkillMapping.query.filter_by(
+        employee_id=emp.id
+    ).filter(SkillMapping.valid_to.is_(None)).all()
+    skill_history = SkillMapping.query.filter_by(
+        employee_id=emp.id
+    ).filter(SkillMapping.valid_to.isnot(None)).order_by(
+        SkillMapping.valid_to.desc()).all()
     contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()
-    selection_memberships = SelectionMember.query.filter_by(employee_id=emp.id).all()
+    selection_memberships = SelectionMember.query.filter_by(
+        employee_id=emp.id
+    ).filter(SelectionMember.valid_to.is_(None)).all()
+    selection_history = SelectionMember.query.filter_by(
+        employee_id=emp.id
+    ).filter(SelectionMember.valid_to.isnot(None)).order_by(
+        SelectionMember.valid_to.desc()).all()
     pu_assignments = EmployeePlanningUnit.query.filter_by(
         employee_id=emp.id
     ).filter(EmployeePlanningUnit.valid_to.is_(None)).order_by(
@@ -489,8 +503,10 @@ def employee_profile(emp_id):
         user=user,
         emp=emp,
         skill_mappings=skill_mappings,
+        skill_history=skill_history,
         contract_assignments=contract_assignments,
         selection_memberships=selection_memberships,
+        selection_history=selection_history,
         pu_assignments=pu_assignments,
         pu_history=pu_history,
         ss_assignments=ss_assignments,
@@ -610,8 +626,20 @@ def profile_assign():
                 if not obj:
                     return jsonify({"success": False, "error": "Assignment not found."})
                 obj.selection_id = item_id
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
             else:
-                obj = SelectionMember(selection_id=item_id, employee_id=emp_id)
+                # End-date any current membership for this employee in this selection
+                _today = _dt.date.today()
+                current = SelectionMember.query.filter_by(
+                    employee_id=emp_id, selection_id=item_id
+                ).filter(SelectionMember.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = _today
+                obj = SelectionMember(
+                    selection_id=item_id, employee_id=emp_id,
+                    valid_from=valid_from or _today, valid_to=valid_to,
+                )
                 db.session.add(obj)
         elif assign_type == "shift_sequence":
             ref_date = _dt.datetime.strptime(data["reference_date"], "%Y-%m-%d").date() if data.get("reference_date") else None
@@ -695,12 +723,22 @@ def profile_assign():
                     obj.skill_group_id = item_id
                 obj.proficiency = int(data.get("proficiency", 3))
                 obj.priority = int(data.get("priority", 1))
+                obj.valid_from = valid_from
+                obj.valid_to = valid_to
             else:
+                # End-date any current mapping for this employee + skill group
+                _today = _dt.date.today()
+                current = SkillMapping.query.filter_by(
+                    employee_id=emp_id, skill_group_id=item_id
+                ).filter(SkillMapping.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = _today
                 obj = SkillMapping(
                     employee_id=emp_id, skill_group_id=item_id,
                     proficiency=int(data.get("proficiency", 3)),
                     priority=int(data.get("priority", 1)),
                     is_active=True,
+                    valid_from=valid_from or _today, valid_to=valid_to,
                 )
                 db.session.add(obj)
         else:
@@ -748,7 +786,7 @@ def profile_unassign():
 
     # For history-tracked types, end-date instead of deleting
     _today = _dt.date.today()
-    if assign_type in ("planning_unit", "shift_sequence") and hasattr(obj, "valid_to"):
+    if assign_type in ("planning_unit", "shift_sequence", "skill", "selection") and hasattr(obj, "valid_to"):
         obj.valid_to = _today
         # If end-dating a planning unit, update legacy FK to next active or clear it
         if assign_type == "planning_unit":
