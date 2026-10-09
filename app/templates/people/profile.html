@@ -1216,6 +1216,11 @@ async function saveAssignment(e) {
   }
   if (!body.item_id) { showError('assignError', 'Please select an item.'); return false; }
 
+  const saveBtn = document.getElementById('assignSaveBtn');
+  const origText = saveBtn.textContent;
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+
   try {
     const resp = await fetch('/people/api/profile/assign', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1223,13 +1228,13 @@ async function saveAssignment(e) {
     });
     const data = await resp.json();
     if (data.success) { location.replace(location.href); }
-    else { showError('assignError', data.error); }
-  } catch(err) { showError('assignError', 'Network error: ' + err.message); }
+    else { showError('assignError', data.error); saveBtn.textContent = origText; saveBtn.disabled = false; }
+  } catch(err) { showError('assignError', 'Network error: ' + err.message); saveBtn.textContent = origText; saveBtn.disabled = false; }
   return false;
 }
 
 async function removeAssignment(type, assignmentId) {
-  const historyTypes = ['planning_unit', 'shift_sequence', 'quartile'];
+  const historyTypes = ['planning_unit', 'shift_sequence', 'quartile', 'skill', 'selection'];
   const msg = historyTypes.includes(type) ? 'End-date this assignment? It will move to history.' : 'Remove this assignment?';
   if (!confirm(msg)) return;
   try {
