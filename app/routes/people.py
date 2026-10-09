@@ -405,9 +405,12 @@ def employee_profile(emp_id):
             contract_assignments=[],
             selection_memberships=[],
             pu_assignments=[],
+            pu_history=[],
             ss_assignments=[],
+            ss_history=[],
             wtp_assignments=[],
             quartile=None,
+            quartile_history=[],
             avail_map={},
         )
 
@@ -417,23 +420,43 @@ def employee_profile(emp_id):
     skill_mappings = SkillMapping.query.filter_by(employee_id=emp.id).all()
     contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()
     selection_memberships = SelectionMember.query.filter_by(employee_id=emp.id).all()
-    pu_assignments = EmployeePlanningUnit.query.filter_by(employee_id=emp.id).order_by(
+    pu_assignments = EmployeePlanningUnit.query.filter_by(
+        employee_id=emp.id
+    ).filter(EmployeePlanningUnit.valid_to.is_(None)).order_by(
         EmployeePlanningUnit.priority).all()
+    pu_history = EmployeePlanningUnit.query.filter_by(
+        employee_id=emp.id
+    ).filter(EmployeePlanningUnit.valid_to.isnot(None)).order_by(
+        EmployeePlanningUnit.valid_to.desc()).all()
     try:
-        ss_assignments = EmployeeShiftSequence.query.filter_by(employee_id=emp.id).all()
+        ss_assignments = EmployeeShiftSequence.query.filter_by(
+            employee_id=emp.id
+        ).filter(EmployeeShiftSequence.valid_to.is_(None)).all()
+        ss_history = EmployeeShiftSequence.query.filter_by(
+            employee_id=emp.id
+        ).filter(EmployeeShiftSequence.valid_to.isnot(None)).order_by(
+            EmployeeShiftSequence.valid_to.desc()).all()
     except Exception:
         db.session.rollback()
         ss_assignments = []
+        ss_history = []
     try:
         wtp_assignments = EmployeeWorkTimePattern.query.filter_by(employee_id=emp.id).all()
     except Exception:
         db.session.rollback()
         wtp_assignments = []
     try:
-        quartile = EmployeeQuartile.query.filter_by(employee_id=emp.id).first()
+        quartile = EmployeeQuartile.query.filter_by(
+            employee_id=emp.id
+        ).filter(EmployeeQuartile.end_date.is_(None)).first()
+        quartile_history = EmployeeQuartile.query.filter_by(
+            employee_id=emp.id
+        ).filter(EmployeeQuartile.end_date.isnot(None)).order_by(
+            EmployeeQuartile.end_date.desc()).all()
     except Exception:
         db.session.rollback()
         quartile = None
+        quartile_history = []
     # Build availability map keyed by day_of_week (0-6)
     avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
     avail_map = {a.day_of_week: a for a in avail_entries}
@@ -445,9 +468,12 @@ def employee_profile(emp_id):
         contract_assignments=contract_assignments,
         selection_memberships=selection_memberships,
         pu_assignments=pu_assignments,
+        pu_history=pu_history,
         ss_assignments=ss_assignments,
+        ss_history=ss_history,
         wtp_assignments=wtp_assignments,
         quartile=quartile,
+        quartile_history=quartile_history,
         avail_map=avail_map,
     )
 
@@ -513,10 +539,17 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
+                # End-date any current assignments (no valid_to) for this employee
+                _today = _dt.date.today()
+                current = EmployeePlanningUnit.query.filter_by(
+                    employee_id=emp_id
+                ).filter(EmployeePlanningUnit.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = _today
                 obj = EmployeePlanningUnit(
                     employee_id=emp_id, planning_unit_id=item_id,
                     priority=int(data.get("priority", 1)),
-                    valid_from=valid_from, valid_to=valid_to,
+                    valid_from=valid_from or _today, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "contract":
@@ -555,11 +588,18 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
+                # End-date any current assignments for this employee
+                _today = _dt.date.today()
+                current = EmployeeShiftSequence.query.filter_by(
+                    employee_id=emp_id
+                ).filter(EmployeeShiftSequence.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = _today
                 obj = EmployeeShiftSequence(
                     employee_id=emp_id, shift_sequence_id=item_id,
                     row_index=row_index,
                     reference_date=ref_date,
-                    valid_from=valid_from, valid_to=valid_to,
+                    valid_from=valid_from or _today, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "work_time_pattern":
@@ -580,16 +620,34 @@ def profile_assign():
                 )
                 db.session.add(obj)
         elif assign_type == "quartile":
-            obj = EmployeeQuartile.query.filter_by(employee_id=emp_id).first()
-            if not obj:
-                obj = EmployeeQuartile(employee_id=emp_id)
+            if assignment_id:
+                # Editing an existing quartile record
+                obj = EmployeeQuartile.query.get(int(assignment_id))
+                if not obj:
+                    return jsonify({"success": False, "error": "Assignment not found."})
+                obj.quartile = int(data.get("quartile", 4))
+                obj.planning_unit_id = int(item_id) if item_id else None
+                eff = data.get("effective_date")
+                if eff:
+                    obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
+                obj.notes = data.get("notes", "")
+            else:
+                # End-date any current quartile (no end_date) for this employee
+                _today = _dt.date.today()
+                current = EmployeeQuartile.query.filter_by(
+                    employee_id=emp_id
+                ).filter(EmployeeQuartile.end_date.is_(None)).all()
+                for c in current:
+                    c.end_date = _today
+                eff = data.get("effective_date")
+                obj = EmployeeQuartile(
+                    employee_id=emp_id,
+                    quartile=int(data.get("quartile", 4)),
+                    planning_unit_id=int(item_id) if item_id else None,
+                    effective_date=_dt.datetime.strptime(eff, "%Y-%m-%d").date() if eff else _today,
+                    notes=data.get("notes", ""),
+                )
                 db.session.add(obj)
-            obj.quartile = int(data.get("quartile", 4))
-            obj.planning_unit_id = int(item_id) if item_id else None
-            eff = data.get("effective_date")
-            if eff:
-                obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
-            obj.notes = data.get("notes", "")
         elif assign_type == "skill":
             if assignment_id:
                 obj = SkillMapping.query.get(int(assignment_id))
@@ -615,7 +673,7 @@ def profile_assign():
     except Exception as e:
         db.session.rollback()
         err = str(e)
-        if "uq_emp_pu" in err or "uq_emp_wtpm" in err or "uq_sel_emp" in err or "uq_skill_employee" in err:
+        if "uq_emp_wtpm" in err or "uq_sel_emp" in err or "uq_skill_employee" in err:
             return jsonify({"success": False, "error": "This assignment already exists."})
         return jsonify({"success": False, "error": err})
 
@@ -650,7 +708,14 @@ def profile_unassign():
     if not obj:
         return jsonify({"success": False, "error": "Assignment not found."})
 
-    db.session.delete(obj)
+    # For history-tracked types, end-date instead of deleting
+    _today = _dt.date.today()
+    if assign_type in ("planning_unit", "shift_sequence") and hasattr(obj, "valid_to"):
+        obj.valid_to = _today
+    elif assign_type == "quartile" and hasattr(obj, "end_date"):
+        obj.end_date = _today
+    else:
+        db.session.delete(obj)
     db.session.commit()
     return jsonify({"success": True})
 

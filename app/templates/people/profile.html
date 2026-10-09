@@ -403,7 +403,7 @@
             <td>{{ pa.valid_to or '—' }}</td>
             <td style="white-space:nowrap;">
               <button class="btn-outline-sm" onclick="openAssignModal('planning_unit', {id:{{ pa.id }}, item_id:{{ pa.planning_unit_id }}, priority:{{ pa.priority }}, valid_from:'{{ pa.valid_from or '' }}', valid_to:'{{ pa.valid_to or '' }}'})">Edit</button>
-              <button class="btn-danger-sm" onclick="removeAssignment('planning_unit', {{ pa.id }})">Remove</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('planning_unit', {{ pa.id }})">End</button>
             </td>
           </tr>
           {% endfor %}
@@ -414,6 +414,28 @@
       <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign planning units with priority &amp; validity.</p>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No planning unit assigned.</p>
+      {% endif %}
+      {% if pu_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ pu_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Planning Unit</th><th>Priority</th><th>From</th><th>To</th></tr></thead>
+          <tbody>
+          {% for pa in pu_history %}
+          <tr>
+            <td>{{ pa.planning_unit.name }}</td>
+            <td>{{ pa.priority }}</td>
+            <td>{{ pa.valid_from or '—' }}</td>
+            <td>{{ pa.valid_to or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>
@@ -440,7 +462,7 @@
             <td>{{ sa.valid_to or '—' }}</td>
             <td style="white-space:nowrap;">
               <button class="btn-outline-sm" onclick="openAssignModal('shift_sequence', {id:{{ sa.id }}, item_id:{{ sa.shift_sequence_id }}, row_index:{{ sa.row_index or 0 }}, reference_date:'{{ sa.reference_date or '' }}', valid_from:'{{ sa.valid_from or '' }}', valid_to:'{{ sa.valid_to or '' }}'})">Edit</button>
-              <button class="btn-danger-sm" onclick="removeAssignment('shift_sequence', {{ sa.id }})">Remove</button>
+              <button class="btn-danger-sm" onclick="removeAssignment('shift_sequence', {{ sa.id }})">End</button>
             </td>
           </tr>
           {% endfor %}
@@ -448,6 +470,29 @@
       </table></div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No shift sequence assigned.</p>
+      {% endif %}
+      {% if ss_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ ss_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Sequence</th><th>Row</th><th>Reference Date</th><th>From</th><th>To</th></tr></thead>
+          <tbody>
+          {% for sa in ss_history %}
+          <tr>
+            <td>{{ sa.shift_sequence.name }}</td>
+            <td>{{ sa.row.name if sa.row else 'Row ' ~ (sa.row_index + 1) }}</td>
+            <td>{{ sa.reference_date or '—' }}</td>
+            <td>{{ sa.valid_from or '—' }}</td>
+            <td>{{ sa.valid_to or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>
@@ -489,7 +534,14 @@
   <div class="section-card">
     <div class="section-card-header">
       Performance Quartile
-      <button class="btn-add" onclick="openQuartileModal()">{{ 'Edit' if quartile else '+ Assign' }}</button>
+      {% if quartile %}
+      <span>
+        <button class="btn-outline-sm" onclick="openQuartileModal(true)" style="margin-right:4px;">Edit</button>
+        <button class="btn-add" onclick="openQuartileModal()">+ New</button>
+      </span>
+      {% else %}
+      <button class="btn-add" onclick="openQuartileModal()">+ Assign</button>
+      {% endif %}
     </div>
     <div class="section-card-body">
       {% if quartile %}
@@ -511,6 +563,30 @@
       </div>
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No quartile assigned. Quartile determines shift eligibility — Q1 gets first pick of prime shifts.</p>
+      {% endif %}
+      {% if quartile_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ quartile_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Quartile</th><th>Effective</th><th>End Date</th><th>Notes</th></tr></thead>
+          <tbody>
+          {% for qh in quartile_history %}
+          {% set qcolors = {1: '#059669', 2: '#2563eb', 3: '#ea580c', 4: '#dc2626'} %}
+          {% set qlabels = {1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4'} %}
+          <tr>
+            <td><span style="color:{{ qcolors.get(qh.quartile, '#6b7280') }}; font-weight:600;">{{ qlabels.get(qh.quartile, 'Q' ~ qh.quartile) }}</span></td>
+            <td>{{ qh.effective_date or '—' }}</td>
+            <td>{{ qh.end_date or '—' }}</td>
+            <td>{{ qh.notes or '' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>
@@ -766,6 +842,7 @@
   <div class="modal" style="max-width:420px;">
     <h3>Assign Performance Quartile</h3>
     <form id="quartileForm" onsubmit="return saveQuartile(event)">
+      <input type="hidden" id="q_assignment_id" value="">
       <div class="form-group">
         <label>Quartile</label>
         <select id="q_quartile" required style="font-size:.9rem;">
@@ -1133,7 +1210,9 @@ async function saveAssignment(e) {
 }
 
 async function removeAssignment(type, assignmentId) {
-  if (!confirm('Remove this assignment?')) return;
+  const historyTypes = ['planning_unit', 'shift_sequence', 'quartile'];
+  const msg = historyTypes.includes(type) ? 'End-date this assignment? It will move to history.' : 'Remove this assignment?';
+  if (!confirm(msg)) return;
   try {
     const resp = await fetch('/people/api/profile/unassign', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1146,16 +1225,22 @@ async function removeAssignment(type, assignmentId) {
 }
 
 // ── Quartile Modal ──
-function openQuartileModal() {
-  {% if quartile %}
-  document.getElementById('q_quartile').value = '{{ quartile.quartile }}';
-  document.getElementById('q_effective_date').value = '{{ quartile.effective_date or "" }}';
-  document.getElementById('q_notes').value = '{{ quartile.notes or "" }}';
-  {% else %}
-  document.getElementById('q_quartile').value = '4';
-  document.getElementById('q_effective_date').value = '';
-  document.getElementById('q_notes').value = '';
-  {% endif %}
+function openQuartileModal(editId) {
+  if (editId) {
+    // Editing existing - populate from current quartile
+    {% if quartile %}
+    document.getElementById('q_assignment_id').value = '{{ quartile.id }}';
+    document.getElementById('q_quartile').value = '{{ quartile.quartile }}';
+    document.getElementById('q_effective_date').value = '{{ quartile.effective_date or "" }}';
+    document.getElementById('q_notes').value = '{{ quartile.notes or "" }}';
+    {% endif %}
+  } else {
+    // New quartile assignment (will end-date old one automatically)
+    document.getElementById('q_assignment_id').value = '';
+    document.getElementById('q_quartile').value = '4';
+    document.getElementById('q_effective_date').value = '';
+    document.getElementById('q_notes').value = '';
+  }
   document.getElementById('quartileError').style.display = 'none';
   document.getElementById('quartileModal').style.display = '';
 }
@@ -1170,6 +1255,7 @@ async function saveQuartile(e) {
         type: 'quartile',
         employee_id: EMP_ID,
         item_id: null,
+        assignment_id: document.getElementById('q_assignment_id').value ? parseInt(document.getElementById('q_assignment_id').value) : null,
         quartile: parseInt(document.getElementById('q_quartile').value),
         effective_date: document.getElementById('q_effective_date').value || null,
         notes: document.getElementById('q_notes').value || '',

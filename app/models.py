@@ -1420,9 +1420,7 @@ class EmployeePlanningUnit(db.Model):
     employee      = db.relationship("Employee", backref="planning_unit_assignments")
     planning_unit = db.relationship("PlanningUnit", backref="employee_pu_assignments")
 
-    __table_args__ = (
-        db.UniqueConstraint("employee_id", "planning_unit_id", name="uq_emp_pu"),
-    )
+    # No unique constraint — multiple records allowed for history tracking
 
     def to_dict(self):
         pu = self.planning_unit
@@ -2040,6 +2038,7 @@ class EmployeeQuartile(db.Model):
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
     quartile         = db.Column(db.Integer, nullable=False, default=4)  # 1-4
     effective_date   = db.Column(db.Date, nullable=True)
+    end_date         = db.Column(db.Date, nullable=True)
     notes            = db.Column(db.Text, nullable=True)
     created_at       = db.Column(db.DateTime, default=_utcnow)
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
@@ -2047,9 +2046,7 @@ class EmployeeQuartile(db.Model):
     employee      = db.relationship("Employee", backref="quartile_assignments")
     planning_unit = db.relationship("PlanningUnit", backref="employee_quartiles")
 
-    __table_args__ = (
-        db.UniqueConstraint("employee_id", "planning_unit_id", name="uq_emp_quartile_pu"),
-    )
+    # No unique constraint — multiple records allowed for history tracking
 
     def to_dict(self):
         emp = self.employee
@@ -2063,6 +2060,7 @@ class EmployeeQuartile(db.Model):
             "planning_unit": pu.name if pu else "All",
             "quartile": self.quartile,
             "effective_date": self.effective_date.isoformat() if self.effective_date else "",
+            "end_date": self.end_date.isoformat() if self.end_date else "",
             "notes": self.notes or "",
         }
 
@@ -2210,9 +2208,7 @@ class EmployeeShiftSequence(db.Model):
     employee       = db.relationship("Employee", backref="shift_sequence_assignments")
     shift_sequence = db.relationship("ShiftSequence", backref="employee_ss_assignments")
 
-    __table_args__ = (
-        db.UniqueConstraint("employee_id", "shift_sequence_id", name="uq_emp_ss"),
-    )
+    # No unique constraint — multiple records allowed for history tracking
 
     @property
     def row(self):
