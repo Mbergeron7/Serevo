@@ -318,6 +318,18 @@
       </ul>
       <p>Hover over any bar to see the exact numbers and gap for that interval.</p>
 
+      <h3>Importing Schedules from a Connected WFM System</h3>
+      <p>If you have an external WFM system connected via <strong>Settings &rarr; API Connections</strong>, you can pull published schedules directly:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>On the <strong>Scheduling</strong> page, open the <strong>Configuration</strong> panel.</li>
+        <li>Select a <strong>LOB</strong> to import schedules for one line of business, or <strong>leave it blank</strong> to import schedules for <strong>all LOBs</strong> at once.</li>
+        <li>Set the <strong>Start Date</strong> and <strong>End Date</strong>.</li>
+        <li>Click <strong>Import from WFM</strong>.</li>
+        <li>The import runs in the background on the server. You can close the browser or navigate away — it will complete even if your computer is off.</li>
+        <li>When finished, refresh the page to see the imported schedules.</li>
+      </ol>
+      <p><strong>Tip:</strong> Use the "all LOBs" option (leave LOB blank) when you want to pull in everyone's schedules at once — for example, before going to bed so schedules are ready in the morning.</p>
+
       <h3>End-to-End: Creating a Full Schedule</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
         <li><strong>Prerequisites</strong> — Ensure you have: a forecast generated for the target period, contracts configured for all employees, day models set up for each shift type, and activities assigned to your planning units.</li>
@@ -441,6 +453,18 @@
       <h3>Importing Data</h3>
       <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts. You can import via CSV upload or configure an API connection for automated data feeds (see <strong>Settings &rarr; API Connections</strong>).</p>
 
+      <h3>Importing from a Connected WFM System (API)</h3>
+      <p>If you have connected an external WFM/ACD system via <strong>Settings &rarr; API Connections</strong>, you can pull forecast and volume data directly:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>On the <strong>Forecasting</strong> page, open the <strong>Configuration</strong> panel.</li>
+        <li>Select a <strong>LOB</strong> from the dropdown to import data for that specific line of business, or <strong>leave the LOB blank</strong> to import data for <strong>all LOBs</strong> at once.</li>
+        <li>Set the <strong>Start Date</strong> and <strong>End Date</strong> for the period you want to import.</li>
+        <li>Click <strong>Import from WFM</strong>.</li>
+        <li>A loading indicator appears. The import runs in the background on the server — you can close the browser or navigate away and it will continue running until complete.</li>
+        <li>When finished, a notification confirms how many records were imported. Refresh the page to see the new data.</li>
+      </ol>
+      <p><strong>Tip:</strong> Importing all LOBs at once is useful for initial setup or nightly syncs. The import runs entirely on the server, so it completes even if you close your browser or shut down your computer.</p>
+
       <h3>Forecast Methods</h3>
       <p>Choose from five forecasting methods:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -470,6 +494,18 @@
       </ul>
       <p>Adjust the threshold percentage to suit your operation's tolerance.</p>
 
+      <h3>Summary Cards</h3>
+      <p>At the top of the Forecasting page, summary cards give you a quick snapshot of key metrics for the selected date range and LOB:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Total Forecasted</strong> — the total number of contacts your forecast predicted for the selected period. Shows the number of intervals or days included.</li>
+        <li><strong>Total Offered (Combined)</strong> — the total number of contacts actually received (actuals) plus any remaining forecast for future intervals. This gives you a blended actual+forecast view.</li>
+        <li><strong>OTF (Offer to Forecast)</strong> — the ratio of total offered to total forecasted, expressed as a percentage. An OTF of 100% means actuals are tracking exactly to forecast. Above 100% means volume is higher than predicted; below 100% means lower. The detail line shows the absolute difference (e.g., "+500 over" or "-200 under").</li>
+        <li><strong>Avg AHT</strong> — the weighted average handle time across all intervals.</li>
+        <li><strong>Person-hours Required</strong> — total agent-hours needed to handle the forecasted volume at your configured service level and AHT.</li>
+        <li><strong>Service Level</strong> — your planning unit's service level target (e.g., 80/20 means 80% of contacts answered within 20 seconds).</li>
+        <li><strong>Shrinkage</strong> — the shrinkage factor applied to staffing calculations (accounts for breaks, meetings, absenteeism, etc.).</li>
+      </ul>
+
       <h3>Export</h3>
       <p>Use the <em>Export CSV</em> button in the interval detail table to download the reforecast data for offline analysis or sharing.</p>
 
@@ -481,11 +517,12 @@
       <h3>End-to-End: From Data to Forecast</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
         <li><strong>Set up your planning units</strong> — Go to <em>Settings &rarr; Planning Units</em> and create a unit for each LOB. Assign activities and configure business hours.</li>
-        <li><strong>Import historical data</strong> — Upload at least 4–8 weeks of historical contact volumes via CSV or API connection. The more data, the better the forecast accuracy.</li>
+        <li><strong>Import historical data</strong> — Upload at least 4–8 weeks of historical contact volumes via CSV upload or pull them from your connected WFM system using <em>Import from WFM</em> (leave LOB blank to import all LOBs at once). The more data, the better the forecast accuracy.</li>
         <li><strong>Select forecast method</strong> — Choose a LOB, set a date range, and pick a forecast method. <em>Auto (Best Fit)</em> is recommended for your first run.</li>
         <li><strong>Generate the forecast</strong> — Click <em>Generate</em>. The system produces interval-level predictions and calculates agents required using Erlang C.</li>
         <li><strong>Review the heatmap</strong> — Switch to Weekly or Monthly view to see the Coverage Heatmap. Click LOB rows to verify which activities are assigned and their relative demand.</li>
         <li><strong>Save a scenario</strong> — If satisfied, save the forecast as a named scenario (e.g., "Q1 Baseline") for comparison or to feed into scheduling.</li>
+        <li><strong>Check the summary cards</strong> — Review the <em>Total Forecasted</em>, <em>Total Offered</em>, and <em>OTF</em> cards at the top of the page. OTF (Offer to Forecast) shows how actuals are tracking against your forecast — 100% means on-target, above means higher volume, below means lower.</li>
         <li><strong>Monitor during the day</strong> — Use <em>Mid-Day Reforecast</em> when actual volumes diverge from the forecast. Set up <em>Variance Alerts</em> to catch significant deviations automatically.</li>
       </ol>
     </div>
@@ -1133,7 +1170,22 @@
         <li>Click <strong>Test Connection</strong> to verify the endpoint is reachable and credentials are valid.</li>
         <li>Click <strong>Save</strong>.</li>
       </ol>
-      <p>Once configured, you can use these endpoints in Data Import to pull data automatically on a schedule rather than uploading CSV files manually.</p>
+      <p>Once configured, you can use these endpoints in Data Import, Forecasting (<em>Import from WFM</em>), and Scheduling (<em>Import from WFM</em>) to pull data automatically rather than uploading CSV files manually.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Example: Connecting to Your ACD/WFM Platform</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Obtain the API base URL from your ACD/WFM vendor (e.g., <code>https://api.vendor.com/v1</code>). This is usually documented in their developer portal or provided by their support team.</li>
+        <li>Generate an API key or token in the external system. This is typically found under Settings, Integrations, or Developer sections of the vendor's platform.</li>
+        <li>In {{ brand_name }}, go to <strong>Settings &rarr; API / OAuth</strong> and click <strong>+ Add Endpoint</strong>.</li>
+        <li>Enter a descriptive name (e.g., "Vendor — Call Volumes" or "Vendor — Schedules").</li>
+        <li>Paste the base URL.</li>
+        <li>Select the authentication method your vendor uses (API Key, Bearer Token, or Basic Auth) and enter the credentials you obtained in step 2.</li>
+        <li>Click <strong>Test Connection</strong>. A green checkmark means the endpoint is reachable and credentials are valid. A red error means either the URL is wrong, the credentials are invalid, or the external system is blocking the request.</li>
+        <li>Click <strong>Save</strong>. You can now use <em>Import from WFM</em> on the Forecasting and Scheduling pages.</li>
+      </ol>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Background Processing</h4>
+      <p>All API imports (forecast data, schedule data) run in the background on the {{ brand_name }} server. Once you click <em>Import from WFM</em>, the process continues independently — you can navigate away, close your browser, or even shut down your computer. The import will finish on its own. Check back later or refresh the page to see the results.</p>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">OAuth / Social Login</h4>
       <p>Enable Google and/or Microsoft sign-in so your users can log in with their existing corporate accounts instead of a separate password.</p>
@@ -1492,6 +1544,18 @@
         <li>Optionally add a note to your punch (e.g., "arrived early for training").</li>
         <li>If you forget to clock in or out, contact your supervisor to have the punch corrected.</li>
       </ol>
+
+      <h3>Upcoming Activity Notifications</h3>
+      <p>The agent portal automatically notifies you when an upcoming activity is about to start — breaks, lunch, meetings, and training sessions. A slide-in notification appears in the top-right corner of your screen <strong>5 minutes before</strong> the activity begins.</p>
+      <p>Each notification shows:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>The activity type (break, lunch, meeting, or training) with an icon</li>
+        <li>The scheduled time range (e.g., "10:15 AM – 10:30 AM")</li>
+        <li>A countdown showing how many minutes until it starts</li>
+      </ul>
+      <p>After a break or lunch ends, you'll also receive a <strong>"Back on phones"</strong> notification reminding you to return to your scheduled activity.</p>
+      <p>Notifications auto-dismiss after 60 seconds. You can also close them manually by clicking the × button. Each notification appears only once — if you dismiss it, it won't pop up again for the same activity.</p>
+      <p><strong>Note:</strong> Notifications only appear while you have the agent portal open in your browser. They check your schedule every 60 seconds.</p>
 
       <h3>Announcements &amp; Training</h3>
       <p>View organization-wide announcements on the Self-Service page. Pinned announcements appear at the top. Your assigned training modules and their due dates are also visible here.</p>
