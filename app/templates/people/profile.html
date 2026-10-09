@@ -286,7 +286,7 @@
             <td>{% if sm.is_active %}<span style="color:#16a34a;">Active</span>{% else %}<span style="color:#9ca3af;">Inactive</span>{% endif %}</td>
             <td>{{ sm.valid_from or '—' }}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-outline-sm" onclick="openAssignModal('skill', {id:{{ sm.id }}, item_id:{{ sm.skill_group_id }}, proficiency:{{ sm.proficiency }}, priority:{{ sm.priority }}})">Edit</button>
+              <button class="btn-outline-sm" onclick="openAssignModal('skill', {id:{{ sm.id }}, item_id:{{ sm.skill_group_id }}, proficiency:{{ sm.proficiency }}, priority:{{ sm.priority }}, valid_from:'{{ sm.valid_from or '' }}', valid_to:'{{ sm.valid_to or '' }}'})">Edit</button>
               <button class="btn-danger-sm" onclick="removeAssignment('skill', {{ sm.id }})">End</button>
             </td>
           </tr>
@@ -388,7 +388,7 @@
             <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
             <td>{{ sm.valid_from or '—' }}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-outline-sm" onclick="openAssignModal('selection', {id:{{ sm.id }}, item_id:{{ sm.selection_id }}})">Edit</button>
+              <button class="btn-outline-sm" onclick="openAssignModal('selection', {id:{{ sm.id }}, item_id:{{ sm.selection_id }}, valid_from:'{{ sm.valid_from or '' }}', valid_to:'{{ sm.valid_to or '' }}'})">Edit</button>
               <button class="btn-danger-sm" onclick="removeAssignment('selection', {{ sm.id }})">End</button>
             </td>
           </tr>
@@ -1125,9 +1125,8 @@ function openAssignModal(type, editData) {
     document.getElementById('assign_proficiency').value = (isEdit && editData.proficiency) ? editData.proficiency : '3';
     document.getElementById('assign_skill_priority').value = (isEdit && editData.priority) ? editData.priority : 1;
   }
-  // Selection and skill have no validity dates
-  const hasValidity = type !== 'selection' && type !== 'skill';
-  fromGrp.parentElement.style.display = hasValidity ? '' : 'none';
+  // All assignment types support validity dates
+  fromGrp.parentElement.style.display = '';
 
   // Populate dropdown
   const endpoints = {

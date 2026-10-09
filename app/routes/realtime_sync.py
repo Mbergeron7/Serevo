@@ -1609,6 +1609,42 @@ def debug_volume(lob_name):
     })
 
 
+@realtime_sync_bp.route("/realtime/debug/volume-summary", methods=["GET"])
+@login_required
+def debug_volume_summary():
+    """Diagnostic: show interval_actuals row counts by source and date range per LOB."""
+    auth_err = _require_admin()
+    if auth_err:
+        return auth_err
+    from sqlalchemy import func as sa_func
+    rows = (
+        db.session.query(
+            PlanningUnit.id,
+            PlanningUnit.name,
+            IntervalActual.source,
+            sa_func.count().label("count"),
+            sa_func.min(IntervalActual.timestamp).label("earliest"),
+            sa_func.max(IntervalActual.timestamp).label("latest"),
+        )
+        .join(PlanningUnit, PlanningUnit.id == IntervalActual.planning_unit_id)
+        .group_by(PlanningUnit.id, PlanningUnit.name, IntervalActual.source)
+        .order_by(PlanningUnit.name, IntervalActual.source)
+        .all()
+    )
+    summary = []
+    for r in rows:
+        summary.append({
+            "planning_unit_id": r.id,
+            "planning_unit": r.name,
+            "source": r.source,
+            "rows": r.count,
+            "earliest": r.earliest.strftime("%Y-%m-%d %H:%M") if r.earliest else None,
+            "latest": r.latest.strftime("%Y-%m-%d %H:%M") if r.latest else None,
+        })
+    total = IntervalActual.query.count()
+    return jsonify({"total_rows": total, "by_lob_source": summary})
+
+
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
 @login_required
 def sync_status():
