@@ -430,14 +430,19 @@
 <!-- ═══ Summary cards ═══ -->
 <div class="summary-cards" id="summaryCards" style="display:none;">
   <div class="scard highlight">
+    <div class="label">Total Forecasted</div>
+    <div class="value" id="totalForecasted">—</div>
+    <div class="detail" id="totalForecastedDetail"></div>
+  </div>
+  <div class="scard highlight">
     <div class="label">Total Offered (Combined)</div>
     <div class="value" id="totalOffered">—</div>
     <div class="detail" id="totalOfferedDetail"></div>
   </div>
   <div class="scard">
-    <div class="label">Total Forecasted</div>
-    <div class="value" id="totalForecasted">—</div>
-    <div class="detail" id="totalForecastedDetail"></div>
+    <div class="label">OTF (Offer to Forecast)</div>
+    <div class="value" id="otfCard">—</div>
+    <div class="detail" id="otfDetail"></div>
   </div>
   <div class="scard">
     <div class="label">Avg AHT</div>
@@ -1029,6 +1034,15 @@ function updateSummaryCards() {
     document.getElementById('totalOfferedDetail').textContent = `${intervalData.length} intervals`;
     document.getElementById('totalForecasted').textContent = fcCount ? Math.round(totalFc).toLocaleString() : '—';
     document.getElementById('totalForecastedDetail').textContent = fcCount ? `${fcCount} intervals` : 'No forecast';
+    if (fcCount && totalFc > 0) {
+      const otf = (totalOff / totalFc) * 100;
+      document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
+      const diff = totalOff - totalFc;
+      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(diff).toLocaleString()} under`;
+    } else {
+      document.getElementById('otfCard').textContent = '—';
+      document.getElementById('otfDetail').textContent = '';
+    }
     document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
     document.getElementById('personHours').textContent = Math.round(personHours).toLocaleString();
   } else {
@@ -1047,6 +1061,15 @@ function updateSummaryCards() {
     document.getElementById('totalOfferedDetail').textContent = `${daily.length} days`;
     document.getElementById('totalForecasted').textContent = fcDays ? Math.round(totalFc).toLocaleString() : '—';
     document.getElementById('totalForecastedDetail').textContent = fcDays ? `${fcDays} days` : 'No forecast';
+    if (fcDays && totalFc > 0) {
+      const otf = (totalOff / totalFc) * 100;
+      document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
+      const diff = totalOff - totalFc;
+      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(diff).toLocaleString()} under`;
+    } else {
+      document.getElementById('otfCard').textContent = '—';
+      document.getElementById('otfDetail').textContent = '';
+    }
     document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
     document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
   }
