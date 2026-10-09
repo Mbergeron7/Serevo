@@ -435,6 +435,11 @@
     <div class="detail" id="totalOfferedDetail"></div>
   </div>
   <div class="scard">
+    <div class="label">Total Forecasted</div>
+    <div class="value" id="totalForecasted">—</div>
+    <div class="detail" id="totalForecastedDetail"></div>
+  </div>
+  <div class="scard">
     <div class="label">Avg AHT</div>
     <div class="value" id="avgAht">—</div>
     <div class="detail" id="avgAhtDetail"></div>
@@ -1009,11 +1014,12 @@ function renderDashboard() {
 function updateSummaryCards() {
   // For daily view with interval data, compute from intervals
   if (currentView === 'daily' && intervalData && intervalData.length) {
-    let totalOff = 0, totalAhtW = 0, totalReq = 0;
+    let totalOff = 0, totalFc = 0, totalAhtW = 0, totalReq = 0, fcCount = 0;
     for (const iv of intervalData) {
       totalOff += iv.offered;
       totalAhtW += iv.offered * iv.aht;
       totalReq += iv.agents_required;
+      if (iv.fc_offered != null) { totalFc += iv.fc_offered; fcCount++; }
     }
     const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
     const intervalMins = parseInt(document.getElementById('intervalSelect').value) || 30;
@@ -1021,21 +1027,26 @@ function updateSummaryCards() {
 
     document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
     document.getElementById('totalOfferedDetail').textContent = `${intervalData.length} intervals`;
+    document.getElementById('totalForecasted').textContent = fcCount ? Math.round(totalFc).toLocaleString() : '—';
+    document.getElementById('totalForecastedDetail').textContent = fcCount ? `${fcCount} intervals` : 'No forecast';
     document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
     document.getElementById('personHours').textContent = Math.round(personHours).toLocaleString();
   } else {
     // For weekly/monthly/yearly, compute from the filtered daily data
     const daily = getDailyData();
-    let totalOff = 0, totalAhtW = 0, totalReq = 0;
+    let totalOff = 0, totalFc = 0, totalAhtW = 0, totalReq = 0, fcDays = 0;
     for (const d of daily) {
       totalOff += d.offered;
       totalAhtW += d.offered * d.aht;
       totalReq += d.req;
+      if (d.fc_offered != null) { totalFc += d.fc_offered; fcDays++; }
     }
     const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
     // Rough person-hours: agents_required is per-day avg, multiply by ~hours of operation
     document.getElementById('totalOffered').textContent = Math.round(totalOff).toLocaleString();
     document.getElementById('totalOfferedDetail').textContent = `${daily.length} days`;
+    document.getElementById('totalForecasted').textContent = fcDays ? Math.round(totalFc).toLocaleString() : '—';
+    document.getElementById('totalForecastedDetail').textContent = fcDays ? `${fcDays} days` : 'No forecast';
     document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
     document.getElementById('personHours').textContent = Math.round(totalReq).toLocaleString();
   }
