@@ -582,7 +582,15 @@ def profile_assign():
                 if not valid_to:
                     emp = Employee.query.get(emp_id)
                     if emp:
+                        old_pu_id = emp.planning_unit_id
                         emp.planning_unit_id = item_id
+                        # Move future schedules when LOB changes via edit
+                        if old_pu_id != item_id:
+                            _today = _dt.date.today()
+                            Schedule.query.filter(
+                                Schedule.employee_id == emp_id,
+                                Schedule.schedule_date >= _today,
+                            ).update({Schedule.planning_unit_id: item_id}, synchronize_session="fetch")
             else:
                 # End-date any current assignments (no valid_to) for this employee
                 _today = _dt.date.today()
