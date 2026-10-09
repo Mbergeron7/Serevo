@@ -41,6 +41,16 @@
   .seg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
   .seg-t { color:var(--text-muted); font-size:.68rem; margin-left:2px; }
 
+  /* ── Upcoming activity notification ── */
+  .activity-toast { position:fixed; top:20px; right:20px; z-index:1100; min-width:300px; max-width:400px; background:var(--surface); border:1px solid var(--border); border-left:5px solid #3b82f6; border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.25); padding:16px 20px; animation:slideIn .3s ease-out; }
+  .activity-toast.urgent { border-left-color:#ef4444; }
+  .activity-toast .at-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .activity-toast .at-title { font-weight:700; font-size:.9rem; }
+  .activity-toast .at-close { background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--text-muted); padding:0 4px; }
+  .activity-toast .at-body { font-size:.83rem; color:var(--text-muted); }
+  .activity-toast .at-time { font-weight:700; color:var(--text); }
+  @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
   .mini-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:999; }
   .mini-modal .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; max-width:520px; width:92%; max-height:90vh; overflow-y:auto; }
   .mini-modal h3 { font-size:.95rem; margin:0 0 16px; }
@@ -804,5 +814,113 @@ window.doClock = function(action) {
     else { alert(d.error || 'Clock action failed'); }
   });
 };
+
+// ── Upcoming activity notifications ─────────────────────────
+(function() {
+  const LEAD_MINS = 5;           // notify this many minutes before
+  const CHECK_INTERVAL = 60000;  // check every 60s
+  let dismissedKey = '';         // track dismissed notification
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function parseTime(hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    return d;
+  }
+
+  const LABELS = {
+    'break':'Break','lunch':'Lunch','meeting':'Meeting',
+    'training':'Training','other':'Activity','on-call':'Back on Phones'
+  };
+  const ICONS = {
+    'break':'☕','lunch':'🍽️','meeting':'📅',
+    'training':'📚','other':'📋','on-call':'📞'
+  };
+
+  function showNotification(seg, minsUntil) {
+    // Remove any existing toast
+    const old = document.querySelector('.activity-toast');
+    if (old) old.remove();
+
+    const label = LABELS[seg.type] || seg.type;
+    const icon = ICONS[seg.type] || '🔔';
+    const urgent = minsUntil <= 1;
+    const timeText = minsUntil <= 0 ? 'now' : `in ${minsUntil} min`;
+
+    const toast = document.createElement('div');
+    toast.className = 'activity-toast' + (urgent ? ' urgent' : '');
+    toast.innerHTML = `
+      <div class="at-header">
+        <span class="at-title">${icon} ${label} coming up</span>
+        <button class="at-close" onclick="this.closest('.activity-toast').remove()" title="Dismiss">&times;</button>
+      </div>
+      <div class="at-body">
+        <span class="at-time">${seg.start} – ${seg.end}</span> &middot; starts ${timeText}
+        ${seg.notes ? '<br>' + seg.notes : ''}
+      </div>`;
+    document.body.appendChild(toast);
+
+    // Auto-dismiss after 60s
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 60000);
+  }
+
+  async function checkUpcoming() {
+    try {
+      const today = todayStr();
+      const r = await fetch('/api/agent/schedule?start=' + today + '&end=' + today);
+      if (!r.ok) return;
+      const data = await r.json();
+      const scheds = (data.schedules || []).filter(s => s.date === today && s.status === 'scheduled');
+      if (!scheds.length) return;
+
+      const now = new Date();
+      let nextSeg = null;
+      let nextMins = Infinity;
+
+      for (const sched of scheds) {
+        const segs = sched.segments || [];
+        for (const seg of segs) {
+          if (!seg.start || seg.type === 'on-call') continue;
+          const segStart = parseTime(seg.start);
+          const diff = Math.round((segStart - now) / 60000);
+          if (diff >= 0 && diff <= LEAD_MINS && diff < nextMins) {
+            nextSeg = seg;
+            nextMins = diff;
+          }
+        }
+        // Also notify when they're about to go back on-call after a break/lunch
+        for (let i = 0; i < segs.length; i++) {
+          const seg = segs[i];
+          if (seg.type !== 'on-call' || !seg.start) continue;
+          // Only if the previous segment was a break/lunch/meeting/training
+          if (i > 0 && ['break','lunch','meeting','training'].includes(segs[i-1].type)) {
+            const segStart = parseTime(seg.start);
+            const diff = Math.round((segStart - now) / 60000);
+            if (diff >= 0 && diff <= LEAD_MINS && diff < nextMins) {
+              nextSeg = seg;
+              nextMins = diff;
+            }
+          }
+        }
+      }
+
+      if (nextSeg) {
+        const key = today + ':' + nextSeg.type + ':' + nextSeg.start;
+        if (key !== dismissedKey) {
+          showNotification(nextSeg, nextMins);
+          dismissedKey = key;
+        }
+      }
+    } catch(e) { /* silent */ }
+  }
+
+  // Start checking
+  checkUpcoming();
+  setInterval(checkUpcoming, CHECK_INTERVAL);
+})();
 </script>
 {% endblock %}
