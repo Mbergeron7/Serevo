@@ -62,6 +62,14 @@ def index():
     else:
         from app.scheduling.engine import get_available_lobs
         from app.models import Selection, SkillGroup, ShiftSequence, SegmentCode
+        # Auto-sync planning unit assignments → schedule records
+        try:
+            from app.routes.people import _sync_planning_units
+            n = _sync_planning_units()
+            if n:
+                db.session.commit()
+        except Exception:
+            log.debug("planning-unit sync skipped", exc_info=True)
         sheet = _get_sheet()
         lobs = get_available_lobs(sheet)
         try:

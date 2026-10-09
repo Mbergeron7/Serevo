@@ -31,11 +31,9 @@ from app.routes._utils import get_sheet as _get_sheet
 
 
 # ── One-time sync: legacy planning_unit_id from junction table ──
-@people_bp.route("/api/sync-planning-units", methods=["POST"])
-@login_required
-def sync_planning_units():
-    """Sync Employee.planning_unit_id to match current (active today) junction records.
-    Also transfers schedules from each assignment's valid_from date onward."""
+def _sync_planning_units():
+    """Sync Employee.planning_unit_id and schedule records to match
+    current (active today) junction records.  Returns count of employees touched."""
     updated = 0
     _today = _dt.date.today()
     current_assignments = EmployeePlanningUnit.query.filter(
@@ -47,14 +45,31 @@ def sync_planning_units():
     ).all()
     for a in current_assignments:
         emp = Employee.query.get(a.employee_id)
-        if emp and emp.planning_unit_id != a.planning_unit_id:
-            effective = a.valid_from or _today
-            Schedule.query.filter(
-                Schedule.employee_id == emp.id,
-                Schedule.schedule_date >= effective,
-            ).update({Schedule.planning_unit_id: a.planning_unit_id}, synchronize_session="fetch")
+        if not emp:
+            continue
+        effective = a.valid_from or _today
+        touched = False
+        # Sync legacy FK
+        if emp.planning_unit_id != a.planning_unit_id:
             emp.planning_unit_id = a.planning_unit_id
+            touched = True
+        # Always fix schedule records from effective date onward
+        n = Schedule.query.filter(
+            Schedule.employee_id == emp.id,
+            Schedule.schedule_date >= effective,
+            Schedule.planning_unit_id != a.planning_unit_id,
+        ).update({Schedule.planning_unit_id: a.planning_unit_id}, synchronize_session="fetch")
+        if n:
+            touched = True
+        if touched:
             updated += 1
+    return updated
+
+
+@people_bp.route("/api/sync-planning-units", methods=["POST"])
+@login_required
+def sync_planning_units():
+    updated = _sync_planning_units()
     db.session.commit()
     return jsonify({"success": True, "updated": updated})
 
