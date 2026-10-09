@@ -1226,9 +1226,15 @@ async function saveAssignment(e) {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify(body),
     });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      showError('assignError', 'Server error (' + resp.status + '): ' + txt.substring(0, 200));
+      saveBtn.textContent = origText; saveBtn.disabled = false;
+      return false;
+    }
     const data = await resp.json();
-    if (data.success) { location.replace(location.href); }
-    else { showError('assignError', data.error); saveBtn.textContent = origText; saveBtn.disabled = false; }
+    if (data.success) { window.location.reload(true); }
+    else { showError('assignError', data.error || 'Unknown error'); saveBtn.textContent = origText; saveBtn.disabled = false; }
   } catch(err) { showError('assignError', 'Network error: ' + err.message); saveBtn.textContent = origText; saveBtn.disabled = false; }
   return false;
 }
