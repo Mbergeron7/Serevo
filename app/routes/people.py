@@ -574,9 +574,10 @@ def profile_assign():
     valid_to = _dt.datetime.strptime(data["valid_to"], "%Y-%m-%d").date() if data.get("valid_to") else None
 
     try:
+        _today = _dt.date.today()
+        effective = valid_from or _today  # when the new assignment takes effect
+
         if assign_type == "planning_unit":
-            _today = _dt.date.today()
-            effective = valid_from or _today  # when the new assignment takes effect
 
             if assignment_id:
                 obj = EmployeePlanningUnit.query.get(int(assignment_id))
@@ -631,9 +632,15 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
+                # End-date any current assignments — day before new one starts
+                current = EmployeeContract.query.filter_by(
+                    employee_id=emp_id
+                ).filter(EmployeeContract.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = effective - _dt.timedelta(days=1)
                 obj = EmployeeContract(
                     employee_id=emp_id, contract_id=item_id,
-                    valid_from=valid_from, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "selection":
@@ -645,16 +652,15 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
-                # End-date any current membership for this employee in this selection
-                _today = _dt.date.today()
+                # End-date any current membership — day before new one starts
                 current = SelectionMember.query.filter_by(
                     employee_id=emp_id, selection_id=item_id
                 ).filter(SelectionMember.valid_to.is_(None)).all()
                 for c in current:
-                    c.valid_to = _today
+                    c.valid_to = effective - _dt.timedelta(days=1)
                 obj = SelectionMember(
                     selection_id=item_id, employee_id=emp_id,
-                    valid_from=valid_from or _today, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "shift_sequence":
@@ -670,18 +676,17 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
-                # End-date any current assignments for this employee
-                _today = _dt.date.today()
+                # End-date any current assignments — day before new one starts
                 current = EmployeeShiftSequence.query.filter_by(
                     employee_id=emp_id
                 ).filter(EmployeeShiftSequence.valid_to.is_(None)).all()
                 for c in current:
-                    c.valid_to = _today
+                    c.valid_to = effective - _dt.timedelta(days=1)
                 obj = EmployeeShiftSequence(
                     employee_id=emp_id, shift_sequence_id=item_id,
                     row_index=row_index,
                     reference_date=ref_date,
-                    valid_from=valid_from or _today, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "work_time_pattern":
@@ -695,10 +700,16 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
+                # End-date any current assignments — day before new one starts
+                current = EmployeeWorkTimePattern.query.filter_by(
+                    employee_id=emp_id
+                ).filter(EmployeeWorkTimePattern.valid_to.is_(None)).all()
+                for c in current:
+                    c.valid_to = effective - _dt.timedelta(days=1)
                 obj = EmployeeWorkTimePattern(
                     employee_id=emp_id, work_time_pattern_model_id=item_id,
                     reference_date=ref_date,
-                    valid_from=valid_from, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
         elif assign_type == "quartile":
@@ -714,19 +725,19 @@ def profile_assign():
                     obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
                 obj.notes = data.get("notes", "")
             else:
-                # End-date any current quartile (no end_date) for this employee
-                _today = _dt.date.today()
+                # End-date any current quartile — day before new one starts
+                eff = data.get("effective_date")
+                q_effective = _dt.datetime.strptime(eff, "%Y-%m-%d").date() if eff else _today
                 current = EmployeeQuartile.query.filter_by(
                     employee_id=emp_id
                 ).filter(EmployeeQuartile.end_date.is_(None)).all()
                 for c in current:
-                    c.end_date = _today
-                eff = data.get("effective_date")
+                    c.end_date = q_effective - _dt.timedelta(days=1)
                 obj = EmployeeQuartile(
                     employee_id=emp_id,
                     quartile=int(data.get("quartile", 4)),
                     planning_unit_id=int(item_id) if item_id else None,
-                    effective_date=_dt.datetime.strptime(eff, "%Y-%m-%d").date() if eff else _today,
+                    effective_date=q_effective,
                     notes=data.get("notes", ""),
                 )
                 db.session.add(obj)
@@ -742,19 +753,18 @@ def profile_assign():
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
             else:
-                # End-date any current mapping for this employee + skill group
-                _today = _dt.date.today()
+                # End-date any current mapping — day before new one starts
                 current = SkillMapping.query.filter_by(
                     employee_id=emp_id, skill_group_id=item_id
                 ).filter(SkillMapping.valid_to.is_(None)).all()
                 for c in current:
-                    c.valid_to = _today
+                    c.valid_to = effective - _dt.timedelta(days=1)
                 obj = SkillMapping(
                     employee_id=emp_id, skill_group_id=item_id,
                     proficiency=int(data.get("proficiency", 3)),
                     priority=int(data.get("priority", 1)),
                     is_active=True,
-                    valid_from=valid_from or _today, valid_to=valid_to,
+                    valid_from=effective, valid_to=valid_to,
                 )
                 db.session.add(obj)
         else:
