@@ -30,6 +30,24 @@ TIMEZONE = "America/Toronto"
 from app.routes._utils import get_sheet as _get_sheet
 
 
+# ── One-time sync: legacy planning_unit_id from junction table ──
+@people_bp.route("/api/sync-planning-units", methods=["POST"])
+@login_required
+def sync_planning_units():
+    """Sync Employee.planning_unit_id to match current (non-end-dated) junction records."""
+    updated = 0
+    current_assignments = EmployeePlanningUnit.query.filter(
+        EmployeePlanningUnit.valid_to.is_(None)
+    ).all()
+    for a in current_assignments:
+        emp = Employee.query.get(a.employee_id)
+        if emp and emp.planning_unit_id != a.planning_unit_id:
+            emp.planning_unit_id = a.planning_unit_id
+            updated += 1
+    db.session.commit()
+    return jsonify({"success": True, "updated": updated})
+
+
 # ── Roster View ──────────────────────────────────────────────
 @people_bp.route("/")
 @login_required
