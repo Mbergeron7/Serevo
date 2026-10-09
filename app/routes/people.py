@@ -538,6 +538,11 @@ def profile_assign():
                 obj.priority = int(data.get("priority", 1))
                 obj.valid_from = valid_from
                 obj.valid_to = valid_to
+                # Keep legacy direct FK in sync if this is the current assignment
+                if not valid_to:
+                    emp = Employee.query.get(emp_id)
+                    if emp:
+                        emp.planning_unit_id = item_id
             else:
                 # End-date any current assignments (no valid_to) for this employee
                 _today = _dt.date.today()
@@ -552,6 +557,10 @@ def profile_assign():
                     valid_from=valid_from or _today, valid_to=valid_to,
                 )
                 db.session.add(obj)
+                # Keep legacy direct FK in sync so LOB filtering works everywhere
+                emp = Employee.query.get(emp_id)
+                if emp:
+                    emp.planning_unit_id = item_id
         elif assign_type == "contract":
             if assignment_id:
                 obj = EmployeeContract.query.get(int(assignment_id))
@@ -712,6 +721,17 @@ def profile_unassign():
     _today = _dt.date.today()
     if assign_type in ("planning_unit", "shift_sequence") and hasattr(obj, "valid_to"):
         obj.valid_to = _today
+        # If end-dating a planning unit, update legacy FK to next active or clear it
+        if assign_type == "planning_unit":
+            emp = Employee.query.get(obj.employee_id)
+            if emp:
+                # Find another current (non-end-dated) assignment for this employee
+                other = EmployeePlanningUnit.query.filter(
+                    EmployeePlanningUnit.employee_id == obj.employee_id,
+                    EmployeePlanningUnit.id != obj.id,
+                    EmployeePlanningUnit.valid_to.is_(None),
+                ).first()
+                emp.planning_unit_id = other.planning_unit_id if other else None
     elif assign_type == "quartile" and hasattr(obj, "end_date"):
         obj.end_date = _today
     else:
