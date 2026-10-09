@@ -39,9 +39,15 @@ def sync_planning_units():
     current_assignments = EmployeePlanningUnit.query.filter(
         EmployeePlanningUnit.valid_to.is_(None)
     ).all()
+    _today = _dt.date.today()
     for a in current_assignments:
         emp = Employee.query.get(a.employee_id)
         if emp and emp.planning_unit_id != a.planning_unit_id:
+            # Move future schedules to the new planning unit
+            Schedule.query.filter(
+                Schedule.employee_id == emp.id,
+                Schedule.schedule_date >= _today,
+            ).update({Schedule.planning_unit_id: a.planning_unit_id}, synchronize_session="fetch")
             emp.planning_unit_id = a.planning_unit_id
             updated += 1
     db.session.commit()
@@ -579,6 +585,11 @@ def profile_assign():
                 emp = Employee.query.get(emp_id)
                 if emp:
                     emp.planning_unit_id = item_id
+                # Move future schedules to the new planning unit
+                Schedule.query.filter(
+                    Schedule.employee_id == emp_id,
+                    Schedule.schedule_date >= _today,
+                ).update({Schedule.planning_unit_id: item_id}, synchronize_session="fetch")
         elif assign_type == "contract":
             if assignment_id:
                 obj = EmployeeContract.query.get(int(assignment_id))
