@@ -8,7 +8,6 @@ import json
 import logging
 import datetime as _dt
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, abort)
@@ -17,7 +16,7 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
                         SkillMapping, PlanningUnit, ShiftSequence,
-                        EmployeeShiftSequence, SkillGroup, CoachingSession,
+                        EmployeeShiftSequence, CoachingSession,
                         TimeClock, EmployeeWorkTimePattern, WorkTimePatternModel,
                         EmployeeQuartile)
 

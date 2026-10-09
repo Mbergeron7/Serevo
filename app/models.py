@@ -188,8 +188,8 @@ class Employee(db.Model):
     external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # e.g. CallPotential ID
     first_name       = db.Column(db.String(80), nullable=False)
     last_name        = db.Column(db.String(80), nullable=False)
-    status           = db.Column(db.String(20), nullable=False, default="Active")
-    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    status           = db.Column(db.String(20), nullable=False, default="Active", index=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True, index=True)
     all_skills       = db.Column(db.Text, default="")
     skill_start      = db.Column(db.Date, nullable=True)
     skill_end        = db.Column(db.Date, nullable=True)
@@ -209,8 +209,10 @@ class Employee(db.Model):
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     contract       = db.relationship("Contract", backref="employees")
-    accommodations = db.relationship("Accommodation", backref="employee", lazy="dynamic")
-    pto_entries    = db.relationship("PTOEntry", backref="employee", lazy="dynamic")
+    accommodations = db.relationship("Accommodation", backref="employee", lazy="dynamic",
+                                     cascade="all, delete-orphan")
+    pto_entries    = db.relationship("PTOEntry", backref="employee", lazy="dynamic",
+                                    cascade="all, delete-orphan")
 
     @property
     def full_name(self):
@@ -450,7 +452,7 @@ class Schedule(db.Model):
     created_at       = db.Column(db.DateTime, default=_utcnow)
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
-    employee = db.relationship("Employee", backref="schedules")
+    employee = db.relationship("Employee", backref=db.backref("schedules", cascade="all, delete-orphan"))
     planning_unit = db.relationship("PlanningUnit", backref="schedules")
     segments = db.relationship("ShiftSegment", backref="schedule",
                                cascade="all, delete-orphan",
@@ -1191,7 +1193,7 @@ class Holiday(db.Model):
     is_paid       = db.Column(db.Boolean, default=True)
     affects_forecast = db.Column(db.Boolean, default=True)       # adjust forecast volume
     volume_factor = db.Column(db.Float, default=0.0)             # 0 = closed, 0.5 = half volume
-    year          = db.Column(db.Integer, nullable=False)
+    year          = db.Column(db.Integer, nullable=False, index=True)
     is_recurring  = db.Column(db.Boolean, default=True)          # auto-create for next year
     created_at    = db.Column(db.DateTime, default=_utcnow)
 

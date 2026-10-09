@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, render_template
 from app.auth import login_required, get_current_user
 from app.models import (
-    db, PTOEntry, ShiftBid, ShiftPost, ShiftSwapRequest, Employee, Schedule,
+    db, PTOEntry, ShiftBid, ShiftPost, ShiftSwapRequest, Employee,
 )
 
 log = logging.getLogger(__name__)

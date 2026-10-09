@@ -905,7 +905,11 @@ def upsert_employees_to_db(employees):
                 end_date=_date(emp.get("endDate") or emp.get("end_date")),
             ))
             created += 1
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return created, updated
 
 
@@ -913,20 +917,30 @@ def upsert_employees_to_db(employees):
 # WFM SCHEDULE IMPORT
 # =========================================================
 
+_segment_code_cache = None
+
+def _get_segment_codes():
+    """Lazy-load and cache active segment codes for the current import run."""
+    global _segment_code_cache
+    if _segment_code_cache is None:
+        try:
+            from app.models import SegmentCode
+            _segment_code_cache = SegmentCode.query.filter_by(is_active=True).all()
+        except Exception:
+            _segment_code_cache = []
+    return _segment_code_cache
+
 def _segment_type_for(activity_name):
     """Map a WFM activity name onto a Serevo segment code.
     Exact/partial match against SegmentCode labels first, then keywords."""
     name = (activity_name or "").strip().lower()
-    try:
-        from app.models import SegmentCode
-        for sc in SegmentCode.query.filter_by(is_active=True).all():
-            if name == (sc.label or "").lower() or name == (sc.code or "").lower():
-                return sc.code
-        for sc in SegmentCode.query.filter_by(is_active=True).all():
-            if (sc.label or "").lower() in name and len(sc.label or "") > 3:
-                return sc.code
-    except Exception:
-        pass
+    codes = _get_segment_codes()
+    for sc in codes:
+        if name == (sc.label or "").lower() or name == (sc.code or "").lower():
+            return sc.code
+    for sc in codes:
+        if (sc.label or "").lower() in name and len(sc.label or "") > 3:
+            return sc.code
     for key, code in (("lunch", "lunch"), ("meal", "lunch"), ("break", "break"),
                       ("train", "training"), ("meeting", "meeting"), ("coach", "coaching"),
                       ("1-on-1", "coaching"), ("project", "project"), ("admin", "other")):
@@ -944,6 +958,8 @@ def fetch_pw_schedules(start_date, end_date, employee_ext_ids=None):
     Returns list of {employee_id, date, start, end, hours, segments:[…]}.
     Days with no schedule blocks are omitted.
     """
+    global _segment_code_cache
+    _segment_code_cache = None  # reset per import run
     session = requests.Session()
 
     # ── Activity name lookup ──────────────────────────────────────
@@ -1104,14 +1120,20 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
     # This removes shifts for employees who are now OFF in PeopleWare
     matched_emp_ids = {emp.id for emp, _ in resolved}
     if start_date and end_date and matched_emp_ids:
-        old = Schedule.query.filter(
+        # Delete child segments first (bulk), then schedules
+        old_sched_ids = db.session.query(Schedule.id).filter(
             Schedule.employee_id.in_(matched_emp_ids),
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
-        ).all()
-        replaced = len(old)
-        for ex_ in old:
-            db.session.delete(ex_)
+        ).subquery()
+        ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(
+            db.session.query(old_sched_ids.c.id)
+        )).delete(synchronize_session=False)
+        replaced = Schedule.query.filter(
+            Schedule.employee_id.in_(matched_emp_ids),
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).delete(synchronize_session=False)
         db.session.flush()
 
     # Insert new shifts
@@ -1135,7 +1157,11 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
                 duration_mins=seg["duration_mins"], sort_order=i, notes=seg.get("notes", ""),
             ))
         created += 1
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     log.info(f"WFM upsert: {created} created, {replaced} cleared, {skipped} skipped (unmatched)")
     return created, replaced, skipped
 

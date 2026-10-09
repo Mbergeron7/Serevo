@@ -14,7 +14,6 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, flash)
 from app.auth import login_required, get_current_user
 from app.capacity import planning as cp
-from config import cfg
 
 log = logging.getLogger("serevo.capacity")
 

@@ -22,9 +22,8 @@ import uuid
 from datetime import datetime
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, jsonify, flash, session)
-from app.auth import login_required, admin_required, get_current_user
-from config import cfg
+                   url_for, jsonify, session)
+from app.auth import admin_required, get_current_user
 
 log = logging.getLogger("serevo.data_import")
 

@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
-from app.auth import get_current_user
+from app.auth import get_current_user, login_required
 from app.models import (
     AgentStatusEvent,
     AppSetting,
@@ -1544,6 +1544,7 @@ def trigger_sync():
 
 
 @realtime_sync_bp.route("/realtime/resync/<int:feed_id>", methods=["POST"])
+@login_required
 def resync_feed(feed_id):
     """Clear all data for a feed and re-sync from scratch.
     Useful after changing timezone or column mapping."""
@@ -1569,6 +1570,7 @@ def resync_feed(feed_id):
 
 
 @realtime_sync_bp.route("/realtime/debug-volume/<lob_name>", methods=["GET"])
+@login_required
 def debug_volume(lob_name):
     """Temporary diagnostic: show interval_actuals + call_routes for a LOB."""
     auth_err = _require_admin()
@@ -1608,6 +1610,7 @@ def debug_volume(lob_name):
 
 
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
+@login_required
 def sync_status():
     """Get the current sync configuration and last sync time."""
     auth_err = _require_admin()
@@ -1648,6 +1651,7 @@ def sync_status():
 
 
 @realtime_sync_bp.route("/realtime/configure", methods=["POST"])
+@login_required
 def configure_sync():
     """Save sheet keys to AppSettings."""
     auth_err = _require_admin()

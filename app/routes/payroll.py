@@ -9,7 +9,7 @@ from datetime import date, timedelta, datetime
 
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, TimeClock, Schedule, PTOEntry
+from app.models import Employee, TimeClock, Schedule, PTOEntry
 
 log = logging.getLogger(__name__)
 payroll_bp = Blueprint("payroll", __name__, url_prefix="/payroll")

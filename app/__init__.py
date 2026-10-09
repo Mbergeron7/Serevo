@@ -302,6 +302,7 @@ def create_app():
         attendance_bp, announce_bp, payroll_bp, shift_notes_bp,
         employee_docs_bp, training_bp, support_bp, wfm_tickets_bp,
         scheduling_config_bp, realtime_sync_bp, notif_bp, search_bp,
+        agent_bp, audit_bp,
     ]:
         csrf.exempt(bp)
 

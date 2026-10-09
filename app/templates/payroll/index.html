@@ -81,10 +81,14 @@ async function loadPayroll() {
   const end_date = document.getElementById('endDate').value;
   if (!start_date || !end_date) return;
 
-  const res = await fetch('/payroll/api/summary', {
-    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
-    body:JSON.stringify({start_date, end_date})
-  });
+  let res;
+  try {
+    res = await fetch('/payroll/api/summary', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({start_date, end_date})
+    });
+    if (!res.ok) throw new Error(res.statusText);
+  } catch(err) { console.error(err); alert('Network error loading payroll'); return; }
   const d = await res.json();
   if (!d.success) { alert(d.error || 'Error loading'); return; }
 
@@ -141,10 +145,14 @@ async function exportCSV() {
   const end_date = document.getElementById('endDate').value;
   if (!start_date || !end_date) { alert('Please select a date range first'); return; }
 
-  const res = await fetch('/payroll/api/export-csv', {
-    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
-    body:JSON.stringify({start_date, end_date})
-  });
+  let res;
+  try {
+    res = await fetch('/payroll/api/export-csv', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({start_date, end_date})
+    });
+    if (!res.ok) throw new Error(res.statusText);
+  } catch(err) { console.error(err); alert('Export failed'); return; }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

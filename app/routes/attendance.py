@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
-from app.models import db, Employee, TimeClock, User, Schedule
+from app.models import db, Employee, TimeClock, Schedule
 
 log = logging.getLogger("serevo.attendance")
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")

@@ -8,7 +8,7 @@ and a getting-started guide when no data has been loaded yet.
 from datetime import date
 
 from flask import Blueprint, render_template, redirect, session
-from app.auth import login_required, get_current_user
+from app.auth import get_current_user
 from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest
 
 dashboard_bp = Blueprint("dashboard", __name__)

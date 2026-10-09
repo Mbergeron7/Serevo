@@ -81,11 +81,15 @@ async function loadEntries(page) {
   const action = document.getElementById('actionFilter').value;
   const entity_type = document.getElementById('targetFilter').value;
 
-  const res = await fetch('/audit-log/api/entries', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
-    body:JSON.stringify({days: parseInt(days), action, entity_type, page: currentPage})
-  });
+  let res;
+  try {
+    res = await fetch('/audit-log/api/entries', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({days: parseInt(days), action, entity_type, page: currentPage})
+    });
+    if (!res.ok) throw new Error(res.statusText);
+  } catch(err) { console.error(err); return; }
   const d = await res.json();
   if (!d.success) return;
 

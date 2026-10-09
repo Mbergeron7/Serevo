@@ -4,7 +4,7 @@ Routes for /my-schedule/, /my-time-off/, etc.
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for
 
 log = logging.getLogger("serevo.agent")
@@ -12,7 +12,7 @@ from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, TimeOffType,
     ShiftPost, ShiftBid, ShiftSwapRequest, VTOOTPost, VTOOTSignup,
-    PlanningUnit, QualityEvaluation,
+    QualityEvaluation,
 )
 from datetime import date as _date_type
 

@@ -234,11 +234,12 @@ function cancelRequest(id) {
   if (!confirm('Cancel this time-off request?')) return;
   var csrf = document.querySelector('meta[name="csrf-token"]').content;
   fetch('/api/agent/time-off/'+id, {method:'DELETE', headers:{'X-CSRFToken':csrf}})
-    .then(function(r){ return r.json(); })
+    .then(function(r){ if (!r.ok) throw new Error(r.statusText); return r.json(); })
     .then(function(d){
       if (d.ok) { showToast('Request cancelled','success'); setTimeout(function(){ location.reload(); }, 600); }
       else showToast(d.error||'Error','error');
-    });
+    })
+    .catch(function(err){ console.error(err); showToast('Network error','error'); });
 }
 </script>
 {% endblock %}
