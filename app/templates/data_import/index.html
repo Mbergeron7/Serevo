@@ -33,9 +33,13 @@
     <!-- Saved schema profiles -->
     <div class="form-group" id="schemaGroup" style="display:none;">
       <label for="schema_id">Column Mapping Profile (optional)</label>
-      <select id="schema_id" name="schema_id">
-        <option value="">— Auto-detect columns —</option>
-      </select>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <select id="schema_id" name="schema_id" style="flex:1;">
+          <option value="">— Auto-detect columns —</option>
+        </select>
+        <button type="button" class="btn btn-sm" id="editSchemaBtn" style="display:none;" onclick="editSchema()" title="Edit profile name">✏️</button>
+        <button type="button" class="btn btn-sm btn-danger" id="deleteSchemaBtn" style="display:none;" onclick="deleteSchema()" title="Delete profile">🗑️</button>
+      </div>
       <small style="color:var(--text-secondary);">Saved profiles remember how your file's columns map to ours</small>
     </div>
 
@@ -88,8 +92,13 @@
 
     <!-- Save mapping profile -->
     <div style="margin-top:1rem; padding:.75rem; background:var(--surface-alt, #f3f4f6); border-radius:8px;">
+      <div id="updateExistingProfile" style="display:none;margin-bottom:.5rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;">
+          <input type="checkbox" id="updateMapping"> Update the selected profile with this mapping
+        </label>
+      </div>
       <label style="display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem;">
-        <input type="checkbox" id="saveMapping"> Save this mapping as a profile
+        <input type="checkbox" id="saveMapping"> Save as a new profile
       </label>
       <div id="saveMappingName" style="display:none;">
         <input type="text" id="mappingProfileName" placeholder="Profile name (e.g. Client X Employees)"
@@ -231,6 +240,44 @@ async function loadSavedSchemas() {
   }
 }
 
+// Show/hide edit & delete buttons when a profile is selected
+document.getElementById('schema_id').addEventListener('change', function() {
+  const hasSelection = !!this.value;
+  document.getElementById('editSchemaBtn').style.display = hasSelection ? '' : 'none';
+  document.getElementById('deleteSchemaBtn').style.display = hasSelection ? '' : 'none';
+});
+
+async function editSchema() {
+  const sel = document.getElementById('schema_id');
+  if (!sel.value) return;
+  const currentName = sel.options[sel.selectedIndex].textContent;
+  const newName = prompt('Rename this mapping profile:', currentName.replace(/ \(.*\)$/, ''));
+  if (!newName || !newName.trim()) return;
+  try {
+    const resp = await fetch(`/data/schemas/${sel.value}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+      body: JSON.stringify({name: newName.trim()})
+    });
+    const data = await resp.json();
+    if (data.success) { loadSavedSchemas(); } else { alert(data.error || 'Rename failed'); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function deleteSchema() {
+  const sel = document.getElementById('schema_id');
+  if (!sel.value) return;
+  if (!confirm('Delete this mapping profile? This cannot be undone.')) return;
+  try {
+    const resp = await fetch(`/data/schemas/${sel.value}`, {
+      method: 'DELETE',
+      headers: {'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''}
+    });
+    const data = await resp.json();
+    if (data.success) { loadSavedSchemas(); } else { alert(data.error || 'Delete failed'); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
 // Save mapping checkbox toggle
 document.getElementById('saveMapping').addEventListener('change', function() {
   document.getElementById('saveMappingName').style.display = this.checked ? '' : 'none';
@@ -335,6 +382,18 @@ function renderMappingModal(data) {
   document.getElementById('mapFilename').textContent = data.filename;
   document.getElementById('mapRowCount').textContent = data.row_count;
 
+  // Show "update existing" checkbox if a profile was selected
+  const selectedSchema = document.getElementById('schema_id').value;
+  const updateDiv = document.getElementById('updateExistingProfile');
+  const updateCb = document.getElementById('updateMapping');
+  if (selectedSchema) {
+    updateDiv.style.display = '';
+    updateCb.checked = false;
+  } else {
+    updateDiv.style.display = 'none';
+    updateCb.checked = false;
+  }
+
   const allFields = [...data.available_fields.required, ...data.available_fields.optional];
   const tbody = document.getElementById('mappingBody');
   tbody.innerHTML = '';
@@ -436,6 +495,19 @@ async function confirmImport() {
   if (document.getElementById('saveMapping').checked) {
     const name = document.getElementById('mappingProfileName').value.trim();
     if (name) payload.save_as = name;
+  }
+
+  // Update existing profile if requested
+  const updateCb = document.getElementById('updateMapping');
+  const schemaSel = document.getElementById('schema_id');
+  if (updateCb && updateCb.checked && schemaSel.value) {
+    try {
+      await fetch(`/data/schemas/${schemaSel.value}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mapping}),
+      });
+    } catch(e) { console.warn('Could not update profile:', e); }
   }
 
   try {

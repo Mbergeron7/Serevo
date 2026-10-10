@@ -777,6 +777,26 @@ def list_schemas():
     })
 
 
+@data_import_bp.route("/schemas/<int:schema_id>", methods=["PUT"])
+@admin_required
+def update_schema(schema_id):
+    """Update a saved schema mapping profile (rename or update mapping)."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, SchemaMapping
+    sm = SchemaMapping.query.get(schema_id)
+    if not sm:
+        return jsonify({"success": False, "error": "Schema not found"}), 404
+    data = request.get_json() or {}
+    if "name" in data and data["name"].strip():
+        sm.name = data["name"].strip()
+    if "mapping" in data and isinstance(data["mapping"], dict):
+        sm.set_mapping(data["mapping"])
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 @data_import_bp.route("/schemas/<int:schema_id>", methods=["DELETE"])
 @admin_required
 def delete_schema(schema_id):
