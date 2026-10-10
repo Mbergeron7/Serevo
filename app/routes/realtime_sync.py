@@ -181,6 +181,13 @@ _VOLUME_COL_ALIASES = {
     "answered": "answered", "calls answered": "answered", "total answered": "answered",
     "ans w/in sl": "answered_within", "answered within sl": "answered_within",
     "answered within": "answered_within", "sl met": "answered_within",
+    "calls within sl": "answered_within", "within sl": "answered_within",
+    "sla met": "answered_within", "service level met": "answered_within",
+    "ans within": "answered_within", "in sl": "answered_within",
+    "within service level": "answered_within", "answered_within_sl": "answered_within",
+    "ans_within_sl": "answered_within", "sl_met": "answered_within",
+    "within threshold": "answered_within", "calls answered within sl": "answered_within",
+    "calls ans w/in sl": "answered_within", "servicelevel": "answered_within",
     "abandoned": "abandoned", "calls abandoned": "abandoned", "total abandoned": "abandoned",
     "abn": "abandoned",
     "rolled": "rolled", "overflow": "rolled", "overflowed": "rolled",
@@ -687,6 +694,9 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
 
     headers = rows[0]
     col_map = _match_columns(headers, _VOLUME_COL_ALIASES, custom_mapping=custom_mapping)
+    log.info(f"[SYNC-DEBUG] Call volume headers: {headers}")
+    log.info(f"[SYNC-DEBUG] Mapped columns: {col_map}")
+    log.info(f"[SYNC-DEBUG] answered_within mapped: {'answered_within' in col_map}")
 
     # Need date + time + either route_id or lob
     has_identifier = "route_id" in col_map or "lob" in col_map
