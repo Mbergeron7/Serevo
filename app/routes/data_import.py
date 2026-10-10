@@ -1012,44 +1012,58 @@ def _import_employees(rows):
         existing = Employee.query.filter_by(employee_id=emp_id).first()
         emp = existing or Employee(employee_id=emp_id)
 
-        # ── HR source-of-truth fields — always update from file ──
-        emp.first_name = first
-        emp.last_name = last
+        # Helper: only set a field if it's currently empty/None on an existing record
+        def _set_if_blank(attr, value):
+            if not existing:
+                setattr(emp, attr, value)
+            elif not getattr(emp, attr, None):
+                setattr(emp, attr, value)
+
+        # ── For new employees, set everything. For existing, only fill blanks. ──
+        if not existing:
+            emp.first_name = first
+            emp.last_name = last
+        # Name always updates (it's identity, not config)
+        else:
+            emp.first_name = first
+            emp.last_name = last
+
         status_val = _get_val(row, "Status")
         if status_val:
-            emp.status = status_val
+            _set_if_blank("status", status_val)
         elif not existing:
             emp.status = "Active"
+
         if unit:
-            emp.planning_unit_id = unit.id
+            _set_if_blank("planning_unit_id", unit.id)
 
         # Skills
         skills_val = _get_val(row, "All Skills")
         if skills_val:
-            emp.all_skills = skills_val
+            _set_if_blank("all_skills", skills_val)
 
         # Email — prefer "Address Email" (HR system), fall back to "Email"
         email_val = _get_val(row, "Address Email") or _get_val(row, "Email")
         if email_val:
-            emp.email = email_val
+            _set_if_blank("email", email_val)
 
         # Contract type (HR system column)
         ct_val = _get_val(row, "Contract Type")
         if ct_val:
-            emp.contract_type = ct_val
+            _set_if_blank("contract_type", ct_val)
 
         # External IDs
         ext1 = _get_val(row, "External ID 1")
         if ext1:
-            emp.external_id_1 = str(ext1).strip()
+            _set_if_blank("external_id_1", str(ext1).strip())
         ext2 = _get_val(row, "External ID 2")
         if ext2:
-            emp.external_id_2 = str(ext2).strip()
+            _set_if_blank("external_id_2", str(ext2).strip())
 
         # Languages
         lang = _get_val(row, "Languages")
         if lang:
-            emp.languages = str(lang).strip()
+            _set_if_blank("languages", str(lang).strip())
 
         # Contract link (by name)
         contract_name = _get_val(row, "Contract")
@@ -1057,9 +1071,9 @@ def _import_employees(rows):
             from app.models import Contract as ContractModel
             c = ContractModel.query.filter_by(name=str(contract_name).strip()).first()
             if c:
-                emp.contract_id = c.id
+                _set_if_blank("contract_id", c.id)
 
-        # Parse dates (always update — these come from the HR system)
+        # Parse dates — only fill in blanks
         for field, attr in [
             ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
@@ -1072,39 +1086,39 @@ def _import_employees(rows):
             if val and val != "4000-01-01":
                 ts = _parse_ts(val)
                 if ts:
-                    setattr(emp, attr, ts.date())
+                    _set_if_blank(attr, ts.date())
 
-        # ── Scheduling/operational fields — only set on new employees
-        #    or when the field is still at its default. This prevents
-        #    re-upload from overwriting manual edits. ──
-        if not existing or not emp.manually_edited:
-            # Numeric fields
-            wh = _get_val(row, "Weekly Hours")
-            if wh:
-                try: emp.weekly_hours = float(wh)
-                except (ValueError, TypeError): pass
-            dpw = _get_val(row, "Days Per Week")
-            if dpw:
-                try: emp.days_per_week = int(dpw)
-                except (ValueError, TypeError): pass
-            hpd = _get_val(row, "Hours Per Day")
-            if hpd:
-                try: emp.hours_per_day = float(hpd)
-                except (ValueError, TypeError): pass
+        # Numeric / scheduling fields — only fill blanks
+        wh = _get_val(row, "Weekly Hours")
+        if wh:
+            try:
+                _set_if_blank("weekly_hours", float(wh))
+            except (ValueError, TypeError): pass
+        dpw = _get_val(row, "Days Per Week")
+        if dpw:
+            try:
+                _set_if_blank("days_per_week", int(dpw))
+            except (ValueError, TypeError): pass
+        hpd = _get_val(row, "Hours Per Day")
+        if hpd:
+            try:
+                _set_if_blank("hours_per_day", float(hpd))
+            except (ValueError, TypeError): pass
 
-            # Timezone
-            tz = _get_val(row, "Timezone")
-            if tz:
-                emp.timezone = str(tz).strip()
+        # Timezone
+        tz = _get_val(row, "Timezone")
+        if tz:
+            _set_if_blank("timezone", str(tz).strip())
 
-            # Team lead
-            tl = _get_val(row, "Team Lead")
-            if tl:
-                emp.team_lead = str(tl).strip()
+        # Team lead
+        tl = _get_val(row, "Team Lead")
+        if tl:
+            _set_if_blank("team_lead", str(tl).strip())
 
-            # Schedule excluded
-            se = _get_val(row, "Schedule Excluded")
-            if se:
+        # Schedule excluded
+        se = _get_val(row, "Schedule Excluded")
+        if se:
+            if not existing:
                 emp.schedule_excluded = str(se).strip().lower() in ("true", "yes", "1", "y")
 
         if not existing:
