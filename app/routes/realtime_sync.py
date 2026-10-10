@@ -1637,6 +1637,7 @@ def debug_volume(lob_name):
         "intervals": [{
             "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M"),
             "offered": r.offered, "answered": r.answered,
+            "answered_within": r.answered_within,
             "abandoned": r.abandoned, "aht": r.aht_secs,
             "source": r.source,
         } for r in rows],
