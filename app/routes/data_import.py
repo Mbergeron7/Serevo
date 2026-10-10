@@ -1011,6 +1011,8 @@ def _import_employees(rows):
 
         existing = Employee.query.filter_by(employee_id=emp_id).first()
         emp = existing or Employee(employee_id=emp_id)
+
+        # ── HR source-of-truth fields — always update from file ──
         emp.first_name = first
         emp.last_name = last
         status_val = _get_val(row, "Status")
@@ -1057,37 +1059,9 @@ def _import_employees(rows):
             if c:
                 emp.contract_id = c.id
 
-        # Numeric fields
-        wh = _get_val(row, "Weekly Hours")
-        if wh:
-            try: emp.weekly_hours = float(wh)
-            except (ValueError, TypeError): pass
-        dpw = _get_val(row, "Days Per Week")
-        if dpw:
-            try: emp.days_per_week = int(dpw)
-            except (ValueError, TypeError): pass
-        hpd = _get_val(row, "Hours Per Day")
-        if hpd:
-            try: emp.hours_per_day = float(hpd)
-            except (ValueError, TypeError): pass
-
-        # Timezone
-        tz = _get_val(row, "Timezone")
-        if tz:
-            emp.timezone = str(tz).strip()
-
-        # Team lead
-        tl = _get_val(row, "Team Lead")
-        if tl:
-            emp.team_lead = str(tl).strip()
-
-        # Schedule excluded
-        se = _get_val(row, "Schedule Excluded")
-        if se:
-            emp.schedule_excluded = str(se).strip().lower() in ("true", "yes", "1", "y")
-
-        # Parse dates
+        # Parse dates (always update — these come from the HR system)
         for field, attr in [
+            ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
             ("Latest Skill Start", "skill_start"),
             ("Skill End", "skill_end"),
@@ -1099,6 +1073,39 @@ def _import_employees(rows):
                 ts = _parse_ts(val)
                 if ts:
                     setattr(emp, attr, ts.date())
+
+        # ── Scheduling/operational fields — only set on new employees
+        #    or when the field is still at its default. This prevents
+        #    re-upload from overwriting manual edits. ──
+        if not existing or not emp.manually_edited:
+            # Numeric fields
+            wh = _get_val(row, "Weekly Hours")
+            if wh:
+                try: emp.weekly_hours = float(wh)
+                except (ValueError, TypeError): pass
+            dpw = _get_val(row, "Days Per Week")
+            if dpw:
+                try: emp.days_per_week = int(dpw)
+                except (ValueError, TypeError): pass
+            hpd = _get_val(row, "Hours Per Day")
+            if hpd:
+                try: emp.hours_per_day = float(hpd)
+                except (ValueError, TypeError): pass
+
+            # Timezone
+            tz = _get_val(row, "Timezone")
+            if tz:
+                emp.timezone = str(tz).strip()
+
+            # Team lead
+            tl = _get_val(row, "Team Lead")
+            if tl:
+                emp.team_lead = str(tl).strip()
+
+            # Schedule excluded
+            se = _get_val(row, "Schedule Excluded")
+            if se:
+                emp.schedule_excluded = str(se).strip().lower() in ("true", "yes", "1", "y")
 
         if not existing:
             db.session.add(emp)

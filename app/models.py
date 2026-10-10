@@ -193,6 +193,7 @@ class Employee(db.Model):
     all_skills       = db.Column(db.Text, default="")
     skill_start      = db.Column(db.Date, nullable=True)
     skill_end        = db.Column(db.Date, nullable=True)
+    start_date       = db.Column(db.Date, nullable=True)       # hire / employment start
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
     contract_type    = db.Column(db.String(100), default="Full-Time")    # Full-Time | Part-Time
