@@ -26,7 +26,8 @@
 <!-- ═══ TABBED MODAL ═══ -->
 <style>
   #editModal::backdrop { background:rgba(0,0,0,.5); }
-  #editModal { border-radius:12px;border:1px solid var(--border);padding:0;max-width:820px;width:95vw;background:var(--surface,#fff);color:var(--text,#111);max-height:90vh;display:flex;flex-direction:column; }
+  #editModal { border-radius:12px;border:1px solid var(--border);padding:0;max-width:820px;width:95vw;background:var(--surface,#fff);color:var(--text,#111);max-height:90vh; }
+  #editModal[open] { display:flex;flex-direction:column; }
 </style>
 <dialog id="editModal">
   <div style="padding:20px 24px 0;">
