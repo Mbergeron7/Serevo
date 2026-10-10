@@ -162,6 +162,7 @@ def create_app():
             ("segment_codes", "is_flexible", "BOOLEAN DEFAULT FALSE"),
             ("segment_codes", "window_start_mins", "INTEGER"),
             ("segment_codes", "window_end_mins", "INTEGER"),
+            ("employees", "start_date", "DATE"),
         ]
         dialect = db.engine.dialect.name
         for tbl, col, col_type in _ensure_columns:
