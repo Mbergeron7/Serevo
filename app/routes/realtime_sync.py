@@ -722,6 +722,10 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
 
             if not pu:
                 skipped += 1
+                if skipped <= 5:
+                    rid_info = row[col_map["route_id"]].strip() if "route_id" in col_map else ""
+                    lob_info = row[col_map["lob"]].strip() if "lob" in col_map else ""
+                    log.debug(f"Row {i} skipped — no PU match (route={rid_info!r}, lob={lob_info!r})")
                 continue
 
             ts = _parse_timestamp(
@@ -800,6 +804,10 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
             errors.append(f"PU {pu_id} @ {ts}: {e}")
 
     db.session.commit()
+    total_data = len(rows) - 1
+    if skipped > 0 and total_data > 0:
+        log.warning(f"Call volume sync: {skipped}/{total_data} rows skipped "
+                    f"({skipped*100//total_data}%) — route/LOB not matched to any planning unit")
     return upserted, skipped, errors
 
 
@@ -882,6 +890,10 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
 
             if not emp:
                 skipped += 1
+                if skipped <= 5:
+                    aid = row[col_map["agent_id"]].strip() if "agent_id" in col_map else ""
+                    aname = row[col_map["agent"]].strip() if "agent" in col_map else ""
+                    log.debug(f"Agent row {i} skipped — no employee match (id={aid!r}, name={aname!r})")
                 continue
 
             # Parse start timestamp
@@ -952,6 +964,10 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
                 break
 
     db.session.commit()
+    total_data = len(rows) - 1
+    if skipped > 0 and total_data > 0:
+        log.warning(f"Agent activity sync: {skipped}/{total_data} rows skipped "
+                    f"({skipped*100//total_data}%) — agent not matched to any employee")
     return upserted, skipped, errors
 
 
@@ -1676,14 +1692,31 @@ def sync_status():
 
     sync_enabled = os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true").lower() == "true"
 
-    return jsonify({
-        "configured": bool(calls_key or agents_key),
+    # Include DataFeed info and DB counts when available
+    result = {
         "calls_sheet_key": calls_key[:8] + "..." if calls_key else "",
         "agents_sheet_key": agents_key[:8] + "..." if agents_key else "",
         "last_sync": last_sync,
         "sync_enabled": sync_enabled,
-        "interval_minutes": 5,
-    })
+        "interval_minutes": 2,
+    }
+    try:
+        feeds = DataFeed.query.filter_by(is_active=True).all()
+        result["configured"] = bool(calls_key or agents_key or feeds)
+        result["data_feeds"] = [{
+            "id": f.id, "name": f.name, "type": f.feed_type,
+            "status": f.last_status, "error": f.last_error,
+            "last_sync": f.last_sync_at.isoformat() if f.last_sync_at else None,
+            "upserted": f.last_upserted, "skipped": f.last_skipped,
+        } for f in feeds]
+        result["db_counts"] = {
+            "interval_actuals": IntervalActual.query.count(),
+            "agent_events": AgentStatusEvent.query.count(),
+        }
+    except Exception:
+        result["configured"] = bool(calls_key or agents_key)
+
+    return jsonify(result)
 
 
 @realtime_sync_bp.route("/realtime/configure", methods=["POST"])
