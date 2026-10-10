@@ -571,30 +571,93 @@
   <!-- ============================================================ -->
   <!-- REAL-TIME -->
   <!-- ============================================================ -->
-  <div class="help-section" id="realtime" data-keywords="realtime real-time adherence vto ot overtime voluntary time off live agent status monitor dashboard schedule conformance intraday">
+  <div class="help-section" id="realtime" data-keywords="realtime real-time adherence vto ot overtime voluntary time off live agent status monitor dashboard schedule conformance intraday forecast otf interval svl service level calculator absenteeism efficiency net staffing optimizer leaderboard queue metrics">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Real-Time Management</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Real-Time Dashboard</h3>
-      <p>The real-time dashboard provides a live view of your workforce. It displays:</p>
+      <p>The Real-Time Management page is organized into tabbed views, each focused on a different aspect of intraday operations. Select a planning unit (LOB) and date at the top — all tabs share the same context. Data refreshes automatically from your connected Google Sheets or ACD integration.</p>
+
+      <h3>Intraday</h3>
+      <p>The default view. Shows a side-by-side comparison of <strong>forecasted</strong> versus <strong>actual</strong> contact volumes and handle times for each interval throughout the day. Use it to spot emerging trends — if actuals are consistently running above forecast, you may need to extend shifts or post overtime.</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Agent Status Board</strong> — each agent's current state (available, on call, on break, after-call work, logged out, etc.) with duration in current state</li>
-        <li><strong>Adherence Indicators</strong> — green for in-adherence, red for out-of-adherence, showing what the agent is doing versus what they're scheduled for</li>
-        <li><strong>Queue Metrics</strong> — current calls in queue, longest wait time, service level percentage (if connected to your ACD/telephony system)</li>
-        <li><strong>Staffing vs. Requirement</strong> — real-time comparison of agents available versus the number needed based on current volume</li>
+        <li>Intervals that have passed show actual data; future intervals show forecast only</li>
+        <li>Variance columns highlight where actuals deviate significantly from plan</li>
       </ul>
 
-      <h3>Adherence Monitoring</h3>
-      <p>Adherence compares an agent's actual activity to their scheduled activity:</p>
+      <h3>Dashboard</h3>
+      <p>A high-level summary of key real-time metrics for the selected LOB and date:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>In Adherence</strong> — the agent is doing what they're scheduled to do</li>
-        <li><strong>Out of Adherence</strong> — the agent's actual state does not match their schedule (e.g., on break when scheduled for calls)</li>
+        <li><strong>Calls Offered / Answered / Abandoned</strong> — running totals for the day</li>
+        <li><strong>Service Level %</strong> — percentage of calls answered within the target threshold</li>
+        <li><strong>Average Speed of Answer (ASA)</strong> — how long callers are waiting on average</li>
+        <li><strong>Average Handle Time (AHT)</strong> — average duration of handled contacts</li>
+        <li><strong>Staffing vs. Requirement</strong> — agents available versus the number needed</li>
       </ul>
-      <p>Click on any agent to see a timeline of their adherence for the day, including each state change and its duration.</p>
 
-      <h3>Live Agent Status</h3>
-      <p>Filter the agent list by planning unit, team lead, or status. Sort by adherence percentage or time in current state to quickly identify agents who may need attention.</p>
+      <h3>Forecast &amp; OTF</h3>
+      <p>Over-the-Forecast (OTF) analysis. Compares the original forecast to actuals and projects whether the day will finish over or under plan. Key columns:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Forecast</strong> — the planned volume for each interval</li>
+        <li><strong>Actual</strong> — real volume received so far</li>
+        <li><strong>Variance</strong> — difference between actual and forecast</li>
+        <li><strong>Cumulative OTF %</strong> — running over/under percentage for the day</li>
+        <li><strong>Service Level</strong> — actual SL achieved per interval and cumulative</li>
+      </ul>
+      <p>Use this to decide whether to activate contingency staffing or release agents early.</p>
+
+      <h3>Interval Report</h3>
+      <p>A detailed interval-by-interval breakdown showing volume, handle time, service level, and staffing data. Each row represents one interval (typically 15 or 30 minutes). Totals and averages appear at the bottom.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Offered / Answered / Abandoned</strong> — contact counts per interval</li>
+        <li><strong>AHT</strong> — average handle time for that interval</li>
+        <li><strong>SL %</strong> — service level for each interval</li>
+        <li><strong>Answered Within Target</strong> — number of calls answered within the SL threshold</li>
+      </ul>
+
+      <h3>SVL Calculator</h3>
+      <p>The Service Level Calculator shows actual service level performance for each LOB. It pulls answered and answered-within-threshold data from your connected data source and calculates the SL percentage.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Displays SL % for each planning unit with the target threshold (e.g., 80/20 means 80% of calls answered within 20 seconds)</li>
+        <li>LOBs that have not received any calls show "—" instead of 0%</li>
+        <li>Color-coded: green when meeting target, red when below</li>
+      </ul>
+      <p><strong>Note:</strong> If your data source does not provide an "answered within threshold" column, {{ brand_name }} estimates service level from Average Speed of Answer (ASA) data. For the most accurate results, ensure your data feed includes a column for calls answered within the SL threshold.</p>
+
+      <h3>Absenteeism</h3>
+      <p>Tracks unplanned absences and their impact on staffing for the selected date. Shows which agents are absent, the reason (if provided), and how their absence affects coverage for each interval.</p>
+
+      <h3>Agent Status</h3>
+      <p>A snapshot of what each agent is currently doing versus what they are scheduled to do:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Scheduled Activity</strong> — what the agent should be doing right now per their schedule</li>
+        <li><strong>Actual Status</strong> — what the agent is actually doing (from your ACD or agent status feed)</li>
+        <li><strong>Adherence</strong> — green for in-adherence, red for out-of-adherence</li>
+        <li><strong>Duration</strong> — how long the agent has been in their current state</li>
+      </ul>
+      <p>Click on any agent to see a detailed timeline of their adherence for the day.</p>
+
+      <h3>Efficiency</h3>
+      <p>Measures how effectively agent time is being used. Compares productive time (handling contacts) to total logged-in time. Helps identify agents with excessive idle time or unusually high auxiliary usage.</p>
+
+      <h3>Net Staffing</h3>
+      <p>Shows the difference between agents available and agents required for each interval. Positive values mean overstaffed; negative values mean understaffed. Use this to make targeted VTO or OT decisions for specific time windows.</p>
+
+      <h3>⚡ Optimizer</h3>
+      <p>Suggests real-time schedule adjustments to improve service level or reduce costs. Based on current actuals and remaining forecast, it recommends actions like moving breaks, reassigning agents between LOBs, or extending/shortening shifts.</p>
+
+      <h3>Leaderboard</h3>
+      <p>Ranks agents by key performance metrics for the selected date — calls handled, AHT, quality scores, and adherence. Use it for gamification, coaching conversations, or to identify top performers and those needing support.</p>
+
+      <h3>🟢 Live Agents</h3>
+      <p>A real-time view of every agent currently on shift, grouped by LOB. Each agent shows:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Current status (Ready, On-call, On Break, Lunch, etc.) with duration</li>
+        <li>Scheduled activity versus actual activity</li>
+        <li>Agents approaching shift start appear in a "Pre-Shift" section</li>
+        <li>Absent agents (shift started but not logged in) are flagged</li>
+      </ul>
+      <p>Click any agent to open a detail panel with their full schedule timeline and status history for the day.</p>
 
       <h3>VTO / OT Management</h3>
       <p>When real-time volume deviates from the forecast:</p>
