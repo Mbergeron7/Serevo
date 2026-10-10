@@ -1123,6 +1123,44 @@ def _import_employees(rows):
 
         if not existing:
             db.session.add(emp)
+            db.session.flush()  # ensure emp.id is available for junction tables
+
+        # ── Junction tables: contract assignment ──
+        contract_start_val = _get_val(row, "Contract Start")
+        contract_end_val   = _get_val(row, "Contract End")
+        if emp.contract_id and (contract_start_val or contract_end_val):
+            from app.models import EmployeeContract
+            ec = EmployeeContract.query.filter_by(
+                employee_id=emp.id, contract_id=emp.contract_id
+            ).first()
+            if not ec:
+                ec = EmployeeContract(employee_id=emp.id, contract_id=emp.contract_id)
+                cs = _parse_ts(contract_start_val) if contract_start_val and contract_start_val != "1900-01-01" else None
+                ce = _parse_ts(contract_end_val) if contract_end_val and contract_end_val != "4000-01-01" else None
+                if cs:
+                    ec.valid_from = cs.date()
+                if ce:
+                    ec.valid_to = ce.date()
+                db.session.add(ec)
+
+        # ── Junction tables: planning unit assignment ──
+        pu_start_val = _get_val(row, "Planning Unit Start Date")
+        if emp.planning_unit_id:
+            from app.models import EmployeePlanningUnit
+            epu = EmployeePlanningUnit.query.filter_by(
+                employee_id=emp.id, planning_unit_id=emp.planning_unit_id
+            ).first()
+            if not epu:
+                epu = EmployeePlanningUnit(
+                    employee_id=emp.id,
+                    planning_unit_id=emp.planning_unit_id,
+                    priority=1,
+                )
+                ps = _parse_ts(pu_start_val) if pu_start_val else None
+                if ps:
+                    epu.valid_from = ps.date()
+                db.session.add(epu)
+
         imported += 1
 
     db.session.flush()
