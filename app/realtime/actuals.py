@@ -89,6 +89,11 @@ def _db_interval_actuals(lob, date_obj):
         ).order_by(IntervalActual.timestamp).all()
         return [r.to_dict() for r in rows]
     except Exception as e:
+        try:
+            from app import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
         log.debug(f"DB actuals unavailable: {e}")
         return None
 
@@ -161,6 +166,11 @@ def _db_agent_events(date_obj):
         ).order_by(AgentStatusEvent.start_ts).all()
         return [r.to_dict() for r in rows]
     except Exception as e:
+        try:
+            from app import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
         log.debug(f"DB agent events unavailable: {e}")
         return []
 

@@ -284,7 +284,7 @@ class PostgresSource:
     def _rollback():
         try:
             from app import db
-            self._rollback()
+            db.session.rollback()
         except Exception:
             pass
 

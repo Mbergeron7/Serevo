@@ -357,4 +357,16 @@ def create_app():
     def health():
         return {"status": "ok", "brand": cfg.BRAND_NAME, "demo": cfg.is_demo}
 
+    # ---- global DB session cleanup ----
+    @app.teardown_appcontext
+    def _shutdown_session(exc):
+        """Roll back the DB session after any failed request so a
+        PendingRollbackError cannot poison later queries on the same
+        worker connection."""
+        if exc is not None:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
     return app

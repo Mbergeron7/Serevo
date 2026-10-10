@@ -17,6 +17,18 @@ log = logging.getLogger("serevo.realtime")
 realtime_bp = Blueprint("realtime", __name__, url_prefix="/realtime")
 
 
+@realtime_bp.teardown_request
+def _rollback_on_error(exc):
+    """Roll back the DB session if any unhandled exception occurred,
+    preventing PendingRollbackError from poisoning subsequent requests."""
+    if exc is not None:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+
+
 def _all_lobs(user):
     """Return list of LOB names for the current user."""
     if user and user.get("is_demo"):
@@ -487,6 +499,11 @@ def api_bundle():
             "service_level": sl_result,
         })
     except Exception as e:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
         log.error(f"Bundle API error: {e}")
         return jsonify({"success": False, "error": str(e)})
 
@@ -1372,6 +1389,11 @@ def _run_report(fn):
         result["success"] = True
         return jsonify(result)
     except Exception as e:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
         log.exception("RTM report error")
         return jsonify({"success": False, "error": str(e)})
 
