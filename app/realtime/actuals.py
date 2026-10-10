@@ -79,6 +79,7 @@ def _db_interval_actuals(lob, date_obj):
         from app.models import db, IntervalActual, PlanningUnit
         pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if not pu:
+            log.info(f"[ACTUALS-DEBUG] No PlanningUnit for lob={lob!r}")
             return []
         start = datetime.datetime.combine(date_obj, datetime.time.min)
         end = start + datetime.timedelta(days=1)
@@ -87,6 +88,14 @@ def _db_interval_actuals(lob, date_obj):
             IntervalActual.timestamp >= start,
             IntervalActual.timestamp < end,
         ).order_by(IntervalActual.timestamp).all()
+        if not rows:
+            # Check if there's ANY data for this PU at all
+            total = IntervalActual.query.filter(
+                IntervalActual.planning_unit_id == pu.id
+            ).count()
+            log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: 0 rows (total in DB for this PU: {total})")
+        else:
+            log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: {len(rows)} rows")
         return [r.to_dict() for r in rows]
     except Exception as e:
         try:
