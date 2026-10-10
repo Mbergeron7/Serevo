@@ -1037,10 +1037,15 @@ def _import_employees(rows):
         if unit:
             _set_if_blank("planning_unit_id", unit.id)
 
-        # Skills
+        # Skills — store the text and auto-create any missing planning units
         skills_val = _get_val(row, "All Skills")
         if skills_val:
             _set_if_blank("all_skills", skills_val)
+            # Ensure each skill name exists as a planning unit
+            for skill_name in skills_val.split(","):
+                skill_name = skill_name.strip()
+                if skill_name:
+                    _get_or_create_unit(skill_name)
 
         # Email — prefer "Address Email" (HR system), fall back to "Email"
         email_val = _get_val(row, "Address Email") or _get_val(row, "Email")
@@ -1065,13 +1070,17 @@ def _import_employees(rows):
         if lang:
             _set_if_blank("languages", str(lang).strip())
 
-        # Contract link (by name)
-        contract_name = _get_val(row, "Contract")
+        # Contract link (by name) — auto-create if it doesn't exist
+        contract_name = (_get_val(row, "Contract") or _get_val(row, "Contract Type"))
         if contract_name:
+            contract_name = str(contract_name).strip()
             from app.models import Contract as ContractModel
-            c = ContractModel.query.filter_by(name=str(contract_name).strip()).first()
-            if c:
-                _set_if_blank("contract_id", c.id)
+            c = ContractModel.query.filter_by(name=contract_name).first()
+            if not c:
+                c = ContractModel(name=contract_name)
+                db.session.add(c)
+                db.session.flush()
+            _set_if_blank("contract_id", c.id)
 
         # Parse dates — only fill in blanks
         for field, attr in [
