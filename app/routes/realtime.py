@@ -434,8 +434,16 @@ def _aggregate_service_level(user, date_obj):
 def index():
     user = get_current_user()
     lobs = _all_lobs(user)
+    # Use the configured timezone (not UTC) so the date picker matches the user's day
+    try:
+        from zoneinfo import ZoneInfo
+        from config import cfg
+        tz = getattr(cfg, "TIMEZONE", None) or "America/Toronto"
+        local_today = datetime.datetime.now(ZoneInfo(tz)).date()
+    except Exception:
+        local_today = datetime.date.today()
     return render_template("realtime/index.html", user=user, lobs=lobs,
-                           today=datetime.date.today().isoformat())
+                           today=local_today.isoformat())
 
 
 # ── Combined bundle (snapshot + adherence + service level in one call) ──
