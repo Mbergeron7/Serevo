@@ -829,8 +829,8 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
 
     if ws is None:
         for name in ("Agent Activity", "Agent Status", "Agent States",
-                     "Agents", "agent_activity", "Status Events",
-                     "Real Time", "RealTime"):
+                     "AGENT STATUS RAW", "Agents", "agent_activity",
+                     "Status Events", "Real Time", "RealTime"):
             try:
                 ws = spreadsheet.worksheet(name)
                 break
@@ -1490,6 +1490,15 @@ def run_sync(app=None):
                 "realtime_calls_sheet_key",
                 env_fallback="CALLPOTENTIAL_SHEET_KEY",
             )
+            # Fall back to the capacity sheet if no dedicated realtime sheet
+            if err:
+                calls_sheet, cap_err = _open_sheet(
+                    "google_sheet_key",
+                    env_fallback="CAPACITY_SHEET_KEY",
+                )
+                if not cap_err:
+                    err = None
+                    log.info("Call volume sync: using capacity sheet as fallback")
             if err:
                 results["call_volume_legacy"] = {"error": err}
             else:
@@ -1504,6 +1513,15 @@ def run_sync(app=None):
 
         if "agent_status" not in feed_types_covered:
             agents_sheet, err = _open_sheet("realtime_agents_sheet_key")
+            # Fall back to the capacity sheet if no dedicated agents sheet
+            if err:
+                agents_sheet, cap_err = _open_sheet(
+                    "google_sheet_key",
+                    env_fallback="CAPACITY_SHEET_KEY",
+                )
+                if not cap_err:
+                    err = None
+                    log.info("Agent activity sync: using capacity sheet as fallback")
             if err:
                 results["agent_activity_legacy"] = {"error": err}
             else:
