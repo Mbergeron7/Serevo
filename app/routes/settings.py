@@ -2028,7 +2028,7 @@ def planning_units_page():
 @settings_bp.route("/planning-units/save", methods=["POST"])
 @admin_required
 def planning_units_save():
-    from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, CallRoute, db
+    from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, CallRoute, LOBSetting, db
     d = request.json or {}
     try:
         if d.get("id"):
@@ -2060,6 +2060,48 @@ def planning_units_save():
                 valid_from=_parse_date(bh.get("valid_from")),
                 valid_to=_parse_date(bh.get("valid_to")),
             ))
+
+        # ── Sync business hours → LOBSetting so forecast/scheduling respect them ──
+        bh_rows = d.get("business_hours") or []
+        if bh_rows:
+            lob_s = LOBSetting.query.filter_by(planning_unit_id=item.id).first()
+            if not lob_s:
+                lob_s = LOBSetting(planning_unit_id=item.id)
+                db.session.add(lob_s)
+
+            # Derive weekday / saturday / sunday hours from business_hours entries
+            day_map = {}  # day_type -> (open, close)
+            for bh in bh_rows:
+                dt = (bh.get("day_type") or "").strip().lower()
+                if dt:
+                    day_map[dt] = (bh.get("open_time", "08:00"), bh.get("close_time", "22:00"))
+
+            # Weekday: use monday as representative, fall back to any weekday
+            weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+            wk_hours = None
+            for wd in weekdays:
+                if wd in day_map:
+                    wk_hours = day_map[wd]
+                    break
+            if wk_hours:
+                lob_s.operating_start = wk_hours[0]
+                lob_s.operating_end = wk_hours[1]
+
+            # Saturday
+            if "saturday" in day_map:
+                lob_s.sat_operating_start = day_map["saturday"][0]
+                lob_s.sat_operating_end = day_map["saturday"][1]
+            else:
+                lob_s.sat_operating_start = None
+                lob_s.sat_operating_end = None
+
+            # Sunday
+            if "sunday" in day_map:
+                lob_s.sun_operating_start = day_map["sunday"][0]
+                lob_s.sun_operating_end = day_map["sunday"][1]
+            else:
+                lob_s.sun_operating_start = None
+                lob_s.sun_operating_end = None
 
         # Sync assigned activities (replace all)
         PlanningUnitActivity.query.filter_by(planning_unit_id=item.id).delete()

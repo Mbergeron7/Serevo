@@ -1199,10 +1199,32 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     except Exception:
         avail_map = {}
 
-    # If no requirements data, create a basic schedule anyway
+    # If no requirements data, create a basic schedule using business hours
     if not requirements:
+        # Look up operating hours from LOBSetting
+        default_start, default_end = "08:00", "16:00"
+        try:
+            from app.models import PlanningUnit, LOBSetting
+            from app.data_source import normalize_lob
+            lob_norm = normalize_lob(str(lob).strip())
+            pu = PlanningUnit.query.filter_by(name=lob_norm).first()
+            if pu and pu.lob_setting:
+                dow = date_obj.weekday()
+                s, e = pu.lob_setting.get_hours_for_day(dow)
+                if s and e:
+                    default_start = s
+                    # Use shift length to cap end time rather than full operating window
+                    start_mins = int(s.split(":")[0]) * 60 + int(s.split(":")[1])
+                    end_mins = start_mins + shift_length_mins
+                    end_from_bh = int(e.split(":")[0]) * 60 + int(e.split(":")[1])
+                    if end_mins > end_from_bh:
+                        end_mins = end_from_bh
+                    default_end = f"{end_mins // 60:02d}:{end_mins % 60:02d}"
+        except Exception as exc:
+            log.warning("Could not load business hours for scheduling fallback: %s", exc)
+
         warnings.append(f"No requirements data for {lob} on {date_obj}. "
-                        "Generating default 08:00–16:00 shifts for available staff.")
+                        f"Generating default {default_start}–{default_end} shifts for available staff.")
         shifts = []
         unassigned = []
         skip_reasons = []
@@ -1255,7 +1277,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         wtpm_shifts = []  # fall through to standard
 
                 if not wtpm_shifts:
-                    start = avail.get("shift_start") or "08:00"
+                    start = avail.get("shift_start") or default_start
                     # Apply earliest_start constraint
                     if avail.get("earliest_start"):
                         es_min = _time_to_minutes(avail["earliest_start"])
