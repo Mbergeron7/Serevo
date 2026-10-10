@@ -155,6 +155,18 @@ def forecast_otf_report(lobs, date_obj, user=None, sheet=None):
         offered = sum(a["offered"] for a in act)
         answered = sum(a["answered"] for a in act)
         within = sum(a["answered_within"] for a in act)
+        # Fallback: if source data has no answered_within column, estimate
+        # from ASA vs threshold.  If ASA <= threshold for an interval, all
+        # its answered calls are counted as within SL; otherwise none are.
+        # Last resort: treat answered == answered_within.
+        if within == 0 and answered > 0:
+            if threshold and any(a.get("asa") is not None for a in act):
+                within = sum(
+                    a["answered"] for a in act
+                    if a.get("asa") is not None and a["asa"] <= threshold
+                )
+            else:
+                within = answered  # best-effort: assume all answered were within SL
         aband = sum(a["abandoned"] for a in act)
 
         row = {
@@ -224,9 +236,17 @@ def interval_report(lobs, date_obj, user=None, sheet=None):
             if a.get("max_queued") is not None:
                 m["max_queued"] = max(m["max_queued"] or 0, a["max_queued"])
 
+    # Determine SL threshold for ASA-based fallback (use first LOB's)
+    _, _iv_threshold = _lob_targets(lobs[0]) if lobs else (0.8, 20)
+
     times = sorted(set(fc_map) | set(act_map))
     rows = []
     tot = defaultdict(float)
+    # Detect if answered_within is universally 0 (missing from source data)
+    _all_within_zero = all(
+        act_map[t]["answered_within"] == 0 for t in act_map
+    ) and any(act_map[t]["answered"] > 0 for t in act_map)
+
     for t in times:
         f = fc_map.get(t, {"offered": 0.0, "aht_w": 0.0})
         a = act_map.get(t)
@@ -234,22 +254,30 @@ def interval_report(lobs, date_obj, user=None, sheet=None):
         fc_aht = round(f["aht_w"] / fc_off) if fc_off else None
         if a:
             offered = a["offered"]
+            aw = a["answered_within"]
+            # Fallback when source lacks answered_within
+            if _all_within_zero and a["answered"] > 0:
+                if a["asa_n"] and _iv_threshold:
+                    avg_asa = a["asa_w"] / a["asa_n"]
+                    aw = a["answered"] if avg_asa <= _iv_threshold else 0
+                else:
+                    aw = a["answered"]
             lost = a["abandoned"] + a["rolled"]
             row = {
                 "time": t, "is_past": t < cutoff, "is_current": t == cutoff,
                 "forecast_cv": round(fc_off), "offered": offered,
                 "otf_pct": _pct(offered, fc_off),
-                "answered": a["answered"], "answered_within": a["answered_within"],
+                "answered": a["answered"], "answered_within": aw,
                 "abandoned": a["abandoned"], "rolled": a["rolled"],
                 "pct_lost": _pct(lost, offered),
-                "service_level": _pct(a["answered_within"], offered),
+                "service_level": _pct(aw, offered),
                 "asa": round(a["asa_w"] / a["asa_n"]) if a["asa_n"] else None,
                 "actual_aht": round(a["aht_w"] / a["aht_n"]) if a["aht_n"] else None,
                 "forecast_aht": fc_aht,
                 "max_queued": a["max_queued"],
             }
             tot["offered"] += offered; tot["answered"] += a["answered"]
-            tot["within"] += a["answered_within"]; tot["abandoned"] += a["abandoned"]
+            tot["within"] += aw; tot["abandoned"] += a["abandoned"]
             tot["rolled"] += a["rolled"]; tot["asa_w"] += a["asa_w"]; tot["asa_n"] += a["asa_n"]
             tot["aht_w"] += a["aht_w"]; tot["aht_n"] += a["aht_n"]
             if t < cutoff or t == cutoff:
