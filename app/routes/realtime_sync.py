@@ -1679,6 +1679,51 @@ def debug_volume_summary():
     return jsonify({"total_rows": total, "by_lob_source": summary})
 
 
+@realtime_sync_bp.route("/realtime/debug/actuals-test", methods=["GET"])
+@login_required
+def debug_actuals_test():
+    """Test the exact query path used by _db_interval_actuals for all LOBs."""
+    auth_err = _require_admin()
+    if auth_err:
+        return auth_err
+    import datetime as _dt
+    date_str = request.args.get("date", _dt.date.today().isoformat())
+    date_obj = _dt.datetime.strptime(date_str, "%Y-%m-%d").date()
+    start = _dt.datetime.combine(date_obj, _dt.time.min)
+    end = start + _dt.timedelta(days=1)
+
+    # Get all PUs
+    pus = PlanningUnit.query.all()
+    results = []
+    for pu in pus:
+        count = IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == pu.id,
+            IntervalActual.timestamp >= start,
+            IntervalActual.timestamp < end,
+        ).count()
+        total = IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == pu.id,
+        ).count()
+        # Also get a sample row to show stored timestamp format
+        sample = IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == pu.id,
+        ).order_by(IntervalActual.timestamp.desc()).first()
+        results.append({
+            "pu_id": pu.id,
+            "pu_name": pu.name,
+            "is_active": pu.is_active,
+            "rows_for_date": count,
+            "total_rows": total,
+            "latest_timestamp": sample.timestamp.isoformat() if sample else None,
+            "latest_timestamp_date": sample.timestamp.strftime("%Y-%m-%d") if sample else None,
+        })
+    return jsonify({
+        "query_date": date_str,
+        "query_range": f"{start.isoformat()} to {end.isoformat()}",
+        "planning_units": results,
+    })
+
+
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
 @login_required
 def sync_status():

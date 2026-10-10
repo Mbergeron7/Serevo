@@ -62,16 +62,21 @@ def is_logged_in(status):
 
 def get_interval_actuals(lob, date_obj, user=None, sheet=None):
     """Return list of interval actual dicts for one LOB + date (sorted)."""
+    log.info(f"[ACTUALS-DEBUG] get_interval_actuals called: lob={lob!r} date={date_obj} is_demo={user.get('is_demo') if user else None}")
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_interval_actuals
         return get_demo_interval_actuals(lob, date_obj)
 
     rows = _db_interval_actuals(lob, date_obj)
     if rows is None or not rows:
+        log.info(f"[ACTUALS-DEBUG] DB returned {rows!r}, falling through to sheet")
         sheet_rows = _sheet_interval_actuals(lob, date_obj, sheet)
         if sheet_rows:
             rows = sheet_rows
-    return sorted(rows or [], key=lambda r: r["time"])
+            log.info(f"[ACTUALS-DEBUG] Sheet returned {len(sheet_rows)} rows")
+    result = sorted(rows or [], key=lambda r: r["time"])
+    log.info(f"[ACTUALS-DEBUG] Returning {len(result)} actuals for {lob!r}")
+    return result
 
 
 def _db_interval_actuals(lob, date_obj):
