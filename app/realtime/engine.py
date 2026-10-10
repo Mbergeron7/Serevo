@@ -195,8 +195,22 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
         for m in range(s_min, e_min, DEFAULT_INTERVAL_MINS):
             sched_map[_minutes_to_time(m)] += 1
 
+    # Load actual call-volume data for the date
+    act_map = {}
+    try:
+        from app.realtime.actuals import get_interval_actuals
+        from app.auth import get_current_user
+        act_rows = get_interval_actuals(lob, date_obj, user=get_current_user(), sheet=sheet)
+        for a in (act_rows or []):
+            act_map[a.get("time", "")] = a
+    except Exception:
+        log.debug("Could not load interval actuals for snapshot", exc_info=True)
+
     # Merge into interval list
-    all_times = sorted(set(list(req_map.keys()) + list(sched_map.keys()) + list(fc_map.keys())))
+    all_times = sorted(set(
+        list(req_map.keys()) + list(sched_map.keys()) +
+        list(fc_map.keys()) + list(act_map.keys())
+    ))
 
     intervals = []
     for t in all_times:
@@ -205,6 +219,7 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
         gap = sched - req
         pct = round((sched / req) * 100, 1) if req > 0 else (100.0 if sched > 0 else 0)
         fc = fc_map.get(t, {})
+        act = act_map.get(t, {})
 
         if req > 0 and pct < ALERT_CRITICAL_PCT * 100:
             status = "critical"
@@ -223,6 +238,12 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
             "coverage_pct": pct,
             "forecast_offered": round(fc.get("offered", 0), 1),
             "forecast_aht": round(fc.get("aht", 0), 1),
+            "actual_offered": act.get("offered"),
+            "actual_answered": act.get("answered"),
+            "actual_abandoned": act.get("abandoned"),
+            "actual_aht": act.get("aht"),
+            "actual_asa": act.get("asa"),
+            "actual_sl": act.get("answered_within"),
             "status": status,
         })
 

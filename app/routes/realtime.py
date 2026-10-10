@@ -75,8 +75,18 @@ CP_STATUS_MAP = {
     "WA3f5159a6c417b72f73c8128f5d3cc0ed Duplicate": "Cascade",
 }
 
-# CST → EST offset (dialer timestamps are in CST)
-CP_TZ_OFFSET_HOURS = 1
+# Dialer timestamps are in America/Chicago (CST/CDT).
+# Compute offset to America/Toronto (EST/EDT) dynamically to handle DST.
+def _cp_tz_offset_hours():
+    """Return hours to add to CST/CDT to get EST/EDT.  Handles DST correctly."""
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cst_off = now.astimezone(ZoneInfo("America/Chicago")).utcoffset()
+        est_off = now.astimezone(ZoneInfo("America/Toronto")).utcoffset()
+        return (est_off - cst_off).total_seconds() / 3600
+    except Exception:
+        return 1  # fallback: CST is 1h behind EST when both are standard or both daylight
 
 
 def _parse_datetime_str(s):
@@ -196,7 +206,7 @@ def _get_live_agents_from_sheet():
         dt_cst = _parse_datetime_str(st)
         if not dt_cst:
             continue
-        dt_est = dt_cst + datetime.timedelta(hours=CP_TZ_OFFSET_HOURS)
+        dt_est = dt_cst + datetime.timedelta(hours=_cp_tz_offset_hours())
 
         # For yesterday CST rows, only include if they fall on today in EST
         if is_yesterday_cst and dt_est.date() != now_est.date():
@@ -1026,6 +1036,10 @@ def net_staffing():
                     "est_sl": est_sl,
                     "forecast_offered": offered,
                     "status": iv["status"],
+                    "actual_offered": iv.get("actual_offered"),
+                    "actual_answered": iv.get("actual_answered"),
+                    "actual_aht": iv.get("actual_aht"),
+                    "actual_sl": iv.get("actual_sl"),
                 })
 
             results.append({
@@ -1805,7 +1819,7 @@ def api_agent_detail():
             dt_cst = _parse_datetime_str(st)
             if not dt_cst:
                 continue
-            dt_est = dt_cst + datetime.timedelta(hours=CP_TZ_OFFSET_HOURS)
+            dt_est = dt_cst + datetime.timedelta(hours=_cp_tz_offset_hours())
             if dt_est.date() != today:
                 continue
             status = CP_STATUS_MAP.get(sid, sid[:20] if sid else "Unknown")

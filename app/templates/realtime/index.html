@@ -740,16 +740,20 @@ function renderIntraday() {
   $('heatmapRow').innerHTML = ivs.map(iv => {
     const cls = iv.status === 'critical' ? 'hm-crit' : iv.status === 'warning' ? 'hm-warn' : iv.status === 'over' ? 'hm-over' : iv.required === 0 ? 'hm-empty' : 'hm-ok';
     const now = iv.time === curTime ? ' hm-now' : '';
-    return `<div class="heatmap-cell ${cls}${now}" title="${iv.time}: ${iv.scheduled}/${iv.required} (${iv.coverage_pct}%)">${iv.scheduled}</div>`;
+    const actTip = iv.actual_offered != null ? ` · Actual: ${iv.actual_offered}` : '';
+    return `<div class="heatmap-cell ${cls}${now}" title="${iv.time}: ${iv.scheduled}/${iv.required} (${iv.coverage_pct}%)${actTip}">${iv.scheduled}</div>`;
   }).join('');
   $('heatmapLabels').innerHTML = ivs.map((iv, i) => i % 2 === 0 ? `<span>${iv.time}</span>` : `<span></span>`).join('');
 
-  // Coverage chart
+  // Coverage chart (required vs scheduled vs actual offered)
   const labels = ivs.map(iv => iv.time);
-  drawLineChart('chartCoverage', [
+  const covSeries = [
     { data: ivs.map(iv => iv.required), color:'#ef4444', width:2 },
     { data: ivs.map(iv => iv.scheduled), color:'#10b981', width:2.5 },
-  ], labels);
+  ];
+  const hasActuals = ivs.some(iv => iv.actual_offered != null);
+  if (hasActuals) covSeries.push({ data: ivs.map(iv => iv.actual_offered), color:'#6366f1', width:2, dash:[4,4] });
+  drawLineChart('chartCoverage', covSeries, labels);
 
   // SL chart
   const sl = INTRA.sl;
@@ -954,9 +958,11 @@ function renderNetStaffing() {
 
     let h = '';
     d.lobs.forEach(l => {
+      const nsHasAct = l.intervals.some(iv => iv.actual_offered != null);
+      const actHdr = nsHasAct ? '<th>Offered</th><th>Answered</th><th>AHT</th><th>Actual SL</th>' : '';
       h += `<div class="report-card"><h3>${esc(l.lob)} <span class="hint">net staffing by interval</span></h3>
         <div class="wrap" style="max-height:50vh;"><table class="rt sortable"><thead>
-        <tr><th>Time</th><th>Required</th><th>Scheduled</th><th>Net</th><th>Coverage</th><th>Est. SL</th><th>Status</th></tr>
+        <tr><th>Time</th><th>Required</th><th>Scheduled</th><th>Net</th><th>Coverage</th><th>Est. SL</th>${actHdr}<th>Status</th></tr>
         </thead><tbody>`;
       l.intervals.forEach(iv => {
         const isCur = iv.time === curIv;
@@ -967,10 +973,11 @@ function renderNetStaffing() {
         const statusPill = iv.status === 'critical' ? '<span class="pill high">CRITICAL</span>' :
           iv.status === 'warning' ? '<span class="pill medium">WARNING</span>' :
           iv.status === 'over' ? '<span class="pill low">OVER</span>' : '—';
+        const actCols = nsHasAct ? `<td>${fmt(iv.actual_offered)}</td><td>${fmt(iv.actual_answered)}</td><td>${fmt(iv.actual_aht)}</td><td>${iv.actual_sl != null ? pct(iv.actual_sl) : '—'}</td>` : '';
         h += `<tr${cls}><td>${iv.time}${isCur?' ◀':''}</td><td>${fmt(iv.required,1)}</td><td>${iv.scheduled}</td>
           <td class="${netCls}">${iv.net>0?'+':''}${fmt(iv.net,1)}</td>
           <td>${pct(iv.coverage_pct)}</td>
-          <td class="${slCls}">${iv.est_sl !== null ? pct(iv.est_sl) : '—'}</td>
+          <td class="${slCls}">${iv.est_sl !== null ? pct(iv.est_sl) : '—'}</td>${actCols}
           <td>${statusPill}</td></tr>`;
       });
       h += '</tbody></table></div></div>';
