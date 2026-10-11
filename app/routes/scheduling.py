@@ -16,7 +16,7 @@ from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, Schedule, ShiftSegment, Employee
+from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode
 
 log = logging.getLogger("serevo.scheduling")
 
@@ -680,6 +680,12 @@ def add_segment(shift_id):
         if not start_t or not end_t:
             return jsonify({"success": False, "error": "Start and end times required"})
 
+        # Validate activity type against SegmentCode table
+        act_type = payload.get("type", "on-call")
+        valid_code = SegmentCode.query.filter_by(code=act_type).first()
+        if not valid_code:
+            return jsonify({"success": False, "error": f"Unknown activity type '{act_type}'"})
+
         dur = (end_t.hour * 60 + end_t.minute) - (start_t.hour * 60 + start_t.minute)
 
         # Get next sort order
@@ -688,7 +694,7 @@ def add_segment(shift_id):
 
         seg = ShiftSegment(
             schedule_id=shift_id,
-            activity_type=payload.get("type", "on-call"),
+            activity_type=act_type,
             start_time=start_t,
             end_time=end_t,
             duration_mins=dur,
@@ -721,6 +727,9 @@ def update_segment(seg_id):
 
         payload = request.get_json(silent=True) or {}
         if "type" in payload:
+            valid_code = SegmentCode.query.filter_by(code=payload["type"]).first()
+            if not valid_code:
+                return jsonify({"success": False, "error": f"Unknown activity type '{payload['type']}'"})
             seg.activity_type = payload["type"]
         if "start" in payload:
             seg.start_time = _parse_time(payload["start"])

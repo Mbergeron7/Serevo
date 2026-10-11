@@ -1701,6 +1701,12 @@ def activities_save():
             item = SegmentCode.query.get(int(seg_id))
             if not item:
                 return jsonify(success=False, error="Segment not found")
+            # Cascade code rename to existing schedule segments
+            old_code = item.code
+            if code != old_code:
+                from app.models import ShiftSegment
+                ShiftSegment.query.filter_by(activity_type=old_code).update(
+                    {"activity_type": code}, synchronize_session=False)
             item.code = code
             item.label = label
             item.color = data.get("color", item.color)
@@ -1792,6 +1798,12 @@ def activities_delete():
             return jsonify(success=False, error="Segment not found")
         if item.is_default:
             return jsonify(success=False, error="Cannot delete a default segment code")
+        # Reassign any schedule segments using this code to the default activity
+        from app.models import ShiftSegment
+        default_code = SegmentCode.query.filter_by(is_default=True).first()
+        fallback = default_code.code if default_code else "on-call"
+        ShiftSegment.query.filter_by(activity_type=item.code).update(
+            {"activity_type": fallback}, synchronize_session=False)
         db.session.delete(item)
         db.session.commit()
         return jsonify(success=True)
