@@ -29,6 +29,30 @@ log = logging.getLogger("serevo.data_import")
 
 data_import_bp = Blueprint("data_import", __name__, url_prefix="/data")
 
+
+@data_import_bp.route("/test_update/<emp_id>")
+@admin_required
+def test_update(emp_id):
+    """Bare-bones test: update one employee's start_date to prove DB writes work."""
+    from app.models import db, Employee
+    emp = Employee.query.filter_by(employee_id=str(emp_id)).first()
+    if not emp:
+        return jsonify({"error": f"Employee {emp_id} not found"})
+    old_start = str(emp.start_date)
+    old_status = emp.status
+    emp.start_date = date(2023, 2, 27)
+    emp.status = "Inactive"
+    is_dirty = db.session.is_modified(emp)
+    db.session.commit()
+    # Re-query to verify
+    emp2 = Employee.query.filter_by(employee_id=str(emp_id)).first()
+    return jsonify({
+        "before": {"start_date": old_start, "status": old_status},
+        "after": {"start_date": str(emp2.start_date), "status": emp2.status},
+        "was_dirty": is_dirty,
+    })
+
+
 # In-memory job store for background imports (safe with 1 worker)
 _import_jobs = {}  # job_id -> {"status": "running"|"complete"|"failed", "result": {...}}
 
@@ -1216,12 +1240,18 @@ def _import_employees(rows):
         # Helper: set field, overwriting if value is provided
         def _set(attr, value):
             if value is not None:
+                old = getattr(emp, attr, None)
                 setattr(emp, attr, value)
+                if i <= 5 and old != value:
+                    log.info("  _set row %d: %s %r -> %r", i, attr, old, value)
 
         # Helper: only set if currently empty/None
         def _set_if_blank(attr, value):
             if value is not None and not getattr(emp, attr, None):
+                old = getattr(emp, attr, None)
                 setattr(emp, attr, value)
+                if i <= 5:
+                    log.info("  _set_if_blank row %d: %s %r -> %r", i, attr, old, value)
 
         # ── Core identity — always update ──
         if i <= 5 and not is_new:
@@ -1393,8 +1423,9 @@ def _import_employees(rows):
                         db.session.add(sm)
 
         if i <= 5 and not is_new:
-            log.info("AFTER row %d (emp %s): status=%r start_date=%r end_date=%r email=%r planning_unit_id=%r",
-                     i, emp_id, emp.status, emp.start_date, emp.end_date, emp.email, emp.planning_unit_id)
+            modified = db.session.is_modified(emp)
+            log.info("AFTER row %d (emp %s): modified=%s status=%r start_date=%r end_date=%r",
+                     i, emp_id, modified, emp.status, emp.start_date, emp.end_date)
         imported += 1
 
     db.session.flush()
