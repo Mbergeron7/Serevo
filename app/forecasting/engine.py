@@ -28,20 +28,21 @@ DEFAULT_SHRINKAGE = 0.30
 # ═══════════════════════════════════════════════════════════════
 
 def _get_lob_setting(lob):
-    """Look up LOBSetting for a given LOB name (via its PlanningUnit)."""
+    """Look up LOBSetting for a given LOB name (via its PlanningUnit).
+    Returns (lob_setting_or_None, planning_unit_or_None)."""
     try:
         from app.models import PlanningUnit, LOBSetting
         from app.data_source import normalize_lob
         lob_norm = normalize_lob(str(lob).strip())
         pu = PlanningUnit.query.filter_by(name=lob_norm).first()
-        if pu and pu.lob_setting:
-            return pu.lob_setting
+        if pu:
+            return pu.lob_setting, pu
     except Exception as e:
         log.warning("Could not load LOB setting for '%s': %s", lob, e)
-    return None
+    return None, None
 
 
-def _operating_slots(lob_setting, target_date):
+def _operating_slots(lob_setting, target_date, planning_unit=None):
     """
     Return sorted list of time-slot strings (e.g. '08:00', '08:30', …)
     covering every interval within the LOB's operating hours for a given date.
@@ -50,49 +51,54 @@ def _operating_slots(lob_setting, target_date):
     Business Hours tab), then falls back to the LOBSetting weekday/sat/sun
     columns.
 
-    If no LOB setting, returns None (caller should fall back to history-only).
+    Returns None if no hours can be determined (caller uses history as-is).
     """
-    if not lob_setting:
-        return None
-
     dow = target_date.weekday()
     day_names = ["monday", "tuesday", "wednesday", "thursday",
                  "friday", "saturday", "sunday"]
     start_str = None
     end_str = None
 
+    # Resolve the planning unit
+    pu = planning_unit
+    if not pu and lob_setting:
+        try:
+            pu = lob_setting.planning_unit
+        except Exception:
+            pass
+
     # Try per-day business hours from the planning unit first
-    try:
-        pu = lob_setting.planning_unit
-        log.info("[BIZ-HOURS] LOBSetting id=%s, planning_unit=%s, pu.business_hours count=%d",
-                 lob_setting.id, pu.name if pu else "None",
-                 len(pu.business_hours) if pu and pu.business_hours else 0)
-        if pu and pu.business_hours:
-            day_name = day_names[dow]
-            for bh in pu.business_hours:
-                log.info("[BIZ-HOURS]   checking bh: day_type=%r open=%s close=%s valid_from=%s valid_to=%s",
-                         bh.day_type, bh.open_time, bh.close_time, bh.valid_from, bh.valid_to)
-                if bh.day_type.lower() == day_name:
-                    # Check validity dates
-                    if bh.valid_from and target_date < bh.valid_from:
-                        continue
-                    if bh.valid_to and target_date > bh.valid_to:
-                        continue
-                    start_str = bh.open_time
-                    end_str = bh.close_time
-                    log.info("[BIZ-HOURS]   MATCHED %s: %s–%s", day_name, start_str, end_str)
-                    break
-    except Exception as e:
-        log.warning("[BIZ-HOURS] Could not check business hours: %s", e)
+    if pu:
+        try:
+            bh_list = pu.business_hours
+            log.info("[BIZ-HOURS] planning_unit=%s, business_hours count=%d, has_lob_setting=%s",
+                     pu.name, len(bh_list) if bh_list else 0, bool(lob_setting))
+            if bh_list:
+                day_name = day_names[dow]
+                for bh in bh_list:
+                    if bh.day_type.lower() == day_name:
+                        # Check validity dates
+                        if bh.valid_from and target_date < bh.valid_from:
+                            continue
+                        if bh.valid_to and target_date > bh.valid_to:
+                            continue
+                        start_str = bh.open_time
+                        end_str = bh.close_time
+                        log.info("[BIZ-HOURS]   MATCHED %s: %s–%s", day_name, start_str, end_str)
+                        break
+        except Exception as e:
+            log.warning("[BIZ-HOURS] Could not check business hours: %s", e)
 
     # Fall back to LOBSetting weekday/sat/sun columns
-    if not start_str or not end_str:
+    if (not start_str or not end_str) and lob_setting:
         start_str, end_str = lob_setting.get_hours_for_day(dow)
         log.info("[BIZ-HOURS] Fell back to LOBSetting: %s–%s for dow=%d", start_str, end_str, dow)
+
     if not start_str or not end_str:
+        log.info("[BIZ-HOURS] No operating hours found for dow=%d, returning None", dow)
         return None
 
-    interval = lob_setting.interval_minutes or DEFAULT_INTERVAL_MINS
+    interval = (lob_setting.interval_minutes if lob_setting else None) or DEFAULT_INTERVAL_MINS
 
     try:
         sh, sm = int(start_str.split(":")[0]), int(start_str.split(":")[1])
@@ -113,7 +119,7 @@ def _operating_slots(lob_setting, target_date):
     return slots
 
 
-def _fill_operating_hours(forecast_rows, lob_setting, fc_date):
+def _fill_operating_hours(forecast_rows, lob_setting, fc_date, planning_unit=None):
     """
     Given forecast rows for a single date (from historical averages) and the
     LOB's operating hours, ensure every operating interval is represented.
@@ -124,7 +130,7 @@ def _fill_operating_hours(forecast_rows, lob_setting, fc_date):
 
     Returns the complete list of rows for that date.
     """
-    slots = _operating_slots(lob_setting, fc_date)
+    slots = _operating_slots(lob_setting, fc_date, planning_unit=planning_unit)
     if not slots:
         return forecast_rows  # no LOB setting — return as-is
 
@@ -557,7 +563,7 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
         }
 
     # Look up LOB operating hours
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     # Project forward
     forecast = []
@@ -574,7 +580,7 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
                 "aht": prof["aht"],
             })
         # Fill all operating-hour intervals
-        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
         forecast.extend(day_rows)
 
     return {
@@ -629,7 +635,7 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
         return 1.0 / (1.0 + 0.1 * delta)
 
     # Look up LOB operating hours
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     forecast = []
     for d_offset in range(forecast_days):
@@ -680,7 +686,7 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
             })
 
         # Fill all operating-hour intervals
-        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
         forecast.extend(day_rows)
 
     return {
@@ -835,7 +841,7 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
             all_times.add(time_str)
 
     # Look up LOB operating hours
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     # Distribute daily forecasts across time slots
     forecast = []
@@ -861,7 +867,7 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
                 "aht": round(day_aht, 1),
             })
 
-        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
         forecast.extend(day_rows)
 
     return {
@@ -1483,7 +1489,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
     today = datetime.date.today()
 
     # Look up LOB operating hours
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     if method == "holt_winters":
         # Use the standalone Holt-Winters generator (it handles its own data)
@@ -1530,7 +1536,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
                     "aht": round(avg_aht, 1),
                 })
             # Fill all operating-hour intervals
-            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
             forecast.extend(day_rows)
     else:
         # Weighted trend (default) — same logic as generate_forecast_weighted
@@ -1576,7 +1582,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
                     "aht": round(avg_aht, 1),
                 })
             # Fill all operating-hour intervals
-            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date)
+            day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
             forecast.extend(day_rows)
 
     return {
@@ -1736,7 +1742,7 @@ def generate_retrospective_forecast(lob, start_date, end_date,
     for (d,) in rows:
         existing.add(str(d))
 
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     # Erlang C params from LOB settings
     sl_target = lob_setting.service_level_target if lob_setting else None
@@ -1833,7 +1839,7 @@ def generate_retrospective_forecast(lob, start_date, end_date,
                     "aht": round(avg_aht, 1),
                 })
 
-        day_rows = _fill_operating_hours(day_rows, lob_setting, current)
+        day_rows = _fill_operating_hours(day_rows, lob_setting, current, planning_unit=_pu)
 
         if not day_rows:
             current += datetime.timedelta(days=1)

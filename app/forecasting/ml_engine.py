@@ -223,7 +223,7 @@ def generate_forecast_ml(lob, historical_days=90, forecast_days=7,
 
     # Look up LOB operating hours for slot coverage
     from app.forecasting.engine import _get_lob_setting, _operating_slots
-    lob_setting = _get_lob_setting(lob)
+    lob_setting, _pu = _get_lob_setting(lob)
 
     forecast = []
     for d_offset in range(forecast_days):
@@ -235,7 +235,7 @@ def generate_forecast_ml(lob, historical_days=90, forecast_days=7,
         mon = fc_date.month
 
         # Determine slots for this day
-        operating = _operating_slots(lob_setting, fc_date) or last_day_slots
+        operating = _operating_slots(lob_setting, fc_date, planning_unit=_pu) or last_day_slots
 
         for time_str in operating:
             parts = time_str.split(":")

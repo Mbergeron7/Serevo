@@ -800,10 +800,19 @@ def forecast_api_intervals():
         )
         rq_map = {r.timestamp.strftime("%H:%M"): round(float(r.agents_required or 0), 1) for r in rq_rows}
 
+        # Filter to operating hours if business hours are configured
+        from app.forecasting.engine import _operating_slots
+        lob_s = unit.lob_setting
+        op_slots = _operating_slots(lob_s, target_date, planning_unit=unit)
+        op_set = set(op_slots) if op_slots else None
+
         # Merge all time slots — return both historic and forecast values
         all_times = sorted(set(list(actual_map.keys()) + list(fc_map.keys())))
         intervals = []
         for t in all_times:
+            # Skip intervals outside operating hours
+            if op_set and t not in op_set:
+                continue
             actual = actual_map.get(t)
             fc = fc_map.get(t)
             entry = {
