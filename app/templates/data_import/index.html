@@ -639,7 +639,10 @@ async function confirmImport() {
     });
     const data = await resp.json();
     closeMappingModal();
-    if (data.job_id) {
+    if (data.result) {
+      // Synchronous import — result included directly
+      showResult(data.result);
+    } else if (data.job_id) {
       btn.textContent = 'Importing… (this may take a few minutes)';
       const result = await pollJobStatus(data.job_id);
       showResult(result);

@@ -692,31 +692,16 @@ def upload_confirm():
     row_count = len(rows)
     user_email = user.get("email", "")
     job_id = uuid.uuid4().hex
-    _import_jobs[job_id] = {"status": "running", "result": None}
 
-    from flask import current_app
-    app = current_app._get_current_object()
-
-    def _run_import():
-        try:
-            with app.app_context():
-                log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
-                         upload_type, row_count, orig_filename, user_email)
-                result = _import_rows(upload_type, rows, user_email)
-                if result.get("success"):
-                    log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
-                             upload_type, result.get("imported", 0), result.get("skipped", 0))
-                _import_jobs[job_id] = {"status": "complete", "result": result}
-        except Exception as exc:
-            log.exception("Background import crashed: %s", exc)
-            _import_jobs[job_id] = {
-                "status": "complete",
-                "result": {"success": False, "error": f"Import crashed: {exc}"},
-            }
-
-    t = threading.Thread(target=_run_import, daemon=True)
-    t.start()
-    return jsonify({"success": True, "job_id": job_id, "message": "Import started in background"})
+    # Run import synchronously — background thread was not persisting changes
+    log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
+             upload_type, row_count, orig_filename, user_email)
+    result = _import_rows(upload_type, rows, user_email)
+    if result.get("success"):
+        log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
+                 upload_type, result.get("imported", 0), result.get("skipped", 0))
+    _import_jobs[job_id] = {"status": "complete", "result": result}
+    return jsonify({"success": True, "job_id": job_id, "result": result})
 
 
 def _remap_rows(rows, mapping, inverted=False):
@@ -1088,7 +1073,24 @@ def _import_rows(upload_type, rows, uploaded_by=""):
         upload.status = "complete"
         if errors:
             upload.error_detail = "\n".join(errors[:20])
+        dirty_count = len(db.session.dirty)
+        new_count = len(db.session.new)
+        log.info("PRE-COMMIT: dirty=%d new=%d", dirty_count, new_count)
+        if db.session.dirty:
+            for obj in list(db.session.dirty)[:5]:
+                log.info("  dirty obj: %r", obj)
         db.session.commit()
+        log.info("COMMIT DONE for upload_type=%s", upload_type)
+        # Verify commit actually persisted — re-query first employee
+        if upload_type == "employees" and rows:
+            verify_id = _get_val(rows[0], "Employee ID")
+            if verify_id:
+                verify_emp = Employee.query.filter_by(employee_id=str(verify_id)).first()
+                if verify_emp:
+                    log.info("VERIFY after commit: emp %s status=%r start_date=%r end_date=%r",
+                             verify_id, verify_emp.status, verify_emp.start_date, verify_emp.end_date)
+                else:
+                    log.warning("VERIFY: emp %s NOT FOUND after commit!", verify_id)
 
         return {
             "success": True,
@@ -1222,6 +1224,9 @@ def _import_employees(rows):
                 setattr(emp, attr, value)
 
         # ── Core identity — always update ──
+        if i <= 5 and not is_new:
+            log.info("BEFORE row %d (emp %s): status=%r start_date=%r end_date=%r email=%r planning_unit_id=%r",
+                     i, emp_id, emp.status, emp.start_date, emp.end_date, emp.email, emp.planning_unit_id)
         emp.first_name = first
         emp.last_name = last
 
@@ -1387,9 +1392,13 @@ def _import_employees(rows):
                             sm.valid_to = skill_end
                         db.session.add(sm)
 
+        if i <= 5 and not is_new:
+            log.info("AFTER row %d (emp %s): status=%r start_date=%r end_date=%r email=%r planning_unit_id=%r",
+                     i, emp_id, emp.status, emp.start_date, emp.end_date, emp.email, emp.planning_unit_id)
         imported += 1
 
     db.session.flush()
+    log.info("Post-flush: dirty=%d", len(db.session.dirty))
     return imported, skipped, errors
 
 
