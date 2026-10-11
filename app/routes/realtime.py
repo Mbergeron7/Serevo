@@ -62,30 +62,34 @@ _live_agents_cache_lock = threading.Lock()
 _LIVE_AGENTS_CACHE_TTL = 15  # seconds
 
 # Dialer status SID → human-readable name
-CP_STATUS_MAP = {
-    "WA9c4e93d1de9b472ebb7e3b89426df574": "Ready",
-    "WAd1f6c9952f3d04482bb9b6b28dd9819e": "Offline",
-    "WA9a7153cbe2257eb452ff60067002087b": "On-call",
-    "WA55e3a3eb3b9df10c69b902682ee87fbf": "Cool-Down",
-    "WA3f5159a6c417b72f73c8128f5d3cc0ed": "Unavailable",
-    "WA4090114d9b863e27e396b747e7071d7b": "No-Answer",
-    "WAa8d8e71d8d79415ba585a53ca493521f": "Rejected",
-    "WA960ed92496da0b023b5e69e4f5c783a2": "On Break",
-    "WAa513fc91db454de83aefda3f5b689c5e": "Lunch",
-    "WA009e46be32c8efb7132cfda1b5a42ea8": "ooq Client Account Work",
-    "WA641c3fceafe43e72da443995033777a0": "No-Mic",
-    "WA17446c1b845fe8159134a9e2da69dc8c": "Web Leads",
-    "WA84686f853061b6271f6a43dd6a3c6384": "Long Distance",
-    "WA0d324b251da94519738a9ee65fb89152": "eChat",
-    "WA8cb16293fa633f5b155a5579c4199992": "Leader on Duty",
-    "WAea2d79d49903a266c61e67a346ecf926": "ooq Meeting",
-    "WA61f0205ad33fc03a62d1b21c6edd4cf5": "ooq Training",
-    "WA1eb894d4d481b80387166e248bea38c4": "ooq Coaching",
-    "WAaaf8f99bad17314f6908a2b20faf208a": "ooq After Shift",
-    "WAcafc4a5f5503c8fbab4e19697b81edb3": "ooq System Issue",
-    "WA2a678c82745f6019e3b4fdc994af7f18": "ooq Personal",
-    "WA3f5159a6c417b72f73c8128f5d3cc0ed Duplicate": "Cascade",
-}
+def _build_status_map():
+    """Build external-ID → label map from SegmentCode (activities) in the DB.
+    Cached for 5 minutes to avoid hitting the DB on every refresh."""
+    try:
+        from app.models import SegmentCode
+        codes = SegmentCode.query.all()
+        m = {}
+        for sc in codes:
+            for ext_id in (sc.get_external_ids() or []):
+                m[ext_id.strip()] = sc.label
+        return m
+    except Exception as e:
+        log.warning("Could not build status map from DB: %s", e)
+        return {}
+
+
+_status_map_cache = {"ts": 0, "map": {}}
+_STATUS_MAP_TTL = 300  # 5 minutes
+
+
+def _get_status_map():
+    """Return cached external-ID → label map, refreshing every 5 min."""
+    import time as _t
+    now = _t.time()
+    if now - _status_map_cache["ts"] > _STATUS_MAP_TTL or not _status_map_cache["map"]:
+        _status_map_cache["map"] = _build_status_map()
+        _status_map_cache["ts"] = now
+    return _status_map_cache["map"]
 
 # Dialer timestamps are in America/Chicago (CST/CDT).
 # Compute offset to America/Toronto (EST/EDT) dynamically to handle DST.
@@ -224,7 +228,7 @@ def _get_live_agents_from_sheet():
         if is_yesterday_cst and dt_est.date() != now_est.date():
             continue
 
-        status = CP_STATUS_MAP.get(sid, sid[:20] if sid else "Unknown")
+        status = _get_status_map().get(sid, sid[:20] if sid else "Unknown")
         by_uid.setdefault(uid, []).append({"dt": dt_est, "status": status})
 
     # Derive current status per agent (latest event)
@@ -1852,7 +1856,7 @@ def api_agent_detail():
             dt_est = dt_cst + datetime.timedelta(hours=_cp_tz_offset_hours())
             if dt_est.date() != today:
                 continue
-            status = CP_STATUS_MAP.get(sid, sid[:20] if sid else "Unknown")
+            status = _get_status_map().get(sid, sid[:20] if sid else "Unknown")
             timeline.append({
                 "time": dt_est.strftime("%H:%M"),
                 "status": status,
