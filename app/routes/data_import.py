@@ -855,6 +855,31 @@ def list_schemas():
     })
 
 
+@data_import_bp.route("/schemas", methods=["POST"])
+@admin_required
+def create_schema():
+    """Create a new schema mapping profile."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import db, SchemaMapping
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    upload_type = data.get("upload_type", "")
+    mapping = data.get("mapping", {})
+    if not name:
+        return jsonify({"success": False, "error": "Name is required"}), 400
+    if not upload_type:
+        return jsonify({"success": False, "error": "Upload type is required"}), 400
+    user = get_current_user()
+    sm = SchemaMapping(name=name, upload_type=upload_type,
+                       created_by=user.get("email", "") if user else "")
+    sm.set_mapping(mapping)
+    db.session.add(sm)
+    db.session.commit()
+    return jsonify({"success": True, "id": sm.id})
+
+
 @data_import_bp.route("/schemas/<int:schema_id>", methods=["PUT"])
 @admin_required
 def update_schema(schema_id):
