@@ -1702,20 +1702,21 @@ def api_live_agents():
             sched_now_val = _sched_now(sched)
 
             # ── Attendance flags ──────────────────────────────
-            attendance = ""  # "", "late", "left_early"
+            attendance = ""       # live view: "", "left_early"
+            was_late = False      # for schedule coloring only
             if sched and sched.shift_start and sched.shift_end:
                 is_offline = ag["status"] in ("Offline", "offline")
                 # Left Early: agent offline during their scheduled shift
                 if is_offline and not is_shift_done and not is_pre_shift:
                     attendance = "left_early"
-                # Late: agent's first activity today was after shift start + grace
-                elif not is_pre_shift:
+                # Late detection: agent's first activity was after shift start + grace
+                if not is_pre_shift:
                     first_seen = ag.get("first_seen")
                     if first_seen:
                         grace_start = (datetime.datetime.combine(today, sched.shift_start)
                                        + datetime.timedelta(minutes=LATE_GRACE_MINS)).time()
                         if first_seen.time() > grace_start:
-                            attendance = "late"
+                            was_late = True
 
             agent = {
                 "name": emp.full_name,
@@ -1731,6 +1732,7 @@ def api_live_agents():
                 "not_scheduled": not_scheduled,
                 "pre_shift": is_pre_shift,
                 "attendance": attendance,
+                "was_late": was_late,
             }
 
             by_lob.setdefault(lob, []).append(agent)

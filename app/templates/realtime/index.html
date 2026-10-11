@@ -1259,7 +1259,6 @@ function laAdherenceBadge(a) {
   if (a.not_scheduled) return '<span class="la-adh-badge" style="background:#607d8b;color:#fff">📋 Not Scheduled</span>';
   // Attendance flags from schedule cross-reference
   if (a.attendance==="left_early") return '<span class="la-adh-badge" style="background:#c62828;color:#fff">🚪 Left Early</span>';
-  if (a.attendance==="late") return '<span class="la-adh-badge" style="background:#e65100;color:#fff">⏰ Late</span>';
   if (a.pre_shift&&a.shift_start) return `<span class="la-adh-badge la-adh-due">⏳ Pre-Shift</span>`;
   if (a.shift_done&&a.shift_end) return `<span class="la-adh-badge la-adh-unsch">⏰ Over Shift</span>`;
   if (a.sched_now==="break") {

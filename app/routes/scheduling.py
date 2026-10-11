@@ -593,6 +593,75 @@ def load_schedule():
         ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
         shifts = [s.to_dict() for s in schedules]
+
+        # ── Enrich today's shifts with attendance status ──────
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("America/Toronto")
+            now_est = datetime.datetime.now(tz).replace(tzinfo=None)
+            today = now_est.date()
+
+            if start_date <= today <= end_date:
+                from app.routes.realtime import _get_live_agents_from_sheet
+                agent_now, _ = _get_live_agents_from_sheet()
+
+                # Build ext-id → agent_now lookup
+                active_emps = Employee.query.filter_by(status="Active").all()
+                ext_to_emp_id = {}
+                emp_id_to_ext = {}
+                for emp in active_emps:
+                    for eid in [emp.external_id_1, getattr(emp, "external_id_2", None), str(emp.employee_id) if emp.employee_id else None]:
+                        if eid and eid.strip():
+                            ext_to_emp_id[eid.strip()] = emp.id
+                            emp_id_to_ext.setdefault(emp.id, []).append(eid.strip())
+
+                # Determine which employee_ids are logged in
+                logged_in = {}  # emp.id → agent data
+                for uid, ag in agent_now.items():
+                    eid = ext_to_emp_id.get(uid)
+                    if eid:
+                        logged_in[eid] = ag
+
+                LATE_GRACE_MINS = 2
+                now_time = now_est.time()
+
+                for shift in shifts:
+                    if shift["date"] != today.isoformat():
+                        continue
+                    # Find the schedule object for this shift to get internal employee id
+                    sched_obj = next((s for s in schedules if s.id == shift["id"]), None)
+                    if not sched_obj:
+                        continue
+                    emp_id = sched_obj.employee_id
+                    ag = logged_in.get(emp_id)
+
+                    if not sched_obj.shift_start or not sched_obj.shift_end:
+                        continue
+
+                    is_pre_shift = now_time < sched_obj.shift_start
+                    is_shift_done = now_time > sched_obj.shift_end
+
+                    if ag:
+                        # Agent has activity today
+                        is_offline = ag["status"] in ("Offline", "offline")
+                        if is_offline and not is_shift_done and not is_pre_shift:
+                            shift["attendance"] = "left_early"
+                        elif not is_pre_shift:
+                            first_seen = ag.get("first_seen")
+                            if first_seen:
+                                grace_start = (datetime.datetime.combine(today, sched_obj.shift_start)
+                                               + datetime.timedelta(minutes=LATE_GRACE_MINS)).time()
+                                if first_seen.time() > grace_start:
+                                    shift["attendance"] = "was_late"
+                    else:
+                        # No dialer activity — check if absent
+                        if not is_pre_shift and not is_shift_done:
+                            grace_dt = datetime.datetime.combine(today, sched_obj.shift_start) + datetime.timedelta(minutes=LATE_GRACE_MINS)
+                            if now_est > grace_dt:
+                                shift["attendance"] = "absent"
+        except Exception:
+            log.exception("Attendance enrichment failed — returning shifts without attendance")
+
         return jsonify({"success": True, "shifts": shifts})
 
     except Exception as e:
