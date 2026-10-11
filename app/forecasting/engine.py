@@ -64,9 +64,14 @@ def _operating_slots(lob_setting, target_date):
     # Try per-day business hours from the planning unit first
     try:
         pu = lob_setting.planning_unit
+        log.info("[BIZ-HOURS] LOBSetting id=%s, planning_unit=%s, pu.business_hours count=%d",
+                 lob_setting.id, pu.name if pu else "None",
+                 len(pu.business_hours) if pu and pu.business_hours else 0)
         if pu and pu.business_hours:
             day_name = day_names[dow]
             for bh in pu.business_hours:
+                log.info("[BIZ-HOURS]   checking bh: day_type=%r open=%s close=%s valid_from=%s valid_to=%s",
+                         bh.day_type, bh.open_time, bh.close_time, bh.valid_from, bh.valid_to)
                 if bh.day_type.lower() == day_name:
                     # Check validity dates
                     if bh.valid_from and target_date < bh.valid_from:
@@ -75,13 +80,15 @@ def _operating_slots(lob_setting, target_date):
                         continue
                     start_str = bh.open_time
                     end_str = bh.close_time
+                    log.info("[BIZ-HOURS]   MATCHED %s: %s–%s", day_name, start_str, end_str)
                     break
     except Exception as e:
-        log.debug("Could not check business hours: %s", e)
+        log.warning("[BIZ-HOURS] Could not check business hours: %s", e)
 
     # Fall back to LOBSetting weekday/sat/sun columns
     if not start_str or not end_str:
         start_str, end_str = lob_setting.get_hours_for_day(dow)
+        log.info("[BIZ-HOURS] Fell back to LOBSetting: %s–%s for dow=%d", start_str, end_str, dow)
     if not start_str or not end_str:
         return None
 
