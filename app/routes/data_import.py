@@ -1992,6 +1992,18 @@ def _open_employee_sheet():
             except Exception:
                 log.warning("Failed to read employee_sheet_key from DB settings", exc_info=True)
 
+        # Fall back to the Headcount data feed's sheet key
+        if not sheet_key:
+            try:
+                from app.models import DataFeed
+                feed = DataFeed.query.filter_by(feed_type="employees", is_active=True).first()
+                if feed and feed.sheet_key:
+                    sheet_key = feed.sheet_key
+                    if feed.service_account_json:
+                        sa_json = feed.service_account_json
+            except Exception:
+                log.warning("Failed to read employee feed sheet key", exc_info=True)
+
         if not sheet_key:
             return None, "No employee sheet key configured. Set EMPLOYEE_SHEET_KEY in environment or in Settings → Connections."
 
