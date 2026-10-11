@@ -182,6 +182,18 @@
   <div id="syncResult" style="display:none; margin-top:1rem;"></div>
 </div>
 
+<!-- Data Cleanup -->
+<div class="card" style="max-width: 640px; margin-top:1rem;">
+  <h2>Data Cleanup</h2>
+  <p>Fix common data issues from HR system exports.</p>
+  <div style="display:flex; gap:.5rem; align-items:center; margin-top:.75rem;">
+    <button class="btn btn-outline" id="cleanupDatesBtn" onclick="cleanupSentinelDates()">
+      Clear Sentinel Dates (1900-01-01)
+    </button>
+  </div>
+  <div id="cleanupResult" style="display:none; margin-top:1rem;"></div>
+</div>
+
 <!-- Download Templates -->
 <div class="card" style="margin-top:2rem; max-width:640px;">
   <h2>Download Templates</h2>
@@ -608,6 +620,27 @@ async function runSync() {
     document.getElementById('syncResult').style.display = '';
   }
   btn.disabled = false; btn.textContent = 'Sync Employees';
+}
+
+async function cleanupSentinelDates() {
+  const btn = document.getElementById('cleanupDatesBtn');
+  btn.disabled = true; btn.textContent = 'Cleaning…';
+  try {
+    const resp = await fetch('/data/cleanup-sentinel-dates', {method: 'POST'});
+    const data = await resp.json();
+    const div = document.getElementById('cleanupResult');
+    div.style.display = '';
+    if (data.success) {
+      div.innerHTML = `<p style="color:var(--brand-accent)">✅ ${data.message}</p>`;
+    } else {
+      div.innerHTML = `<p style="color:#dc2626">❌ ${data.error}</p>`;
+    }
+  } catch(err) {
+    const div = document.getElementById('cleanupResult');
+    div.style.display = '';
+    div.innerHTML = `<p style="color:#dc2626">${err.message}</p>`;
+  }
+  btn.disabled = false; btn.textContent = 'Clear Sentinel Dates (1900-01-01)';
 }
 
 function filterUploads() {

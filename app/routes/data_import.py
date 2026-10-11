@@ -19,7 +19,7 @@ import logging
 import tempfile
 import threading
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, session)
@@ -1027,15 +1027,22 @@ def _import_employees(rows):
     imported, skipped = 0, 0
     errors = []
 
-    # Sentinel dates from PeopleWare to ignore
-    SENTINEL_DATES = {"4000-01-01", "1900-01-01", "0000-00-00", "1111-01-01"}
+    # Sentinel dates from PeopleWare to ignore (check both string and parsed)
+    SENTINEL_DATES_STR = {"4000-01-01", "1900-01-01", "0000-00-00", "1111-01-01"}
+    SENTINEL_DATES_PARSED = {date(1900, 1, 1), date(4000, 1, 1), date(1111, 1, 1)}
 
     def _clean_date(val):
         """Parse a date string, returning None for sentinel/invalid values."""
-        if not val or val.strip() in SENTINEL_DATES:
+        if not val or val.strip() in SENTINEL_DATES_STR:
             return None
         ts = _parse_ts(val)
-        return ts.date() if ts else None
+        if not ts:
+            return None
+        d = ts.date()
+        # Check parsed date against sentinels (catches "01/01/1900" etc.)
+        if d in SENTINEL_DATES_PARSED:
+            return None
+        return d
 
     # Cache for skill groups and contracts to avoid repeated queries
     _sg_cache = {}   # name -> SkillGroup
@@ -1151,7 +1158,7 @@ def _import_employees(rows):
             if c:
                 _set("contract_id", c.id)
 
-        # Parse dates — always update when provided
+        # Parse dates — always update when provided; clear sentinels
         for field, attr in [
             ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
@@ -1161,9 +1168,13 @@ def _import_employees(rows):
             ("End Date", "end_date"),
         ]:
             val = _get_val(row, field)
-            d = _clean_date(val)
-            if d:
-                _set(attr, d)
+            if val and val.strip():
+                d = _clean_date(val)
+                if d:
+                    _set(attr, d)
+                else:
+                    # Sentinel date — clear the field
+                    setattr(emp, attr, None)
 
         # Numeric / scheduling fields — fill blanks
         wh = _get_val(row, "Weekly Hours")
@@ -2033,6 +2044,55 @@ def _open_employee_sheet():
         return ws, None
     except Exception as e:
         return None, f"Could not open employee sheet: {e}"
+
+
+@data_import_bp.route("/cleanup-sentinel-dates", methods=["POST"])
+@admin_required
+def cleanup_sentinel_dates():
+    """One-time cleanup: null out 1900-01-01 (and other sentinel) dates across employees and junction tables."""
+    from app.models import db, Employee, SkillMapping, EmployeeContract, EmployeePlanningUnit
+
+    sentinels = [date(1900, 1, 1), date(4000, 1, 1), date(1111, 1, 1)]
+    cleared = 0
+
+    # Employee date fields
+    for attr in ["start_date", "end_date", "skill_start", "skill_end"]:
+        for s in sentinels:
+            count = Employee.query.filter(getattr(Employee, attr) == s).update(
+                {attr: None}, synchronize_session=False
+            )
+            cleared += count
+
+    # EmployeeContract
+    for attr in ["valid_from", "valid_to"]:
+        for s in sentinels:
+            count = EmployeeContract.query.filter(getattr(EmployeeContract, attr) == s).update(
+                {attr: None}, synchronize_session=False
+            )
+            cleared += count
+
+    # EmployeePlanningUnit
+    for attr in ["valid_from", "valid_to"]:
+        for s in sentinels:
+            count = EmployeePlanningUnit.query.filter(getattr(EmployeePlanningUnit, attr) == s).update(
+                {attr: None}, synchronize_session=False
+            )
+            cleared += count
+
+    # SkillMapping (valid_from / valid_to may not exist yet — handle gracefully)
+    try:
+        for attr in ["valid_from", "valid_to"]:
+            for s in sentinels:
+                count = SkillMapping.query.filter(getattr(SkillMapping, attr) == s).update(
+                    {attr: None}, synchronize_session=False
+                )
+                cleared += count
+    except Exception:
+        pass  # columns may not exist yet
+
+    db.session.commit()
+    return jsonify(success=True, cleared=cleared,
+                   message=f"Cleared {cleared} sentinel date values (1900-01-01, etc.)")
 
 
 @data_import_bp.route("/sync-employees", methods=["POST"])
