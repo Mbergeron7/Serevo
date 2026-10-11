@@ -1673,6 +1673,7 @@ def api_live_agents():
             return ""
 
         # ── Build response ─────────────────────────────────────
+        LATE_GRACE_MINS = 2  # don't flag as late/absent within this window
         by_lob = {}
         pre_shift = []
         matched = 0
@@ -1707,11 +1708,14 @@ def api_live_agents():
                 # Left Early: agent offline during their scheduled shift
                 if is_offline and not is_shift_done and not is_pre_shift:
                     attendance = "left_early"
-                # Late: agent's first activity today was after shift start
+                # Late: agent's first activity today was after shift start + grace
                 elif not is_pre_shift:
                     first_seen = ag.get("first_seen")
-                    if first_seen and first_seen.time() > sched.shift_start:
-                        attendance = "late"
+                    if first_seen:
+                        grace_start = (datetime.datetime.combine(today, sched.shift_start)
+                                       + datetime.timedelta(minutes=LATE_GRACE_MINS)).time()
+                        if first_seen.time() > grace_start:
+                            attendance = "late"
 
             agent = {
                 "name": emp.full_name,
@@ -1747,8 +1751,9 @@ def api_live_agents():
             start_dt = datetime.datetime.combine(today, s.shift_start)
             mins_until = (start_dt - now_est).total_seconds() / 60
 
-            if now_time > s.shift_start:
-                # Past start time — absent
+            grace_dt = start_dt + datetime.timedelta(minutes=LATE_GRACE_MINS)
+            if now_est > grace_dt:
+                # Past start time + grace — absent
                 mins_late = round((now_est - start_dt).total_seconds() / 60)
                 if s.shift_end and now_time > s.shift_end:
                     continue  # shift is over, don't show
