@@ -1116,13 +1116,12 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
         seen_ext_ids.add(ext)
         resolved.append((emp, s))
 
-    # Bulk-clear existing schedules for all matched employees in the date range
-    # This removes shifts for employees who are now OFF in PeopleWare
-    matched_emp_ids = {emp.id for emp, _ in resolved}
-    if start_date and end_date and matched_emp_ids:
+    # Bulk-clear ALL existing schedules in the date range before inserting.
+    # This ensures PeopleWare is the source of truth — any manually created
+    # or previously imported schedules are replaced entirely.
+    if start_date and end_date:
         # Delete child segments first (bulk), then schedules
         old_sched_ids = db.session.query(Schedule.id).filter(
-            Schedule.employee_id.in_(matched_emp_ids),
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
         ).subquery()
@@ -1130,7 +1129,6 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
             db.session.query(old_sched_ids.c.id)
         )).delete(synchronize_session=False)
         replaced = Schedule.query.filter(
-            Schedule.employee_id.in_(matched_emp_ids),
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
         ).delete(synchronize_session=False)
