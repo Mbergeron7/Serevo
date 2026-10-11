@@ -1192,6 +1192,8 @@ def _import_employees(rows):
         emp_id = _get_val(row, "Employee ID")
         first  = _get_val(row, "First Name")
         last   = _get_val(row, "Last Name")
+        log.info("Import row %d: emp_id=%r first=%r last=%r row_keys=%s",
+                 i, emp_id, first, last, list(row.keys())[:8])
         if not emp_id or not first:
             skipped += 1
             errors.append(f"Row {i}: missing Employee ID or First Name")
@@ -1206,6 +1208,8 @@ def _import_employees(rows):
         existing = Employee.query.filter_by(employee_id=emp_id).first()
         emp = existing or Employee(employee_id=emp_id)
         is_new = not existing
+        log.info("Import row %d: emp_id=%s is_new=%s status_val=%r",
+                 i, emp_id, is_new, _get_val(row, "Status"))
 
         # Helper: set field, overwriting if value is provided
         def _set(attr, value):
