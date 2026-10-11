@@ -407,9 +407,14 @@ function renderMappingModal(data) {
   }
 
   // Build reverse map: serevo_field -> file_header
-  const reverseMap = {};
-  for (const [fileH, serevoF] of Object.entries(data.auto_mapping)) {
-    if (serevoF) reverseMap[serevoF] = fileH;
+  // Use saved_field_map directly if available (supports multi-field mappings)
+  let reverseMap = {};
+  if (data.saved_field_map) {
+    reverseMap = data.saved_field_map;
+  } else {
+    for (const [fileH, serevoF] of Object.entries(data.auto_mapping)) {
+      if (serevoF) reverseMap[serevoF] = fileH;
+    }
   }
 
   const allFields = [...data.available_fields.required, ...data.available_fields.optional];

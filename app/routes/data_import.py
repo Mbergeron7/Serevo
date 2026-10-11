@@ -525,15 +525,29 @@ def upload_preview():
 
     # Check if a saved schema was requested
     schema_id = request.form.get("schema_id")
+    saved_field_map = None  # {serevo_field: file_header} for the frontend
     if schema_id:
         from app.models import SchemaMapping
         sm = SchemaMapping.query.get(int(schema_id))
         if sm and sm.upload_type == upload_type:
             saved_map = sm.get_mapping()
-            # Build auto_map from the saved mapping
+            # Detect format
+            _known = set(type_info["required"] + type_info["optional"])
+            _keys_match = sum(1 for k in saved_map if k in _known)
+            _vals_match = sum(1 for v in saved_map.values() if v in _known)
+            if _keys_match > _vals_match:
+                # Already {serevo_field: file_header}
+                saved_field_map = saved_map
+            else:
+                # Legacy {file_header: serevo_field} — invert
+                saved_field_map = {v: k for k, v in saved_map.items() if v}
+            # Build auto_map from saved (for backward compat)
             auto_map = {}
             for h in headers:
-                auto_map[h] = saved_map.get(h)
+                auto_map[h] = None
+            for sf, fh in saved_field_map.items():
+                if fh in auto_map:
+                    auto_map[fh] = sf
         else:
             auto_map = _auto_match_columns(headers, upload_type)
     else:
@@ -564,6 +578,7 @@ def upload_preview():
         "row_count": len(rows),
         "file_headers": headers,
         "auto_mapping": auto_map,
+        "saved_field_map": saved_field_map,  # {serevo_field: file_header} or null
         "available_fields": {
             "required": type_info["required"],
             "optional": type_info["optional"],
