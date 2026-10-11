@@ -59,20 +59,23 @@
       <p style="margin:0;"><strong id="mapFilename"></strong> — <span id="mapRowCount"></span> rows</p>
     </div>
 
-    <!-- Profile selector inside modal -->
-    <div id="modalProfileSection" style="margin-bottom:1rem; padding:.75rem; background:var(--surface-alt, #f3f4f6); border-radius:8px;">
-      <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:.5rem;">
-        <label for="modalProfileSelect" style="margin:0; font-weight:600; font-size:.9rem; white-space:nowrap;">Mapping Profile:</label>
-        <select id="modalProfileSelect" style="flex:1;" onchange="loadProfileInModal()">
-          <option value="">— None (auto-detect) —</option>
-        </select>
+    <!-- Profile actions — two buttons + loaded indicator -->
+    <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="showSavedMappings()">📋 Load Saved</button>
+      <button type="button" class="btn btn-sm btn-outline" onclick="saveMapping()">💾 Save Mapping</button>
+      <span id="loadedProfileBadge" style="display:none; font-size:.85rem; padding:.25rem .6rem; background:var(--brand-accent, #2563eb); color:#fff; border-radius:12px;">
+        Using: <strong id="loadedProfileLabel"></strong>
+        <a href="#" onclick="clearLoadedProfile(); return false;" style="color:#fff; margin-left:.35rem; text-decoration:none; opacity:.7;" title="Clear">&times;</a>
+      </span>
+    </div>
+
+    <!-- Saved mappings list (hidden until opened) -->
+    <div id="savedMappingsList" style="display:none; margin-bottom:1rem; border:1px solid var(--border, #e5e7eb); border-radius:8px; overflow:hidden;">
+      <div style="padding:.5rem .75rem; background:var(--surface-alt, #f3f4f6); font-weight:600; font-size:.9rem; display:flex; justify-content:space-between; align-items:center;">
+        <span>Saved Mappings</span>
+        <a href="#" onclick="document.getElementById('savedMappingsList').style.display='none'; return false;" style="color:var(--text-secondary); text-decoration:none; font-size:1.1rem;">&times;</a>
       </div>
-      <div style="display:flex; flex-wrap:wrap; gap:.5rem;">
-        <button type="button" class="btn btn-sm btn-outline" onclick="saveProfileAs()">💾 Save As New</button>
-        <button type="button" class="btn btn-sm btn-outline" id="modalUpdateProfileBtn" style="display:none;" onclick="updateCurrentProfile()">📝 Update</button>
-        <button type="button" class="btn btn-sm btn-outline" id="modalRenameProfileBtn" style="display:none;" onclick="editSchema()">✏️ Rename</button>
-        <button type="button" class="btn btn-sm btn-danger" id="modalDeleteProfileBtn" style="display:none;" onclick="deleteSchema()">🗑️ Delete</button>
-      </div>
+      <div id="savedMappingsItems" style="max-height:200px; overflow-y:auto;"></div>
     </div>
 
     <!-- Mapping status -->
@@ -227,155 +230,72 @@ async function loadSavedSchemas() {
   }
 }
 
-function _populateModalProfileDropdown() {
-  const sel = document.getElementById('modalProfileSelect');
-  sel.innerHTML = '<option value="">— None (auto-detect) —</option>';
-  _savedSchemas.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.name;
-    sel.appendChild(opt);
-  });
-  // Re-select loaded profile if any
-  if (_loadedProfileId) {
-    sel.value = _loadedProfileId;
-  }
-}
+// ── Profile management (simplified) ──
 
-async function editSchema() {
-  if (!_loadedProfileId) return;
-  const newName = prompt('Rename this mapping profile:', _loadedProfileName || '');
-  if (!newName || !newName.trim()) return;
-  try {
-    const resp = await fetch(`/data/schemas/${_loadedProfileId}`, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
-      body: JSON.stringify({name: newName.trim()})
-    });
-    const data = await resp.json();
-    if (data.success) {
-      _loadedProfileName = newName.trim();
-      await loadSavedSchemas();
-      _populateModalProfileDropdown();
-      _showProfileButtons();
-    } else { alert(data.error || 'Rename failed'); }
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-async function deleteSchema() {
-  if (!_loadedProfileId) return;
-  if (!confirm('Delete this mapping profile? This cannot be undone.')) return;
-  try {
-    const resp = await fetch(`/data/schemas/${_loadedProfileId}`, {
-      method: 'DELETE',
-      headers: {'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''}
-    });
-    const data = await resp.json();
-    if (data.success) {
-      _loadedProfileId = null;
-      _loadedProfileName = null;
-      await loadSavedSchemas();
-      _populateModalProfileDropdown();
-      _showProfileButtons();
-    } else { alert(data.error || 'Delete failed'); }
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-// ── Profile management (inside mapping modal) ──
-
-// Track which profile is loaded in the modal
 let _loadedProfileId = null;
 let _loadedProfileName = null;
 
-async function saveProfileAs() {
-  const name = prompt('Name for this mapping profile:');
-  if (!name || !name.trim()) return;
-
-  const mapping = _gatherModalMapping();
-  try {
-    const type = document.getElementById('upload_type').value;
-    const resp = await fetch('/data/schemas', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''
-      },
-      body: JSON.stringify({ name: name.trim(), upload_type: type, mapping })
-    });
-    const data = await resp.json();
-    if (data.success || data.id) {
-      _loadedProfileId = data.id || null;
-      _loadedProfileName = name.trim();
-      await loadSavedSchemas();
-      _populateModalProfileDropdown();
-      _showProfileButtons();
-    } else {
-      alert(data.error || 'Save failed');
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-async function updateCurrentProfile() {
-  if (!_loadedProfileId) return;
-  const mapping = _gatherModalMapping();
-  try {
-    const resp = await fetch(`/data/schemas/${_loadedProfileId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''
-      },
-      body: JSON.stringify({ mapping })
-    });
-    const data = await resp.json();
-    if (data.success) {
-      await loadSavedSchemas();  // refresh cached mappings
-    } else {
-      alert(data.error || 'Update failed');
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
+function _csrfHeader() {
+  return document.querySelector('meta[name=csrf-token]')?.content || '';
 }
 
 function _gatherModalMapping() {
   const mapping = {};
   document.querySelectorAll('.map-select').forEach(sel => {
-    if (sel.value) {
-      mapping[sel.dataset.field] = sel.value;
-    }
+    if (sel.value) mapping[sel.dataset.field] = sel.value;
   });
   return mapping;
 }
 
-function _showProfileButtons() {
-  const hasProfile = !!_loadedProfileId;
-  document.getElementById('modalUpdateProfileBtn').style.display = hasProfile ? '' : 'none';
-  document.getElementById('modalRenameProfileBtn').style.display = hasProfile ? '' : 'none';
-  document.getElementById('modalDeleteProfileBtn').style.display = hasProfile ? '' : 'none';
+function _updateLoadedBadge() {
+  const badge = document.getElementById('loadedProfileBadge');
+  if (_loadedProfileId) {
+    document.getElementById('loadedProfileLabel').textContent = _loadedProfileName;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
-function loadProfileInModal() {
-  const sel = document.getElementById('modalProfileSelect');
-  const schemaId = sel.value;
-  if (!schemaId) {
-    // Reset to auto-detect
-    _loadedProfileId = null;
-    _loadedProfileName = null;
-    _applyMappingToDropdowns({});
-    _showProfileButtons();
+function clearLoadedProfile() {
+  _loadedProfileId = null;
+  _loadedProfileName = null;
+  _updateLoadedBadge();
+}
+
+// "Load Saved" — show the list panel
+async function showSavedMappings() {
+  await loadSavedSchemas();
+  const container = document.getElementById('savedMappingsItems');
+  const panel = document.getElementById('savedMappingsList');
+
+  if (!_savedSchemas.length) {
+    container.innerHTML = '<p style="padding:.75rem; color:var(--text-secondary); margin:0;">No saved mappings yet.</p>';
+    panel.style.display = '';
     return;
   }
-  // Find the schema in our cached list
-  const schema = _savedSchemas.find(s => String(s.id) === String(schemaId));
+
+  container.innerHTML = _savedSchemas.map(s => `
+    <div style="display:flex; align-items:center; gap:.5rem; padding:.5rem .75rem; border-top:1px solid var(--border, #e5e7eb);" data-schema-id="${s.id}">
+      <button type="button" class="btn btn-sm btn-primary" style="flex-shrink:0;" onclick="loadProfile(${s.id})">Load</button>
+      <span style="flex:1; font-size:.9rem;">${escHtml(s.name)}</span>
+      <button type="button" class="btn btn-sm btn-outline" onclick="renameProfile(${s.id}, this)" title="Rename" style="padding:2px 8px;">✏️</button>
+      <button type="button" class="btn btn-sm btn-danger" onclick="deleteProfile(${s.id}, '${escAttr(s.name)}')" title="Delete" style="padding:2px 8px;">🗑️</button>
+    </div>
+  `).join('');
+
+  panel.style.display = '';
+}
+
+// Load a profile's mapping into the dropdowns
+function loadProfile(schemaId) {
+  const schema = _savedSchemas.find(s => s.id === schemaId);
   if (!schema) return;
 
   _loadedProfileId = schema.id;
   _loadedProfileName = schema.name;
 
-  // Detect format and build { serevo_field: file_header }
+  // Detect format: { serevo_field: file_header } vs legacy { file_header: serevo_field }
   const savedMap = schema.mapping || {};
   const known = new Set([
     ..._mappingData.available_fields.required,
@@ -386,28 +306,110 @@ function loadProfileInModal() {
 
   let fieldMap;
   if (keysMatch >= valsMatch) {
-    fieldMap = savedMap;  // already { serevo_field: file_header }
+    fieldMap = savedMap;
   } else {
-    // Legacy { file_header: serevo_field } — invert
     fieldMap = {};
     for (const [fh, sf] of Object.entries(savedMap)) {
       if (sf) fieldMap[sf] = fh;
     }
   }
 
-  _applyMappingToDropdowns(fieldMap);
-  _showProfileButtons();
-}
-
-function _applyMappingToDropdowns(fieldMap) {
+  // Apply to dropdowns
   document.querySelectorAll('.map-select').forEach(sel => {
-    const field = sel.dataset.field;
-    const mapped = fieldMap[field] || '';
-    // Only set if the file header exists in the dropdown options
+    const mapped = fieldMap[sel.dataset.field] || '';
     const hasOption = [...sel.options].some(o => o.value === mapped);
     sel.value = hasOption ? mapped : '';
   });
   updateMappingStatus();
+  _updateLoadedBadge();
+
+  // Close the list
+  document.getElementById('savedMappingsList').style.display = 'none';
+}
+
+// "Save Mapping" — if a profile is loaded, offer to update it; otherwise save as new
+async function saveMapping() {
+  if (_loadedProfileId) {
+    const choice = confirm(`Update "${_loadedProfileName}" with the current mapping?\n\nOK = Update existing\nCancel = Save as new`);
+    if (choice) {
+      // Update existing
+      const mapping = _gatherModalMapping();
+      try {
+        const resp = await fetch(`/data/schemas/${_loadedProfileId}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrfHeader()},
+          body: JSON.stringify({ mapping })
+        });
+        const data = await resp.json();
+        if (!data.success) alert(data.error || 'Update failed');
+        else await loadSavedSchemas();
+      } catch(e) { alert('Error: ' + e.message); }
+      return;
+    }
+  }
+
+  // Save as new
+  const name = prompt('Name for this mapping:');
+  if (!name || !name.trim()) return;
+  const mapping = _gatherModalMapping();
+  try {
+    const type = document.getElementById('upload_type').value;
+    const resp = await fetch('/data/schemas', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrfHeader()},
+      body: JSON.stringify({ name: name.trim(), upload_type: type, mapping })
+    });
+    const data = await resp.json();
+    if (data.success || data.id) {
+      _loadedProfileId = data.id || null;
+      _loadedProfileName = name.trim();
+      _updateLoadedBadge();
+      await loadSavedSchemas();
+    } else {
+      alert(data.error || 'Save failed');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Rename a profile from the list
+async function renameProfile(schemaId, btn) {
+  const schema = _savedSchemas.find(s => s.id === schemaId);
+  if (!schema) return;
+  const newName = prompt('Rename this mapping:', schema.name);
+  if (!newName || !newName.trim()) return;
+  try {
+    const resp = await fetch(`/data/schemas/${schemaId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrfHeader()},
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      if (_loadedProfileId === schemaId) _loadedProfileName = newName.trim();
+      _updateLoadedBadge();
+      await showSavedMappings();  // refresh the list
+    } else { alert(data.error || 'Rename failed'); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Delete a profile from the list
+async function deleteProfile(schemaId, name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    const resp = await fetch(`/data/schemas/${schemaId}`, {
+      method: 'DELETE',
+      headers: {'X-CSRFToken': _csrfHeader()}
+    });
+    const data = await resp.json();
+    if (data.success) {
+      if (_loadedProfileId === schemaId) {
+        _loadedProfileId = null;
+        _loadedProfileName = null;
+        _updateLoadedBadge();
+      }
+      await showSavedMappings();  // refresh the list
+    } else { alert(data.error || 'Delete failed'); }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 // ── Direct upload (existing flow with auto-matching) ──
@@ -509,12 +511,11 @@ async function renderMappingModal(data) {
   document.getElementById('mapFilename').textContent = data.filename;
   document.getElementById('mapRowCount').textContent = data.row_count;
 
-  // Load schemas and populate the modal dropdown
-  await loadSavedSchemas();
+  // Reset profile state
   _loadedProfileId = null;
   _loadedProfileName = null;
-  _populateModalProfileDropdown();
-  _showProfileButtons();
+  _updateLoadedBadge();
+  document.getElementById('savedMappingsList').style.display = 'none';
 
   // Build reverse map: serevo_field -> file_header (auto-detect)
   let reverseMap = {};
