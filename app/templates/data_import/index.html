@@ -446,18 +446,6 @@ function updateMappingStatus() {
   if (!_mappingData) return;
   const required = _mappingData.available_fields.required;
   const selects = document.querySelectorAll('.map-select');
-  const usedHeaders = {};
-  const duplicates = new Set();
-
-  // Find duplicate file-header selections
-  selects.forEach(sel => {
-    const fileHeader = sel.value;
-    if (fileHeader) {
-      if (usedHeaders[fileHeader]) duplicates.add(fileHeader);
-      usedHeaders[fileHeader] = (usedHeaders[fileHeader] || 0) + 1;
-    }
-  });
-
   // Update status icons + sample data
   selects.forEach(sel => {
     const fileHeader = sel.value;
@@ -478,8 +466,6 @@ function updateMappingStatus() {
       statusTd.innerHTML = isRequired
         ? '<span style="color:#dc2626" title="Required — not mapped">✗</span>'
         : '<span style="color:var(--text-secondary)">—</span>';
-    } else if (duplicates.has(fileHeader)) {
-      statusTd.innerHTML = '<span style="color:#f59e0b" title="Duplicate mapping">⚠️</span>';
     } else {
       statusTd.innerHTML = isRequired
         ? '<span style="color:#059669" title="Required field matched">✓</span>'
@@ -488,13 +474,11 @@ function updateMappingStatus() {
   });
 
   // Check all required Serevo fields have a file header mapped
-  const mappedRequiredFields = [];
   const missingReq = [];
   selects.forEach(sel => {
     const serevoField = sel.dataset.field;
-    if (required.includes(serevoField)) {
-      if (sel.value) mappedRequiredFields.push(serevoField);
-      else missingReq.push(serevoField);
+    if (required.includes(serevoField) && !sel.value) {
+      missingReq.push(serevoField);
     }
   });
 
@@ -504,9 +488,6 @@ function updateMappingStatus() {
   if (missingReq.length) {
     statusDiv.innerHTML = `<p style="color:#dc2626;">⚠️ Missing required fields: <strong>${missingReq.join(', ')}</strong></p>`;
     btn.disabled = true;
-  } else if (duplicates.size) {
-    statusDiv.innerHTML = `<p style="color:#f59e0b;">⚠️ Some file columns are mapped more than once</p>`;
-    btn.disabled = false;
   } else {
     statusDiv.innerHTML = `<p style="color:#059669;">✓ ${totalMapped} columns mapped — ready to import</p>`;
     btn.disabled = false;
@@ -523,13 +504,14 @@ async function confirmImport() {
   btn.disabled = true;
   btn.textContent = 'Importing…';
 
-  // Build mapping as { file_header: serevo_field } from flipped UI
+  // Build mapping as { serevo_field: file_header }
+  // Multiple Serevo fields can point to the same file column
   const mapping = {};
   document.querySelectorAll('.map-select').forEach(sel => {
     const fileHeader = sel.value;
     const serevoField = sel.dataset.field;
     if (fileHeader) {
-      mapping[fileHeader] = serevoField;
+      mapping[serevoField] = fileHeader;
     }
   });
 

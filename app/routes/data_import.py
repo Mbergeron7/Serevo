@@ -590,7 +590,7 @@ def upload_confirm():
     if not data:
         return jsonify({"success": False, "error": "No mapping data"})
 
-    mapping = data.get("mapping", {})  # {file_header: internal_field}
+    mapping_raw = data.get("mapping", {})
     save_as = data.get("save_as")       # optional: name to save this mapping
 
     import_key = session.pop("_import_key", None)
@@ -612,9 +612,25 @@ def upload_confirm():
     if upload_type not in UPLOAD_TYPES:
         return jsonify({"success": False, "error": f"Unknown type: {upload_type}"})
 
-    # Validate required fields are mapped
+    # Detect mapping format: {file_header: serevo_field} (legacy) or
+    # {serevo_field: file_header} (new flipped UI — allows multiple
+    # Serevo fields to map to the same file column).
     type_info = UPLOAD_TYPES[upload_type]
-    mapped_fields = {v for v in mapping.values() if v}
+    known_fields = set(type_info.get("required", []) + type_info.get("optional", []))
+    keys_are_fields = sum(1 for k in mapping_raw if k in known_fields)
+    vals_are_fields = sum(1 for v in mapping_raw.values() if v in known_fields)
+    if keys_are_fields > vals_are_fields:
+        mapping = mapping_raw
+        mapping_inverted = True
+    else:
+        mapping = mapping_raw
+        mapping_inverted = False
+
+    # Validate required fields are mapped
+    if mapping_inverted:
+        mapped_fields = {k for k, v in mapping.items() if v}
+    else:
+        mapped_fields = {v for v in mapping.values() if v}
     missing = [c for c in type_info["required"] if c not in mapped_fields]
     if missing:
         return jsonify({
@@ -643,7 +659,7 @@ def upload_confirm():
             db.session.rollback()
 
     # Remap rows using confirmed mapping
-    rows = _remap_rows(rows, mapping)
+    rows = _remap_rows(rows, mapping, inverted=mapping_inverted)
 
     row_count = len(rows)
     user_email = user.get("email", "")
@@ -675,37 +691,57 @@ def upload_confirm():
     return jsonify({"success": True, "job_id": job_id, "message": "Import started in background"})
 
 
-def _remap_rows(rows, mapping):
+def _remap_rows(rows, mapping, inverted=False):
     """Rename row keys according to a mapping dict.
 
-    mapping: {file_header: internal_field_or_None}
-    Headers mapped to None are kept as-is (they'll just be ignored
-    by the import functions).
+    When inverted=False (legacy):
+        mapping: {file_header: internal_field_or_None}
+    When inverted=True (new flipped UI):
+        mapping: {serevo_field: file_header}
+        Multiple Serevo fields can map to the same file header.
 
     For streaming (large file) inputs, returns a _RemappedStream
     wrapper that applies the mapping lazily during iteration.
     """
     if isinstance(rows, (_StreamingCsv, _RemappedStream)):
-        return _RemappedStream(rows, mapping)
-    remapped = []
-    for row in rows:
-        new_row = {}
-        for k, v in row.items():
-            field = mapping.get(k.strip())
-            if field:
-                new_row[field] = v
-            else:
-                new_row[k] = v  # keep unmapped columns in case needed
-        remapped.append(new_row)
-    return remapped
+        return _RemappedStream(rows, mapping, inverted=inverted)
+
+    def _remap_one(row):
+        if inverted:
+            # {serevo_field: file_header} — pull value from file header
+            new_row = {}
+            row_lower = {k.strip().lower(): (k, v) for k, v in row.items()}
+            for serevo_field, file_header in mapping.items():
+                if file_header:
+                    key_match = row_lower.get(file_header.strip().lower())
+                    if key_match:
+                        new_row[serevo_field] = key_match[1]
+            # Keep unmapped file columns too
+            mapped_headers = {fh.strip().lower() for fh in mapping.values() if fh}
+            for k, v in row.items():
+                if k.strip().lower() not in mapped_headers:
+                    new_row[k] = v
+            return new_row
+        else:
+            new_row = {}
+            for k, v in row.items():
+                field = mapping.get(k.strip())
+                if field:
+                    new_row[field] = v
+                else:
+                    new_row[k] = v
+            return new_row
+
+    return [_remap_one(row) for row in rows]
 
 
 class _RemappedStream:
     """Lazily applies column remapping to a streaming row source."""
 
-    def __init__(self, source, mapping):
+    def __init__(self, source, mapping, inverted=False):
         self._source = source
         self._mapping = mapping
+        self._inverted = inverted
 
     def __len__(self):
         return len(self._source)
@@ -715,13 +751,26 @@ class _RemappedStream:
 
     def __iter__(self):
         for row in self._source:
-            new_row = {}
-            for k, v in row.items():
-                field = self._mapping.get(k.strip())
-                if field:
-                    new_row[field] = v
-                else:
-                    new_row[k] = v
+            if self._inverted:
+                new_row = {}
+                row_lower = {k.strip().lower(): (k, v) for k, v in row.items()}
+                for serevo_field, file_header in self._mapping.items():
+                    if file_header:
+                        key_match = row_lower.get(file_header.strip().lower())
+                        if key_match:
+                            new_row[serevo_field] = key_match[1]
+                mapped_headers = {fh.strip().lower() for fh in self._mapping.values() if fh}
+                for k, v in row.items():
+                    if k.strip().lower() not in mapped_headers:
+                        new_row[k] = v
+            else:
+                new_row = {}
+                for k, v in row.items():
+                    field = self._mapping.get(k.strip())
+                    if field:
+                        new_row[field] = v
+                    else:
+                        new_row[k] = v
             yield new_row
 
     def __getitem__(self, idx):
@@ -729,11 +778,21 @@ class _RemappedStream:
             raise IndexError
         # Return remapped header template
         d = self._source[0]
-        new = {}
-        for k, v in d.items():
-            field = self._mapping.get(k.strip())
-            new[field if field else k] = v
-        return new
+        if self._inverted:
+            new = {}
+            row_lower = {k.strip().lower(): (k, v) for k, v in d.items()}
+            for serevo_field, file_header in self._mapping.items():
+                if file_header:
+                    key_match = row_lower.get(file_header.strip().lower())
+                    if key_match:
+                        new[serevo_field] = key_match[1]
+            return new
+        else:
+            new = {}
+            for k, v in d.items():
+                field = self._mapping.get(k.strip())
+                new[field if field else k] = v
+            return new
 
 
 def _apply_schema_mapping(rows, schema_id):
