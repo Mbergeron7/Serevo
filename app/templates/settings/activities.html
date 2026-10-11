@@ -239,6 +239,8 @@ function render() {
 
 function appendRow(r, isChild, isParent) {
   const tr = document.createElement('tr');
+  tr.style.cursor = 'pointer';
+  tr.addEventListener('click', (e) => { if (!e.target.closest('button')) editItem(r); });
   if (isChild) tr.style.background = 'var(--surface-raised, rgba(0,0,0,0.02))';
   const indent = isChild ? '<span style="color:var(--text-muted);margin-right:4px;">└</span>' : '';
   const typeBadge = `<span style="font-size:0.72rem;padding:1px 6px;border-radius:10px;background:${typeColor(r.activity_type)};color:#fff;">${(r.activity_type||'presence').charAt(0).toUpperCase()+(r.activity_type||'presence').slice(1)}</span>`;
