@@ -456,36 +456,21 @@ def upload():
         row_count = 0
 
     job_id = uuid.uuid4().hex
-    _import_jobs[job_id] = {"status": "running", "result": None}
     user_email = user.get("email", "")
     filename_for_log = file.filename
 
-    from flask import current_app
-    app = current_app._get_current_object()
-
-    def _run_import():
-        try:
-            with app.app_context():
-                log.info("Upload started: type=%s rows=%s file=%s user=%s",
-                         upload_type, row_count or "streaming", filename_for_log, user_email)
-                result = _import_rows(upload_type, rows, user_email)
-                if result.get("success"):
-                    log.info("Upload complete: type=%s imported=%d skipped=%d",
-                             upload_type, result.get("imported", 0), result.get("skipped", 0))
-                else:
-                    log.error("Upload failed: type=%s error=%s",
-                              upload_type, result.get("error", ""))
-                _import_jobs[job_id] = {"status": "complete", "result": result}
-        except Exception as exc:
-            log.exception("Background import crashed: %s", exc)
-            _import_jobs[job_id] = {
-                "status": "complete",
-                "result": {"success": False, "error": f"Import crashed: {exc}"},
-            }
-
-    t = threading.Thread(target=_run_import, daemon=True)
-    t.start()
-    return jsonify({"success": True, "job_id": job_id, "message": "Import started in background"})
+    # Run import synchronously — background thread was not persisting changes
+    log.info("Upload started: type=%s rows=%s file=%s user=%s",
+             upload_type, row_count or "streaming", filename_for_log, user_email)
+    result = _import_rows(upload_type, rows, user_email)
+    if result.get("success"):
+        log.info("Upload complete: type=%s imported=%d skipped=%d",
+                 upload_type, result.get("imported", 0), result.get("skipped", 0))
+    else:
+        log.error("Upload failed: type=%s error=%s",
+                  upload_type, result.get("error", ""))
+    _import_jobs[job_id] = {"status": "complete", "result": result}
+    return jsonify({"success": True, "job_id": job_id, "result": result})
 
 
 @data_import_bp.route("/upload/status/<job_id>")
