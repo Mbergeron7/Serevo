@@ -40,7 +40,7 @@ COLUMN_ALIASES = {
     # ── Employees ──
     "Employee ID":      ["employee id", "emp id", "empid", "agent id", "agentid",
                          "employee number", "emp number", "staff id", "badge",
-                         "badge number", "id", "personnel number", "person id"],
+                         "badge number", "id", "person id"],
     "First Name":       ["first name", "firstname", "given name", "prénom", "fname",
                          "first", "forename"],
     "Last Name":        ["last name", "lastname", "surname", "family name", "nom",
@@ -59,9 +59,11 @@ COLUMN_ALIASES = {
     "Contract Type":    ["contract type", "employment type", "work type",
                          "position type"],
     "External ID 1":    ["external id 1", "ext id 1", "external id", "ext id",
-                         "peopleware id", "external identifier", "system id"],
+                         "peopleware id", "external identifier", "system id",
+                         "current id"],
     "External ID 2":    ["external id 2", "ext id 2", "secondary id",
-                         "alt id", "alternate id"],
+                         "alt id", "alternate id", "personnel #",
+                         "personnel number"],
     "Languages":        ["languages", "language", "langs", "spoken languages"],
     "Contract":         ["contract", "contract name", "contract template",
                          "work agreement"],
@@ -1019,9 +1021,54 @@ def _get_or_create_unit(name):
 
 
 def _import_employees(rows):
-    from app.models import db, Employee
+    from app.models import (db, Employee, Contract as ContractModel,
+                            EmployeeContract, EmployeePlanningUnit,
+                            SkillGroup, SkillMapping)
     imported, skipped = 0, 0
     errors = []
+
+    # Sentinel dates from PeopleWare to ignore
+    SENTINEL_DATES = {"4000-01-01", "1900-01-01", "0000-00-00", "1111-01-01"}
+
+    def _clean_date(val):
+        """Parse a date string, returning None for sentinel/invalid values."""
+        if not val or val.strip() in SENTINEL_DATES:
+            return None
+        ts = _parse_ts(val)
+        return ts.date() if ts else None
+
+    # Cache for skill groups and contracts to avoid repeated queries
+    _sg_cache = {}   # name -> SkillGroup
+    _ct_cache = {}   # name -> Contract
+
+    def _get_or_create_skill_group(name):
+        name = name.strip()
+        if not name:
+            return None
+        if name in _sg_cache:
+            return _sg_cache[name]
+        sg = SkillGroup.query.filter_by(name=name).first()
+        if not sg:
+            sg = SkillGroup(name=name)
+            db.session.add(sg)
+            db.session.flush()
+        _sg_cache[name] = sg
+        return sg
+
+    def _get_or_create_contract(name):
+        name = name.strip()
+        if not name:
+            return None
+        if name in _ct_cache:
+            return _ct_cache[name]
+        c = ContractModel.query.filter_by(name=name).first()
+        if not c:
+            c = ContractModel(name=name)
+            db.session.add(c)
+            db.session.flush()
+        _ct_cache[name] = c
+        return c
+
     for i, row in enumerate(rows, start=2):
         emp_id = _get_val(row, "Employee ID")
         first  = _get_val(row, "First Name")
@@ -1031,8 +1078,7 @@ def _import_employees(rows):
             errors.append(f"Row {i}: missing Employee ID or First Name")
             continue
 
-        # LOB resolution: prefer "Planning Unit" (organizational unit),
-        # fall back to "LOB" or "Latest Skill Name" for queue assignment
+        # LOB resolution: prefer "Planning Unit", fall back to "LOB" or skill
         lob = (_get_val(row, "Planning Unit")
                or _get_val(row, "LOB")
                or _get_val(row, "Latest Skill Name"))
@@ -1040,59 +1086,58 @@ def _import_employees(rows):
 
         existing = Employee.query.filter_by(employee_id=emp_id).first()
         emp = existing or Employee(employee_id=emp_id)
+        is_new = not existing
 
-        # Helper: only set a field if it's currently empty/None on an existing record
+        # Helper: set field, overwriting if value is provided
+        def _set(attr, value):
+            if value is not None:
+                setattr(emp, attr, value)
+
+        # Helper: only set if currently empty/None
         def _set_if_blank(attr, value):
-            if not existing:
-                setattr(emp, attr, value)
-            elif not getattr(emp, attr, None):
+            if value is not None and not getattr(emp, attr, None):
                 setattr(emp, attr, value)
 
-        # ── For new employees, set everything. For existing, only fill blanks. ──
-        if not existing:
-            emp.first_name = first
-            emp.last_name = last
-        # Name always updates (it's identity, not config)
-        else:
-            emp.first_name = first
-            emp.last_name = last
+        # ── Core identity — always update ──
+        emp.first_name = first
+        emp.last_name = last
 
         status_val = _get_val(row, "Status")
         if status_val:
-            _set_if_blank("status", status_val)
-        elif not existing:
+            _set("status", status_val)
+        elif is_new:
             emp.status = "Active"
 
         if unit:
-            _set_if_blank("planning_unit_id", unit.id)
+            _set("planning_unit_id", unit.id)
 
-        # Skills — store the text and auto-create any missing planning units
+        # Skills text — always update
         skills_val = _get_val(row, "All Skills")
         if skills_val:
-            _set_if_blank("all_skills", skills_val)
+            _set("all_skills", skills_val)
             # Ensure each skill name exists as a planning unit
             for skill_name in skills_val.split(","):
                 skill_name = skill_name.strip()
                 if skill_name:
                     _get_or_create_unit(skill_name)
 
-        # Email — prefer "Address Email" (HR system), fall back to "Email"
+        # Email — prefer "Address Email", fall back to "Email"
         email_val = _get_val(row, "Address Email") or _get_val(row, "Email")
         if email_val:
-            _set_if_blank("email", email_val)
+            _set("email", email_val)
 
-        # Contract type (HR system column)
+        # Contract type
         ct_val = _get_val(row, "Contract Type")
         if ct_val:
-            _set_if_blank("contract_type", ct_val)
+            _set("contract_type", ct_val)
 
-        # External IDs
+        # External IDs — always update when provided
         ext1 = _get_val(row, "External ID 1")
         if ext1:
-            _set_if_blank("external_id_1", str(ext1).strip())
+            _set("external_id_1", str(ext1).strip())
         ext2 = _get_val(row, "External ID 2")
         if ext2:
-            _set_if_blank("external_id_2", str(ext2).strip())
+            _set("external_id_2", str(ext2).strip())
 
         # Languages
         lang = _get_val(row, "Languages")
@@ -1102,16 +1147,11 @@ def _import_employees(rows):
         # Contract link (by name) — auto-create if it doesn't exist
         contract_name = (_get_val(row, "Contract") or _get_val(row, "Contract Type"))
         if contract_name:
-            contract_name = str(contract_name).strip()
-            from app.models import Contract as ContractModel
-            c = ContractModel.query.filter_by(name=contract_name).first()
-            if not c:
-                c = ContractModel(name=contract_name)
-                db.session.add(c)
-                db.session.flush()
-            _set_if_blank("contract_id", c.id)
+            c = _get_or_create_contract(contract_name)
+            if c:
+                _set("contract_id", c.id)
 
-        # Parse dates — only fill in blanks
+        # Parse dates — always update when provided
         for field, attr in [
             ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
@@ -1121,26 +1161,22 @@ def _import_employees(rows):
             ("End Date", "end_date"),
         ]:
             val = _get_val(row, field)
-            if val and val != "4000-01-01":
-                ts = _parse_ts(val)
-                if ts:
-                    _set_if_blank(attr, ts.date())
+            d = _clean_date(val)
+            if d:
+                _set(attr, d)
 
-        # Numeric / scheduling fields — only fill blanks
+        # Numeric / scheduling fields — fill blanks
         wh = _get_val(row, "Weekly Hours")
         if wh:
-            try:
-                _set_if_blank("weekly_hours", float(wh))
+            try: _set_if_blank("weekly_hours", float(wh))
             except (ValueError, TypeError): pass
         dpw = _get_val(row, "Days Per Week")
         if dpw:
-            try:
-                _set_if_blank("days_per_week", int(dpw))
+            try: _set_if_blank("days_per_week", int(dpw))
             except (ValueError, TypeError): pass
         hpd = _get_val(row, "Hours Per Day")
         if hpd:
-            try:
-                _set_if_blank("hours_per_day", float(hpd))
+            try: _set_if_blank("hours_per_day", float(hpd))
             except (ValueError, TypeError): pass
 
         # Timezone
@@ -1156,10 +1192,10 @@ def _import_employees(rows):
         # Schedule excluded
         se = _get_val(row, "Schedule Excluded")
         if se:
-            if not existing:
+            if is_new:
                 emp.schedule_excluded = str(se).strip().lower() in ("true", "yes", "1", "y")
 
-        if not existing:
+        if is_new:
             db.session.add(emp)
             db.session.flush()  # ensure emp.id is available for junction tables
 
@@ -1167,24 +1203,22 @@ def _import_employees(rows):
         contract_start_val = _get_val(row, "Contract Start")
         contract_end_val   = _get_val(row, "Contract End")
         if emp.contract_id and (contract_start_val or contract_end_val):
-            from app.models import EmployeeContract
             ec = EmployeeContract.query.filter_by(
                 employee_id=emp.id, contract_id=emp.contract_id
             ).first()
             if not ec:
                 ec = EmployeeContract(employee_id=emp.id, contract_id=emp.contract_id)
-                cs = _parse_ts(contract_start_val) if contract_start_val and contract_start_val != "1900-01-01" else None
-                ce = _parse_ts(contract_end_val) if contract_end_val and contract_end_val != "4000-01-01" else None
+                cs = _clean_date(contract_start_val)
+                ce = _clean_date(contract_end_val)
                 if cs:
-                    ec.valid_from = cs.date()
+                    ec.valid_from = cs
                 if ce:
-                    ec.valid_to = ce.date()
+                    ec.valid_to = ce
                 db.session.add(ec)
 
         # ── Junction tables: planning unit assignment ──
         pu_start_val = _get_val(row, "Planning Unit Start Date")
         if emp.planning_unit_id:
-            from app.models import EmployeePlanningUnit
             epu = EmployeePlanningUnit.query.filter_by(
                 employee_id=emp.id, planning_unit_id=emp.planning_unit_id
             ).first()
@@ -1194,10 +1228,37 @@ def _import_employees(rows):
                     planning_unit_id=emp.planning_unit_id,
                     priority=1,
                 )
-                ps = _parse_ts(pu_start_val) if pu_start_val else None
+                ps = _clean_date(pu_start_val)
                 if ps:
-                    epu.valid_from = ps.date()
+                    epu.valid_from = ps
                 db.session.add(epu)
+
+        # ── Junction tables: skill mappings from "All Skills" ──
+        if skills_val:
+            skill_start = _clean_date(_get_val(row, "Latest Skill Start"))
+            skill_end   = _clean_date(_get_val(row, "Latest Skill End"))
+            for skill_name in skills_val.split(","):
+                skill_name = skill_name.strip()
+                if not skill_name:
+                    continue
+                sg = _get_or_create_skill_group(skill_name)
+                if sg:
+                    sm = SkillMapping.query.filter_by(
+                        employee_id=emp.id, skill_group_id=sg.id
+                    ).first()
+                    if not sm:
+                        sm = SkillMapping(
+                            employee_id=emp.id,
+                            skill_group_id=sg.id,
+                            proficiency=3,
+                            priority=1,
+                            is_active=True,
+                        )
+                        if skill_start:
+                            sm.valid_from = skill_start
+                        if skill_end:
+                            sm.valid_to = skill_end
+                        db.session.add(sm)
 
         imported += 1
 
