@@ -640,6 +640,8 @@ def upload_confirm():
     else:
         mapping = mapping_raw
         mapping_inverted = False
+    log.info("confirm mapping: inverted=%s keys_match=%d vals_match=%d mapping=%s",
+             mapping_inverted, keys_are_fields, vals_are_fields, mapping)
 
     # Save schema profile if requested (do this BEFORE validation
     # so the mapping is saved even if required fields are missing)
@@ -676,7 +678,16 @@ def upload_confirm():
         })
 
     # Remap rows using confirmed mapping
+    if rows:
+        log.info("Pre-remap sample row keys: %s", list(rows[0].keys())[:10])
     rows = _remap_rows(rows, mapping, inverted=mapping_inverted)
+    if rows:
+        log.info("Post-remap sample row keys: %s", list(rows[0].keys())[:10])
+        # Log first row values for key fields to verify mapping worked
+        sample = rows[0]
+        log.info("Post-remap sample values: EmpID=%r FirstName=%r LastName=%r Status=%r",
+                 _get_val(sample, "Employee ID"), _get_val(sample, "First Name"),
+                 _get_val(sample, "Last Name"), _get_val(sample, "Status"))
 
     row_count = len(rows)
     user_email = user.get("email", "")
@@ -2208,7 +2219,7 @@ def sync_employees_from_sheet():
         return dg
 
     user = get_current_user()
-    active_only = request.json.get("active_only", True) if request.is_json else True
+    active_only = request.json.get("active_only", False) if request.is_json else False
 
     ws, err = _open_employee_sheet()
     if err:
