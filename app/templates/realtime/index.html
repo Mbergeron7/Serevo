@@ -1257,6 +1257,9 @@ function laOverIcon(a) {
 }
 function laAdherenceBadge(a) {
   if (a.not_scheduled) return '<span class="la-adh-badge" style="background:#607d8b;color:#fff">📋 Not Scheduled</span>';
+  // Attendance flags from schedule cross-reference
+  if (a.attendance==="left_early") return '<span class="la-adh-badge" style="background:#c62828;color:#fff">🚪 Left Early</span>';
+  if (a.attendance==="late") return '<span class="la-adh-badge" style="background:#e65100;color:#fff">⏰ Late</span>';
   if (a.pre_shift&&a.shift_start) return `<span class="la-adh-badge la-adh-due">⏳ Pre-Shift</span>`;
   if (a.shift_done&&a.shift_end) return `<span class="la-adh-badge la-adh-unsch">⏰ Over Shift</span>`;
   if (a.sched_now==="break") {
@@ -1313,7 +1316,7 @@ function laBuildCard(lob, agents, showLobTag) {
     const dur=laFmtDur(a.minutes_in_status);
     const rc=laRowClass(a);
     const icon=laOverIcon(a);
-    const adh=(isOff||isUn)?laShiftBadge(a):laAdherenceBadge(a);
+    const adh=(isOff||isUn)?laAdherenceBadge(a)||laShiftBadge(a):laAdherenceBadge(a);
     const lobTag=showLobTag&&a.lob?`<span class="la-lob-tag">${a.lob}</span>`:"";
     rows+=`<div class="la-row${rc?' '+rc:''}">
       <span class="la-name" title="${a.name}" data-uid="${a.user_id}" data-aname="${a.name}" data-alob="${showLobTag&&a.lob?a.lob:lob}" onclick="laOpenPanel(this)">👤 ${a.name}${lobTag}</span>

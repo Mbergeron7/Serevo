@@ -235,12 +235,14 @@ def _get_live_agents_from_sheet():
     agent_now = {}
     for uid, events in by_uid.items():
         events.sort(key=lambda x: x["dt"])
+        first = events[0]
         last = events[-1]
         mins = round((now_est - last["dt"]).total_seconds() / 60, 1)
         agent_now[uid] = {
             "status": last["status"],
             "current_since": last["dt"].strftime("%H:%M"),
             "minutes_in_status": max(0, mins),
+            "first_seen": first["dt"],  # for late detection
         }
 
     return agent_now, now_est
@@ -1698,6 +1700,19 @@ def api_live_agents():
             is_shift_done = bool(sched and sched.shift_end and now_time > sched.shift_end)
             sched_now_val = _sched_now(sched)
 
+            # ── Attendance flags ──────────────────────────────
+            attendance = ""  # "", "late", "left_early"
+            if sched and sched.shift_start and sched.shift_end:
+                is_offline = ag["status"] in ("Offline", "offline")
+                # Left Early: agent offline during their scheduled shift
+                if is_offline and not is_shift_done and not is_pre_shift:
+                    attendance = "left_early"
+                # Late: agent's first activity today was after shift start
+                elif not is_pre_shift:
+                    first_seen = ag.get("first_seen")
+                    if first_seen and first_seen.time() > sched.shift_start:
+                        attendance = "late"
+
             agent = {
                 "name": emp.full_name,
                 "user_id": uid,
@@ -1711,6 +1726,7 @@ def api_live_agents():
                 "sched_now": sched_now_val,
                 "not_scheduled": not_scheduled,
                 "pre_shift": is_pre_shift,
+                "attendance": attendance,
             }
 
             by_lob.setdefault(lob, []).append(agent)
