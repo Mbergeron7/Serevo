@@ -848,6 +848,41 @@ def profile_unassign():
     return jsonify({"success": True})
 
 
+@people_bp.route("/api/profile/delete-assignment", methods=["POST"])
+@login_required
+def profile_delete_assignment():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    assign_type = data.get("type")
+    assign_id = data.get("assignment_id")
+
+    if not assign_id:
+        return jsonify({"success": False, "error": "Missing assignment ID."})
+
+    model_map = {
+        "planning_unit": EmployeePlanningUnit,
+        "contract": EmployeeContract,
+        "selection": SelectionMember,
+        "shift_sequence": EmployeeShiftSequence,
+        "skill": SkillMapping,
+        "work_time_pattern": EmployeeWorkTimePattern,
+        "quartile": EmployeeQuartile,
+    }
+    model = model_map.get(assign_type)
+    if not model:
+        return jsonify({"success": False, "error": f"Unknown type: {assign_type}"})
+
+    obj = model.query.get(assign_id)
+    if not obj:
+        return jsonify({"success": False, "error": "Assignment not found."})
+
+    db.session.delete(obj)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 @people_bp.route("/api/profile/availability", methods=["POST"])
 @login_required
 def profile_availability():

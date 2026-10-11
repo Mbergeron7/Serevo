@@ -303,7 +303,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>From</th><th>To</th></tr></thead>
+          <thead><tr><th>Skill Group</th><th>Proficiency</th><th>Priority</th><th>From</th><th>To</th><th></th></tr></thead>
           <tbody>
           {% for sm in skill_history %}
           <tr>
@@ -316,6 +316,10 @@
             <td>{{ sm.priority }}</td>
             <td>{{ sm.valid_from or '—' }}</td>
             <td>{{ sm.valid_to or '—' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('skill', {id:{{ sm.id }}, item_id:{{ sm.skill_group_id }}, proficiency:{{ sm.proficiency }}, priority:{{ sm.priority }}, valid_from:'{{ sm.valid_from or '' }}', valid_to:'{{ sm.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('skill', {{ sm.id }})">Delete</button>
+            </td>
           </tr>
           {% endfor %}
           </tbody>
@@ -405,7 +409,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Selection</th><th>Description</th><th>From</th><th>To</th></tr></thead>
+          <thead><tr><th>Selection</th><th>Description</th><th>From</th><th>To</th><th></th></tr></thead>
           <tbody>
           {% for sm in selection_history %}
           <tr>
@@ -413,6 +417,10 @@
             <td style="color:var(--text-muted);">{{ sm.selection.description or '—' }}</td>
             <td>{{ sm.valid_from or '—' }}</td>
             <td>{{ sm.valid_to or '—' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('selection', {id:{{ sm.id }}, item_id:{{ sm.selection_id }}, valid_from:'{{ sm.valid_from or '' }}', valid_to:'{{ sm.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('selection', {{ sm.id }})">Delete</button>
+            </td>
           </tr>
           {% endfor %}
           </tbody>
@@ -473,7 +481,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Planning Unit</th><th>Priority</th><th>From</th><th>To</th></tr></thead>
+          <thead><tr><th>Planning Unit</th><th>Priority</th><th>From</th><th>To</th><th></th></tr></thead>
           <tbody>
           {% for pa in pu_history %}
           <tr>
@@ -481,6 +489,10 @@
             <td>{{ pa.priority }}</td>
             <td>{{ pa.valid_from or '—' }}</td>
             <td>{{ pa.valid_to or '—' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('planning_unit', {id:{{ pa.id }}, item_id:{{ pa.planning_unit_id }}, priority:{{ pa.priority }}, valid_from:'{{ pa.valid_from or '' }}', valid_to:'{{ pa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('planning_unit', {{ pa.id }})">Delete</button>
+            </td>
           </tr>
           {% endfor %}
           </tbody>
@@ -529,7 +541,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Sequence</th><th>Row</th><th>Reference Date</th><th>From</th><th>To</th></tr></thead>
+          <thead><tr><th>Sequence</th><th>Row</th><th>Reference Date</th><th>From</th><th>To</th><th></th></tr></thead>
           <tbody>
           {% for sa in ss_history %}
           <tr>
@@ -538,6 +550,10 @@
             <td>{{ sa.reference_date or '—' }}</td>
             <td>{{ sa.valid_from or '—' }}</td>
             <td>{{ sa.valid_to or '—' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('shift_sequence', {id:{{ sa.id }}, item_id:{{ sa.shift_sequence_id }}, row_index:{{ sa.row_index or 0 }}, reference_date:'{{ sa.reference_date or '' }}', valid_from:'{{ sa.valid_from or '' }}', valid_to:'{{ sa.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('shift_sequence', {{ sa.id }})">Delete</button>
+            </td>
           </tr>
           {% endfor %}
           </tbody>
@@ -591,7 +607,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Quartile</th><th>Effective</th><th>End Date</th><th>Notes</th></tr></thead>
+          <thead><tr><th>Quartile</th><th>Effective</th><th>End Date</th><th>Notes</th><th></th></tr></thead>
           <tbody>
           {% for qh in quartile_history %}
           {% set qcolors = {1: '#059669', 2: '#2563eb', 3: '#ea580c', 4: '#dc2626'} %}
@@ -601,6 +617,10 @@
             <td>{{ qh.effective_date or '—' }}</td>
             <td>{{ qh.end_date or '—' }}</td>
             <td>{{ qh.notes or '' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openQuartileModal(true, {id:{{ qh.id }}, quartile:{{ qh.quartile }}, effective_date:'{{ qh.effective_date or '' }}', end_date:'{{ qh.end_date or '' }}', notes:'{{ qh.notes or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('quartile', {{ qh.id }})">Delete</button>
+            </td>
           </tr>
           {% endfor %}
           </tbody>
@@ -1258,10 +1278,29 @@ async function removeAssignment(type, assignmentId) {
   } catch(err) { alert('Network error: ' + err.message); }
 }
 
+async function deleteAssignment(type, assignmentId) {
+  if (!confirm('Permanently delete this history record? This cannot be undone.')) return;
+  try {
+    const resp = await fetch('/people/api/profile/delete-assignment', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: type, assignment_id: assignmentId }),
+    });
+    const data = await resp.json();
+    if (data.success) { window.location.href = window.location.pathname + '?_=' + Date.now(); }
+    else { alert(data.error || 'Error deleting assignment.'); }
+  } catch(err) { alert('Network error: ' + err.message); }
+}
+
 // ── Quartile Modal ──
-function openQuartileModal(editId) {
-  if (editId) {
-    // Editing existing - populate from current quartile
+function openQuartileModal(editMode, histData) {
+  if (editMode && histData) {
+    // Editing a history record
+    document.getElementById('q_assignment_id').value = histData.id;
+    document.getElementById('q_quartile').value = histData.quartile;
+    document.getElementById('q_effective_date').value = histData.effective_date || '';
+    document.getElementById('q_notes').value = histData.notes || '';
+  } else if (editMode) {
+    // Editing current quartile
     {% if quartile %}
     document.getElementById('q_assignment_id').value = '{{ quartile.id }}';
     document.getElementById('q_quartile').value = '{{ quartile.quartile }}';
