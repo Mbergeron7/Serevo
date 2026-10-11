@@ -987,29 +987,36 @@ def sync_agent_activity(spreadsheet, tab_name=None, custom_mapping=None):
 
 _EMPLOYEE_COL_ALIASES = {
     "employee id": "employee_id", "id": "employee_id", "emp id": "employee_id",
-    "personnel #": "employee_id", "personnel no": "employee_id",
     "first name": "first_name", "first": "first_name", "given name": "first_name",
     "last name": "last_name", "last": "last_name", "surname": "last_name", "family name": "last_name",
     "start date": "start_date", "hire date": "start_date", "hired": "start_date",
     "end date": "end_date", "termination date": "end_date", "term date": "end_date",
     "planning unit": "planning_unit", "lob": "planning_unit", "department": "planning_unit",
-    "latest skill name": "planning_unit",  # PeopleWare-specific alias
+    "latest skill name": "planning_unit",
     "status": "status", "employment status": "status",
     "all skills": "all_skills", "skills": "all_skills",
     "contract type": "contract_type", "contract": "contract_type",
+    "contract start": "contract_start", "contract start date": "contract_start",
+    "contract end": "contract_end", "contract end date": "contract_end",
+    "latest skill start": "skill_start", "skill start": "skill_start",
+    "latest skill end": "skill_end", "skill end": "skill_end",
+    "planning unit start date": "planning_unit_start", "planning unit start": "planning_unit_start",
     "email": "email", "address email": "email", "work email": "email",
     "title": "title", "job title": "title",
     "external id": "external_id_1", "current id": "external_id_1",
+    "external id 1": "external_id_1",
+    "personnel #": "external_id_2", "personnel no": "external_id_2",
+    "personnel number": "external_id_2", "external id 2": "external_id_2",
 }
 
 
 def sync_employees(spreadsheet, tab_name=None, custom_mapping=None):
     """Sync employee / headcount data from a Google Sheet into the employees table.
 
-    Upserts by employee_id. Returns (upserted, skipped, errors).
+    Delegates to the enhanced _import_employees() in data_import.py which
+    handles all junction records (skills, contracts, planning units) and dates.
+    Returns (upserted, skipped, errors).
     """
-    from app.models import Employee, PlanningUnit
-
     try:
         ws = spreadsheet.worksheet(tab_name) if tab_name else spreadsheet.sheet1
         rows = ws.get_all_values()
@@ -1020,6 +1027,8 @@ def sync_employees(spreadsheet, tab_name=None, custom_mapping=None):
         return 0, 0, ["Sheet is empty or has no data rows"]
 
     headers = rows[0]
+
+    # Build canonical→column-index map using aliases + any custom overrides
     col_map = _match_columns(headers, _EMPLOYEE_COL_ALIASES, custom_mapping=custom_mapping)
 
     if "employee_id" not in col_map:
@@ -1027,111 +1036,39 @@ def sync_employees(spreadsheet, tab_name=None, custom_mapping=None):
     if "first_name" not in col_map or "last_name" not in col_map:
         return 0, 0, [f"Missing First Name / Last Name columns. Found: {headers}"]
 
-    # Pre-load planning units for quick lookup
-    pu_map = {}
-    try:
-        for pu in PlanningUnit.query.all():
-            pu_map[pu.name.strip().lower()] = pu.id
-    except Exception:
-        pass
+    # Convert raw rows into list-of-dicts using the canonical field names
+    # so _import_employees (which uses _get_val with COLUMN_ALIASES) can find them.
+    # We map canonical keys back to the standard header names it expects.
+    _CANONICAL_TO_HEADER = {
+        "employee_id": "Employee ID", "first_name": "First Name",
+        "last_name": "Last Name", "start_date": "Start Date",
+        "end_date": "End Date", "planning_unit": "Planning Unit",
+        "status": "Status", "all_skills": "All Skills",
+        "contract_type": "Contract Type", "email": "Email",
+        "external_id_1": "External ID 1", "external_id_2": "External ID 2",
+        "title": "Title", "contract_start": "Contract Start",
+        "contract_end": "Contract End", "skill_start": "Latest Skill Start",
+        "skill_end": "Latest Skill End", "planning_unit_start": "Planning Unit Start Date",
+    }
 
-    upserted = 0
-    skipped = 0
-    errors = []
+    dict_rows = []
+    for row in rows[1:]:
+        d = {}
+        for canonical_key, col_idx in col_map.items():
+            header_name = _CANONICAL_TO_HEADER.get(canonical_key, canonical_key)
+            val = row[col_idx].strip() if col_idx < len(row) else ""
+            d[header_name] = val
+        # Also pass through any unmapped columns by their original header name
+        for idx, hdr in enumerate(headers):
+            if hdr and hdr not in d:
+                d[hdr] = row[idx].strip() if idx < len(row) else ""
+        dict_rows.append(d)
 
-    def _cell(row, key):
-        if key not in col_map:
-            return ""
-        idx = col_map[key]
-        return row[idx].strip() if idx < len(row) else ""
-
-    def _parse_date(val):
-        if not val:
-            return None
-        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%m/%d/%y",
-                    "%Y-%m-%d %H:%M:%S", "%m/%d/%Y %H:%M:%S"):
-            try:
-                return datetime.strptime(val, fmt).date()
-            except (ValueError, TypeError):
-                continue
-        return None
-
-    for i, row in enumerate(rows[1:], start=2):
-        try:
-            emp_id = _cell(row, "employee_id")
-            first = _cell(row, "first_name")
-            last = _cell(row, "last_name")
-
-            if not emp_id or not first:
-                skipped += 1
-                continue
-
-            status = _cell(row, "status") or "Active"
-            # Normalize status
-            status_lower = status.lower()
-            if status_lower in ("inactive", "terminated", "deleted"):
-                status = status.capitalize()
-            else:
-                status = "Active"
-
-            # Resolve planning unit
-            pu_name = _cell(row, "planning_unit")
-            pu_id = None
-            if pu_name:
-                pu_id = pu_map.get(pu_name.strip().lower())
-
-            # Upsert by employee_id
-            emp = Employee.query.filter_by(employee_id=str(emp_id)).first()
-            if emp:
-                # Don't overwrite manually-edited employees
-                if emp.manually_edited:
-                    skipped += 1
-                    continue
-                emp.first_name = first
-                emp.last_name = last
-                emp.status = status
-                if pu_id:
-                    emp.planning_unit_id = pu_id
-                end_dt = _parse_date(_cell(row, "end_date"))
-                if end_dt and str(end_dt) != "4000-01-01":
-                    emp.end_date = end_dt
-                all_skills = _cell(row, "all_skills")
-                if all_skills:
-                    emp.all_skills = all_skills
-                contract = _cell(row, "contract_type")
-                if contract:
-                    emp.contract_type = "Part-Time" if "part" in contract.lower() else "Full-Time"
-                email = _cell(row, "email")
-                if email:
-                    emp.email = email
-                ext_id = _cell(row, "external_id_1")
-                if ext_id:
-                    emp.external_id_1 = ext_id
-            else:
-                emp = Employee(
-                    employee_id=str(emp_id),
-                    first_name=first,
-                    last_name=last,
-                    status=status,
-                    planning_unit_id=pu_id,
-                    end_date=_parse_date(_cell(row, "end_date")),
-                    all_skills=_cell(row, "all_skills") or "",
-                    contract_type="Part-Time" if "part" in (_cell(row, "contract_type") or "").lower() else "Full-Time",
-                    email=_cell(row, "email") or None,
-                    external_id_1=_cell(row, "external_id_1") or None,
-                )
-                db.session.add(emp)
-
-            upserted += 1
-
-        except Exception as e:
-            errors.append(f"Row {i}: {e}")
-            if len(errors) > 50:
-                errors.append("... (truncated)")
-                break
-
+    # Use the enhanced import function from data_import
+    from app.routes.data_import import _import_employees
+    imported, skipped, errors = _import_employees(dict_rows)
     db.session.commit()
-    return upserted, skipped, errors
+    return imported, skipped, errors
 
 
 # ═══════════════════════════════════════════════════════════════
