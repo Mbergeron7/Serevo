@@ -46,13 +46,42 @@ def _operating_slots(lob_setting, target_date):
     Return sorted list of time-slot strings (e.g. '08:00', '08:30', …)
     covering every interval within the LOB's operating hours for a given date.
 
+    Checks per-day PlanningUnitBusinessHours first (from the planning unit's
+    Business Hours tab), then falls back to the LOBSetting weekday/sat/sun
+    columns.
+
     If no LOB setting, returns None (caller should fall back to history-only).
     """
     if not lob_setting:
         return None
 
     dow = target_date.weekday()
-    start_str, end_str = lob_setting.get_hours_for_day(dow)
+    day_names = ["monday", "tuesday", "wednesday", "thursday",
+                 "friday", "saturday", "sunday"]
+    start_str = None
+    end_str = None
+
+    # Try per-day business hours from the planning unit first
+    try:
+        pu = lob_setting.planning_unit
+        if pu and pu.business_hours:
+            day_name = day_names[dow]
+            for bh in pu.business_hours:
+                if bh.day_type.lower() == day_name:
+                    # Check validity dates
+                    if bh.valid_from and target_date < bh.valid_from:
+                        continue
+                    if bh.valid_to and target_date > bh.valid_to:
+                        continue
+                    start_str = bh.open_time
+                    end_str = bh.close_time
+                    break
+    except Exception as e:
+        log.debug("Could not check business hours: %s", e)
+
+    # Fall back to LOBSetting weekday/sat/sun columns
+    if not start_str or not end_str:
+        start_str, end_str = lob_setting.get_hours_for_day(dow)
     if not start_str or not end_str:
         return None
 
