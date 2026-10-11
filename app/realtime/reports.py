@@ -115,7 +115,7 @@ def _shifts(lob, date_obj, user, sheet=None):
         if pu:
             rows = Schedule.query.filter_by(planning_unit_id=pu.id, schedule_date=date_obj).all()
             if rows:
-                return [r.to_dict() for r in rows if r.shift_start]
+                return [r.to_dict() for r in rows if r.shift_start and r.status == "scheduled"]
     except Exception:
         pass
     try:
