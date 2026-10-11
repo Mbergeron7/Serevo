@@ -641,19 +641,9 @@ def upload_confirm():
         mapping = mapping_raw
         mapping_inverted = False
 
-    # Validate required fields are mapped
-    if mapping_inverted:
-        mapped_fields = {k for k, v in mapping.items() if v}
-    else:
-        mapped_fields = {v for v in mapping.values() if v}
-    missing = [c for c in type_info["required"] if c not in mapped_fields]
-    if missing:
-        return jsonify({
-            "success": False,
-            "error": f"Required fields not mapped: {', '.join(missing)}"
-        })
-
-    # Save schema profile if requested
+    # Save schema profile if requested (do this BEFORE validation
+    # so the mapping is saved even if required fields are missing)
+    #
     if save_as:
         from app.models import db, SchemaMapping
         existing = SchemaMapping.query.filter_by(
@@ -672,6 +662,18 @@ def upload_confirm():
         except Exception as e:
             log.warning("Could not save schema mapping: %s", e)
             db.session.rollback()
+
+    # Validate required fields are mapped
+    if mapping_inverted:
+        mapped_fields = {k for k, v in mapping.items() if v}
+    else:
+        mapped_fields = {v for v in mapping.values() if v}
+    missing = [c for c in type_info["required"] if c not in mapped_fields]
+    if missing:
+        return jsonify({
+            "success": False,
+            "error": f"Required fields not mapped: {', '.join(missing)}"
+        })
 
     # Remap rows using confirmed mapping
     rows = _remap_rows(rows, mapping, inverted=mapping_inverted)
