@@ -1550,6 +1550,8 @@ def _import_employees(rows):
                     epu.valid_to = pe
 
         # ── Junction tables: skill mappings from "All Skills" ──
+        if i <= 5 or str(emp_id) == "1202":
+            log.info("SKILLS row %d (emp %s): skills_val=%r", i, emp_id, skills_val[:80] if skills_val else skills_val)
         if skills_val:
             skill_start = _clean_date(_get_val(row, "Latest Skill Start")) or _clean_date(_get_val(row, "Start Date"))
             skill_end   = _clean_date(_get_val(row, "Latest Skill End")) or _clean_date(_get_val(row, "End Date"))
@@ -1575,6 +1577,7 @@ def _import_employees(rows):
                         if skill_end:
                             sm.valid_to = skill_end
                         db.session.add(sm)
+                        log.info("SKILL CREATED: emp %s -> %s (from=%s to=%s)", emp_id, skill_name, skill_start, skill_end)
                     else:
                         # Update existing skill mapping dates if missing
                         if skill_start and not sm.valid_from:
