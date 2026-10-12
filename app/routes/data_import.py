@@ -633,6 +633,14 @@ def upload_confirm():
     upload_type = stored["upload_type"]
     orig_filename = stored.get("filename", "upload")
 
+    # DEBUG: scan stored rows for 1202 before any remapping
+    log.info("DEBUG stored rows count: %d", len(rows))
+    for _si, _sr in enumerate(rows):
+        for _sk, _sv in _sr.items():
+            if _sv and "1202" in str(_sv):
+                log.info("DEBUG stored row %d has 1202: field=%r val=%r", _si, _sk, str(_sv)[:60])
+                break
+
     if upload_type not in UPLOAD_TYPES:
         return jsonify({"success": False, "error": f"Unknown type: {upload_type}"})
 
@@ -1206,7 +1214,22 @@ def _import_employees(rows):
         _ct_cache[name] = c
         return c
 
-    for i, row in enumerate(rows, start=2):
+    # DEBUG: scan all rows for emp 1202 before processing
+    _row_list = list(rows) if not isinstance(rows, list) else rows
+    log.info("DEBUG total rows to process: %d", len(_row_list))
+    for _di, _dr in enumerate(_row_list):
+        _did = _get_val(_dr, "Employee ID")
+        if "1202" in str(_did):
+            log.info("DEBUG found 1202 at index %d: emp_id=%r row=%s",
+                     _di, _did, {k: str(v)[:40] for k, v in _dr.items()})
+        # Also search all values for 1202
+        for _dk, _dv in _dr.items():
+            if _dv and "1202" in str(_dv) and _dk.lower().strip() not in ("", ):
+                if _dk.strip().lower().replace("_", " ") != "employee id":
+                    log.info("DEBUG 1202 found in field %r=%r at row %d", _dk, str(_dv)[:60], _di)
+                    break
+
+    for i, row in enumerate(_row_list, start=2):
         emp_id = _get_val(row, "Employee ID")
         first  = _get_val(row, "First Name")
         last   = _get_val(row, "Last Name")
