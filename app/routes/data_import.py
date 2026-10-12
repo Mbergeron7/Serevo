@@ -1517,8 +1517,8 @@ def _import_employees(rows):
                 db.session.add(ec)
 
         # ── Junction tables: planning unit assignment ──
-        pu_start_val = _get_val(row, "Planning Unit Start Date")
-        pu_end_val   = _get_val(row, "Planning Unit End Date")
+        pu_start_val = _get_val(row, "Planning Unit Start Date") or _get_val(row, "Start Date")
+        pu_end_val   = _get_val(row, "Planning Unit End Date") or _get_val(row, "End Date")
         if emp.planning_unit_id:
             epu = EmployeePlanningUnit.query.filter_by(
                 employee_id=emp.id, planning_unit_id=emp.planning_unit_id
