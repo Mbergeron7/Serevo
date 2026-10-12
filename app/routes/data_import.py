@@ -226,6 +226,12 @@ COLUMN_ALIASES = {
     "Sun Open":         ["sun open", "sunday open"],
     "Sun Close":        ["sun close", "sunday close"],
 
+    # ── Planning Unit dates ──
+    "Planning Unit Start Date": ["planning unit start date", "pu start date",
+                                  "pu start", "unit start date"],
+    "Planning Unit End Date":   ["planning unit end date", "pu end date",
+                                  "pu end", "unit end date"],
+
     # ── Skill dates ──
     "Skill Start":      ["skill start", "latest skill start", "skill date"],
     "Skill End":        ["skill end", "latest skill end"],
@@ -284,7 +290,7 @@ UPLOAD_TYPES = {
         "optional": ["Status", "LOB", "All Skills", "Skill Start", "Skill End",
                       "Latest Skill Start", "Latest Skill Name", "Latest Skill End",
                       "Start Date", "End Date",
-                      "Planning Unit", "Planning Unit Start Date",
+                      "Planning Unit", "Planning Unit Start Date", "Planning Unit End Date",
                       "Contract Type", "Contract", "Contract Start", "Contract End",
                       "Email", "Address Email",
                       "External ID 1", "External ID 2", "Languages",
@@ -1512,6 +1518,7 @@ def _import_employees(rows):
 
         # ── Junction tables: planning unit assignment ──
         pu_start_val = _get_val(row, "Planning Unit Start Date")
+        pu_end_val   = _get_val(row, "Planning Unit End Date")
         if emp.planning_unit_id:
             epu = EmployeePlanningUnit.query.filter_by(
                 employee_id=emp.id, planning_unit_id=emp.planning_unit_id
@@ -1523,9 +1530,20 @@ def _import_employees(rows):
                     priority=1,
                 )
                 ps = _clean_date(pu_start_val)
+                pe = _clean_date(pu_end_val)
                 if ps:
                     epu.valid_from = ps
+                if pe:
+                    epu.valid_to = pe
                 db.session.add(epu)
+            else:
+                # Update existing assignment's dates if provided
+                ps = _clean_date(pu_start_val)
+                pe = _clean_date(pu_end_val)
+                if ps and not epu.valid_from:
+                    epu.valid_from = ps
+                if pe and not epu.valid_to:
+                    epu.valid_to = pe
 
         # ── Junction tables: skill mappings from "All Skills" ──
         if skills_val:
