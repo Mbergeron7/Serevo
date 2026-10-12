@@ -612,7 +612,7 @@ def _month_aware_headcount(year):
     employees = (
         Employee.query
         .filter(Employee.planning_unit_id.isnot(None))
-        .filter(~Employee.status.in_(["Terminated", "terminated", "Deleted", "deleted"]))
+        .filter(Employee.status.in_(["Active", "active"]))
         .all()
     )
     # Build PU id→name cache
