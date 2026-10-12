@@ -164,40 +164,20 @@ def _parse_duration_mins(dur_str):
 
 
 # ── LOB → Planning Unit mapping ─────────────────────────────────
-_LOB_TO_PU = {
-    "SS Sales Combined":              "SS Sales",
-    "SS Sales EN":                    "SS Sales",
-    "SS Sales FR":                    "SS Sales",
-    "SS Case Management Combined":    "SS Case Management",
-    "SS Case Management Combined EN": "SS Case Management",
-    "SS Case Management Combined FR": "SS Case Management",
-    "SS Case Management CC Combined": "SS Case Management",
-    "SS Case Management CC EN":       "SS Case Management",
-    "SS Case Management CC FR":       "SS Case Management",
-    "PS Sales Combined":              "PS Sales",
-    "PS Sales EN":                    "PS Sales",
-    "PS Sales FR":                    "PS Sales",
-    "PS Care Combined":               "PS Care",
-    "PS Care EN":                     "PS Care",
-    "PS Care FR":                     "PS Care",
-    "PS Case Manager":                "PS Case Manager",
-    "Web Leads SS Combined":          "Web Leads SS",
-    "Web Leads SS EN":                "Web Leads SS",
-    "Web Leads SS FR":                "Web Leads SS",
-    "Web Leads SS Inbound Combined":  "Web Leads SS Inbound",
-    "Web Leads SS Inbound EN":        "Web Leads SS Inbound",
-    "Web Leads SS Inbound FR":        "Web Leads SS Inbound",
-    "Web Leads PS Combined":          "Web Leads PS",
-    "Web Leads PS EN":                "Web Leads PS",
-    "Web Leads PS FR":                "Web Leads PS",
-    "I.T Support":                    "I.T Support",
-    "MoveBuddy":                      "MoveBuddy",
-}
+def _load_lob_to_pu():
+    """Load LOB→PlanningUnit mappings from the database LobMapping table."""
+    try:
+        from app.models import LobMapping
+        return {m.source_name: m.planning_unit_name
+                for m in LobMapping.query.all()}
+    except Exception:
+        return {}
 
 
 def lob_to_planning_unit(lob_name):
     """Map a LOB display name to its planning unit name for headcount lookup."""
-    return _LOB_TO_PU.get(lob_name, lob_name)
+    mappings = _load_lob_to_pu()
+    return mappings.get(lob_name, lob_name)
 
 
 def _activity_id_to_name(activity_id, planning_unit_name):
@@ -1244,9 +1224,9 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
     # Build reverse map: pu_name → pu_id
     pu_name_to_id = {pu.name: pu.id for pu in pus}
 
-    # Determine which PUs have language splits (EN/FR LOBs in _LOB_TO_PU)
+    # Determine which PUs have language splits (EN/FR LOBs in LobMapping)
     pus_with_lang = set()
-    for lob_key, pu_val in _LOB_TO_PU.items():
+    for lob_key, pu_val in _load_lob_to_pu().items():
         if lob_key.lower().endswith(" en") or lob_key.lower().endswith(" fr"):
             pus_with_lang.add(pu_val)
 
