@@ -1480,7 +1480,9 @@ def _import_employees(rows):
             _set("planning_unit_id", unit.id)
 
         # Skills text — always update
-        skills_val = _get_val(row, "All Skills") or _get_val(row, "Latest Skill Name")
+        skills_val = (_get_val(row, "All Skills")
+                      or _get_val(row, "Latest Skill Name")
+                      or _get_val(row, "Planning Unit"))
         if skills_val:
             _set("all_skills", skills_val)
             # Ensure each skill name exists as a planning unit
