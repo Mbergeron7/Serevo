@@ -488,6 +488,93 @@ def upload_status(job_id):
     return jsonify({"status": "complete", "result": result})
 
 
+@data_import_bp.route("/debug/employee/<emp_id_str>")
+@admin_required
+def debug_employee(emp_id_str):
+    """Diagnostic page: show everything we know about an employee by employee_id."""
+    from app.models import db, Employee, DataUpload
+    emp = Employee.query.filter_by(employee_id=emp_id_str).first()
+
+    # Also try partial matches
+    partials = Employee.query.filter(
+        Employee.employee_id.ilike(f"%{emp_id_str}%")
+    ).limit(10).all()
+
+    # Recent uploads
+    recent_uploads = DataUpload.query.filter_by(upload_type="employees")\
+        .order_by(DataUpload.uploaded_at.desc()).limit(5).all()
+
+    # Check temp files for pending imports
+    tmp_dir = tempfile.gettempdir()
+    pending_files = []
+    try:
+        for f in os.listdir(tmp_dir):
+            if f.startswith("serevo_import_") and f.endswith(".json"):
+                fpath = os.path.join(tmp_dir, f)
+                try:
+                    with open(fpath) as tf:
+                        data = json.load(tf)
+                    rows = data.get("rows", [])
+                    matches = []
+                    for ri, r in enumerate(rows):
+                        for k, v in r.items():
+                            if v and emp_id_str in str(v):
+                                matches.append({"row": ri, "field": k, "value": str(v)[:80]})
+                                break
+                    pending_files.append({
+                        "file": f,
+                        "type": data.get("upload_type"),
+                        "filename": data.get("filename"),
+                        "total_rows": len(rows),
+                        "matches": matches[:5],
+                    })
+                except Exception as e:
+                    pending_files.append({"file": f, "error": str(e)})
+    except Exception:
+        pass
+
+    info = {
+        "search": emp_id_str,
+        "found": None,
+        "partial_matches": [],
+        "recent_uploads": [],
+        "pending_imports": pending_files,
+    }
+
+    if emp:
+        info["found"] = {
+            "id": emp.id,
+            "employee_id": emp.employee_id,
+            "first_name": emp.first_name,
+            "last_name": emp.last_name,
+            "start_date": str(emp.start_date) if emp.start_date else None,
+            "end_date": str(emp.end_date) if emp.end_date else None,
+            "skill_start": str(emp.skill_start) if hasattr(emp, 'skill_start') and emp.skill_start else None,
+            "skill_end": str(emp.skill_end) if hasattr(emp, 'skill_end') and emp.skill_end else None,
+            "status": emp.status if hasattr(emp, 'status') else None,
+            "planning_unit_id": emp.planning_unit_id,
+        }
+
+    for p in partials:
+        info["partial_matches"].append({
+            "id": p.id,
+            "employee_id": p.employee_id,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            "start_date": str(p.start_date) if p.start_date else None,
+        })
+
+    for u in recent_uploads:
+        info["recent_uploads"].append({
+            "id": u.id,
+            "filename": u.filename if hasattr(u, 'filename') else None,
+            "uploaded_at": str(u.uploaded_at) if u.uploaded_at else None,
+            "row_count": u.row_count if hasattr(u, 'row_count') else None,
+        })
+
+    return jsonify(info)
+
+
 # ── Two-step mapping flow ──────────────────────────────────────
 
 @data_import_bp.route("/upload/preview", methods=["POST"])
