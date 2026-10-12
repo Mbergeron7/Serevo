@@ -3000,14 +3000,31 @@ async function runOptimize() {
   btn.disabled = true;
 
   try {
+    // In demo mode, send shift data so backend can optimize without DB
+    const requestBody = {
+      shift_ids: shiftIds,
+      activity_types: types,
+      coverage: day.coverage || [],
+    };
+    if (IS_DEMO) {
+      requestBody.shifts = day.shifts.filter(s =>
+        shiftIds.includes(s.id)
+      ).map(s => ({
+        id: s.id,
+        employee: s.employee,
+        start: s.start,
+        end: s.end,
+        type: s.type,
+        segments: (s.segments || []).map(sg => ({
+          id: sg.id, type: sg.type, start: sg.start, end: sg.end,
+          duration_mins: sg.duration_mins,
+        })),
+      }));
+    }
     const resp = await fetch('/scheduling/optimize-segments', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        shift_ids: shiftIds,
-        activity_types: types,
-        coverage: day.coverage || [],
-      }),
+      body: JSON.stringify(requestBody),
     });
     const data = await resp.json();
 

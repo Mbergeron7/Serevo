@@ -257,19 +257,95 @@ def _demo_pto_set(day):
     return out
 
 
+def _get_demo_day_model_rules(start_str, end_str):
+    """Find matching demo day model and return its activity placement rules."""
+    for dm in get_demo_day_models():
+        if dm.get("start_time") == start_str and dm.get("end_time") == end_str:
+            acts = dm.get("activities", [])
+            if acts:
+                return acts
+    # Also check real DB day models if any exist
+    try:
+        from app.models import DayModel
+        import json as _json
+        for dm in DayModel.query.filter_by(is_active=True, start_time=start_str, end_time=end_str).all():
+            acts = _json.loads(dm.activities_json) if dm.activities_json else []
+            if acts:
+                return acts
+    except Exception:
+        pass
+    return None
+
+
 def _build_demo_segments(start_str, end_str, stagger_idx, total):
-    """Break/lunch placement from the demo segment rules (break1 @2h, lunch @4h, break2 @6h)."""
+    """Break/lunch placement using day model windows when available,
+    falling back to hardcoded rules (break1 @2h, lunch @4h, break2 @6h)."""
     sh, sm = map(int, start_str.split(":"))
     eh, em = map(int, end_str.split(":"))
     s_min, e_min = sh * 60 + sm, eh * 60 + em
-    stagger = int((stagger_idx % max(1, total)) * (60 / max(1, total)))  # spread across a 1h window
-    pauses = []
-    for off, dur, typ in ((120, 15, "break"), (240, 30, "lunch"), (360, 15, "break")):
-        ps = s_min + off + stagger
-        if ps + dur <= e_min:
-            pauses.append((ps, ps + dur, dur, typ))
+
+    # Try day model activity rules first
+    dm_rules = _get_demo_day_model_rules(start_str, end_str)
+    if dm_rules:
+        pauses = []
+        for rule in dm_rules:
+            dur = rule.get("duration_mins", 15)
+            relative = rule.get("relative", True)
+            win_s = rule.get("window_start_mins", 0)
+            win_e = rule.get("window_end_mins", win_s)
+            act_id = str(rule.get("activity_id", ""))
+
+            # Map activity_id to type name
+            typ = act_id
+            # Check SegmentCode mapping
+            try:
+                from app.models import SegmentCode
+                sc = SegmentCode.query.filter_by(id=int(act_id)).first() if act_id.isdigit() else None
+                if sc:
+                    # Map SegmentCode to display type
+                    typ = "break" if "break" in sc.code.lower() else ("lunch" if "lunch" in sc.code.lower() else sc.code)
+            except Exception:
+                pass
+            # Fallback: use the id directly if it looks like a type name
+            if typ in ("break", "lunch", "break_1", "break_2"):
+                pass  # already good
+            elif "break" in typ.lower():
+                typ = "break"
+            elif "lunch" in typ.lower():
+                typ = "lunch"
+
+            # Stagger within window
+            window_range = max(0, win_e - win_s)
+            if total > 1 and window_range > 0:
+                step = window_range / total
+                offset = win_s + int(step * stagger_idx)
+            else:
+                offset = win_s
+
+            if relative:
+                ps = s_min + offset
+            else:
+                ps = offset
+
+            if ps + dur <= e_min:
+                pauses.append((ps, ps + dur, dur, typ))
+    else:
+        # Hardcoded fallback
+        stagger = int((stagger_idx % max(1, total)) * (60 / max(1, total)))
+        pauses = []
+        for off, dur, typ in ((120, 15, "break"), (240, 30, "lunch"), (360, 15, "break")):
+            ps = s_min + off + stagger
+            if ps + dur <= e_min:
+                pauses.append((ps, ps + dur, dur, typ))
+
+    pauses.sort(key=lambda x: x[0])
     segs, cursor, sid = [], s_min, 0
     for ps, pe, dur, typ in pauses:
+        if ps < cursor:
+            ps = cursor
+            pe = ps + dur
+            if pe > e_min:
+                continue
         if cursor < ps:
             segs.append({"id": sid, "type": "on-call", "start": _mm(cursor), "end": _mm(ps),
                          "duration_mins": ps - cursor, "sort_order": sid, "notes": ""}); sid += 1

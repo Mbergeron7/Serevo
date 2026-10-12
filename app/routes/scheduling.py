@@ -1659,6 +1659,168 @@ def mass_segment_apply():
         return jsonify({"success": False, "error": str(e)})
 
 
+def _optimize_demo_segments(payload):
+    """Optimize break/lunch placement for demo mode using in-memory shift data."""
+    shifts_data = payload.get("shifts", [])
+    coverage = payload.get("coverage", [])
+    types_to_opt = set(payload.get("activity_types", ["break", "lunch"]))
+
+    # Build coverage map
+    cov_map = {}
+    for c in coverage:
+        t = c.get("time", "")
+        if len(t) >= 5:
+            m = _time_to_mins(t[:5])
+            cov_map[m] = {"req": c.get("required", 0), "sched": c.get("scheduled", 0)}
+
+    cov_times = sorted(cov_map.keys())
+    interval = 15
+    if len(cov_times) >= 2:
+        interval = cov_times[1] - cov_times[0]
+    if interval < 1:
+        interval = 15
+
+    def _matches(activity_type):
+        if activity_type in types_to_opt:
+            return True
+        for t in types_to_opt:
+            if activity_type and activity_type.startswith(t):
+                return True
+        return False
+
+    # Get day model rules for window constraints
+    from app.demo_data import get_demo_day_models
+    dm_rules_cache = {}
+    for dm in get_demo_day_models():
+        if dm.get("activities"):
+            key = (dm.get("start_time"), dm.get("end_time"))
+            dm_rules_cache[key] = dm["activities"]
+    # Also check real DB day models
+    try:
+        from app.models import DayModel
+        import json as _json
+        for dm in DayModel.query.filter_by(is_active=True).all():
+            acts = _json.loads(dm.activities_json) if dm.activities_json else []
+            if acts:
+                key = (dm.start_time, dm.end_time)
+                dm_rules_cache[key] = acts
+    except Exception:
+        pass
+
+    # Collect segments to reposition
+    to_reposition = []
+    already_placed = []
+
+    for shift in shifts_data:
+        s_s = _time_to_mins(shift.get("start", "00:00"))
+        s_e = _time_to_mins(shift.get("end", "00:00"))
+        for seg in shift.get("segments", []):
+            if _matches(seg.get("type", "")):
+                to_reposition.append((shift, seg, s_s, s_e))
+            elif seg.get("type") != "on-call":
+                if seg.get("start") and seg.get("end"):
+                    already_placed.append((_time_to_mins(seg["start"]), _time_to_mins(seg["end"])))
+
+    if not to_reposition:
+        return jsonify({"success": True, "demo": True, "changes": [],
+                        "message": "No break/lunch segments found to optimise"})
+
+    changes = []
+    for shift, seg, s_s, s_e in to_reposition:
+        duration = seg.get("duration_mins") or 15
+        seg_type = seg.get("type", "")
+
+        # Find rule window from day model
+        dm_acts = dm_rules_cache.get((shift.get("start"), shift.get("end")), [])
+        rule = None
+        for act in dm_acts:
+            act_id = str(act.get("activity_id", ""))
+            # Match by type similarity
+            if act_id == seg_type or act_id.startswith(seg_type) or seg_type.startswith(act_id):
+                rule = act
+                break
+            # Try matching "break" to activity_id that's a SegmentCode id
+            try:
+                from app.models import SegmentCode
+                sc = SegmentCode.query.filter_by(id=int(act_id)).first() if act_id.isdigit() else None
+                if sc and (seg_type in sc.code.lower() or sc.code.lower().startswith(seg_type)):
+                    rule = act
+                    break
+            except Exception:
+                pass
+
+        # Determine window
+        if rule:
+            relative = rule.get("relative", True)
+            win_s = rule.get("window_start_mins", 0)
+            win_e = rule.get("window_end_mins", win_s)
+            if relative:
+                win_s = s_s + win_s
+                win_e = s_s + win_e
+        else:
+            win_s = s_s
+            win_e = s_e
+
+        win_s = max(win_s, s_s)
+        win_e = min(win_e, s_e)
+        if win_e - win_s < duration:
+            continue
+
+        # Find best slot by coverage surplus
+        best_slot = None
+        best_score = -9999
+
+        t = win_s
+        while t + duration <= win_e:
+            min_surplus = 9999
+            overlap_count = 0
+            m = t
+            while m < t + duration:
+                cov = cov_map.get(m)
+                if cov:
+                    surplus = cov["sched"] - cov["req"]
+                    for placed in already_placed:
+                        if placed[0] <= m < placed[1]:
+                            surplus -= 1
+                    min_surplus = min(min_surplus, surplus)
+                for placed in already_placed:
+                    if placed[0] <= m < placed[1]:
+                        overlap_count += 1
+                m += interval
+            if min_surplus == 9999:
+                min_surplus = -overlap_count
+            if min_surplus > best_score:
+                best_score = min_surplus
+                best_slot = t
+            t += interval
+
+        if best_slot is None:
+            continue
+
+        old_start = seg.get("start", "")
+        old_end = seg.get("end", "")
+        new_start = _mins_to_time(best_slot)
+        new_end = _mins_to_time(best_slot + duration)
+
+        already_placed.append((best_slot, best_slot + duration))
+
+        if old_start == new_start and old_end == new_end:
+            continue
+
+        changes.append({
+            "shift_id": shift.get("id"),
+            "employee": shift.get("employee", ""),
+            "type": seg_type,
+            "old_start": old_start,
+            "old_end": old_end,
+            "new_start": new_start,
+            "new_end": new_end,
+            "coverage_impact": best_score,
+        })
+
+    return jsonify({"success": True, "demo": True, "changes": changes})
+
+
 @scheduling_bp.route("/optimize-segments", methods=["POST"])
 @login_required
 def optimize_segments():
@@ -1682,14 +1844,17 @@ def optimize_segments():
     }
     """
     _u = get_current_user()
-    if _u and _u.get("is_demo"):
-        return jsonify({"success": True, "demo": True, "changes": [],
-                        "message": "Demo mode — changes kept on screen only"})
+    is_demo = _u and _u.get("is_demo")
     try:
         payload = request.get_json(silent=True) or {}
         shift_ids = payload.get("shift_ids", [])
         coverage = payload.get("coverage", [])
         types_to_opt = set(payload.get("activity_types", ["break", "lunch"]))
+
+        # Demo mode: optimize using shift data from the request payload
+        if is_demo and payload.get("shifts"):
+            return _optimize_demo_segments(payload)
+
 
         if not shift_ids:
             return jsonify({"success": False, "error": "No shifts selected"})
