@@ -1547,8 +1547,8 @@ def _import_employees(rows):
 
         # ── Junction tables: skill mappings from "All Skills" ──
         if skills_val:
-            skill_start = _clean_date(_get_val(row, "Latest Skill Start"))
-            skill_end   = _clean_date(_get_val(row, "Latest Skill End"))
+            skill_start = _clean_date(_get_val(row, "Latest Skill Start")) or _clean_date(_get_val(row, "Start Date"))
+            skill_end   = _clean_date(_get_val(row, "Latest Skill End")) or _clean_date(_get_val(row, "End Date"))
             for skill_name in skills_val.split(","):
                 skill_name = skill_name.strip()
                 if not skill_name:
@@ -1571,6 +1571,12 @@ def _import_employees(rows):
                         if skill_end:
                             sm.valid_to = skill_end
                         db.session.add(sm)
+                    else:
+                        # Update existing skill mapping dates if missing
+                        if skill_start and not sm.valid_from:
+                            sm.valid_from = skill_start
+                        if skill_end and not sm.valid_to:
+                            sm.valid_to = skill_end
 
         if (i <= 5 or str(emp_id) == "1202") and not is_new:
             modified = db.session.is_modified(emp)
