@@ -680,6 +680,14 @@ def debug_employee(emp_id_str):
 def debug_capacity_alignment():
     """Show how LOB names, LOB mappings, planning units, skill groups,
     and employee headcounts all line up for capacity planning."""
+    try:
+        return _debug_capacity_alignment_inner()
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+
+def _debug_capacity_alignment_inner():
     from app.models import (db, Employee, PlanningUnit, SkillGroup,
                             SkillMapping, LobMapping)
     import datetime, calendar
