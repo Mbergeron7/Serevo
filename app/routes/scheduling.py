@@ -452,8 +452,8 @@ def save_schedule():
         date_str = payload.get("date", "")
         shifts = payload.get("shifts", [])
 
-        if not lob or not date_str:
-            return jsonify({"success": False, "error": "LOB and date required"})
+        if not date_str:
+            return jsonify({"success": False, "error": "Date required"})
 
         sched_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
 
@@ -464,15 +464,21 @@ def save_schedule():
 
         # Find or create planning unit
         from app.models import PlanningUnit
-        pu = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
-        ).first()
-        pu_id = pu.id if pu else None
-
-        # Delete existing schedules for this LOB+date (bulk)
-        Schedule.query.filter_by(
-            schedule_date=sched_date, planning_unit_id=pu_id
-        ).delete(synchronize_session=False)
+        pu_id = None
+        if lob:
+            pu = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name) == lob.lower()
+            ).first()
+            pu_id = pu.id if pu else None
+            # Delete existing schedules for this LOB+date (bulk)
+            Schedule.query.filter_by(
+                schedule_date=sched_date, planning_unit_id=pu_id
+            ).delete(synchronize_session=False)
+        else:
+            # All LOBs — delete all schedules for this date
+            Schedule.query.filter_by(
+                schedule_date=sched_date
+            ).delete(synchronize_session=False)
 
         # Prefetch all employees by external ID for this batch
         ext_ids = [str(s.get("employee_id", "")).strip() for s in shifts if s.get("employee_id")]
@@ -497,9 +503,12 @@ def save_schedule():
             if not hours and start_t and end_t:
                 hours = _time_diff_hours(start_t, end_t)
 
+            # Use employee's own planning_unit_id when saving All LOBs
+            shift_pu_id = pu_id if pu_id else emp.planning_unit_id
+
             sched = Schedule(
                 employee_id=emp.id,
-                planning_unit_id=pu_id,
+                planning_unit_id=shift_pu_id,
                 schedule_date=sched_date,
                 shift_start=start_t,
                 shift_end=end_t,
@@ -530,7 +539,7 @@ def save_schedule():
         try:
             from app.routes.notifications import notify_all_admins
             notify_all_admins(
-                f"Schedule saved: {lob}",
+                f"Schedule saved: {lob or 'All LOBs'}",
                 f"{saved} shift(s) saved for {date_str}.",
                 category="schedule",
                 link="/scheduling/",
