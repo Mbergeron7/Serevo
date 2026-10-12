@@ -1741,19 +1741,68 @@ def optimize_segments():
             return jsonify({"success": True, "changes": [],
                             "message": "No break/lunch segments found to optimise"})
 
-        # Get segment rules for window constraints (per shift type)
+        # Get segment rules — prefer day model activities_json, fall back to engine rules
         from app.scheduling.engine import _get_segment_rules
-        _rules_cache = {}  # shift_type -> {seg_type -> rule}
+        from app.models import DayModel
+        import json as _json
 
-        def _rules_for(shift_type):
-            if shift_type not in _rules_cache:
-                rules = _get_segment_rules(shift_type or "full")
-                by_type = {}
+        # Load all day models and index by (start_time, end_time, planning_unit_id)
+        _dm_cache = {}  # (start, end, pu_id) -> [{activity rule}]
+        for dm in DayModel.query.filter_by(is_active=True).all():
+            acts = _json.loads(dm.activities_json) if dm.activities_json else []
+            if acts:
+                key = (dm.start_time, dm.end_time, dm.planning_unit_id)
+                _dm_cache[key] = acts
+
+        # Build lookup: find SegmentCode name by id for matching activity_type
+        from app.models import SegmentCode
+        _code_by_id = {}
+        for sc in SegmentCode.query.all():
+            _code_by_id[str(sc.id)] = sc.code
+            _code_by_id[sc.code] = sc.code
+
+        _rules_cache = {}
+
+        def _rules_for_shift(shift):
+            """Return {activity_type -> rule} for a shift, using day model windows first."""
+            cache_key = (shift.shift_start, shift.shift_end, shift.planning_unit_id, shift.shift_type)
+            if cache_key in _rules_cache:
+                return _rules_cache[cache_key]
+
+            by_type = {}
+
+            # Try to match a day model by shift times
+            s_str = shift.shift_start.strftime("%H:%M") if shift.shift_start else ""
+            e_str = shift.shift_end.strftime("%H:%M") if shift.shift_end else ""
+
+            # Try with PU, then without
+            dm_acts = _dm_cache.get((s_str, e_str, shift.planning_unit_id))
+            if not dm_acts:
+                dm_acts = _dm_cache.get((s_str, e_str, None))
+
+            if dm_acts:
+                for act in dm_acts:
+                    act_id = str(act.get("activity_id", ""))
+                    act_type = _code_by_id.get(act_id, act_id)
+                    by_type[act_type] = {
+                        "type": act_type,
+                        "offset_mins": act.get("offset_mins") or act.get("window_start_mins", 0),
+                        "duration_mins": act.get("duration_mins", 15),
+                        "is_flexible": True,
+                        "window_start_mins": act.get("window_start_mins", 0),
+                        "window_end_mins": act.get("window_end_mins", 0),
+                        "interval_mins": act.get("interval_mins"),
+                        "relative": act.get("relative", True),
+                    }
+            else:
+                # Fall back to engine segment rules
+                rules = _get_segment_rules(shift.shift_type or "full")
                 for r in rules:
                     if r["type"] not in by_type:
                         by_type[r["type"]] = r
-                _rules_cache[shift_type] = by_type
-            return _rules_cache[shift_type]
+
+            _rules_cache[cache_key] = by_type
+            return by_type
 
         # Build per-shift fixed segments (meetings, training, etc.) that must not overlap
         shift_fixed = {}  # shift.id -> [(start_min, end_min)]
@@ -1777,14 +1826,19 @@ def optimize_segments():
 
         for shift, seg, s_s, s_e in to_reposition:
             duration = seg.duration_mins or 15
-            rules_by_type = _rules_for(shift.shift_type)
+            rules_by_type = _rules_for_shift(shift)
             rule = rules_by_type.get(seg.activity_type)
 
-            # Determine window: use rule window relative to shift start,
+            # Determine window: use rule window (relative to shift start or absolute),
             # or fall back to full shift
             if rule and rule.get("is_flexible"):
-                win_s = s_s + (rule.get("window_start_mins", 0))
-                win_e = s_s + (rule.get("window_end_mins", s_e - s_s))
+                if rule.get("relative", True):
+                    win_s = s_s + (rule.get("window_start_mins", 0))
+                    win_e = s_s + (rule.get("window_end_mins", s_e - s_s))
+                else:
+                    # Absolute clock minutes
+                    win_s = rule.get("window_start_mins", s_s)
+                    win_e = rule.get("window_end_mins", s_e)
             else:
                 # Non-flexible segment — still try to optimise within
                 # a ±30 minute window of its current position

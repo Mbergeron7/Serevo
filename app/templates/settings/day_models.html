@@ -101,6 +101,17 @@ function render() {
   if (!DATA.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">No day models yet. Click "+ Add Day Model" to create one.</td></tr>';
 }
 
+function minsToHM(m) {
+  if (m == null || m === '') return '';
+  const h = Math.floor(m / 60), mm = m % 60;
+  return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+}
+function hmToMins(s) {
+  if (!s) return null;
+  const [h, m] = s.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
 function renderActivityRows() {
   const container = document.getElementById('activityRows');
   const noMsg = document.getElementById('noActivities');
@@ -108,20 +119,29 @@ function renderActivityRows() {
   noMsg.style.display = actRows.length ? 'none' : 'block';
   actRows.forEach((row, i) => {
     const div = document.createElement('div');
-    div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+    div.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg);';
     const actOpts = ACTIVITIES.map(a => `<option value="${a.id}" ${a.id==row.activity_id?'selected':''}>${a.name}</option>`).join('');
+    const rel = row.relative !== false;
     div.innerHTML = `
-      <label style="font-size:.8rem;">Activity<select class="form-input" onchange="actRows[${i}].activity_id=this.value" style="font-size:.85rem;"><option value="">—</option>${actOpts}</select></label>
-      <label style="font-size:.8rem;">Offset (min)<input type="number" class="form-input" value="${row.offset_mins||''}" onchange="actRows[${i}].offset_mins=+this.value" style="font-size:.85rem;"></label>
-      <label style="font-size:.8rem;">Duration (min)<input type="number" class="form-input" value="${row.duration_mins||''}" onchange="actRows[${i}].duration_mins=+this.value" style="font-size:.85rem;"></label>
-      <label style="font-size:.8rem;display:flex;align-items:center;gap:4px;margin-top:16px;"><input type="checkbox" ${row.is_flexible?'checked':''} onchange="actRows[${i}].is_flexible=this.checked"> Flex</label>
-      <button type="button" class="btn btn-sm btn-danger" onclick="actRows.splice(${i},1);renderActivityRows()" style="margin-bottom:2px;">×</button>`;
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="font-size:.8rem;flex:1;margin-right:8px;">Activity<select class="form-input" onchange="actRows[${i}].activity_id=this.value" style="font-size:.85rem;"><option value="">—</option>${actOpts}</select></label>
+        <button type="button" class="btn btn-sm btn-danger" onclick="actRows.splice(${i},1);renderActivityRows()">Delete</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <label style="font-size:.8rem;">Start<input type="text" class="form-input" value="${minsToHM(row.window_start_mins)}" placeholder="01:30" onchange="actRows[${i}].window_start_mins=hmToMins(this.value)" style="font-size:.85rem;"></label>
+        <label style="font-size:.8rem;">End<input type="text" class="form-input" value="${minsToHM(row.window_end_mins)}" placeholder="02:30" onchange="actRows[${i}].window_end_mins=hmToMins(this.value)" style="font-size:.85rem;"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <label style="font-size:.8rem;">Total activity duration<input type="text" class="form-input" value="${minsToHM(row.duration_mins)}" placeholder="00:15" onchange="actRows[${i}].duration_mins=hmToMins(this.value)" style="font-size:.85rem;"></label>
+        <label style="font-size:.8rem;">Interval <span style="color:var(--text-muted);">optional</span><input type="text" class="form-input" value="${minsToHM(row.interval_mins)}" placeholder="00:15" onchange="actRows[${i}].interval_mins=hmToMins(this.value)" style="font-size:.85rem;"></label>
+      </div>
+      <label style="font-size:.8rem;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${rel?'checked':''} onchange="actRows[${i}].relative=this.checked"> Relative to start of shift</label>`;
     container.appendChild(div);
   });
 }
 
 function addActivityRow() {
-  actRows.push({activity_id:'', offset_mins:0, duration_mins:15, is_flexible:false});
+  actRows.push({activity_id:'', window_start_mins:90, window_end_mins:150, duration_mins:15, interval_mins:15, relative:true});
   renderActivityRows();
 }
 
@@ -135,7 +155,15 @@ function openModal(item) {
   document.getElementById('f_day_type').value = item ? item.day_type : 'any';
   document.getElementById('f_planning_unit_id').value = item ? (item.planning_unit_id||'') : '';
   document.getElementById('f_shift_template_id').value = item ? (item.shift_template_id||'') : '';
-  actRows = item && item.activities ? JSON.parse(JSON.stringify(item.activities)) : [];
+  actRows = item && item.activities ? JSON.parse(JSON.stringify(item.activities)).map(r => {
+    // Migrate old format: if has offset_mins but no window_start_mins, convert
+    if (r.offset_mins != null && r.window_start_mins == null) {
+      r.window_start_mins = r.offset_mins;
+      r.window_end_mins = (r.offset_mins || 0) + (r.duration_mins || 15);
+    }
+    if (r.relative == null) r.relative = true;
+    return r;
+  }) : [];
   renderActivityRows();
   dlg.showModal();
 }
@@ -152,7 +180,17 @@ async function saveItem() {
     day_type: document.getElementById('f_day_type').value,
     planning_unit_id: document.getElementById('f_planning_unit_id').value || null,
     shift_template_id: document.getElementById('f_shift_template_id').value || null,
-    activities: actRows.filter(r => r.activity_id),
+    activities: actRows.filter(r => r.activity_id).map(r => ({
+      activity_id: r.activity_id,
+      window_start_mins: r.window_start_mins,
+      window_end_mins: r.window_end_mins,
+      duration_mins: r.duration_mins,
+      interval_mins: r.interval_mins || null,
+      relative: r.relative !== false,
+      // Keep offset_mins for backward compat with optimizer
+      offset_mins: r.window_start_mins,
+      is_flexible: true,
+    })),
   };
   const res = await fetch('/settings/day-models/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();

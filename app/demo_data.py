@@ -1189,14 +1189,46 @@ def get_demo_contracts():
 
 def get_demo_day_models():
     """Demo data for Settings > Day Models page."""
+    # Activity placements use HH:MM-style windows stored as minutes
+    # window_start/end are relative to shift start when relative=True
+    _full_activities = [
+        {"activity_id": "break", "window_start_mins": 90, "window_end_mins": 150,
+         "duration_mins": 15, "interval_mins": 15, "relative": True,
+         "offset_mins": 120, "is_flexible": True},
+        {"activity_id": "lunch", "window_start_mins": 210, "window_end_mins": 300,
+         "duration_mins": 30, "interval_mins": 15, "relative": True,
+         "offset_mins": 240, "is_flexible": True},
+        {"activity_id": "break", "window_start_mins": 330, "window_end_mins": 390,
+         "duration_mins": 15, "interval_mins": 15, "relative": True,
+         "offset_mins": 360, "is_flexible": True},
+    ]
+    _short_activities = [
+        {"activity_id": "break", "window_start_mins": 90, "window_end_mins": 150,
+         "duration_mins": 15, "interval_mins": 15, "relative": True,
+         "offset_mins": 120, "is_flexible": True},
+    ]
     return [
-        {"id": 1, "name": "Early 6:00–14:30", "start_time": "06:00", "end_time": "14:30", "break_minutes": 30, "is_active": True},
-        {"id": 2, "name": "Morning 8:00–16:30", "start_time": "08:00", "end_time": "16:30", "break_minutes": 30, "is_active": True},
-        {"id": 3, "name": "Mid 10:00–18:30", "start_time": "10:00", "end_time": "18:30", "break_minutes": 30, "is_active": True},
-        {"id": 4, "name": "Late 12:00–20:30", "start_time": "12:00", "end_time": "20:30", "break_minutes": 30, "is_active": True},
-        {"id": 5, "name": "Evening 14:00–22:30", "start_time": "14:00", "end_time": "22:30", "break_minutes": 30, "is_active": True},
-        {"id": 6, "name": "Short AM 8:00–12:00", "start_time": "08:00", "end_time": "12:00", "break_minutes": 0, "is_active": True},
-        {"id": 7, "name": "Off", "start_time": None, "end_time": None, "break_minutes": 0, "is_active": True},
+        {"id": 1, "name": "Early 6:00–14:30", "start_time": "06:00", "end_time": "14:30",
+         "paid_hours": 8, "break_minutes": 30, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _full_activities},
+        {"id": 2, "name": "Morning 8:00–16:30", "start_time": "08:00", "end_time": "16:30",
+         "paid_hours": 8, "break_minutes": 30, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _full_activities},
+        {"id": 3, "name": "Mid 10:00–18:30", "start_time": "10:00", "end_time": "18:30",
+         "paid_hours": 8, "break_minutes": 30, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _full_activities},
+        {"id": 4, "name": "Late 12:00–20:30", "start_time": "12:00", "end_time": "20:30",
+         "paid_hours": 8, "break_minutes": 30, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _full_activities},
+        {"id": 5, "name": "Evening 14:00–22:30", "start_time": "14:00", "end_time": "22:30",
+         "paid_hours": 8, "break_minutes": 30, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _full_activities},
+        {"id": 6, "name": "Short AM 8:00–12:00", "start_time": "08:00", "end_time": "12:00",
+         "paid_hours": 4, "break_minutes": 0, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": _short_activities},
+        {"id": 7, "name": "Off", "start_time": None, "end_time": None,
+         "paid_hours": 0, "break_minutes": 0, "is_active": True, "day_type": "any",
+         "planning_unit": "All", "activities": []},
     ]
 
 

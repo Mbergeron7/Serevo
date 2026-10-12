@@ -171,17 +171,9 @@
       <!-- ── TAB: Placement ── -->
       <div class="tab-panel" data-panel="placement">
         <div style="display:grid;gap:12px;">
-          <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Auto-placement rules for the schedule optimizer.</p>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Break and lunch placement windows are now configured per Day Model. Go to <strong>Settings → Day Models</strong> to set start/end windows, duration, and interval for each activity within a shift.</p>
           <div class="form-grid-2" style="gap:12px;">
-            <label>Offset (mins from shift start)<input id="f_offset_mins" type="number" class="form-input" min="0" placeholder="e.g. 120"></label>
-            <label>Duration (mins)<input id="f_duration_mins" type="number" class="form-input" min="1" placeholder="e.g. 15"></label>
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;"><input id="f_is_flexible" type="checkbox" onchange="toggleWindow()"> Flexible (stagger within window)</label>
-          <div id="windowRow" style="display:none;">
-            <div class="form-grid-2" style="gap:12px;">
-              <label>Window Start (mins)<input id="f_window_start_mins" type="number" class="form-input" min="0" placeholder="e.g. 90"></label>
-              <label>Window End (mins)<input id="f_window_end_mins" type="number" class="form-input" min="0" placeholder="e.g. 150"></label>
-            </div>
+            <label>Default Duration (mins)<input id="f_duration_mins" type="number" class="form-input" min="1" placeholder="e.g. 15"></label>
           </div>
         </div>
       </div>
@@ -296,7 +288,7 @@ function updateCategoryUI() {
 }
 
 function toggleWindow() {
-  document.getElementById('windowRow').style.display = document.getElementById('f_is_flexible').checked ? '' : 'none';
+  // Window fields moved to Day Models — kept as no-op for compat
 }
 
 function toggleMultiFields() {
@@ -408,11 +400,7 @@ function openModal(item) {
   f('f_can_be_day_status').checked = item ? item.can_be_day_status : false;
 
   // Placement
-  f('f_offset_mins').value = item && item.offset_mins != null ? item.offset_mins : '';
   f('f_duration_mins').value = item && item.duration_mins != null ? item.duration_mins : '';
-  f('f_is_flexible').checked = item ? item.is_flexible : false;
-  f('f_window_start_mins').value = item && item.window_start_mins != null ? item.window_start_mins : '';
-  f('f_window_end_mins').value = item && item.window_end_mins != null ? item.window_end_mins : '';
 
   // Skills
   skillRows = item && item.skills ? item.skills.map(s => ({...s})) : [];
@@ -471,11 +459,7 @@ async function saveItem() {
     special_handling: f('f_special_handling').checked,
     can_be_day_status: f('f_can_be_day_status').checked,
     // Placement
-    offset_mins: f('f_offset_mins').value ? parseInt(f('f_offset_mins').value) : null,
     duration_mins: f('f_duration_mins').value ? parseInt(f('f_duration_mins').value) : null,
-    is_flexible: f('f_is_flexible').checked,
-    window_start_mins: f('f_window_start_mins').value ? parseInt(f('f_window_start_mins').value) : null,
-    window_end_mins: f('f_window_end_mins').value ? parseInt(f('f_window_end_mins').value) : null,
     // Skills & external statuses
     skills: skillRows.filter(s => s.name.trim()),
     external_statuses: extStatusRows.filter(m => m.external_status.trim()),
