@@ -675,6 +675,111 @@ def debug_employee(emp_id_str):
     return jsonify(info)
 
 
+@data_import_bp.route("/debug/capacity-alignment")
+@admin_required
+def debug_capacity_alignment():
+    """Show how LOB names, LOB mappings, planning units, skill groups,
+    and employee headcounts all line up for capacity planning."""
+    from app.models import (db, Employee, PlanningUnit, SkillGroup,
+                            SkillMapping, LobMapping)
+    import datetime, calendar
+
+    year = int(request.args.get("year", datetime.date.today().year))
+    month = int(request.args.get("month", datetime.date.today().month))
+
+    # 1. LOB Mappings (from settings)
+    lob_mappings = {m.source_name: m.planning_unit_name
+                    for m in LobMapping.query.all()}
+
+    # 2. Planning Units
+    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    pu_info = {}
+    for pu in pus:
+        pu_info[pu.name] = {"id": pu.id, "employees": 0,
+                            "active_this_month": 0, "skill_groups": []}
+
+    # 3. Skill Groups per PU
+    for sg in SkillGroup.query.all():
+        pu = next((p for p in pus if p.id == sg.planning_unit_id), None)
+        if pu and pu.name in pu_info:
+            pu_info[pu.name]["skill_groups"].append(sg.name)
+
+    # 4. Employee counts per PU for the requested month
+    first_of_month = datetime.date(year, month, 1)
+    _, last_day = calendar.monthrange(year, month)
+    last_of_month = datetime.date(year, month, last_day)
+
+    employees = (
+        Employee.query
+        .filter(Employee.planning_unit_id.isnot(None))
+        .filter(~Employee.status.in_(["Terminated", "terminated",
+                                       "Deleted", "deleted"]))
+        .all()
+    )
+    pu_id_to_name = {pu.id: pu.name for pu in pus}
+
+    for emp in employees:
+        pu_name = pu_id_to_name.get(emp.planning_unit_id)
+        if not pu_name or pu_name not in pu_info:
+            continue
+        pu_info[pu_name]["employees"] += 1
+
+        start = (emp.skill_start or
+                 (emp.created_at.date() if emp.created_at else
+                  datetime.date(year, 1, 1)))
+        end = emp.end_date
+        if start and start > last_of_month:
+            continue
+        if end and end < first_of_month:
+            continue
+        pu_info[pu_name]["active_this_month"] += 1
+
+    # 5. Skill mappings — count active employees per skill group name
+    skill_hc = {}
+    active_mappings = (
+        db.session.query(SkillMapping, SkillGroup)
+        .join(SkillGroup, SkillMapping.skill_group_id == SkillGroup.id)
+        .filter(SkillMapping.is_active.is_(True))
+        .all()
+    )
+    for sm, sg in active_mappings:
+        skill_hc.setdefault(sg.name, 0)
+        skill_hc[sg.name] += 1
+
+    # 6. Build alignment report
+    alignment = []
+    # All LOB source names from mappings + all PU names
+    all_names = sorted(set(list(lob_mappings.keys()) +
+                          list(pu_info.keys()) +
+                          list(skill_hc.keys())))
+
+    for name in all_names:
+        mapped_to = lob_mappings.get(name)
+        resolved_pu = mapped_to or name
+        pu_data = pu_info.get(resolved_pu)
+        row = {
+            "name": name,
+            "lob_mapping": mapped_to,
+            "resolved_planning_unit": resolved_pu,
+            "pu_exists": resolved_pu in pu_info,
+            "total_employees": pu_data["employees"] if pu_data else 0,
+            "active_headcount": pu_data["active_this_month"] if pu_data else 0,
+            "skill_groups": pu_data["skill_groups"] if pu_data else [],
+            "active_skill_mappings": skill_hc.get(name, 0),
+        }
+        alignment.append(row)
+
+    return jsonify({
+        "year": year,
+        "month": month,
+        "month_label": datetime.date(year, month, 1).strftime("%b %Y"),
+        "lob_mappings_configured": lob_mappings,
+        "planning_units": {k: v for k, v in pu_info.items()},
+        "skill_group_headcounts": skill_hc,
+        "alignment": alignment,
+    })
+
+
 # ── Two-step mapping flow ──────────────────────────────────────
 
 @data_import_bp.route("/upload/preview", methods=["POST"])
