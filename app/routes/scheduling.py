@@ -1714,6 +1714,17 @@ def optimize_segments():
         if not shifts:
             return jsonify({"success": False, "error": "No matching shifts found"})
 
+        def _matches_opt_type(activity_type):
+            """Check if activity_type matches any type to optimise.
+            'break_2' matches 'break', 'lunch_b' matches 'lunch', etc."""
+            if activity_type in types_to_opt:
+                return True
+            # Check base type: strip trailing _N, _suffix
+            for t in types_to_opt:
+                if activity_type and activity_type.startswith(t):
+                    return True
+            return False
+
         # Collect all segments that we'll reposition, and track ones we won't
         # move (so they count as "already placed" for coverage)
         to_reposition = []   # [(shift, segment, shift_start_min, shift_end_min)]
@@ -1728,7 +1739,7 @@ def optimize_segments():
             s_e = s_end.hour * 60 + s_end.minute
 
             for seg in shift.segments:
-                if seg.activity_type in types_to_opt:
+                if _matches_opt_type(seg.activity_type):
                     to_reposition.append((shift, seg, s_s, s_e))
                 elif seg.activity_type != "on-call":
                     # Fixed segments (meetings, training, etc.) reduce coverage
@@ -1828,6 +1839,25 @@ def optimize_segments():
             duration = seg.duration_mins or 15
             rules_by_type = _rules_for_shift(shift)
             rule = rules_by_type.get(seg.activity_type)
+
+            # If no exact match, find the best rule by base type + proximity
+            # e.g. segment "break" matches rules "break_1", "break_2" — pick closest
+            if not rule and seg.activity_type:
+                seg_start_min = (seg.start_time.hour * 60 + seg.start_time.minute) if seg.start_time else s_s
+                base = seg.activity_type.rstrip("_0123456789")  # "break_2" -> "break"
+                candidates = []
+                for rtype, r in rules_by_type.items():
+                    r_base = rtype.rstrip("_0123456789")
+                    if r_base == base or rtype.startswith(seg.activity_type) or seg.activity_type.startswith(rtype):
+                        # Score by how close this rule's window is to the segment's current position
+                        r_mid = r.get("window_start_mins", 0) + r.get("window_end_mins", 0)
+                        if r.get("relative", True):
+                            r_mid = s_s + r_mid
+                        dist = abs(r_mid / 2 - seg_start_min)
+                        candidates.append((dist, r))
+                if candidates:
+                    candidates.sort(key=lambda x: x[0])
+                    rule = candidates[0][1]
 
             # Determine window: use rule window (relative to shift start or absolute),
             # or fall back to full shift
