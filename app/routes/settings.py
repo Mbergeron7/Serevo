@@ -1932,10 +1932,6 @@ def contracts_delete():
 @admin_required
 def day_models():
     user = get_current_user()
-    if user and user.get("is_demo"):
-        from app.demo_data import get_demo_day_models, get_demo_activities
-        demo_acts = [{"id": a["code"], "name": a["label"]} for a in get_demo_activities()]
-        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=demo_acts, planning_units=[], shift_templates=[])
     from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
     try:
         items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
@@ -1944,6 +1940,10 @@ def day_models():
         from app.models import db
         db.session.rollback()
         items = []
+    # In demo mode, show demo day models if no real ones exist yet
+    if not items and user and user.get("is_demo"):
+        from app.demo_data import get_demo_day_models
+        items = get_demo_day_models()
     try:
         activities = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
     except Exception:
@@ -1980,7 +1980,12 @@ def day_models_save():
     from app.models import DayModel, db
     d = request.json or {}
     try:
-        item = DayModel.query.get(int(d["id"])) if d.get("id") else DayModel()
+        item = None
+        if d.get("id"):
+            item = DayModel.query.get(int(d["id"]))
+        if item is None:
+            item = DayModel()
+            db.session.add(item)
         item.name = d["name"]
         item.abbreviation = d.get("abbreviation", "")
         item.start_time = d.get("start_time", "08:00")
@@ -1993,8 +1998,6 @@ def day_models_save():
         item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
         item.shift_template_id = int(d["shift_template_id"]) if d.get("shift_template_id") else None
         item.activities_json = json.dumps(d.get("activities", []))
-        if not d.get("id"):
-            db.session.add(item)
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
