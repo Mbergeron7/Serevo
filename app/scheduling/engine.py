@@ -1029,7 +1029,49 @@ def _minutes_to_time(mins):
     return f"{h:02d}:{m:02d}"
 
 
-def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_employees=1):
+def _get_day_model_rules(start_time, end_time, planning_unit_id=None):
+    """Look up activity placement rules from DayModel.activities_json.
+    Returns list of rule dicts if a matching day model is found, else None."""
+    try:
+        from app.models import DayModel, SegmentCode
+        import json as _json
+
+        # Build SegmentCode lookup
+        _code_by_id = {}
+        for sc in SegmentCode.query.all():
+            _code_by_id[str(sc.id)] = sc.code
+            _code_by_id[sc.code] = sc.code
+
+        # Try matching with PU first, then without
+        for pu_id in ([planning_unit_id, None] if planning_unit_id else [None]):
+            for dm in DayModel.query.filter_by(is_active=True, start_time=start_time, end_time=end_time).all():
+                if dm.planning_unit_id == pu_id:
+                    acts = _json.loads(dm.activities_json) if dm.activities_json else []
+                    if acts:
+                        rules = []
+                        for act in acts:
+                            act_id = str(act.get("activity_id", ""))
+                            act_type = _code_by_id.get(act_id, act_id)
+                            rules.append({
+                                "type": act_type,
+                                "offset_mins": act.get("offset_mins") or act.get("window_start_mins", 0),
+                                "duration_mins": act.get("duration_mins", 15),
+                                "is_flexible": True,
+                                "window_start_mins": act.get("window_start_mins", 0),
+                                "window_end_mins": act.get("window_end_mins", 0),
+                                "interval_mins": act.get("interval_mins"),
+                                "relative": act.get("relative", True),
+                            })
+                        rules.sort(key=lambda r: r["offset_mins"])
+                        return rules
+        return None
+    except Exception as e:
+        log.warning(f"Day model rules lookup error: {e}")
+        return None
+
+
+def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_employees=1,
+                       planning_unit_id=None):
     """
     Build the segments list for a shift, inserting break and lunch
     windows into on-call blocks.
@@ -1045,6 +1087,7 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
         shift_type: "full" or "half"
         stagger_index: this employee's index (0-based) for staggering
         total_employees: total number of employees being scheduled (for stagger spread)
+        planning_unit_id: optional PU id for day model matching
 
     Returns list of:
       {type: "on-call"|"break"|"lunch", start: "HH:MM", end: "HH:MM",
@@ -1053,29 +1096,38 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
     s_min = _time_to_minutes(start_time)
     e_min = _time_to_minutes(end_time)
 
-    rules = _get_segment_rules(shift_type)
+    # Prefer day model activity windows, fall back to segment code rules
+    rules = _get_day_model_rules(start_time, end_time, planning_unit_id)
+    if rules is None:
+        rules = _get_segment_rules(shift_type)
 
     # Collect break/lunch windows that fit within the shift
     pauses = []
     for rule in rules:
         is_flex = rule.get("is_flexible", False)
         duration = rule["duration_mins"]
+        relative = rule.get("relative", True)
+        default_offset = rule.get("offset_mins") or rule.get("window_start_mins", 0)
 
         if is_flex and total_employees > 1:
             # Stagger within the window
-            win_start = rule.get("window_start_mins", rule["offset_mins"])
-            win_end = rule.get("window_end_mins", rule["offset_mins"])
+            win_start = rule.get("window_start_mins", default_offset)
+            win_end = rule.get("window_end_mins", default_offset)
             # Available window for start times (must leave room for duration)
             window_range = max(0, win_end - win_start)
             if total_employees > 1 and window_range > 0:
                 step = window_range / total_employees
                 offset = win_start + int(step * stagger_index)
             else:
-                offset = rule["offset_mins"]
+                offset = default_offset
         else:
-            offset = rule["offset_mins"]
+            offset = default_offset
 
-        p_start = s_min + offset
+        if relative:
+            p_start = s_min + offset
+        else:
+            # Absolute clock minutes
+            p_start = offset
         p_end = p_start + duration
         if p_end <= e_min:
             pauses.append({
@@ -1318,7 +1370,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         for idx, shift in enumerate(shifts):
             shift["segments"] = _generate_segments(
                 shift["start"], shift["end"], shift["type"],
-                stagger_index=idx, total_employees=total_scheduled)
+                stagger_index=idx, total_employees=total_scheduled,
+                planning_unit_id=shift.get("planning_unit_id"))
 
         warnings.extend(_apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map))
         if skip_reasons:
@@ -1608,7 +1661,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     for idx, shift in enumerate(shifts):
         shift["segments"] = _generate_segments(
             shift["start"], shift["end"], shift["type"],
-            stagger_index=idx, total_employees=total_scheduled)
+            stagger_index=idx, total_employees=total_scheduled,
+            planning_unit_id=shift.get("planning_unit_id"))
 
     # Fill-in / backup rules: cover shift categories nobody landed on
     fill_warnings = _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map)
@@ -1723,7 +1777,8 @@ def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):
                     "team_lead": emp.team_lead or "",
                     "segments": _generate_segments(_minutes_to_time(s_min), _minutes_to_time(e_min),
                                                    stype, stagger_index=len(shifts),
-                                                   total_employees=len(shifts) + 1),
+                                                   total_employees=len(shifts) + 1,
+                                                   planning_unit_id=getattr(emp, 'planning_unit_id', None)),
                     "fill_in": True,
                 })
                 scheduled_ids.add(ext_id)
