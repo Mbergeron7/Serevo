@@ -488,6 +488,27 @@ def upload_status(job_id):
     return jsonify({"status": "complete", "result": result})
 
 
+@data_import_bp.route("/debug/employees")
+@admin_required
+def debug_employees_all():
+    """Diagnostic page: show all employees with key fields."""
+    from app.models import Employee
+    emps = Employee.query.order_by(Employee.employee_id).all()
+    rows = []
+    for e in emps:
+        rows.append({
+            "id": e.id,
+            "employee_id": e.employee_id,
+            "first_name": e.first_name,
+            "last_name": e.last_name,
+            "start_date": str(e.start_date) if e.start_date else None,
+            "end_date": str(e.end_date) if e.end_date else None,
+            "status": e.status if hasattr(e, 'status') else None,
+            "planning_unit_id": e.planning_unit_id,
+        })
+    return jsonify({"total": len(rows), "employees": rows})
+
+
 @data_import_bp.route("/debug/employee/<emp_id_str>")
 @admin_required
 def debug_employee(emp_id_str):
