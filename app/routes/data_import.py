@@ -1405,6 +1405,13 @@ def _import_employees(rows):
     # DEBUG: scan all rows for emp 1202 before processing
     _row_list = list(rows) if not isinstance(rows, list) else rows
     log.info("DEBUG total rows to process: %d", len(_row_list))
+    if _row_list:
+        log.info("DEBUG ALL row keys for row 0: %s", list(_row_list[0].keys()))
+        # Find Isaac specifically
+        for _ri, _rr in enumerate(_row_list):
+            if _get_val(_rr, "Employee ID") == "1381":
+                log.info("DEBUG ISAAC row %d full data: %s", _ri, {k: str(v)[:50] for k, v in _rr.items()})
+                break
     for _di, _dr in enumerate(_row_list):
         _did = _get_val(_dr, "Employee ID")
         if "1202" in str(_did):
