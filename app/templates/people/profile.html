@@ -246,7 +246,7 @@
         </div>
         <div class="info-item">
           <label>Start Date</label>
-          <div class="val">{{ emp.skill_start or '—' }}</div>
+          <div class="val">{{ emp.start_date or '—' }}</div>
         </div>
         <div class="info-item">
           <label>End Date</label>
@@ -1021,7 +1021,7 @@
       <div class="form-grid-3" style="gap:.75rem;">
         <div class="form-group">
           <label>Start Date</label>
-          <input type="date" id="basic_start" value="{{ emp.skill_start or '' }}">
+          <input type="date" id="basic_start" value="{{ emp.start_date or '' }}">
         </div>
         <div class="form-group">
           <label>Skill End</label>
@@ -1079,7 +1079,7 @@ async function saveBasicInfo(e) {
     languages: document.getElementById('basic_lang').value,
     timezone: document.getElementById('basic_tz').value,
     schedule_excluded: document.getElementById('basic_excluded').checked,
-    skill_start: document.getElementById('basic_start').value,
+    start_date: document.getElementById('basic_start').value,
     skill_end: document.getElementById('basic_skill_end').value,
     end_date: document.getElementById('basic_end').value,
     // Keep existing LOB

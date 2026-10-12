@@ -158,6 +158,7 @@ def save_employee():
         emp.status = (data.get("status") or "Active").strip()
         emp.planning_unit_id = unit.id if unit else None
         emp.all_skills = (data.get("all_skills") or "").strip()
+        emp.start_date = _parse_date(data.get("start_date"))
         emp.skill_start = _parse_date(data.get("skill_start"))
         emp.skill_end = _parse_date(data.get("skill_end"))
         emp.end_date = _parse_date(data.get("end_date"))
