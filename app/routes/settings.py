@@ -1933,8 +1933,9 @@ def contracts_delete():
 def day_models():
     user = get_current_user()
     if user and user.get("is_demo"):
-        from app.demo_data import get_demo_day_models
-        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=[], planning_units=[], shift_templates=[])
+        from app.demo_data import get_demo_day_models, get_demo_activities
+        demo_acts = [{"id": a["code"], "name": a["label"]} for a in get_demo_activities()]
+        return render_template("settings/day_models.html", items=get_demo_day_models(), activities=demo_acts, planning_units=[], shift_templates=[])
     from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
     try:
         items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
