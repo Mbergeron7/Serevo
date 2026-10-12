@@ -694,9 +694,10 @@ def upload_confirm():
         log.info("Post-remap sample row keys: %s", list(rows[0].keys())[:10])
         # Log first row values for key fields to verify mapping worked
         sample = rows[0]
-        log.info("Post-remap sample values: EmpID=%r FirstName=%r LastName=%r Status=%r",
+        log.info("Post-remap sample values: EmpID=%r FirstName=%r LastName=%r Status=%r StartDate=%r EndDate=%r",
                  _get_val(sample, "Employee ID"), _get_val(sample, "First Name"),
-                 _get_val(sample, "Last Name"), _get_val(sample, "Status"))
+                 _get_val(sample, "Last Name"), _get_val(sample, "Status"),
+                 _get_val(sample, "Start Date"), _get_val(sample, "End Date"))
 
     row_count = len(rows)
     user_email = user.get("email", "")
@@ -1295,6 +1296,8 @@ def _import_employees(rows):
                 _set("contract_id", c.id)
 
         # Parse dates — always update when provided; clear sentinels
+        if i <= 5:
+            log.info("DATE DEBUG row %d: row keys=%s", i, list(row.keys()))
         for field, attr in [
             ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
@@ -1304,8 +1307,12 @@ def _import_employees(rows):
             ("End Date", "end_date"),
         ]:
             val = _get_val(row, field)
+            if i <= 5:
+                log.info("DATE DEBUG row %d: field=%r val=%r", i, field, val)
             if val and val.strip():
                 d = _clean_date(val)
+                if i <= 5:
+                    log.info("DATE DEBUG row %d: field=%r clean_date=%r", i, field, d)
                 if d:
                     _set(attr, d)
                 else:
