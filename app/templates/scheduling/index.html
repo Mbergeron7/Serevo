@@ -565,9 +565,11 @@
     <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">
       Mass Update
     </button>
-    <button class="btn-action" id="btnOptimize" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff;">
-      Optimize Breaks
-    </button>
+    <span style="display:inline-flex;align-items:center;gap:0;">
+      <button class="btn-action" id="btnOptimize" onclick="runQuickOptimize()" style="background:#0891b2; color:#fff; border-radius:6px 0 0 6px;">
+        Optimize Breaks &amp; Lunches
+      </button><button class="btn-action" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff; border-radius:0 6px 6px 0; border-left:1px solid rgba(255,255,255,0.3); padding:6px 8px;" title="Customize optimization">⚙</button>
+    </span>
     <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">
       Bulk Edit
     </button>
@@ -951,10 +953,10 @@
 <!-- ── Optimize Breaks Modal ───────────────────────────────── -->
 <div class="modal-overlay" id="optimizeOverlay">
   <div class="modal" style="max-width:620px">
-    <h2>Optimize Breaks &amp; Lunches</h2>
+    <h2>Optimize Breaks &amp; Lunches — Customize</h2>
     <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:16px">
-      Re-position breaks and lunches to minimize coverage impact. The optimizer
-      staggers placements so not everyone is off the phones at the same time.
+      Select specific employees or segment types to optimize. For a quick
+      one-click optimize of all employees, use the main button instead.
     </p>
 
     <div class="form-row">
@@ -3089,6 +3091,100 @@ async function runOptimize() {
 document.getElementById('optimizeOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeOptimizeModal();
 });
+
+// ── Quick Optimize (one-click, all employees, breaks + lunches) ──
+async function runQuickOptimize() {
+  if (!scheduleData || !scheduleData.days.length) {
+    showToast('Load or generate a schedule first.', true);
+    return;
+  }
+  const dayIdx = _massGetActiveDayIdx();
+  const day = scheduleData.days[dayIdx];
+  if (!day || !day.shifts.length) {
+    showToast('No shifts on this day.', true);
+    return;
+  }
+
+  const scheduled = day.shifts.filter(s => s.status === 'scheduled');
+  if (!scheduled.length) {
+    showToast('No scheduled shifts to optimize.', true);
+    return;
+  }
+
+  const shiftIds = scheduled.map(s => parseInt(s.id)).filter(id => id && !isNaN(id));
+  const tmpIds = scheduled.filter(s => String(s.id).startsWith('tmp_'));
+  if (tmpIds.length) {
+    showToast('Save the schedule first before optimizing.', true);
+    return;
+  }
+  if (!shiftIds.length) {
+    showToast('No saved shifts to optimize.', true);
+    return;
+  }
+
+  const btn = document.getElementById('btnOptimize');
+  const origText = btn.textContent;
+  btn.textContent = 'Optimizing…';
+  btn.disabled = true;
+
+  try {
+    const requestBody = {
+      shift_ids: shiftIds,
+      activity_types: ['break', 'lunch'],
+      coverage: day.coverage || [],
+    };
+    if (IS_DEMO) {
+      requestBody.shifts = scheduled.filter(s =>
+        shiftIds.includes(s.id)
+      ).map(s => ({
+        id: s.id,
+        employee: s.employee,
+        start: s.start,
+        end: s.end,
+        type: s.type,
+        segments: (s.segments || []).map(sg => ({
+          id: sg.id, type: sg.type, start: sg.start, end: sg.end,
+          duration_mins: sg.duration_mins,
+        })),
+      }));
+    }
+    const resp = await fetch('/scheduling/optimize-segments', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(requestBody),
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+      showToast('Error: ' + (data.error || 'Unknown'), true);
+      return;
+    }
+
+    const changes = data.changes || [];
+    if (!changes.length) {
+      showToast('Breaks & lunches are already optimally placed.', false);
+      return;
+    }
+
+    // Apply changes to in-memory schedule
+    changes.forEach(c => {
+      const shift = day.shifts.find(s => s.id === c.shift_id);
+      if (!shift) return;
+      const seg = (shift.segments || []).find(sg => sg.id === c.segment_id);
+      if (seg) {
+        seg.start = c.new_start;
+        seg.end = c.new_end;
+      }
+    });
+    renderSchedule();
+    showToast(`Optimized ${changes.length} break/lunch placement${changes.length !== 1 ? 's' : ''} across ${new Set(changes.map(c => c.shift_id)).size} employee${new Set(changes.map(c => c.shift_id)).size !== 1 ? 's' : ''}.`);
+  } catch (e) {
+    showToast('Optimize failed: ' + e, true);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // ══  DRAG-TO-MOVE & COPY/PASTE SEGMENTS  ══════════════════
