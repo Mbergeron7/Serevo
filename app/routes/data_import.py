@@ -518,6 +518,42 @@ def debug_employees_all():
     return jsonify({"total": len(rows), "employees": rows})
 
 
+@data_import_bp.route("/debug/skills/<emp_id_str>")
+@admin_required
+def debug_skills(emp_id_str):
+    """Minimal skill check — just raw SQL, nothing else."""
+    from app.models import db
+    try:
+        emp_row = db.session.execute(db.text(
+            "SELECT id, employee_id, first_name, last_name FROM employees WHERE employee_id = :eid"
+        ), {"eid": emp_id_str}).fetchone()
+        if not emp_row:
+            return jsonify({"error": f"No employee with employee_id={emp_id_str}"})
+        eid = emp_row[0]
+        skills = db.session.execute(db.text(
+            "SELECT sm.id, sg.name, sm.is_active, sm.valid_from, sm.valid_to "
+            "FROM skill_mappings sm LEFT JOIN skill_groups sg ON sg.id = sm.skill_group_id "
+            "WHERE sm.employee_id = :eid"
+        ), {"eid": eid}).fetchall()
+        sels = db.session.execute(db.text(
+            "SELECT sm.id, s.name, sm.valid_from, sm.valid_to "
+            "FROM selection_members sm LEFT JOIN selections s ON s.id = sm.selection_id "
+            "WHERE sm.employee_id = :eid"
+        ), {"eid": eid}).fetchall()
+        return jsonify({
+            "employee": {"db_id": eid, "employee_id": emp_row[1],
+                         "name": f"{emp_row[2]} {emp_row[3]}"},
+            "skill_mappings": [{"id": r[0], "skill": r[1], "active": r[2],
+                                "from": str(r[3]) if r[3] else None,
+                                "to": str(r[4]) if r[4] else None} for r in skills],
+            "selections": [{"id": r[0], "name": r[1],
+                            "from": str(r[2]) if r[2] else None,
+                            "to": str(r[3]) if r[3] else None} for r in sels],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @data_import_bp.route("/debug/employee/<emp_id_str>")
 @admin_required
 def debug_employee(emp_id_str):
