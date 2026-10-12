@@ -175,9 +175,36 @@ def _load_lob_to_pu():
 
 
 def lob_to_planning_unit(lob_name):
-    """Map a LOB display name to its planning unit name for headcount lookup."""
+    """Map a LOB display name to its planning unit name for headcount lookup.
+
+    Resolution order:
+      1. Exact match in the LobMapping table (user-configured).
+      2. Strip known suffixes (" EN", " FR", " Combined") and check if the
+         base name is a real PlanningUnit — this lets language-split and
+         combined LOBs resolve automatically without manual mappings.
+      3. Fall back to the original LOB name (identity mapping).
+    """
     mappings = _load_lob_to_pu()
-    return mappings.get(lob_name, lob_name)
+    if lob_name in mappings:
+        return mappings[lob_name]
+
+    # Auto-strip suffixes and check against real PU names
+    from app.models import PlanningUnit
+    try:
+        pu_names = {pu.name for pu in PlanningUnit.query.all()}
+    except Exception:
+        return lob_name
+
+    for suffix in (" EN", " FR", " Combined"):
+        if lob_name.endswith(suffix):
+            base = lob_name[: -len(suffix)]
+            if base in pu_names:
+                return base
+            # Also check if the base itself has a mapping
+            if base in mappings:
+                return mappings[base]
+
+    return lob_name
 
 
 def _activity_id_to_name(activity_id, planning_unit_name):
