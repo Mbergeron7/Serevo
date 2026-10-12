@@ -701,6 +701,7 @@ def _debug_capacity_alignment_inner():
 
     # 2. Planning Units
     pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    pu_id_to_name = {pu.id: pu.name for pu in pus}
     pu_info = {}
     for pu in pus:
         pu_info[pu.name] = {"id": pu.id, "employees": 0,
@@ -733,7 +734,6 @@ def _debug_capacity_alignment_inner():
                                        "Deleted", "deleted"]))
         .all()
     )
-    pu_id_to_name = {pu.id: pu.name for pu in pus}
 
     for emp in employees:
         pu_name = pu_id_to_name.get(emp.planning_unit_id)
