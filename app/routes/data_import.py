@@ -706,11 +706,20 @@ def _debug_capacity_alignment_inner():
         pu_info[pu.name] = {"id": pu.id, "employees": 0,
                             "active_this_month": 0, "skill_groups": []}
 
-    # 3. Skill Groups per PU
-    for sg in SkillGroup.query.all():
-        pu = next((p for p in pus if p.id == sg.planning_unit_id), None)
-        if pu and pu.name in pu_info:
-            pu_info[pu.name]["skill_groups"].append(sg.name)
+    # 3. Skill Groups — link to PUs via employees who have both
+    sg_names = {sg.id: sg.name for sg in SkillGroup.query.all()}
+    sg_to_pus = {}  # skill_group_name -> set of PU names
+    for sm in SkillMapping.query.filter_by(is_active=True).all():
+        sg_name = sg_names.get(sm.skill_group_id)
+        if not sg_name:
+            continue
+        emp = Employee.query.get(sm.employee_id)
+        if emp and emp.planning_unit_id:
+            pu_name = pu_id_to_name.get(emp.planning_unit_id)
+            if pu_name:
+                sg_to_pus.setdefault(sg_name, set()).add(pu_name)
+                if pu_name in pu_info and sg_name not in pu_info[pu_name]["skill_groups"]:
+                    pu_info[pu_name]["skill_groups"].append(sg_name)
 
     # 4. Employee counts per PU for the requested month
     first_of_month = datetime.date(year, month, 1)
