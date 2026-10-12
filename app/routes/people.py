@@ -465,27 +465,17 @@ def employee_profile(emp_id):
 
     skill_mappings = SkillMapping.query.filter_by(
         employee_id=emp.id
-    ).filter(SkillMapping.valid_to.is_(None)).all()
-    skill_history = SkillMapping.query.filter_by(
-        employee_id=emp.id
-    ).filter(SkillMapping.valid_to.isnot(None)).order_by(
-        SkillMapping.valid_to.desc()).all()
+    ).order_by(SkillMapping.valid_from.desc().nullslast()).all()
+    skill_history = []
     contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()
     selection_memberships = SelectionMember.query.filter_by(
         employee_id=emp.id
-    ).filter(SelectionMember.valid_to.is_(None)).all()
-    selection_history = SelectionMember.query.filter_by(
-        employee_id=emp.id
-    ).filter(SelectionMember.valid_to.isnot(None)).order_by(
-        SelectionMember.valid_to.desc()).all()
+    ).all()
+    selection_history = []
     pu_assignments = EmployeePlanningUnit.query.filter_by(
         employee_id=emp.id
-    ).filter(EmployeePlanningUnit.valid_to.is_(None)).order_by(
-        EmployeePlanningUnit.priority).all()
-    pu_history = EmployeePlanningUnit.query.filter_by(
-        employee_id=emp.id
-    ).filter(EmployeePlanningUnit.valid_to.isnot(None)).order_by(
-        EmployeePlanningUnit.valid_to.desc()).all()
+    ).order_by(EmployeePlanningUnit.priority).all()
+    pu_history = []
     try:
         ss_assignments = EmployeeShiftSequence.query.filter_by(
             employee_id=emp.id
