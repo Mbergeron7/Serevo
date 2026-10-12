@@ -1480,9 +1480,13 @@ def _import_employees(rows):
             _set("planning_unit_id", unit.id)
 
         # Skills text — always update
-        skills_val = (_get_val(row, "All Skills")
-                      or _get_val(row, "Latest Skill Name")
-                      or _get_val(row, "Planning Unit"))
+        _all_skills_raw = _get_val(row, "All Skills")
+        _latest_skill_raw = _get_val(row, "Latest Skill Name")
+        _pu_raw = _get_val(row, "Planning Unit")
+        skills_val = _all_skills_raw or _latest_skill_raw or _pu_raw
+        if i <= 5 or str(emp_id) in ("1202", "1381"):
+            log.info("SKILL FALLBACK row %d (emp %s): all_skills=%r latest_skill=%r planning_unit=%r -> skills_val=%r",
+                     i, emp_id, _all_skills_raw, _latest_skill_raw, _pu_raw, skills_val)
         if skills_val:
             _set("all_skills", skills_val)
             # Ensure each skill name exists as a planning unit
