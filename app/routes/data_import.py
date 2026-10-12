@@ -747,7 +747,9 @@ def _debug_capacity_alignment_inner():
         end = emp.end_date
         if start and start > last_of_month:
             continue
-        if end and end < first_of_month:
+        today = datetime.date.today()
+        cutoff = today if first_of_month >= today.replace(day=1) else first_of_month
+        if end and end < cutoff:
             continue
         pu_info[pu_name]["active_this_month"] += 1
 

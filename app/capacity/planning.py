@@ -637,6 +637,7 @@ def _month_aware_headcount(year):
         is_french = "french" in langs_raw or "français" in langs_raw or "francais" in langs_raw
         is_english = "english" in langs_raw or "anglais" in langs_raw
 
+        today = datetime.date.today()
         for m in range(1, 13):
             first_of_month = datetime.date(year, m, 1)
             _, last_day = calendar.monthrange(year, m)
@@ -645,8 +646,10 @@ def _month_aware_headcount(year):
             # Employee must have started on or before end of month
             if start and start > last_of_month:
                 continue
-            # Employee must not have ended before start of month
-            if end and end < first_of_month:
+            # For past months: employee must not have ended before start of month
+            # For current/future months: employee must not have ended before today
+            cutoff = today if first_of_month >= today.replace(day=1) else first_of_month
+            if end and end < cutoff:
                 continue
 
             hc_by_pu.setdefault(pu_name, {})
