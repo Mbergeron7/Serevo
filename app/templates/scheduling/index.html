@@ -1456,7 +1456,6 @@ function loadSchedule() {
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
 
-  if (!lob) { showToast('Please select a LOB.', 'error'); return; }
   if (!start || !end) { showToast('Please set dates.', 'error'); return; }
 
   showLoading('Loading saved schedule…');

@@ -560,8 +560,8 @@ def load_schedule():
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
 
-        if not lob or not start_str or not end_str:
-            return jsonify({"success": False, "error": "LOB and date range required"})
+        if not start_str or not end_str:
+            return jsonify({"success": False, "error": "Date range required"})
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
@@ -569,7 +569,10 @@ def load_schedule():
         user = get_current_user()
         if user and user.get("is_demo"):
             from app.demo_data import get_demo_schedules, DEMO_EMPLOYEES
-            lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            if lob:
+                lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            else:
+                lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES}
             shifts = []
             d = start_date
             while d <= end_date:
@@ -580,17 +583,23 @@ def load_schedule():
             return jsonify({"success": True, "shifts": shifts})
 
         from app.models import PlanningUnit
-        pu = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
-        ).first()
-        if not pu:
-            return jsonify({"success": True, "shifts": [], "message": "No planning unit found"})
-
-        schedules = Schedule.query.filter(
-            Schedule.planning_unit_id == pu.id,
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+        if lob:
+            pu = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name) == lob.lower()
+            ).first()
+            if not pu:
+                return jsonify({"success": True, "shifts": [], "message": "No planning unit found"})
+            schedules = Schedule.query.filter(
+                Schedule.planning_unit_id == pu.id,
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+            ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+        else:
+            # All LOBs
+            schedules = Schedule.query.filter(
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+            ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
         shifts = [s.to_dict() for s in schedules]
 
