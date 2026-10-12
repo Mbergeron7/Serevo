@@ -572,19 +572,6 @@ def debug_employee(emp_id_str):
     }
 
     if emp:
-        from app.models import SkillMapping, SelectionMember
-        try:
-            skills = SkillMapping.query.filter_by(employee_id=emp.id).all()
-        except Exception as e:
-            db.session.rollback()
-            skills = []
-            info["skill_error"] = str(e)
-        try:
-            selections = SelectionMember.query.filter_by(employee_id=emp.id).all()
-        except Exception as e:
-            db.session.rollback()
-            selections = []
-            info["selection_error"] = str(e)
         info["found"] = {
             "id": emp.id,
             "employee_id": emp.employee_id,
@@ -594,23 +581,43 @@ def debug_employee(emp_id_str):
             "end_date": str(emp.end_date) if emp.end_date else None,
             "status": getattr(emp, 'status', None),
             "planning_unit_id": emp.planning_unit_id,
-            "skill_mappings_count": len(skills),
-            "skill_mappings": [
-                {"id": s.id, "skill_group_id": s.skill_group_id,
-                 "skill_group_name": getattr(s.skill_group, 'name', None) if s.skill_group else None,
-                 "is_active": s.is_active,
-                 "valid_from": str(s.valid_from) if s.valid_from else None,
-                 "valid_to": str(s.valid_to) if s.valid_to else None}
-                for s in skills
-            ],
-            "selection_memberships_count": len(selections),
-            "selection_memberships": [
-                {"id": s.id, "selection_id": s.selection_id,
-                 "valid_from": str(s.valid_from) if s.valid_from else None,
-                 "valid_to": str(s.valid_to) if s.valid_to else None}
-                for s in selections
-            ],
         }
+        # Use raw SQL to avoid ORM relationship issues
+        try:
+            skill_rows = db.session.execute(db.text(
+                "SELECT sm.id, sm.skill_group_id, sg.name as skill_name, "
+                "sm.is_active, sm.valid_from, sm.valid_to "
+                "FROM skill_mappings sm "
+                "LEFT JOIN skill_groups sg ON sg.id = sm.skill_group_id "
+                "WHERE sm.employee_id = :eid"
+            ), {"eid": emp.id}).fetchall()
+            info["found"]["skill_mappings_count"] = len(skill_rows)
+            info["found"]["skill_mappings"] = [
+                {"id": r[0], "skill_group_id": r[1], "skill_name": r[2],
+                 "is_active": r[3], "valid_from": str(r[4]) if r[4] else None,
+                 "valid_to": str(r[5]) if r[5] else None}
+                for r in skill_rows
+            ]
+        except Exception as e:
+            db.session.rollback()
+            info["found"]["skill_error"] = str(e)
+        try:
+            sel_rows = db.session.execute(db.text(
+                "SELECT sm.id, sm.selection_id, s.name, sm.valid_from, sm.valid_to "
+                "FROM selection_members sm "
+                "LEFT JOIN selections s ON s.id = sm.selection_id "
+                "WHERE sm.employee_id = :eid"
+            ), {"eid": emp.id}).fetchall()
+            info["found"]["selection_memberships_count"] = len(sel_rows)
+            info["found"]["selection_memberships"] = [
+                {"id": r[0], "selection_id": r[1], "selection_name": r[2],
+                 "valid_from": str(r[3]) if r[3] else None,
+                 "valid_to": str(r[4]) if r[4] else None}
+                for r in sel_rows
+            ]
+        except Exception as e:
+            db.session.rollback()
+            info["found"]["selection_error"] = str(e)
 
     for p in partials:
         info["partial_matches"].append({
