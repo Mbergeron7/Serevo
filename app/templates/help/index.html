@@ -531,13 +531,24 @@
   <!-- ============================================================ -->
   <!-- CAPACITY -->
   <!-- ============================================================ -->
-  <div class="help-section" id="capacity" data-keywords="capacity planning staffing headcount long range google sheets requirements overstaffed understaffed erlang shrinkage service level">
+  <div class="help-section" id="capacity" data-keywords="capacity planning staffing headcount long range google sheets requirements overstaffed understaffed erlang shrinkage service level summary control panel data sources lob mapping">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Capacity Planning</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Capacity Panel</h3>
-      <p>The Capacity Panel shows current staffing levels against requirements for each planning unit. For every interval it displays:</p>
+      <p>Capacity Planning is organized into five sub-pages, accessible from the tab bar at the top:</p>
+
+      <h3>📊 Summary</h3>
+      <p>The Summary page provides a high-level overview of your capacity position. It displays:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Stat cards</strong> — total headcount, total required FTEs, overall variance, and average utilization at a glance</li>
+        <li><strong>Headcount trend chart</strong> — how headcount has changed month-over-month across the year</li>
+        <li><strong>Headcount table</strong> — monthly headcount per planning unit, showing current employees and any fluctuations from hires, terminations, and leaves</li>
+        <li><strong>Capacity plan table</strong> — required FTEs vs. available headcount per planning unit per month, with surplus/deficit highlighted</li>
+      </ul>
+
+      <h3>🛠 Control Panel</h3>
+      <p>The Control Panel shows current staffing levels against requirements for each planning unit. For every interval it displays:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Required staff</strong> — calculated from forecast volume, service level targets, AHT, and shrinkage</li>
         <li><strong>Scheduled staff</strong> — how many employees are actually scheduled</li>
@@ -545,10 +556,10 @@
       </ul>
       <p>Color coding highlights intervals that are significantly over or under the requirement. Use this to identify coverage gaps before publishing schedules.</p>
 
-      <h3>Capacity Summary</h3>
-      <p>The summary view aggregates capacity data across all planning units, showing overall staffing health for the selected date range. It rolls up interval-level data into daily and weekly totals, making it easy to see trends at a higher level.</p>
+      <h3>📋 Capacity Plan</h3>
+      <p>The Capacity Plan page shows a detailed per-planning-unit monthly table of required FTEs versus available headcount. This is the primary working view for capacity analysts — use it to compare staffing needs across months and export the data as CSV for sharing with finance or operations.</p>
 
-      <h3>Long-Range Planning</h3>
+      <h3>📈 Long-Range Planning</h3>
       <p>Use long-range planning to project headcount needs weeks or months ahead:</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Select the planning unit and the future date range.</li>
@@ -556,6 +567,17 @@
         <li>Compare required FTEs against your current headcount to identify hiring needs.</li>
         <li>Export the long-range plan for budgeting and workforce planning discussions.</li>
       </ol>
+
+      <h3>🔗 Data Sources</h3>
+      <p>The Data Sources page shows which data feeds capacity planning. It displays the connection status for Google Sheets, API integrations, and any other configured data sources. Use it to verify your data pipeline is healthy and to troubleshoot when capacity numbers look off.</p>
+
+      <h3>How Headcount Is Calculated</h3>
+      <p>Capacity planning calculates headcount per planning unit per month using employee records from the People roster:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Historical months</strong> — counts all employees who were assigned to the planning unit during that month, based on their hire date and end date. Employees who were terminated during a past month are still counted for the months they were active.</li>
+        <li><strong>Current and future months</strong> — counts only employees with an <strong>Active</strong> status. Terminated employees are excluded from the current month forward.</li>
+      </ul>
+      <p>This means historical headcount accurately reflects who was actually working each month, while current/future headcount reflects your real available workforce.</p>
 
       <h3>Google Sheets Integration</h3>
       <p>Capacity data can be pulled from or pushed to connected Google Sheets for collaboration with finance and operations teams:</p>
@@ -1095,6 +1117,33 @@
         <li><strong>Average Handle Time (AHT)</strong> — the expected average duration of each contact in seconds</li>
         <li><strong>Shrinkage</strong> — the percentage of scheduled time that agents are unavailable due to breaks, meetings, training, absenteeism, etc. (e.g., 30%). This factor increases the required headcount to compensate.</li>
       </ul>
+
+      <!-- LOB Mappings -->
+      <h3>LOB Mappings</h3>
+      <p>LOB Mappings let you map source line-of-business names from external systems (ACD platforms, telephony, CRM exports) to your internal planning units. This is essential when imported data uses different naming conventions than your planning units — for example, your ACD might label queues as "SS Sales EN", "SS Sales FR", and "SS Sales Combined", but all three should roll up to your "Sales Support" planning unit.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">How LOB Mappings Work</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Source Name</strong> — the LOB name exactly as it appears in your imported data (e.g., "SS Sales EN", "Tech_Support_L2", "Billing-Collections")</li>
+        <li><strong>Planning Unit</strong> — the planning unit this source name maps to. Multiple source names can map to the same planning unit.</li>
+      </ul>
+      <p>Capacity planning uses these mappings to aggregate forecast hours and headcount from multiple source LOBs into a single planning unit view. Without mappings, imported LOB names that don't exactly match a planning unit name will be ignored in capacity calculations.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Common Patterns</h4>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Language suffixes</strong> — map "Sales EN", "Sales FR", and "Sales Combined" to a single "Sales" planning unit</li>
+        <li><strong>System prefixes</strong> — map "ACD_Billing" or "CRM-Billing" to your "Billing" planning unit</li>
+        <li><strong>Legacy names</strong> — map old queue names to current planning unit names after a reorg</li>
+      </ul>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Setting Up LOB Mappings</h4>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to <strong>Settings &rarr; LOB Mappings</strong>.</li>
+        <li>Click <strong>+ Add Mapping</strong>.</li>
+        <li>Enter the <strong>Source Name</strong> exactly as it appears in your imported data.</li>
+        <li>Select the <strong>Planning Unit</strong> it should map to.</li>
+        <li>Click <strong>Save</strong>. Repeat for each source LOB name that needs mapping.</li>
+      </ol>
 
       <!-- Day Models -->
       <h3>Day Models</h3>

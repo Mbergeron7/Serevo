@@ -1048,10 +1048,11 @@ def get_demo_settings_data():
         "availability": availability,
         "current_year": cur_year,
         "lob_mappings": [
-            {"id": 1, "source_name": "SS Sales Combined", "planning_unit_name": "SS Sales"},
-            {"id": 2, "source_name": "CS Tier1 Overflow", "planning_unit_name": "Customer Service"},
-            {"id": 3, "source_name": "Tech_Support_L2", "planning_unit_name": "Tech Support"},
-            {"id": 4, "source_name": "Billing-Collections", "planning_unit_name": "Billing"},
+            {"id": 1, "source_name": "SS Sales EN",          "planning_unit_name": "Sales Support"},
+            {"id": 2, "source_name": "SS Sales FR",          "planning_unit_name": "Sales Support"},
+            {"id": 3, "source_name": "SS Sales Combined",    "planning_unit_name": "Sales Support"},
+            {"id": 4, "source_name": "Tech_Support_L2",      "planning_unit_name": "Tech Help Desk"},
+            {"id": 5, "source_name": "Billing-Collections",  "planning_unit_name": "Billing"},
         ],
     }
 
