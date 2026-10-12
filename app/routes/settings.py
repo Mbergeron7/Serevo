@@ -1932,8 +1932,11 @@ def contracts_delete():
 @admin_required
 def day_models():
     user = get_current_user()
-    from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate
+    from app.models import DayModel, Activity, PlanningUnit, ShiftTemplate, db
     try:
+        # Fix any records saved without is_active set
+        DayModel.query.filter(DayModel.is_active.is_(None)).update({DayModel.is_active: True})
+        db.session.commit()
         items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
     except Exception as e:
         log.warning(f"day_models query failed (table/columns may not exist yet): {e}")
@@ -1997,6 +2000,7 @@ def day_models_save():
         item.day_type = d.get("day_type", "any")
         item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
         item.shift_template_id = int(d["shift_template_id"]) if d.get("shift_template_id") else None
+        item.is_active = d.get("is_active", True)
         item.activities_json = json.dumps(d.get("activities", []))
         db.session.commit()
         return jsonify(success=True)
