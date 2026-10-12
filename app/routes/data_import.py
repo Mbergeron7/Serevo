@@ -572,6 +572,9 @@ def debug_employee(emp_id_str):
     }
 
     if emp:
+        from app.models import SkillMapping, SelectionMember
+        skills = SkillMapping.query.filter_by(employee_id=emp.id).all()
+        selections = SelectionMember.query.filter_by(employee_id=emp.id).all()
         info["found"] = {
             "id": emp.id,
             "employee_id": emp.employee_id,
@@ -583,6 +586,20 @@ def debug_employee(emp_id_str):
             "skill_end": str(emp.skill_end) if hasattr(emp, 'skill_end') and emp.skill_end else None,
             "status": emp.status if hasattr(emp, 'status') else None,
             "planning_unit_id": emp.planning_unit_id,
+            "skill_mappings": [
+                {"id": s.id, "skill_group_id": s.skill_group_id,
+                 "skill_group_name": s.skill_group.name if s.skill_group else None,
+                 "is_active": s.is_active,
+                 "valid_from": str(s.valid_from) if s.valid_from else None,
+                 "valid_to": str(s.valid_to) if s.valid_to else None}
+                for s in skills
+            ],
+            "selection_memberships": [
+                {"id": s.id, "selection_id": s.selection_id,
+                 "valid_from": str(s.valid_from) if s.valid_from else None,
+                 "valid_to": str(s.valid_to) if s.valid_to else None}
+                for s in selections
+            ],
         }
 
     for p in partials:
