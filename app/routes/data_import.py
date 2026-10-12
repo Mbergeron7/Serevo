@@ -1246,7 +1246,7 @@ def _import_employees(rows):
                     log.info("  _set_if_blank row %d: %s %r -> %r", i, attr, old, value)
 
         # ── Core identity — always update ──
-        if i <= 5 and not is_new:
+        if (i <= 5 or str(emp_id) == "1202") and not is_new:
             log.info("BEFORE row %d (emp %s): status=%r start_date=%r end_date=%r email=%r planning_unit_id=%r",
                      i, emp_id, emp.status, emp.start_date, emp.end_date, emp.email, emp.planning_unit_id)
         emp.first_name = first
@@ -1302,8 +1302,9 @@ def _import_employees(rows):
                 _set("contract_id", c.id)
 
         # Parse dates — always update when provided; clear sentinels
-        if i <= 5:
-            log.info("DATE DEBUG row %d: row keys=%s", i, list(row.keys()))
+        trace = (i <= 5 or str(emp_id) == "1202")
+        if trace:
+            log.info("DATE DEBUG row %d (emp %s): row keys=%s", i, emp_id, list(row.keys()))
         for field, attr in [
             ("Start Date", "start_date"),
             ("Skill Start", "skill_start"),
@@ -1313,12 +1314,14 @@ def _import_employees(rows):
             ("End Date", "end_date"),
         ]:
             val = _get_val(row, field)
-            if i <= 5:
-                log.info("DATE DEBUG row %d: field=%r val=%r", i, field, val)
+            if trace:
+                log.info("DATE DEBUG row %d (emp %s): field=%r val=%r current=%r",
+                         i, emp_id, field, val, getattr(emp, attr, "N/A"))
             if val and val.strip():
                 d = _clean_date(val)
-                if i <= 5:
-                    log.info("DATE DEBUG row %d: field=%r clean_date=%r", i, field, d)
+                if trace:
+                    log.info("DATE DEBUG row %d (emp %s): field=%r clean_date=%r",
+                             i, emp_id, field, d)
                 if d:
                     _set(attr, d)
                 else:
@@ -1420,7 +1423,7 @@ def _import_employees(rows):
                             sm.valid_to = skill_end
                         db.session.add(sm)
 
-        if i <= 5 and not is_new:
+        if (i <= 5 or str(emp_id) == "1202") and not is_new:
             modified = db.session.is_modified(emp)
             log.info("AFTER row %d (emp %s): modified=%s status=%r start_date=%r end_date=%r",
                      i, emp_id, modified, emp.status, emp.start_date, emp.end_date)
