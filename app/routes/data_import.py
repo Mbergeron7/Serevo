@@ -573,8 +573,18 @@ def debug_employee(emp_id_str):
 
     if emp:
         from app.models import SkillMapping, SelectionMember
-        skills = SkillMapping.query.filter_by(employee_id=emp.id).all()
-        selections = SelectionMember.query.filter_by(employee_id=emp.id).all()
+        try:
+            skills = SkillMapping.query.filter_by(employee_id=emp.id).all()
+        except Exception as e:
+            db.session.rollback()
+            skills = []
+            info["skill_error"] = str(e)
+        try:
+            selections = SelectionMember.query.filter_by(employee_id=emp.id).all()
+        except Exception as e:
+            db.session.rollback()
+            selections = []
+            info["selection_error"] = str(e)
         info["found"] = {
             "id": emp.id,
             "employee_id": emp.employee_id,
@@ -582,18 +592,18 @@ def debug_employee(emp_id_str):
             "last_name": emp.last_name,
             "start_date": str(emp.start_date) if emp.start_date else None,
             "end_date": str(emp.end_date) if emp.end_date else None,
-            "skill_start": str(emp.skill_start) if hasattr(emp, 'skill_start') and emp.skill_start else None,
-            "skill_end": str(emp.skill_end) if hasattr(emp, 'skill_end') and emp.skill_end else None,
-            "status": emp.status if hasattr(emp, 'status') else None,
+            "status": getattr(emp, 'status', None),
             "planning_unit_id": emp.planning_unit_id,
+            "skill_mappings_count": len(skills),
             "skill_mappings": [
                 {"id": s.id, "skill_group_id": s.skill_group_id,
-                 "skill_group_name": s.skill_group.name if s.skill_group else None,
+                 "skill_group_name": getattr(s.skill_group, 'name', None) if s.skill_group else None,
                  "is_active": s.is_active,
                  "valid_from": str(s.valid_from) if s.valid_from else None,
                  "valid_to": str(s.valid_to) if s.valid_to else None}
                 for s in skills
             ],
+            "selection_memberships_count": len(selections),
             "selection_memberships": [
                 {"id": s.id, "selection_id": s.selection_id,
                  "valid_from": str(s.valid_from) if s.valid_from else None,
