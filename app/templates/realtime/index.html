@@ -1378,10 +1378,18 @@ async function laLoadAgents(showSpinner) {
     document.getElementById("laGrid").innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)"><span class="spinner"></span> Loading…</div>';
   }
   try {
-    const resp=await fetch("/realtime/api/live-agents",{method:"POST",headers:{"Content-Type":"application/json","X-CSRFToken":document.querySelector('meta[name=csrf-token]')?.content||""},body:JSON.stringify({})});
+    let resp=await fetch("/realtime/api/live-agents",{method:"POST",headers:{"Content-Type":"application/json","X-CSRFToken":document.querySelector('meta[name=csrf-token]')?.content||""},credentials:"same-origin",body:JSON.stringify({})});
+    if(resp.status===401){
+      // Transient auth hiccup — retry once after a short delay
+      await new Promise(r=>setTimeout(r,1500));
+      resp=await fetch("/realtime/api/live-agents",{method:"POST",headers:{"Content-Type":"application/json","X-CSRFToken":document.querySelector('meta[name=csrf-token]')?.content||""},credentials:"same-origin",body:JSON.stringify({})});
+    }
     const data=await resp.json();
     la_lastData={};
-    if(data.error){document.getElementById("laGrid").innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:#c62828">${data.error}</div>`;return;}
+    if(data.error){
+      if(resp.status===401){return;} // Skip display — next auto-refresh will retry
+      document.getElementById("laGrid").innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:#c62828">${data.error}</div>`;return;
+    }
 
     const lobs=Object.keys(data.by_lob).sort();
     let html="";
