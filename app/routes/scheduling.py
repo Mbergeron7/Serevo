@@ -1730,24 +1730,44 @@ def _optimize_demo_segments(payload):
         duration = seg.get("duration_mins") or 15
         seg_type = seg.get("type", "")
 
-        # Find rule window from day model
+        # Find rule window from day model — match by type AND proximity
         dm_acts = dm_rules_cache.get((shift.get("start"), shift.get("end")), [])
         rule = None
-        for act in dm_acts:
-            act_id = str(act.get("activity_id", ""))
-            # Match by type similarity
-            if act_id == seg_type or act_id.startswith(seg_type) or seg_type.startswith(act_id):
-                rule = act
-                break
-            # Try matching "break" to activity_id that's a SegmentCode id
+        seg_current_mins = _time_to_mins(seg.get("start", "00:00"))
+        seg_offset = seg_current_mins - s_s  # how far into shift
+
+        def _act_matches_type(act_id, seg_t):
+            """Check if activity_id matches segment type."""
+            if act_id == seg_t or act_id.startswith(seg_t) or seg_t.startswith(act_id):
+                return True
+            # Try SegmentCode lookup for numeric IDs
             try:
                 from app.models import SegmentCode
                 sc = SegmentCode.query.filter_by(id=int(act_id)).first() if act_id.isdigit() else None
-                if sc and (seg_type in sc.code.lower() or sc.code.lower().startswith(seg_type)):
-                    rule = act
-                    break
+                if sc and (seg_t in sc.code.lower() or sc.code.lower().startswith(seg_t)):
+                    return True
             except Exception:
                 pass
+            return False
+
+        # Collect all matching rules, pick the one whose window center is closest
+        # to the segment's current position (handles multiple breaks)
+        candidates = []
+        for act in dm_acts:
+            act_id = str(act.get("activity_id", ""))
+            if _act_matches_type(act_id, seg_type):
+                # Calculate rule window midpoint relative to shift
+                w_s = act.get("window_start_mins", 0)
+                w_e = act.get("window_end_mins", w_s)
+                if act.get("relative", True):
+                    mid = (w_s + w_e) / 2
+                else:
+                    mid = (w_s + w_e) / 2 - s_s
+                dist = abs(mid - seg_offset)
+                candidates.append((dist, act))
+        if candidates:
+            candidates.sort(key=lambda x: x[0])
+            rule = candidates[0][1]
 
         # Determine window
         if rule:
@@ -1940,12 +1960,13 @@ def optimize_segments():
         _rules_cache = {}
 
         def _rules_for_shift(shift):
-            """Return {activity_type -> rule} for a shift, using day model windows first."""
+            """Return list of rules for a shift, using day model windows first.
+            Multiple rules with the same type (e.g. two breaks) are kept separate."""
             cache_key = (shift.shift_start, shift.shift_end, shift.planning_unit_id, shift.shift_type)
             if cache_key in _rules_cache:
                 return _rules_cache[cache_key]
 
-            by_type = {}
+            rules_list = []
 
             # Try to match a day model by shift times
             s_str = shift.shift_start.strftime("%H:%M") if shift.shift_start else ""
@@ -1960,7 +1981,7 @@ def optimize_segments():
                 for act in dm_acts:
                     act_id = str(act.get("activity_id", ""))
                     act_type = _code_by_id.get(act_id, act_id)
-                    by_type[act_type] = {
+                    rules_list.append({
                         "type": act_type,
                         "offset_mins": act.get("offset_mins") or act.get("window_start_mins", 0),
                         "duration_mins": act.get("duration_mins", 15),
@@ -1969,16 +1990,13 @@ def optimize_segments():
                         "window_end_mins": act.get("window_end_mins", 0),
                         "interval_mins": act.get("interval_mins"),
                         "relative": act.get("relative", True),
-                    }
+                    })
             else:
                 # Fall back to engine segment rules
-                rules = _get_segment_rules(shift.shift_type or "full")
-                for r in rules:
-                    if r["type"] not in by_type:
-                        by_type[r["type"]] = r
+                rules_list = list(_get_segment_rules(shift.shift_type or "full"))
 
-            _rules_cache[cache_key] = by_type
-            return by_type
+            _rules_cache[cache_key] = rules_list
+            return rules_list
 
         # Build per-shift fixed segments (meetings, training, etc.) that must not overlap
         shift_fixed = {}  # shift.id -> [(start_min, end_min)]
@@ -2002,27 +2020,32 @@ def optimize_segments():
 
         for shift, seg, s_s, s_e in to_reposition:
             duration = seg.duration_mins or 15
-            rules_by_type = _rules_for_shift(shift)
-            rule = rules_by_type.get(seg.activity_type)
+            rules_list = _rules_for_shift(shift)
+            seg_start_min = (seg.start_time.hour * 60 + seg.start_time.minute) if seg.start_time else s_s
+            seg_offset = seg_start_min - s_s  # how far into the shift
 
-            # If no exact match, find the best rule by base type + proximity
-            # e.g. segment "break" matches rules "break_1", "break_2" — pick closest
-            if not rule and seg.activity_type:
-                seg_start_min = (seg.start_time.hour * 60 + seg.start_time.minute) if seg.start_time else s_s
-                base = seg.activity_type.rstrip("_0123456789")  # "break_2" -> "break"
-                candidates = []
-                for rtype, r in rules_by_type.items():
-                    r_base = rtype.rstrip("_0123456789")
-                    if r_base == base or rtype.startswith(seg.activity_type) or seg.activity_type.startswith(rtype):
-                        # Score by how close this rule's window is to the segment's current position
-                        r_mid = r.get("window_start_mins", 0) + r.get("window_end_mins", 0)
-                        if r.get("relative", True):
-                            r_mid = s_s + r_mid
-                        dist = abs(r_mid / 2 - seg_start_min)
-                        candidates.append((dist, r))
-                if candidates:
-                    candidates.sort(key=lambda x: x[0])
-                    rule = candidates[0][1]
+            # Find the best-matching rule by type similarity AND proximity
+            rule = None
+            seg_base = (seg.activity_type or "").rstrip("_0123456789")
+            candidates = []
+            for r in rules_list:
+                rtype = r.get("type", "")
+                r_base = rtype.rstrip("_0123456789")
+                if (rtype == seg.activity_type or r_base == seg_base
+                        or rtype.startswith(seg.activity_type or "~~")
+                        or (seg.activity_type or "~~").startswith(rtype)):
+                    # Score by how close this rule's window midpoint is to the segment
+                    w_s = r.get("window_start_mins", 0)
+                    w_e = r.get("window_end_mins", w_s)
+                    if r.get("relative", True):
+                        mid = (w_s + w_e) / 2
+                    else:
+                        mid = (w_s + w_e) / 2 - s_s
+                    dist = abs(mid - seg_offset)
+                    candidates.append((dist, r))
+            if candidates:
+                candidates.sort(key=lambda x: x[0])
+                rule = candidates[0][1]
 
             # Determine window: use rule window (relative to shift start or absolute),
             # or fall back to full shift
