@@ -612,7 +612,7 @@ def _month_aware_headcount(year):
     employees = (
         Employee.query
         .filter(Employee.planning_unit_id.isnot(None))
-        .filter(Employee.status.in_(["Active", "active"]))
+        .filter(~Employee.status.in_(["Deleted", "deleted"]))
         .all()
     )
     # Build PU id→name cache
@@ -648,8 +648,12 @@ def _month_aware_headcount(year):
                 continue
             # For past months: employee must not have ended before start of month
             # For current/future months: employee must not have ended before today
-            cutoff = today if first_of_month >= today.replace(day=1) else first_of_month
+            #   AND must currently be Active (not Terminated/Inactive)
+            is_current_or_future = first_of_month >= today.replace(day=1)
+            cutoff = today if is_current_or_future else first_of_month
             if end and end < cutoff:
+                continue
+            if is_current_or_future and emp.status not in ("Active", "active"):
                 continue
 
             hc_by_pu.setdefault(pu_name, {})
