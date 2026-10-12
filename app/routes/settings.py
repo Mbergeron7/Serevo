@@ -1950,6 +1950,14 @@ def day_models():
         from app.models import db
         db.session.rollback()
         activities = []
+    # Fall back to SegmentCode if no Activity records exist
+    if not activities:
+        try:
+            from app.models import SegmentCode
+            activities = [{"id": sc.id, "name": sc.label} for sc in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.sort_order, SegmentCode.label).all()]
+        except Exception:
+            from app.models import db
+            db.session.rollback()
     try:
         planning_units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
     except Exception:
