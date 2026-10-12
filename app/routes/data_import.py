@@ -77,6 +77,8 @@ COLUMN_ALIASES = {
                          "unit", "site", "location", "center", "centre"],
     "All Skills":       ["all skills", "skills", "skill list", "competencies",
                          "qualifications"],
+    "All Selections":   ["all selections", "selections", "selection list",
+                         "groups", "employee groups"],
     "Email":            ["email", "e-mail", "email address", "mail"],
     "Address Email":    ["address email", "work email", "corporate email",
                          "business email"],
@@ -291,6 +293,7 @@ UPLOAD_TYPES = {
                       "Latest Skill Start", "Latest Skill Name", "Latest Skill End",
                       "Start Date", "End Date",
                       "Planning Unit", "Planning Unit Start Date", "Planning Unit End Date",
+                      "All Selections",
                       "Contract Type", "Contract", "Contract Start", "Contract End",
                       "Email", "Address Email",
                       "External ID 1", "External ID 2", "Languages",
@@ -1275,7 +1278,8 @@ def _get_or_create_unit(name):
 def _import_employees(rows):
     from app.models import (db, Employee, Contract as ContractModel,
                             EmployeeContract, EmployeePlanningUnit,
-                            SkillGroup, SkillMapping)
+                            SkillGroup, SkillMapping,
+                            Selection, SelectionMember)
     imported, skipped = 0, 0
     errors = []
 
@@ -1577,6 +1581,41 @@ def _import_employees(rows):
                             sm.valid_from = skill_start
                         if skill_end and not sm.valid_to:
                             sm.valid_to = skill_end
+
+        # ── Junction tables: selections from "All Selections" ──
+        selections_val = _get_val(row, "All Selections")
+        if selections_val:
+            sel_start = _clean_date(_get_val(row, "Start Date"))
+            sel_end   = _clean_date(_get_val(row, "End Date"))
+            for sel_name in selections_val.split(","):
+                sel_name = sel_name.strip()
+                if not sel_name:
+                    continue
+                sel = Selection.query.filter(
+                    db.func.lower(Selection.name) == sel_name.lower()
+                ).first()
+                if not sel:
+                    sel = Selection(name=sel_name, is_active=True)
+                    db.session.add(sel)
+                    db.session.flush()
+                sm_sel = SelectionMember.query.filter_by(
+                    employee_id=emp.id, selection_id=sel.id
+                ).first()
+                if not sm_sel:
+                    sm_sel = SelectionMember(
+                        employee_id=emp.id,
+                        selection_id=sel.id,
+                    )
+                    if sel_start:
+                        sm_sel.valid_from = sel_start
+                    if sel_end:
+                        sm_sel.valid_to = sel_end
+                    db.session.add(sm_sel)
+                else:
+                    if sel_start and not sm_sel.valid_from:
+                        sm_sel.valid_from = sel_start
+                    if sel_end and not sm_sel.valid_to:
+                        sm_sel.valid_to = sel_end
 
         if (i <= 5 or str(emp_id) == "1202") and not is_new:
             modified = db.session.is_modified(emp)
