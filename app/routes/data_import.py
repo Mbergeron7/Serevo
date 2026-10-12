@@ -688,10 +688,16 @@ def upload_confirm():
 
     # Remap rows using confirmed mapping
     if rows:
-        log.info("Pre-remap sample row keys: %s", list(rows[0].keys())[:10])
+        log.info("Pre-remap sample row keys: %s", list(rows[0].keys()))
+        # Check if Start Date exists in raw data
+        raw_sd = _get_val(rows[0], "Start Date")
+        log.info("Pre-remap Start Date value: %r", raw_sd)
     rows = _remap_rows(rows, mapping, inverted=mapping_inverted)
     if rows:
-        log.info("Post-remap sample row keys: %s", list(rows[0].keys())[:10])
+        log.info("Post-remap sample row keys: %s", list(rows[0].keys()))
+        # Check if Start Date survived remapping
+        post_sd = _get_val(rows[0], "Start Date")
+        log.info("Post-remap Start Date value: %r", post_sd)
         # Log first row values for key fields to verify mapping worked
         sample = rows[0]
         log.info("Post-remap sample values: EmpID=%r FirstName=%r LastName=%r Status=%r StartDate=%r EndDate=%r",
