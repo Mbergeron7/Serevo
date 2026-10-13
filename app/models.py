@@ -1981,6 +1981,7 @@ class WeekTimePattern(db.Model):
             "planning_unit_id": self.planning_unit_id,
             "planning_unit": pu.name if pu else "All",
             "assigned_day_models": [adm.to_dict() for adm in self.assigned_day_models],
+            "assigned_day_model_ids": [adm.day_model_id for adm in self.assigned_day_models],
             "is_active": self.is_active,
         }
 
