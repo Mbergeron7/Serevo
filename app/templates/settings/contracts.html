@@ -372,13 +372,21 @@ function autoFillDefaults() {
   const chkIf = (id, val) => { const el = document.getElementById('f_'+id); if (el && !el.checked) el.checked = val; };
 
   const type = v('contract_type') || 'full_time';
+  const setVal = (id, val) => { const el = document.getElementById('f_'+id); if (el) el.value = val; };
+
+  // Parse contract name for explicit values like "51 hrs", "6x8.5hr"
+  const name = v('name');
+  const hrsMatch = name.match(/(\d+)\s*hrs/i);
+  const patt = name.match(/(\d)x(\d+\.?\d*)hr/i);
+
+  // If name has explicit info, override the key fields to match
+  if (patt) setVal('days_per_week', parseInt(patt[1]));
+  if (hrsMatch) { setVal('weekly_hours', parseFloat(hrsMatch[1])); setVal('weekly_hours_target', parseFloat(hrsMatch[1])); }
+
   const dpw = parseFloat(v('days_per_week')) || 5;
   const weeklyHrs = parseFloat(v('weekly_hours') || v('weekly_hours_target')) || (type === 'full_time' ? 40 : type === 'part_time' ? 20 : 40);
 
-  // Parse contract name for patterns like "4x10hr"
-  const name = v('name');
   let dailyTarget = weeklyHrs / dpw;
-  const patt = name.match(/(\d)x(\d+)hr/i);
   if (patt) dailyTarget = parseFloat(patt[2]);
 
   const daily = Math.round(dailyTarget * 4) / 4; // round to quarter-hour
@@ -386,20 +394,24 @@ function autoFillDefaults() {
   const dailyMax = Math.round((daily + 2) * 4) / 4;
 
   // ── Work Time tab ──
-  setIf('weekly_hours', weeklyHrs);
-  setIf('weekly_hours_target', weeklyHrs);
-  setIf('weekly_hours_min', Math.max(weeklyHrs - 5, 0));
-  setIf('monthly_hours_max', Math.round(weeklyHrs * 4.5));
-  setIf('daily_hours_target', daily);
-  setIf('daily_hours_min', Math.max(dailyMin, 4));
-  setIf('daily_hours_max', Math.min(dailyMax, 12));
+  // If name had explicit info, override these to match; otherwise fill if empty
+  const nameHasInfo = !!(patt || hrsMatch);
+  const setWork = nameHasInfo ? setVal : setIf;
+  setWork('weekly_hours', weeklyHrs);
+  setWork('weekly_hours_target', weeklyHrs);
+  setWork('weekly_hours_min', Math.max(weeklyHrs - 5, 0));
+  setWork('monthly_hours_max', Math.round(weeklyHrs * 4.5));
+  setWork('daily_hours_target', daily);
+  setWork('daily_hours_min', Math.max(dailyMin, 4));
+  setWork('daily_hours_max', Math.min(dailyMax, 12));
 
   // Per-day work hours (HH:MM format)
   const hhMM = h => { const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); };
   const dayHrs = hhMM(daily);
   const days = ['mon','tue','wed','thu','fri','sat','sun'];
   days.forEach((d, i) => {
-    if (i < dpw) setIf('work_hours_'+d, dayHrs);
+    if (i < dpw) { nameHasInfo ? setVal('work_hours_'+d, dayHrs) : setIf('work_hours_'+d, dayHrs); }
+    else if (nameHasInfo) setVal('work_hours_'+d, '');  // clear days beyond dpw
   });
 
   // ── General tab ──
