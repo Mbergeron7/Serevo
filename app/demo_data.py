@@ -2095,6 +2095,13 @@ def get_demo_live_agents():
             current_since = shift_end
             since_h, since_m = eh, em
 
+        # Attendance flag: offline during shift = left early
+        attendance = ""
+        is_offline = status in ("Offline",)
+        is_shift_done_flag = shift_done if not (is_offline and shift_done) else True
+        if is_offline and not shift_done and not (now_mins < shift_start_mins + 5 and now_mins >= shift_start_mins):
+            attendance = "left_early"
+
         agent = {
             "name": name,
             "user_id": eid,
@@ -2104,10 +2111,11 @@ def get_demo_live_agents():
             "lob": lob,
             "shift_start": shift_start,
             "shift_end": shift_end,
-            "shift_done": shift_done if not (status == "Offline" and shift_done) else True,
+            "shift_done": is_shift_done_flag,
             "sched_now": sched_now,
             "not_scheduled": not_scheduled,
             "pre_shift": now_mins < shift_start_mins + 5 and now_mins >= shift_start_mins,
+            "attendance": attendance,
         }
 
         by_lob.setdefault(lob, []).append(agent)

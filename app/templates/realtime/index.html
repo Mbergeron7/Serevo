@@ -364,7 +364,7 @@
     .la-row.la-warn { background:rgba(255,152,0,.10); }
     .la-row.la-warn .la-dur { color:#e65100; font-weight:700; }
     .la-name { font-size:.74rem; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
-    .la-adh { flex:0 0 80px; text-align:center; }
+    .la-adh { flex:0 0 100px; text-align:center; }
     .la-badge { font-size:.62rem; font-weight:600; border-radius:10px; padding:1px 5px; color:#fff; flex:0 0 90px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px; }
     .la-dur { font-size:.65rem; color:var(--text-muted); min-width:34px; text-align:right; flex-shrink:0; }
     .la-empty { padding:18px; text-align:center; color:var(--text-muted); font-size:.82rem; }
@@ -1332,7 +1332,7 @@ function laBuildCard(lob, agents, showLobTag) {
     const rc=laRowClass(a);
     const icon=laOverIcon(a);
     let adh;
-    if(isOff){adh=laShiftBadge(a);}
+    if(isOff){adh=a.attendance==="left_early"?'<span class="la-adh-badge" style="background:#c62828;color:#fff">🚪 Left Early</span>':laShiftBadge(a);}
     else if(isUn){adh=laAdherenceBadge(a)||laShiftBadge(a);}
     else{adh=laAdherenceBadge(a);}
     const lobTag=showLobTag&&a.lob?`<span class="la-lob-tag">${a.lob}</span>`:"";
@@ -1356,7 +1356,7 @@ function laBuildCard(lob, agents, showLobTag) {
     <div class="la-sort-hdr">
       <button class="la-sort-btn${state.col==='name'?' active':''}" onclick="laSetSort('${lobAttr}','name')">Name${arrow('name')}</button>
       <button class="la-sort-btn" style="flex:0 0 100px;text-align:center;cursor:default;font-size:.7rem" disabled>Adherence</button>
-      <button class="la-sort-btn${state.col==='status'?' active':''}" style="flex:0 0 130px;text-align:center;font-size:.7rem" onclick="laSetSort('${lobAttr}','status')">Status${arrow('status')}</button>
+      <button class="la-sort-btn${state.col==='status'?' active':''}" style="flex:0 0 90px;text-align:center;font-size:.7rem" onclick="laSetSort('${lobAttr}','status')">Status${arrow('status')}</button>
       <button class="la-sort-btn dur${state.col==='duration'?' active':''}" onclick="laSetSort('${lobAttr}','duration')">Time${arrow('duration')}</button>
     </div>
     <div class="la-agent-list">${rows||'<div class="la-empty">No agents logged in</div>'}</div>
