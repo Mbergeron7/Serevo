@@ -68,11 +68,17 @@
         </label>
       </div>
       <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:16px;">
-        <legend style="font-weight:600;font-size:.9rem;">Break & Legacy Settings</legend>
+        <legend style="font-weight:600;font-size:.9rem;">Break &amp; Lunch Settings</legend>
         <div class="form-grid-3" style="gap:12px;">
           <label>Break (min) <input id="f_break_duration_mins" type="number" class="form-input" value="30"></label>
           <label>Break After (hrs) <input id="f_break_after_hours" type="number" step="0.5" class="form-input" value="4"></label>
           <label>Lunch (min) <input id="f_lunch_duration_mins" type="number" class="form-input" value="30"></label>
+        </div>
+        <div class="form-grid-4" style="gap:12px;margin-top:10px;">
+          <label>Break Earliest <input id="f_break_earliest" class="form-input" placeholder="HH:MM" maxlength="5" style="text-align:center;"></label>
+          <label>Break Latest <input id="f_break_latest" class="form-input" placeholder="HH:MM" maxlength="5" style="text-align:center;"></label>
+          <label>Lunch Earliest <input id="f_lunch_earliest" class="form-input" placeholder="HH:MM" maxlength="5" style="text-align:center;"></label>
+          <label>Lunch Latest <input id="f_lunch_latest" class="form-input" placeholder="HH:MM" maxlength="5" style="text-align:center;"></label>
         </div>
         <div class="form-grid-2" style="gap:12px;margin-top:10px;">
           <label style="display:flex;align-items:center;gap:6px;"><input id="f_overtime_eligible" type="checkbox" checked> Overtime Eligible</label>
@@ -257,6 +263,7 @@ function switchTab(name, btn) {
 /* ── All field IDs grouped by type ── */
 const STR_FIELDS = ['name','abbreviation','color','contract_type','workdays_calculation',
   'work_hours_mon','work_hours_tue','work_hours_wed','work_hours_thu','work_hours_fri','work_hours_sat','work_hours_sun',
+  'break_earliest','break_latest','lunch_earliest','lunch_latest',
   'min_net_work_hours_day','max_net_work_hours_day','rest_between_workdays','max_activity_duration',
   'min_gap_between_activities','max_gap_between_activities','max_work_hours_24h',
   'overtime_threshold_consec','weekly_rest_no_full_day','weekly_rest_full_day',
@@ -368,23 +375,23 @@ async function deleteItem(id) {
 
 function autoFillDefaults() {
   const v = id => document.getElementById('f_'+id)?.value || '';
+  const setVal = (id, val) => { const el = document.getElementById('f_'+id); if (el) el.value = val; };
   const setIf = (id, val) => { const el = document.getElementById('f_'+id); if (el && !el.value) el.value = val; };
   const chkIf = (id, val) => { const el = document.getElementById('f_'+id); if (el && !el.checked) el.checked = val; };
 
   const type = v('contract_type') || 'full_time';
-  const setVal = (id, val) => { const el = document.getElementById('f_'+id); if (el) el.value = val; };
 
   // Parse contract name for explicit values like "51 hrs", "6x8.5hr"
   const name = v('name');
-  const hrsMatch = name.match(/(\d+)\s*hrs/i);
+  const hrsMatch = name.match(/(\d+\.?\d*)\s*hrs/i);
   const patt = name.match(/(\d)x(\d+\.?\d*)hr/i);
 
-  // If name has explicit info, override the key fields to match
+  // If name has explicit info, override key fields to match
   if (patt) setVal('days_per_week', parseInt(patt[1]));
   if (hrsMatch) { setVal('weekly_hours', parseFloat(hrsMatch[1])); setVal('weekly_hours_target', parseFloat(hrsMatch[1])); }
 
   const dpw = parseFloat(v('days_per_week')) || 5;
-  const weeklyHrs = parseFloat(v('weekly_hours') || v('weekly_hours_target')) || (type === 'full_time' ? 40 : type === 'part_time' ? 20 : 40);
+  const weeklyHrs = parseFloat(v('weekly_hours')) || parseFloat(v('weekly_hours_target')) || (type === 'full_time' ? 40 : type === 'part_time' ? 20 : 40);
 
   let dailyTarget = weeklyHrs / dpw;
   if (patt) dailyTarget = parseFloat(patt[2]);
@@ -393,31 +400,33 @@ function autoFillDefaults() {
   const dailyMin = Math.round((daily - 1) * 4) / 4;
   const dailyMax = Math.round((daily + 2) * 4) / 4;
 
-  // ── Work Time tab ──
-  // If name had explicit info, override these to match; otherwise fill if empty
-  const nameHasInfo = !!(patt || hrsMatch);
-  const setWork = nameHasInfo ? setVal : setIf;
-  setWork('weekly_hours', weeklyHrs);
-  setWork('weekly_hours_target', weeklyHrs);
-  setWork('weekly_hours_min', Math.max(weeklyHrs - 5, 0));
-  setWork('monthly_hours_max', Math.round(weeklyHrs * 4.5));
-  setWork('daily_hours_target', daily);
-  setWork('daily_hours_min', Math.max(dailyMin, 4));
-  setWork('daily_hours_max', Math.min(dailyMax, 12));
+  // ── Work Time tab ── (always set these based on the derived values)
+  setVal('weekly_hours', weeklyHrs);
+  setVal('weekly_hours_target', weeklyHrs);
+  setVal('weekly_hours_min', Math.max(weeklyHrs - 5, 0));
+  setVal('monthly_hours_max', Math.round(weeklyHrs * 4.5));
+  setVal('daily_hours_target', daily);
+  setVal('daily_hours_min', Math.max(dailyMin, 4));
+  setVal('daily_hours_max', Math.min(dailyMax, 12));
 
   // Per-day work hours (HH:MM format)
   const hhMM = h => { const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); };
   const dayHrs = hhMM(daily);
   const days = ['mon','tue','wed','thu','fri','sat','sun'];
   days.forEach((d, i) => {
-    if (i < dpw) { nameHasInfo ? setVal('work_hours_'+d, dayHrs) : setIf('work_hours_'+d, dayHrs); }
-    else if (nameHasInfo) setVal('work_hours_'+d, '');  // clear days beyond dpw
+    setVal('work_hours_'+d, i < dpw ? dayHrs : '');
   });
 
-  // ── General tab ──
-  setIf('break_duration_mins', daily >= 6 ? 30 : 15);
-  setIf('break_after_hours', daily >= 6 ? 4 : 3);
-  setIf('lunch_duration_mins', daily >= 6 ? 30 : 0);
+  // ── General tab ── (break & lunch)
+  setVal('break_duration_mins', daily >= 6 ? 30 : 15);
+  setVal('break_after_hours', daily >= 6 ? 4 : 3);
+  setVal('lunch_duration_mins', daily >= 6 ? 30 : 0);
+  // Break window: after first 2hrs, before last 2hrs of shift
+  setIf('break_earliest', hhMM(2));
+  setIf('break_latest', hhMM(Math.max(daily - 2, 3)));
+  // Lunch window: middle portion of shift
+  setIf('lunch_earliest', hhMM(Math.max(Math.floor(daily/2) - 1, 3)));
+  setIf('lunch_latest', hhMM(Math.min(Math.floor(daily/2) + 1, daily - 1)));
 
   // ── Scheduling tab ──
   setIf('min_rest_hours', 10);

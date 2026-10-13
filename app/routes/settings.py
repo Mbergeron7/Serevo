@@ -1856,7 +1856,8 @@ def contracts_save():
                      "max_work_hours_24h", "overtime_threshold_consec",
                      "weekly_rest_no_full_day", "weekly_rest_full_day",
                      "max_activity_duration_2", "rest_after_holiday_no_full",
-                     "rest_after_holiday_full", "max_work_time_deviation"]:
+                     "rest_after_holiday_full", "max_work_time_deviation",
+                     "break_earliest", "break_latest", "lunch_earliest", "lunch_latest"]:
             if fld in d:
                 setattr(item, fld, d[fld] or None)
 

@@ -1869,7 +1869,11 @@ class Contract(db.Model):
     # ── Legacy / general ──────────────────────────────────────
     break_duration_mins = db.Column(db.Integer, default=30)
     break_after_hours   = db.Column(db.Float, default=4.0)
+    break_earliest      = db.Column(db.String(5), nullable=True)   # HH:MM — earliest break can start
+    break_latest        = db.Column(db.String(5), nullable=True)   # HH:MM — latest break can start
     lunch_duration_mins = db.Column(db.Integer, default=30)
+    lunch_earliest      = db.Column(db.String(5), nullable=True)   # HH:MM — earliest lunch can start
+    lunch_latest        = db.Column(db.String(5), nullable=True)   # HH:MM — latest lunch can start
     overtime_eligible   = db.Column(db.Boolean, default=True)
     schedule_rule_id    = db.Column(db.Integer, db.ForeignKey("schedule_rules.id"), nullable=True)
     is_active           = db.Column(db.Boolean, default=True)
