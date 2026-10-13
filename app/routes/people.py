@@ -460,8 +460,19 @@ def employee_profile(emp_id):
             avail_map={},
         )
 
-    emp_id = int(emp_id)
-    emp = Employee.query.get_or_404(emp_id)
+    # emp_id may be a numeric DB id or a string employee_id like "E1001"
+    try:
+        numeric_id = int(emp_id)
+        emp = Employee.query.get(numeric_id)
+    except (ValueError, TypeError):
+        emp = None
+
+    # Fallback: look up by employee_id string
+    if emp is None:
+        emp = Employee.query.filter_by(employee_id=str(emp_id)).first()
+
+    if emp is None:
+        abort(404)
 
     skill_mappings = SkillMapping.query.filter_by(
         employee_id=emp.id
