@@ -457,6 +457,16 @@
       </div>
     </div>
     <span style="color:var(--text-muted)">|</span>
+    <div class="la-filter-wrap">
+      <label style="font-size:.8rem;color:var(--text-muted);margin-right:4px">Selection</label>
+      <select id="laSelectionFilter" onchange="laApplySelectionFilter()" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;font-size:.8rem;background:var(--bg);color:var(--text);">
+        <option value="">All</option>
+        {% for s in selections %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <span style="color:var(--text-muted)">|</span>
     <span class="la-summary" id="laStatusSummary"></span>
   </div>
 
@@ -1506,6 +1516,28 @@ function laToggleStatus(s,c){
 }
 function laSelectAllStatuses(){la_selectedStatuses=null;laRebuildStatusList();laApplyStatusFilter();}
 function laSelectNoneStatuses(){la_selectedStatuses=new Set();laRebuildStatusList();laApplyStatusFilter();}
+
+/* Selection filter */
+const la_selectionData = {{ selections | tojson }};
+function laApplySelectionFilter(){
+  const selId = document.getElementById('laSelectionFilter').value;
+  if(!selId){ document.querySelectorAll('.la-row').forEach(r=>r.removeAttribute('data-sel-hidden')); laApplySelVisibility(); return; }
+  const sel = la_selectionData.find(s=>s.id==selId);
+  const memberIds = sel ? new Set(sel.member_ids.map(String)) : new Set();
+  document.querySelectorAll('.la-row').forEach(row=>{
+    const nameEl = row.querySelector('.la-name');
+    const uid = nameEl ? nameEl.dataset.uid : '';
+    if(memberIds.has(String(uid))){ row.removeAttribute('data-sel-hidden'); }
+    else { row.setAttribute('data-sel-hidden','1'); }
+  });
+  laApplySelVisibility();
+}
+function laApplySelVisibility(){
+  document.querySelectorAll('.la-row').forEach(row=>{
+    if(row.getAttribute('data-sel-hidden')==='1') row.style.display='none';
+    else if(row.style.display==='none'&&!row.getAttribute('data-sel-hidden')) row.style.display='';
+  });
+}
 function laApplyStatusFilter(){
   document.querySelectorAll(".la-card").forEach(card=>{
     const lob=card.dataset.laLob;

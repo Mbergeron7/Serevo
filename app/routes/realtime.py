@@ -448,8 +448,18 @@ def index():
         local_today = datetime.datetime.now(ZoneInfo(tz)).date()
     except Exception:
         local_today = datetime.date.today()
+    # Load selections for filter dropdown
+    selections = []
+    if not (user and user.get("is_demo")):
+        try:
+            from app.models import Selection
+            selections = [{"id": s.id, "name": s.name,
+                           "member_ids": [m.employee_id for m in s.members]}
+                          for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+        except Exception:
+            pass
     return render_template("realtime/index.html", user=user, lobs=lobs,
-                           today=local_today.isoformat())
+                           today=local_today.isoformat(), selections=selections)
 
 
 # ── Combined bundle (snapshot + adherence + service level in one call) ──

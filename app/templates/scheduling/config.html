@@ -127,6 +127,7 @@
   <button class="view-tab" data-tab="wtp">Week Patterns</button>
   <button class="view-tab" data-tab="wtpm" style="display:none">Rotation Models</button>
   <button class="view-tab" data-tab="eq">Employee Quartiles</button>
+  <button class="view-tab" data-tab="qr">Quartile Rules</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -346,6 +347,80 @@
   </form>
 </dialog>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     TAB 5: Quartile Rules (LOB + Quartile → Day Models)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-qr" class="tab-panel">
+  <div class="filter-bar">
+    <label>LOB (Planning Unit)</label>
+    <select id="qr-filter-pu" onchange="renderQRules()">
+      <option value="">All</option>
+    </select>
+    <label style="margin-left:12px">Quartile</label>
+    <select id="qr-filter-q" onchange="renderQRules()">
+      <option value="">All</option>
+      <option value="1">Q1</option>
+      <option value="2">Q2</option>
+      <option value="3">Q3</option>
+      <option value="4">Q4</option>
+    </select>
+  </div>
+
+  <div class="panel-toolbar">
+    <button class="btn btn-primary btn-sm" onclick="openQRuleModal()">+ Add Rule</button>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>LOB</th>
+        <th>Quartile</th>
+        <th>Day Model</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Paid Hrs</th>
+        <th>Priority</th>
+        <th style="width:90px"></th>
+      </tr>
+    </thead>
+    <tbody id="qr-body"></tbody>
+  </table>
+  <div class="empty-state" id="qr-empty" style="display:none">No quartile rules configured yet.</div>
+</div>
+
+<!-- Quartile Rule Modal -->
+<dialog id="qr-modal">
+  <h3 id="qr-modal-title">Add Quartile Rule</h3>
+  <form onsubmit="return false;">
+    <input type="hidden" id="qr_f_id">
+    <div class="form-grid">
+      <label>LOB (Planning Unit)
+        <select id="qr_f_pu" class="form-input" required></select>
+      </label>
+      <div class="form-row2">
+        <label>Quartile
+          <select id="qr_f_quartile" class="form-input" required>
+            <option value="1">Q1</option>
+            <option value="2">Q2</option>
+            <option value="3">Q3</option>
+            <option value="4">Q4</option>
+          </select>
+        </label>
+        <label>Priority
+          <input type="number" id="qr_f_priority" class="form-input" value="0" min="0">
+        </label>
+      </div>
+      <label>Day Model
+        <select id="qr_f_dm" class="form-input" required></select>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('qr-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="qr_save()">Save</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const CSRF = '{{ csrf_token() }}';
 const API = '/scheduling/config/api';
@@ -353,7 +428,7 @@ const H = {'Content-Type':'application/json', 'X-CSRFToken': CSRF};
 
 /* ── Shared state ─────────────────────────────────────────────── */
 let supportData = {planning_units:[], shift_templates:[], activities:[], employees:[]};
-let dmData=[], wtpData=[], wtpmData=[], eqData=[];
+let dmData=[], wtpData=[], wtpmData=[], eqData=[], qrData=[];
 
 /* ── Tab switching ────────────────────────────────────────────── */
 document.querySelectorAll('#mainTabs .view-tab').forEach(btn => {
@@ -766,6 +841,8 @@ async function loadSupportData() {
       };
       /* Populate PU filter on quartiles tab */
       populateSelect('eq-pu-filter', supportData.planning_units, 'id', 'name', 'All');
+      /* Populate PU filter on quartile rules tab */
+      populateSelect('qr-filter-pu', supportData.planning_units, 'id', 'name', 'All');
     }
   } catch(e) { console.error('Failed to load supporting data', e); }
 }
@@ -802,10 +879,85 @@ async function loadQuartiles() {
   } catch(e) { console.error('Failed to load quartiles', e); }
 }
 
+/* ── Quartile Rules ───────────────────────────────────────────── */
+async function loadQRules() {
+  try {
+    const res = await fetch(API+'/quartile-rules', {headers:{'X-CSRFToken':CSRF}});
+    const data = await res.json();
+    if (data.success) { qrData = data.items||[]; renderQRules(); }
+  } catch(e) { console.error('Failed to load quartile rules', e); }
+}
+
+function renderQRules() {
+  const puFilter = document.getElementById('qr-filter-pu').value;
+  const qFilter = document.getElementById('qr-filter-q').value;
+  let rows = qrData;
+  if (puFilter) rows = rows.filter(r => r.planning_unit_id == puFilter);
+  if (qFilter) rows = rows.filter(r => r.quartile == qFilter);
+
+  const tbody = document.getElementById('qr-body');
+  const empty = document.getElementById('qr-empty');
+  if (!rows.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${r.planning_unit_name||puName(r.planning_unit_id)}</td>
+    <td><span class="q-badge q${r.quartile}">Q${r.quartile}</span></td>
+    <td>${r.day_model_name||'—'}</td>
+    <td>${r.day_model_start||''}</td>
+    <td>${r.day_model_end||''}</td>
+    <td>${r.day_model_paid!=null ? r.day_model_paid : ''}</td>
+    <td>${r.priority}</td>
+    <td>
+      <button class="btn btn-sm" onclick='openQRuleModal(${JSON.stringify(r)})'>Edit</button>
+      <button class="btn btn-sm btn-danger" onclick="qr_del(${r.id})">×</button>
+    </td>
+  </tr>`).join('');
+}
+
+function openQRuleModal(item) {
+  const dlg = document.getElementById('qr-modal');
+  document.getElementById('qr-modal-title').textContent = item ? 'Edit Quartile Rule' : 'Add Quartile Rule';
+  document.getElementById('qr_f_id').value = item ? item.id : '';
+  populateSelect('qr_f_pu', supportData.planning_units, 'id', 'name');
+  populateSelect('qr_f_dm', dmData, 'id', 'name');
+  if (item) {
+    document.getElementById('qr_f_pu').value = item.planning_unit_id;
+    document.getElementById('qr_f_quartile').value = item.quartile;
+    document.getElementById('qr_f_dm').value = item.day_model_id;
+    document.getElementById('qr_f_priority').value = item.priority||0;
+  } else {
+    document.getElementById('qr_f_quartile').value = '1';
+    document.getElementById('qr_f_priority').value = '0';
+  }
+  dlg.showModal();
+}
+
+async function qr_save() {
+  const body = {
+    id: document.getElementById('qr_f_id').value || null,
+    planning_unit_id: document.getElementById('qr_f_pu').value,
+    quartile: document.getElementById('qr_f_quartile').value,
+    day_model_id: document.getElementById('qr_f_dm').value,
+    priority: document.getElementById('qr_f_priority').value || 0,
+  };
+  const res = await fetch(API+'/quartile-rules', {method:'POST', headers:H, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) { document.getElementById('qr-modal').close(); showToast('Quartile rule saved','success'); await loadQRules(); }
+  else showToast(data.error||'Save failed','error');
+}
+
+async function qr_del(id) {
+  if (!confirm('Delete this quartile rule?')) return;
+  const res = await fetch(API+'/quartile-rules/'+id, {method:'DELETE', headers:H});
+  const data = await res.json();
+  if (data.success) { showToast('Rule deleted','success'); await loadQRules(); }
+  else showToast(data.error||'Delete failed','error');
+}
+
 /* ── Init ──────────────────────────────────────────────────────── */
 (async function init() {
   await loadSupportData();
-  await Promise.all([loadDayModels(), loadWeekPatterns(), loadRotationModels(), loadQuartiles()]);
+  await Promise.all([loadDayModels(), loadWeekPatterns(), loadRotationModels(), loadQuartiles(), loadQRules()]);
 })();
 </script>
 {% endblock %}
