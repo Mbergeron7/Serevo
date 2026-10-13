@@ -14,6 +14,15 @@ depends_on = None
 
 
 def upgrade():
+    # Guard: skip if table already exists (created manually or by auto-sync)
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.tables "
+        "WHERE table_name = 'quartile_schedule_rules'"
+    ))
+    if result.fetchone():
+        return
+
     op.create_table(
         'quartile_schedule_rules',
         sa.Column('id', sa.Integer, primary_key=True),
