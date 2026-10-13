@@ -2087,29 +2087,41 @@ class WorkTimePatternModelPattern(db.Model):
 # ═══════════════════════════════════════════════════════════════
 
 class EmployeeQuartile(db.Model):
-    """Assigns a performance quartile (Q1-Q4) to an employee per LOB/planning unit.
-    Q1 = top performers (prime shifts), Q4 = lowest (remaining shifts)."""
+    """Assigns an employee to a specific Quartile entity (WeekTimePattern).
+    The quartile defines which day models the employee is eligible for during scheduling."""
     __tablename__ = "employee_quartiles"
 
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
                                   nullable=False, index=True)
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
-    quartile         = db.Column(db.Integer, nullable=False, default=4)  # 1-4
+    quartile         = db.Column(db.Integer, nullable=False, default=4)  # 1-4 (legacy)
+    schedule_quartile_id = db.Column(db.Integer, db.ForeignKey("week_time_patterns.id", ondelete="SET NULL"),
+                                      nullable=True, index=True)
     effective_date   = db.Column(db.Date, nullable=True)
     end_date         = db.Column(db.Date, nullable=True)
     notes            = db.Column(db.Text, nullable=True)
     created_at       = db.Column(db.DateTime, default=_utcnow)
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
-    employee      = db.relationship("Employee", backref="quartile_assignments")
-    planning_unit = db.relationship("PlanningUnit", backref="employee_quartiles")
+    employee           = db.relationship("Employee", backref="quartile_assignments")
+    planning_unit      = db.relationship("PlanningUnit", backref="employee_quartiles")
+    schedule_quartile  = db.relationship("WeekTimePattern", backref="employee_quartile_assignments")
 
     # No unique constraint — multiple records allowed for history tracking
 
     def to_dict(self):
         emp = self.employee
         pu = self.planning_unit
+        sq = self.schedule_quartile
+        # Build day model chips for the assigned quartile
+        dm_chips = []
+        if sq:
+            for adm in (sq.assigned_day_models or []):
+                dm = adm.day_model
+                if dm:
+                    dm_chips.append({"name": dm.name, "abbreviation": dm.abbreviation or dm.name,
+                                     "color": dm.color or "#6b7280"})
         return {
             "id": self.id,
             "employee_id": self.employee_id,
@@ -2118,6 +2130,9 @@ class EmployeeQuartile(db.Model):
             "planning_unit_id": self.planning_unit_id,
             "planning_unit": pu.name if pu else "All",
             "quartile": self.quartile,
+            "schedule_quartile_id": self.schedule_quartile_id,
+            "schedule_quartile_name": sq.name if sq else "",
+            "day_models": dm_chips,
             "effective_date": self.effective_date.isoformat() if self.effective_date else "",
             "end_date": self.end_date.isoformat() if self.end_date else "",
             "notes": self.notes or "",

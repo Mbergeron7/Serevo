@@ -124,10 +124,9 @@
 
 <div class="view-tabs" id="mainTabs">
   <button class="view-tab active" data-tab="dm">Day Models</button>
-  <button class="view-tab" data-tab="wtp">Week Patterns</button>
+  <button class="view-tab" data-tab="wtp">Quartiles</button>
   <button class="view-tab" data-tab="wtpm" style="display:none">Rotation Models</button>
   <button class="view-tab" data-tab="eq">Employee Quartiles</button>
-  <button class="view-tab" data-tab="qr">Quartile Rules</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -148,11 +147,11 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
-     TAB 2: Week Patterns
+     TAB 2: Quartiles
      ═══════════════════════════════════════════════════════════════ -->
 <div id="panel-wtp" class="tab-panel">
   <div class="panel-toolbar">
-    <button class="btn btn-primary" onclick="wtp_openModal()">+ Add Week Pattern</button>
+    <button class="btn btn-primary" onclick="wtp_openModal()">+ Add Quartile</button>
   </div>
   <div style="overflow-x:auto;">
     <table class="data-table" id="wtp-table">
@@ -197,7 +196,7 @@
   <div style="overflow-x:auto;">
     <table class="data-table" id="eq-table">
       <thead>
-        <tr><th>Employee Name</th><th>Employee ID</th><th>Planning Unit</th><th>Quartile</th><th>Effective Date</th><th>Notes</th><th></th></tr>
+        <tr><th>Employee Name</th><th>Employee ID</th><th>Schedule Quartile</th><th>Day Models</th><th>Effective Date</th><th>Notes</th><th></th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -251,7 +250,7 @@
 
 <!-- Week Pattern Modal -->
 <dialog id="wtp-modal">
-  <h3 id="wtp-modal-title">Add Week Pattern</h3>
+  <h3 id="wtp-modal-title">Add Quartile</h3>
   <form onsubmit="return false;">
     <input type="hidden" id="wtp_f_id">
     <div class="form-grid">
@@ -290,22 +289,14 @@
         <label>Employee
           <select id="eq_f_employee_id" class="form-input" required><option value="">— Select —</option></select>
         </label>
-        <label>Quartile
-          <select id="eq_f_quartile" class="form-input" required>
-            <option value="Q1">Q1</option>
-            <option value="Q2">Q2</option>
-            <option value="Q3">Q3</option>
-            <option value="Q4">Q4</option>
-          </select>
+        <label>Schedule Quartile
+          <select id="eq_f_schedule_quartile_id" class="form-input" required><option value="">— Select —</option></select>
         </label>
       </div>
       <div class="form-row2">
-        <label>Planning Unit
-          <select id="eq_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
-        </label>
         <label>Effective Date<input id="eq_f_effective_date" type="date" class="form-input"></label>
+        <label>Notes<input id="eq_f_notes" class="form-input" placeholder="Optional notes"></label>
       </div>
-      <label>Notes<input id="eq_f_notes" class="form-input" placeholder="Optional notes"></label>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn" onclick="document.getElementById('eq-modal').close()">Cancel</button>
@@ -319,19 +310,9 @@
   <h3>Bulk Assign Quartile</h3>
   <form onsubmit="return false;">
     <div class="form-grid">
-      <div class="form-row2">
-        <label>Quartile
-          <select id="bulk_f_quartile" class="form-input" required>
-            <option value="Q1">Q1</option>
-            <option value="Q2">Q2</option>
-            <option value="Q3">Q3</option>
-            <option value="Q4">Q4</option>
-          </select>
-        </label>
-        <label>Planning Unit
-          <select id="bulk_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
-        </label>
-      </div>
+      <label>Schedule Quartile
+        <select id="bulk_f_schedule_quartile_id" class="form-input" required><option value="">— Select —</option></select>
+      </label>
       <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <span style="font-size:.82rem;font-weight:600;color:var(--text-muted);">Select Employees</span>
@@ -347,79 +328,6 @@
   </form>
 </dialog>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     TAB 5: Quartile Rules (LOB + Quartile → Day Models)
-     ═══════════════════════════════════════════════════════════════ -->
-<div id="panel-qr" class="tab-panel">
-  <div class="filter-bar">
-    <label>LOB (Planning Unit)</label>
-    <select id="qr-filter-pu" onchange="renderQRules()">
-      <option value="">All</option>
-    </select>
-    <label style="margin-left:12px">Quartile</label>
-    <select id="qr-filter-q" onchange="renderQRules()">
-      <option value="">All</option>
-      <option value="1">Q1</option>
-      <option value="2">Q2</option>
-      <option value="3">Q3</option>
-      <option value="4">Q4</option>
-    </select>
-  </div>
-
-  <div class="panel-toolbar">
-    <button class="btn btn-primary btn-sm" onclick="openQRuleModal()">+ Add Rule</button>
-  </div>
-
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>LOB</th>
-        <th>Quartile</th>
-        <th>Day Model</th>
-        <th>Start</th>
-        <th>End</th>
-        <th>Paid Hrs</th>
-        <th>Priority</th>
-        <th style="width:90px"></th>
-      </tr>
-    </thead>
-    <tbody id="qr-body"></tbody>
-  </table>
-  <div class="empty-state" id="qr-empty" style="display:none">No quartile rules configured yet.</div>
-</div>
-
-<!-- Quartile Rule Modal -->
-<dialog id="qr-modal">
-  <h3 id="qr-modal-title">Add Quartile Rule</h3>
-  <form onsubmit="return false;">
-    <input type="hidden" id="qr_f_id">
-    <div class="form-grid">
-      <label>LOB (Planning Unit)
-        <select id="qr_f_pu" class="form-input" required></select>
-      </label>
-      <div class="form-row2">
-        <label>Quartile
-          <select id="qr_f_quartile" class="form-input" required>
-            <option value="1">Q1</option>
-            <option value="2">Q2</option>
-            <option value="3">Q3</option>
-            <option value="4">Q4</option>
-          </select>
-        </label>
-        <label>Priority
-          <input type="number" id="qr_f_priority" class="form-input" value="0" min="0">
-        </label>
-      </div>
-      <label>Day Model
-        <select id="qr_f_dm" class="form-input" required></select>
-      </label>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn" onclick="document.getElementById('qr-modal').close()">Cancel</button>
-      <button type="button" class="btn btn-primary" onclick="qr_save()">Save</button>
-    </div>
-  </form>
-</dialog>
 
 <script>
 const CSRF = '{{ csrf_token() }}';
@@ -428,7 +336,7 @@ const H = {'Content-Type':'application/json', 'X-CSRFToken': CSRF};
 
 /* ── Shared state ─────────────────────────────────────────────── */
 let supportData = {planning_units:[], shift_templates:[], activities:[], employees:[]};
-let dmData=[], wtpData=[], wtpmData=[], eqData=[], qrData=[];
+let dmData=[], wtpData=[], wtpmData=[], eqData=[];
 
 /* ── Tab switching ────────────────────────────────────────────── */
 document.querySelectorAll('#mainTabs .view-tab').forEach(btn => {
@@ -543,7 +451,7 @@ let wtp_selectedDMs = [];
 function wtp_render() {
   const tb = document.querySelector('#wtp-table tbody');
   tb.innerHTML = '';
-  if (!wtpData.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">No week patterns yet. Click "+ Add Week Pattern" to create one.</td></tr>'; return; }
+  if (!wtpData.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">No quartiles yet. Click "+ Add Quartile" to create one.</td></tr>'; return; }
   wtpData.forEach(r => {
     const chips = (r.assigned_day_model_ids||[]).map(did => {
       const dm = dmData.find(d => d.id == did);
@@ -585,7 +493,7 @@ function wtp_renderPool() {
 
 function wtp_openModal(item) {
   const dlg = document.getElementById('wtp-modal');
-  document.getElementById('wtp-modal-title').textContent = item ? 'Edit Week Pattern' : 'Add Week Pattern';
+  document.getElementById('wtp-modal-title').textContent = item ? 'Edit Quartile' : 'Add Quartile';
   populateSelect('wtp_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
   document.getElementById('wtp_f_id').value = item ? item.id : '';
   document.getElementById('wtp_f_name').value = item ? item.name : '';
@@ -611,17 +519,17 @@ async function wtp_save() {
   try {
     const res = await fetch(API+'/week-time-patterns', {method:'POST', headers:H, body:JSON.stringify(body)});
     const data = await res.json();
-    if (data.success) { document.getElementById('wtp-modal').close(); showToast('Week pattern saved','success'); await loadWeekPatterns(); }
+    if (data.success) { document.getElementById('wtp-modal').close(); showToast('Quartile saved','success'); await loadWeekPatterns(); }
     else { showToast(data.error||'Save failed','error'); }
   } catch(e) { showToast('Network error','error'); }
 }
 
 async function wtp_delete(id) {
-  if (!confirm('Delete this week pattern?')) return;
+  if (!confirm('Delete this quartile?')) return;
   try {
     const res = await fetch(API+'/week-time-patterns/'+id, {method:'DELETE', headers:H});
     const data = await res.json();
-    if (data.success) { showToast('Week pattern deleted','success'); await loadWeekPatterns(); }
+    if (data.success) { showToast('Quartile deleted','success'); await loadWeekPatterns(); }
     else { showToast(data.error||'Delete failed','error'); }
   } catch(e) { showToast('Network error','error'); }
 }
@@ -730,16 +638,22 @@ function eq_render() {
   const tb = document.querySelector('#eq-table tbody');
   tb.innerHTML = '';
   const puFilter = document.getElementById('eq-pu-filter').value;
-  const filtered = puFilter ? eqData.filter(r => r.planning_unit_id == puFilter) : eqData;
+  const filtered = puFilter ? eqData.filter(r => {
+    // Filter by the quartile entity's planning unit
+    const sq = wtpData.find(w => w.id == r.schedule_quartile_id);
+    return sq && sq.planning_unit_id == puFilter;
+  }) : eqData;
   if (!filtered.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">No quartile assignments yet. Click "+ Add Assignment" or "Bulk Assign" to get started.</td></tr>'; return; }
   filtered.forEach(r => {
-    const q = r.quartile || '';
+    const dmChips = (r.day_models||[]).map(dm =>
+      `<span class="chip" style="background:${dm.color||'#6b7280'}">${dm.abbreviation||dm.name}</span>`
+    ).join('') || '<span style="color:var(--text-muted)">—</span>';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${empName(r.employee_id)}</td>
-      <td>${r.employee_id}</td>
-      <td>${puName(r.planning_unit_id)}</td>
-      <td><span class="q-badge ${qClass(q)}">${q}</span></td>
+      <td>${r.employee_name||empName(r.employee_id)}</td>
+      <td>${r.employee_ext_id||r.employee_id}</td>
+      <td>${r.schedule_quartile_name||'—'}</td>
+      <td>${dmChips}</td>
       <td>${r.effective_date||'—'}</td>
       <td>${r.notes||'—'}</td>
       <td>
@@ -754,22 +668,24 @@ function eq_openModal(item) {
   const dlg = document.getElementById('eq-modal');
   document.getElementById('eq-modal-title').textContent = item ? 'Edit Quartile Assignment' : 'Add Quartile Assignment';
   populateSelect('eq_f_employee_id', supportData.employees, 'id', 'name', '— Select —');
-  populateSelect('eq_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  populateSelect('eq_f_schedule_quartile_id', wtpData, 'id', 'name', '— Select —');
   document.getElementById('eq_f_id').value = item ? item.id : '';
   document.getElementById('eq_f_employee_id').value = item ? item.employee_id||'' : '';
-  document.getElementById('eq_f_quartile').value = item ? item.quartile||'Q1' : 'Q1';
-  document.getElementById('eq_f_planning_unit_id').value = item ? item.planning_unit_id||'' : '';
+  document.getElementById('eq_f_schedule_quartile_id').value = item ? item.schedule_quartile_id||'' : '';
   document.getElementById('eq_f_effective_date').value = item ? item.effective_date||'' : '';
   document.getElementById('eq_f_notes').value = item ? item.notes||'' : '';
   dlg.showModal();
 }
 
 async function eq_save() {
+  const sqId = document.getElementById('eq_f_schedule_quartile_id').value;
+  if (!sqId) { showToast('Please select a quartile','error'); return; }
+  const sq = wtpData.find(w => w.id == sqId);
   const body = {
     id: document.getElementById('eq_f_id').value || null,
     employee_id: document.getElementById('eq_f_employee_id').value || null,
-    quartile: document.getElementById('eq_f_quartile').value,
-    planning_unit_id: document.getElementById('eq_f_planning_unit_id').value || null,
+    schedule_quartile_id: sqId,
+    planning_unit_id: sq ? sq.planning_unit_id : null,
     effective_date: document.getElementById('eq_f_effective_date').value || null,
     notes: document.getElementById('eq_f_notes').value.trim() || null,
   };
@@ -793,7 +709,7 @@ async function eq_delete(id) {
 
 function eq_openBulkModal() {
   const dlg = document.getElementById('eq-bulk-modal');
-  populateSelect('bulk_f_planning_unit_id', supportData.planning_units, 'id', 'name', '— None —');
+  populateSelect('bulk_f_schedule_quartile_id', wtpData, 'id', 'name', '— Select —');
   const list = document.getElementById('bulk-emp-list');
   list.innerHTML = '';
   supportData.employees.forEach(e => {
@@ -814,13 +730,18 @@ function bulkToggleAll() {
 async function eq_bulkSave() {
   const checked = [...document.querySelectorAll('.bulk-emp-cb:checked')].map(c => c.value);
   if (!checked.length) { showToast('Select at least one employee','error'); return; }
-  const quartile = document.getElementById('bulk_f_quartile').value;
-  const planning_unit_id = document.getElementById('bulk_f_planning_unit_id').value || null;
-  const assignments = checked.map(eid => ({employee_id: eid, quartile, planning_unit_id}));
+  const sqId = document.getElementById('bulk_f_schedule_quartile_id').value;
+  if (!sqId) { showToast('Please select a quartile','error'); return; }
+  const sq = wtpData.find(w => w.id == sqId);
+  const assignments = checked.map(eid => ({
+    employee_id: eid,
+    schedule_quartile_id: sqId,
+    planning_unit_id: sq ? sq.planning_unit_id : null,
+  }));
   try {
     const res = await fetch(API+'/quartiles/bulk', {method:'POST', headers:H, body:JSON.stringify({assignments})});
     const data = await res.json();
-    if (data.success) { document.getElementById('eq-bulk-modal').close(); showToast(`Assigned ${checked.length} employees to ${quartile}`,'success'); await loadQuartiles(); }
+    if (data.success) { document.getElementById('eq-bulk-modal').close(); showToast(`Assigned ${checked.length} employees to ${sq?sq.name:'quartile'}`,'success'); await loadQuartiles(); }
     else { showToast(data.error||'Bulk assign failed','error'); }
   } catch(e) { showToast('Network error','error'); }
 }
@@ -841,8 +762,6 @@ async function loadSupportData() {
       };
       /* Populate PU filter on quartiles tab */
       populateSelect('eq-pu-filter', supportData.planning_units, 'id', 'name', 'All');
-      /* Populate PU filter on quartile rules tab */
-      populateSelect('qr-filter-pu', supportData.planning_units, 'id', 'name', 'All');
     }
   } catch(e) { console.error('Failed to load supporting data', e); }
 }
@@ -879,85 +798,10 @@ async function loadQuartiles() {
   } catch(e) { console.error('Failed to load quartiles', e); }
 }
 
-/* ── Quartile Rules ───────────────────────────────────────────── */
-async function loadQRules() {
-  try {
-    const res = await fetch(API+'/quartile-rules', {headers:{'X-CSRFToken':CSRF}});
-    const data = await res.json();
-    if (data.success) { qrData = data.items||[]; renderQRules(); }
-  } catch(e) { console.error('Failed to load quartile rules', e); }
-}
-
-function renderQRules() {
-  const puFilter = document.getElementById('qr-filter-pu').value;
-  const qFilter = document.getElementById('qr-filter-q').value;
-  let rows = qrData;
-  if (puFilter) rows = rows.filter(r => r.planning_unit_id == puFilter);
-  if (qFilter) rows = rows.filter(r => r.quartile == qFilter);
-
-  const tbody = document.getElementById('qr-body');
-  const empty = document.getElementById('qr-empty');
-  if (!rows.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
-  empty.style.display = 'none';
-  tbody.innerHTML = rows.map(r => `<tr>
-    <td>${r.planning_unit_name||puName(r.planning_unit_id)}</td>
-    <td><span class="q-badge q${r.quartile}">Q${r.quartile}</span></td>
-    <td>${r.day_model_name||'—'}</td>
-    <td>${r.day_model_start||''}</td>
-    <td>${r.day_model_end||''}</td>
-    <td>${r.day_model_paid!=null ? r.day_model_paid : ''}</td>
-    <td>${r.priority}</td>
-    <td>
-      <button class="btn btn-sm" onclick='openQRuleModal(${JSON.stringify(r)})'>Edit</button>
-      <button class="btn btn-sm btn-danger" onclick="qr_del(${r.id})">×</button>
-    </td>
-  </tr>`).join('');
-}
-
-function openQRuleModal(item) {
-  const dlg = document.getElementById('qr-modal');
-  document.getElementById('qr-modal-title').textContent = item ? 'Edit Quartile Rule' : 'Add Quartile Rule';
-  document.getElementById('qr_f_id').value = item ? item.id : '';
-  populateSelect('qr_f_pu', supportData.planning_units, 'id', 'name');
-  populateSelect('qr_f_dm', dmData, 'id', 'name');
-  if (item) {
-    document.getElementById('qr_f_pu').value = item.planning_unit_id;
-    document.getElementById('qr_f_quartile').value = item.quartile;
-    document.getElementById('qr_f_dm').value = item.day_model_id;
-    document.getElementById('qr_f_priority').value = item.priority||0;
-  } else {
-    document.getElementById('qr_f_quartile').value = '1';
-    document.getElementById('qr_f_priority').value = '0';
-  }
-  dlg.showModal();
-}
-
-async function qr_save() {
-  const body = {
-    id: document.getElementById('qr_f_id').value || null,
-    planning_unit_id: document.getElementById('qr_f_pu').value,
-    quartile: document.getElementById('qr_f_quartile').value,
-    day_model_id: document.getElementById('qr_f_dm').value,
-    priority: document.getElementById('qr_f_priority').value || 0,
-  };
-  const res = await fetch(API+'/quartile-rules', {method:'POST', headers:H, body:JSON.stringify(body)});
-  const data = await res.json();
-  if (data.success) { document.getElementById('qr-modal').close(); showToast('Quartile rule saved','success'); await loadQRules(); }
-  else showToast(data.error||'Save failed','error');
-}
-
-async function qr_del(id) {
-  if (!confirm('Delete this quartile rule?')) return;
-  const res = await fetch(API+'/quartile-rules/'+id, {method:'DELETE', headers:H});
-  const data = await res.json();
-  if (data.success) { showToast('Rule deleted','success'); await loadQRules(); }
-  else showToast(data.error||'Delete failed','error');
-}
-
 /* ── Init ──────────────────────────────────────────────────────── */
 (async function init() {
   await loadSupportData();
-  await Promise.all([loadDayModels(), loadWeekPatterns(), loadRotationModels(), loadQuartiles(), loadQRules()]);
+  await Promise.all([loadDayModels(), loadWeekPatterns(), loadRotationModels(), loadQuartiles()]);
 })();
 </script>
 {% endblock %}

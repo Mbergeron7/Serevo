@@ -275,17 +275,12 @@ def save_quartile():
     try:
         item = EmployeeQuartile.query.get(int(d["id"])) if d.get("id") else None
         if not item:
-            # Check for existing by employee + planning unit
-            item = EmployeeQuartile.query.filter_by(
-                employee_id=int(d["employee_id"]),
-                planning_unit_id=int(d["planning_unit_id"]) if d.get("planning_unit_id") else None,
-            ).first()
-        if not item:
             item = EmployeeQuartile()
             item.employee_id = int(d["employee_id"])
-            item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
             db.session.add(item)
-        item.quartile = int(d.get("quartile", 4))
+        item.schedule_quartile_id = int(d["schedule_quartile_id"]) if d.get("schedule_quartile_id") else None
+        item.planning_unit_id = int(d["planning_unit_id"]) if d.get("planning_unit_id") else None
+        item.quartile = int(d.get("quartile", 0)) if d.get("quartile") else None
         if d.get("effective_date"):
             from datetime import datetime as _dt
             item.effective_date = _dt.strptime(d["effective_date"], "%Y-%m-%d").date()
@@ -300,7 +295,7 @@ def save_quartile():
 @scheduling_config_bp.route("/api/quartiles/bulk", methods=["POST"])
 @login_required
 def bulk_save_quartiles():
-    """Bulk assign quartiles: {assignments: [{employee_id, quartile, planning_unit_id?}]}"""
+    """Bulk assign quartiles: {assignments: [{employee_id, schedule_quartile_id, planning_unit_id?}]}"""
     user, err = _admin_or_supervisor()
     if err:
         return err
@@ -310,14 +305,16 @@ def bulk_save_quartiles():
         saved = 0
         for a in assignments:
             emp_id = int(a["employee_id"])
+            sq_id = int(a["schedule_quartile_id"]) if a.get("schedule_quartile_id") else None
             pu_id = int(a["planning_unit_id"]) if a.get("planning_unit_id") else None
             item = EmployeeQuartile.query.filter_by(
-                employee_id=emp_id, planning_unit_id=pu_id
+                employee_id=emp_id, schedule_quartile_id=sq_id
             ).first()
             if not item:
-                item = EmployeeQuartile(employee_id=emp_id, planning_unit_id=pu_id)
+                item = EmployeeQuartile(employee_id=emp_id)
                 db.session.add(item)
-            item.quartile = int(a.get("quartile", 4))
+            item.schedule_quartile_id = sq_id
+            item.planning_unit_id = pu_id
             if a.get("effective_date"):
                 from datetime import datetime as _dt
                 item.effective_date = _dt.strptime(a["effective_date"], "%Y-%m-%d").date()
