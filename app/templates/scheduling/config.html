@@ -339,14 +339,20 @@ let supportData = {planning_units:[], shift_templates:[], activities:[], employe
 let dmData=[], wtpData=[], wtpmData=[], eqData=[];
 
 /* ── Tab switching ────────────────────────────────────────────── */
+function switchToTab(tabId) {
+  document.querySelectorAll('#mainTabs .view-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`#mainTabs .view-tab[data-tab="${tabId}"]`);
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById('panel-' + tabId);
+  if (panel) panel.classList.add('active');
+}
 document.querySelectorAll('#mainTabs .view-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#mainTabs .view-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-  });
+  btn.addEventListener('click', () => switchToTab(btn.dataset.tab));
 });
+// Open tab from ?tab= query param
+const urlTab = new URLSearchParams(window.location.search).get('tab');
+if (urlTab) switchToTab(urlTab);
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 function puName(id) {
