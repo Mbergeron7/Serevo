@@ -372,6 +372,15 @@
     .la-card.la-offline .la-card-hdr { background:#455a64; }
     .la-card.la-unsched .la-card-hdr { background:#e65100; }
     .la-card.la-preshift .la-card-hdr { background:#283593; }
+    .la-card.la-offline, .la-card.la-unsched, .la-card.la-preshift { grid-column: 1 / -1; }
+    .la-card.la-offline .la-agent-list,
+    .la-card.la-unsched .la-agent-list,
+    .la-card.la-preshift .la-agent-list { max-height:none; display:grid; grid-template-columns:repeat(5, 1fr); }
+    .la-card.la-offline .la-sort-hdr,
+    .la-card.la-unsched .la-sort-hdr { display:none; }
+    .la-card.la-offline .la-row,
+    .la-card.la-unsched .la-row { border-bottom:none; border-right:1px solid var(--border); }
+    .la-card.la-preshift .la-ps-row { border-bottom:none; border-right:1px solid var(--border); }
     .la-ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-bottom:1px solid var(--border); font-size:.82rem; }
     .la-ps-row:last-child { border-bottom:none; }
     .la-ps-name { flex:1; font-weight:500; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -419,6 +428,9 @@
     .la-overlay.open { display:block; }
     @media(max-width:1200px) {
       .la-grid { grid-template-columns:repeat(3, 1fr); }
+      .la-card.la-offline .la-agent-list,
+      .la-card.la-unsched .la-agent-list,
+      .la-card.la-preshift .la-agent-list { grid-template-columns:repeat(3, 1fr); }
     }
     @media(max-width:600px) {
       .la-grid { grid-template-columns:1fr; }
@@ -1330,7 +1342,10 @@ function laBuildCard(lob, agents, showLobTag) {
     const dur=laFmtDur(a.minutes_in_status);
     const rc=laRowClass(a);
     const icon=laOverIcon(a);
-    const adh=(isOff||isUn)?laAdherenceBadge(a)||laShiftBadge(a):laAdherenceBadge(a);
+    let adh;
+    if(isOff){adh=laShiftBadge(a);}
+    else if(isUn){adh=laAdherenceBadge(a)||laShiftBadge(a);}
+    else{adh=laAdherenceBadge(a);}
     const lobTag=showLobTag&&a.lob?`<span class="la-lob-tag">${a.lob}</span>`:"";
     rows+=`<div class="la-row${rc?' '+rc:''}">
       <span class="la-name" title="${a.name}" data-uid="${a.user_id}" data-aname="${a.name}" data-alob="${showLobTag&&a.lob?a.lob:lob}" onclick="laOpenPanel(this)">👤 ${a.name}${lobTag}</span>
