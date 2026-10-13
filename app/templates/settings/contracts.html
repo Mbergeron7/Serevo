@@ -228,7 +228,8 @@
     </div>
   </div>
 
-  <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--border);">
+  <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--border);align-items:center;">
+    <button type="button" class="btn" style="background:#1565c0;color:#fff;margin-right:auto;" onclick="autoFillDefaults()" title="Auto-populate empty fields with sensible defaults based on contract type, days/week, and weekly hours">⚡ Auto-fill Defaults</button>
     <button type="button" class="btn" onclick="document.getElementById('editModal').close()">Cancel</button>
     <button type="button" class="btn btn-primary" onclick="saveItem()">Save</button>
   </div>
@@ -363,6 +364,91 @@ async function deleteItem(id) {
   });
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error || 'Delete failed'); }
+}
+
+function autoFillDefaults() {
+  const v = id => document.getElementById('f_'+id)?.value || '';
+  const setIf = (id, val) => { const el = document.getElementById('f_'+id); if (el && !el.value) el.value = val; };
+  const chkIf = (id, val) => { const el = document.getElementById('f_'+id); if (el && !el.checked) el.checked = val; };
+
+  const type = v('contract_type') || 'full_time';
+  const dpw = parseFloat(v('days_per_week')) || 5;
+  const weeklyHrs = parseFloat(v('weekly_hours') || v('weekly_hours_target')) || (type === 'full_time' ? 40 : type === 'part_time' ? 20 : 40);
+
+  // Parse contract name for patterns like "4x10hr"
+  const name = v('name');
+  let dailyTarget = weeklyHrs / dpw;
+  const patt = name.match(/(\d)x(\d+)hr/i);
+  if (patt) dailyTarget = parseFloat(patt[2]);
+
+  const daily = Math.round(dailyTarget * 4) / 4; // round to quarter-hour
+  const dailyMin = Math.round((daily - 1) * 4) / 4;
+  const dailyMax = Math.round((daily + 2) * 4) / 4;
+
+  // ── Work Time tab ──
+  setIf('weekly_hours', weeklyHrs);
+  setIf('weekly_hours_target', weeklyHrs);
+  setIf('weekly_hours_min', Math.max(weeklyHrs - 5, 0));
+  setIf('monthly_hours_max', Math.round(weeklyHrs * 4.5));
+  setIf('daily_hours_target', daily);
+  setIf('daily_hours_min', Math.max(dailyMin, 4));
+  setIf('daily_hours_max', Math.min(dailyMax, 12));
+
+  // Per-day work hours (HH:MM format)
+  const hhMM = h => { const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); };
+  const dayHrs = hhMM(daily);
+  const days = ['mon','tue','wed','thu','fri','sat','sun'];
+  days.forEach((d, i) => {
+    if (i < dpw) setIf('work_hours_'+d, dayHrs);
+  });
+
+  // ── General tab ──
+  setIf('break_duration_mins', daily >= 6 ? 30 : 15);
+  setIf('break_after_hours', daily >= 6 ? 4 : 3);
+  setIf('lunch_duration_mins', daily >= 6 ? 30 : 0);
+
+  // ── Scheduling tab ──
+  setIf('min_rest_hours', 10);
+  setIf('max_consecutive_days', type === 'full_time' ? 6 : 5);
+  setIf('min_days_off_per_week', 1);
+  setIf('min_consec_days_off_week', 1);
+  setIf('max_consecutive_days_off', 4);
+  setIf('min_days_per_week', Math.max(dpw - 1, 1));
+  setIf('max_days_per_week', Math.min(dpw + 1, 7));
+  setIf('max_working_days_per_week', Math.min(dpw + 1, 7));
+  setIf('max_consecutive_working_days', type === 'full_time' ? 6 : 5);
+  setIf('max_shifts_per_day', 1);
+  setIf('max_saturdays_per_month', dpw >= 6 ? 4 : 2);
+  setIf('max_sundays_per_month', dpw >= 7 ? 4 : 0);
+  setIf('min_weekends_off_month', dpw <= 5 ? 2 : 1);
+  setIf('max_sundays_in_row', dpw >= 7 ? 2 : 0);
+  setIf('max_weekends_in_row', dpw >= 6 ? 3 : 0);
+  setIf('min_consec_days_off_week_sched', 1);
+
+  // HH:MM fields
+  setIf('min_net_work_hours_day', hhMM(Math.max(dailyMin, 4)));
+  setIf('max_net_work_hours_day', hhMM(Math.min(dailyMax, 12)));
+  setIf('rest_between_workdays', '10:00');
+  setIf('max_activity_duration', hhMM(daily));
+  setIf('max_work_hours_24h', hhMM(Math.min(dailyMax + 1, 13)));
+  setIf('weekly_rest_no_full_day', '24:00');
+  setIf('weekly_rest_full_day', '36:00');
+
+  // Night shift defaults
+  setIf('max_night_shifts_week', 3);
+  setIf('max_night_shifts_month', 10);
+  setIf('max_consec_night_shifts', 3);
+  setIf('max_day_models_24h', 1);
+
+  // Checkboxes — only set true for sensible ones
+  chkIf('exclude_illness', true);
+  chkIf('exclude_vacation', true);
+  chkIf('exclude_illness_consec', true);
+  chkIf('exclude_vacation_consec', true);
+
+  // Flash feedback
+  const btn = event?.target;
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Done'; setTimeout(() => btn.textContent = orig, 1200); }
 }
 
 render();
