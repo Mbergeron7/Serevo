@@ -18,7 +18,7 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         SkillMapping, PlanningUnit, ShiftSequence,
                         EmployeeShiftSequence, CoachingSession,
                         TimeClock, EmployeeWorkTimePattern, WorkTimePatternModel,
-                        EmployeeQuartile)
+                        EmployeeQuartile, WeekTimePattern)
 
 log = logging.getLogger("serevo.people")
 
@@ -457,6 +457,7 @@ def employee_profile(emp_id):
             wtp_assignments=[],
             quartile=None,
             quartile_history=[],
+            quartile_entities=[],
             avail_map={},
         )
 
@@ -520,6 +521,12 @@ def employee_profile(emp_id):
     avail_entries = EmployeeAvailability.query.filter_by(employee_id=emp.id).all()
     avail_map = {a.day_of_week: a for a in avail_entries}
 
+    # Load quartile entities for the dropdown
+    try:
+        quartile_entities = WeekTimePattern.query.filter_by(is_active=True).order_by(WeekTimePattern.name).all()
+    except Exception:
+        quartile_entities = []
+
     return render_template("people/profile.html",
         user=user,
         emp=emp,
@@ -535,6 +542,7 @@ def employee_profile(emp_id):
         wtp_assignments=wtp_assignments,
         quartile=quartile,
         quartile_history=quartile_history,
+        quartile_entities=quartile_entities,
         avail_map=avail_map,
     )
 
@@ -729,13 +737,22 @@ def profile_assign():
                 )
                 db.session.add(obj)
         elif assign_type == "quartile":
+            sq_id = data.get("schedule_quartile_id")
+            sq_id = int(sq_id) if sq_id else None
+            # Derive planning_unit_id from the quartile entity
+            derived_pu = None
+            if sq_id:
+                wtp = WeekTimePattern.query.get(sq_id)
+                if wtp:
+                    derived_pu = wtp.planning_unit_id
             if assignment_id:
                 # Editing an existing quartile record
                 obj = EmployeeQuartile.query.get(int(assignment_id))
                 if not obj:
                     return jsonify({"success": False, "error": "Assignment not found."})
-                obj.quartile = int(data.get("quartile", 4))
-                obj.planning_unit_id = int(item_id) if item_id else None
+                obj.schedule_quartile_id = sq_id
+                obj.planning_unit_id = derived_pu
+                obj.quartile = int(data.get("quartile", 0)) or 0
                 eff = data.get("effective_date")
                 if eff:
                     obj.effective_date = _dt.datetime.strptime(eff, "%Y-%m-%d").date()
@@ -751,8 +768,9 @@ def profile_assign():
                     c.end_date = q_effective - _dt.timedelta(days=1)
                 obj = EmployeeQuartile(
                     employee_id=emp_id,
-                    quartile=int(data.get("quartile", 4)),
-                    planning_unit_id=int(item_id) if item_id else None,
+                    schedule_quartile_id=sq_id,
+                    planning_unit_id=derived_pu,
+                    quartile=int(data.get("quartile", 0)) or 0,
                     effective_date=q_effective,
                     notes=data.get("notes", ""),
                 )

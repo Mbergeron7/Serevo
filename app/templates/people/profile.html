@@ -583,13 +583,18 @@
       {% if quartile %}
       <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
         <div>
-          {% set q = quartile.quartile %}
-          {% set qcolors = {1: '#059669', 2: '#2563eb', 3: '#ea580c', 4: '#dc2626'} %}
-          {% set qlabels = {1: 'Q1 — Top Performer', 2: 'Q2 — Above Average', 3: 'Q3 — Average', 4: 'Q4 — Development'} %}
+          {% if quartile.schedule_quartile %}
           <span style="display:inline-block; padding:4px 14px; border-radius:20px; font-weight:700; font-size:.85rem;
-            background:{{ qcolors.get(q, '#6b7280') }}20; color:{{ qcolors.get(q, '#6b7280') }}; border:1px solid {{ qcolors.get(q, '#6b7280') }}40;">
-            {{ qlabels.get(q, 'Q' ~ q) }}
+            background:var(--brand-accent-alpha, #059669)20; color:var(--brand-accent, #059669); border:1px solid var(--brand-accent-alpha, #059669)40;">
+            {{ quartile.schedule_quartile.abbreviation or quartile.schedule_quartile.name }}
           </span>
+          <span style="font-size:.82rem; color:var(--text-muted); margin-left:4px;">{{ quartile.schedule_quartile.name }}</span>
+          {% else %}
+          <span style="display:inline-block; padding:4px 14px; border-radius:20px; font-weight:700; font-size:.85rem;
+            background:#6b728020; color:#6b7280; border:1px solid #6b728040;">
+            Unlinked
+          </span>
+          {% endif %}
         </div>
         <div style="font-size:.82rem; color:var(--text-muted);">
           Effective: {{ quartile.effective_date or '—' }}
@@ -598,7 +603,7 @@
         <button class="btn-danger-sm" onclick="removeAssignment('quartile', {{ quartile.id }})" style="margin-left:auto;">Remove</button>
       </div>
       {% else %}
-      <p style="color:var(--text-muted); font-size:.85rem;">No quartile assigned. Quartile determines shift eligibility — Q1 gets first pick of prime shifts.</p>
+      <p style="color:var(--text-muted); font-size:.85rem;">No quartile assigned. Quartile determines shift eligibility — employees are scheduled only from their quartile's day models.</p>
       {% endif %}
       {% if quartile_history %}
       <details style="margin-top:.75rem;">
@@ -610,15 +615,13 @@
           <thead><tr><th>Quartile</th><th>Effective</th><th>End Date</th><th>Notes</th><th></th></tr></thead>
           <tbody>
           {% for qh in quartile_history %}
-          {% set qcolors = {1: '#059669', 2: '#2563eb', 3: '#ea580c', 4: '#dc2626'} %}
-          {% set qlabels = {1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4'} %}
           <tr>
-            <td><span style="color:{{ qcolors.get(qh.quartile, '#6b7280') }}; font-weight:600;">{{ qlabels.get(qh.quartile, 'Q' ~ qh.quartile) }}</span></td>
+            <td><span style="font-weight:600;">{{ qh.schedule_quartile.abbreviation or qh.schedule_quartile.name if qh.schedule_quartile else '(legacy Q' ~ qh.quartile ~ ')' }}</span></td>
             <td>{{ qh.effective_date or '—' }}</td>
             <td>{{ qh.end_date or '—' }}</td>
             <td>{{ qh.notes or '' }}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-outline-sm" onclick="openQuartileModal(true, {id:{{ qh.id }}, quartile:{{ qh.quartile }}, effective_date:'{{ qh.effective_date or '' }}', end_date:'{{ qh.end_date or '' }}', notes:'{{ qh.notes or '' }}'})">Edit</button>
+              <button class="btn-outline-sm" onclick="openQuartileModal(true, {id:{{ qh.id }}, schedule_quartile_id:{{ qh.schedule_quartile_id or 'null' }}, effective_date:'{{ qh.effective_date or '' }}', end_date:'{{ qh.end_date or '' }}', notes:'{{ qh.notes or '' }}'})">Edit</button>
               <button class="btn-danger-sm" onclick="deleteAssignment('quartile', {{ qh.id }})">Delete</button>
             </td>
           </tr>
@@ -880,16 +883,16 @@
 <!-- ══════════════════════════════════════════════════════════════ -->
 <div id="quartileModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)document.getElementById('quartileModal').style.display='none'">
   <div class="modal" style="max-width:420px;">
-    <h3>Assign Performance Quartile</h3>
+    <h3>Assign Quartile</h3>
     <form id="quartileForm" onsubmit="return saveQuartile(event)">
       <input type="hidden" id="q_assignment_id" value="">
       <div class="form-group">
         <label>Quartile</label>
-        <select id="q_quartile" required style="font-size:.9rem;">
-          <option value="1">Q1 — Top Performer</option>
-          <option value="2">Q2 — Above Average</option>
-          <option value="3">Q3 — Average</option>
-          <option value="4" selected>Q4 — Development</option>
+        <select id="q_schedule_quartile_id" required style="font-size:.9rem;">
+          <option value="">— Select Quartile —</option>
+          {% for qe in quartile_entities %}
+          <option value="{{ qe.id }}">{{ qe.abbreviation ~ ' — ' if qe.abbreviation else '' }}{{ qe.name }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="form-group">
@@ -1294,23 +1297,20 @@ async function deleteAssignment(type, assignmentId) {
 // ── Quartile Modal ──
 function openQuartileModal(editMode, histData) {
   if (editMode && histData) {
-    // Editing a history record
     document.getElementById('q_assignment_id').value = histData.id;
-    document.getElementById('q_quartile').value = histData.quartile;
+    document.getElementById('q_schedule_quartile_id').value = histData.schedule_quartile_id || '';
     document.getElementById('q_effective_date').value = histData.effective_date || '';
     document.getElementById('q_notes').value = histData.notes || '';
   } else if (editMode) {
-    // Editing current quartile
     {% if quartile %}
     document.getElementById('q_assignment_id').value = '{{ quartile.id }}';
-    document.getElementById('q_quartile').value = '{{ quartile.quartile }}';
+    document.getElementById('q_schedule_quartile_id').value = '{{ quartile.schedule_quartile_id or "" }}';
     document.getElementById('q_effective_date').value = '{{ quartile.effective_date or "" }}';
     document.getElementById('q_notes').value = '{{ quartile.notes or "" }}';
     {% endif %}
   } else {
-    // New quartile assignment (will end-date old one automatically)
     document.getElementById('q_assignment_id').value = '';
-    document.getElementById('q_quartile').value = '4';
+    document.getElementById('q_schedule_quartile_id').value = '';
     document.getElementById('q_effective_date').value = '';
     document.getElementById('q_notes').value = '';
   }
@@ -1329,7 +1329,7 @@ async function saveQuartile(e) {
         employee_id: EMP_ID,
         item_id: null,
         assignment_id: document.getElementById('q_assignment_id').value ? parseInt(document.getElementById('q_assignment_id').value) : null,
-        quartile: parseInt(document.getElementById('q_quartile').value),
+        schedule_quartile_id: document.getElementById('q_schedule_quartile_id').value || null,
         effective_date: document.getElementById('q_effective_date').value || null,
         notes: document.getElementById('q_notes').value || '',
       }),
