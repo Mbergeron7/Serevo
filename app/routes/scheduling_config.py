@@ -458,7 +458,7 @@ def supporting_data():
             employees=[],
         )
     pus = [{"id": pu.id, "name": pu.name}
-           for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+           for pu in PlanningUnit.query.filter(PlanningUnit.is_active != False).order_by(PlanningUnit.name).all()]
     sts = [{"id": st.id, "name": st.name, "start_time": st.start_time, "end_time": st.end_time}
            for st in ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()]
     acts = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
