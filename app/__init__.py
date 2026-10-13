@@ -88,6 +88,10 @@ def create_app():
     # ---- database ----
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.SQLALCHEMY_DATABASE_URI
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = cfg.SQLALCHEMY_TRACK_MODIFICATIONS
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,      # test connections before use, discard stale ones
+        "pool_recycle": 300,         # recycle connections every 5 min to avoid SSL drops
+    }
 
     from app.models import db
     db.init_app(app)

@@ -1791,7 +1791,12 @@ def api_live_agents():
 
     except Exception as e:
         log.exception("live-agents error")
-        return jsonify(error=str(e)), 500
+        try:
+            from app.models import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify(error="Failed to load live agent data. Please refresh."), 500
 
 
 @realtime_bp.route("/api/agent-detail", methods=["POST"])
