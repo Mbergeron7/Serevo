@@ -457,15 +457,29 @@ def supporting_data():
             activities=[],
             employees=[],
         )
-    pus = [{"id": pu.id, "name": pu.name}
-           for pu in PlanningUnit.query.filter(PlanningUnit.is_active != False).order_by(PlanningUnit.name).all()]
-    sts = [{"id": st.id, "name": st.name, "start_time": st.start_time, "end_time": st.end_time}
-           for st in ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()]
-    acts = [a.to_dict() for a in Activity.query.filter_by(is_active=True).order_by(Activity.name).all()]
-    emps = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name,
-             "planning_unit_id": e.planning_unit_id}
-            for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
-    return jsonify(success=True, planning_units=pus, shift_templates=sts, activities=acts, employees=emps)
+    try:
+        pus = [{"id": pu.id, "name": pu.name}
+               for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        pus = []
+    try:
+        sts = [{"id": st.id, "name": st.name, "start_time": st.start_time, "end_time": st.end_time}
+               for st in ShiftTemplate.query.order_by(ShiftTemplate.name).all()]
+    except Exception:
+        sts = []
+    try:
+        acts = [a.to_dict() for a in Activity.query.order_by(Activity.name).all()]
+    except Exception:
+        acts = []
+    try:
+        emps = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name,
+                 "planning_unit_id": e.planning_unit_id}
+                for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
+    except Exception:
+        emps = []
+    return jsonify(success=True, planning_units=pus, shift_templates=sts, activities=acts, employees=emps,
+                   _debug_pu_count=len(pus))
 
 
 # ═══════════════════════════════════════════════════════════════
