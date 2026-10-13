@@ -3,8 +3,7 @@
 
 {% block head %}
 <style>
-  /* Let the realtime page use the full viewport width */
-  main { max-width:100%; padding-left:16px; padding-right:16px; }
+  /* Live Agents tab goes full-width via JS — see laActivateTab */
   .page-header { margin-bottom: 18px; }
   .page-header h1 { font-size: 1.5rem; margin-bottom: 2px; }
   .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
@@ -345,7 +344,7 @@
     .la-refresh-btn:hover { filter:brightness(.9); }
     .la-countdown { color:var(--brand-accent); font-weight:600; font-size:.82rem; }
     .la-summary { font-size:.78rem; color:var(--text-muted); }
-    .la-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:8px; }
+    .la-grid { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; }
     .la-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
     .la-card-hdr { background:var(--brand-accent); color:#fff; padding:5px 8px; display:flex; justify-content:space-between; align-items:center; }
     .la-card-hdr .la-lob { font-size:.78rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -418,6 +417,9 @@
     .la-tl-time { font-weight:600; min-width:45px; color:var(--text-muted); }
     .la-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:9999; }
     .la-overlay.open { display:block; }
+    @media(max-width:1200px) {
+      .la-grid { grid-template-columns:repeat(3, 1fr); }
+    }
     @media(max-width:600px) {
       .la-grid { grid-template-columns:1fr; }
       #la-panel { width:100%; right:-100%; }
@@ -543,6 +545,17 @@ function showView(name) {
   document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === 'view-' + name));
   try { history.replaceState(null, '', '#' + name); } catch (e) {}
   _activeView = name;
+  // Live Agents tab uses full viewport width; others stay normal
+  const main = document.querySelector('main');
+  if (name === 'liveagents') {
+    main.style.maxWidth = '100%';
+    main.style.paddingLeft = '16px';
+    main.style.paddingRight = '16px';
+  } else {
+    main.style.maxWidth = '';
+    main.style.paddingLeft = '';
+    main.style.paddingRight = '';
+  }
   // Lazy-load tab data on first view
   if (!_loaded[name] && name !== 'intraday') loadTab(name);
 }
