@@ -1725,8 +1725,16 @@ def api_live_agents():
 
             # Determine schedule flags
             not_scheduled = sched is None
-            is_pre_shift = bool(sched and sched.shift_start and now_time < sched.shift_start)
-            is_shift_done = bool(sched and sched.shift_end and now_time > sched.shift_end)
+            # Overnight shift detection: shift_end < shift_start means crosses midnight
+            _overnight = bool(sched and sched.shift_start and sched.shift_end and sched.shift_end < sched.shift_start)
+            if _overnight:
+                # Pre-shift: before start and after end (e.g. 14:00 is before 19:00 start and after 02:00 end)
+                is_pre_shift = bool(sched.shift_end <= now_time < sched.shift_start)
+                # Shift done: after midnight and past end time (e.g. 03:00 > 02:00)
+                is_shift_done = bool(now_time >= sched.shift_end and now_time < sched.shift_start)
+            else:
+                is_pre_shift = bool(sched and sched.shift_start and now_time < sched.shift_start)
+                is_shift_done = bool(sched and sched.shift_end and now_time > sched.shift_end)
             sched_now_val = _sched_now(sched)
 
             # ── Attendance flags ──────────────────────────────

@@ -656,8 +656,13 @@ def load_schedule():
                     if not sched_obj.shift_start or not sched_obj.shift_end:
                         continue
 
-                    is_pre_shift = now_time < sched_obj.shift_start
-                    is_shift_done = now_time > sched_obj.shift_end
+                    _overnight = sched_obj.shift_end < sched_obj.shift_start
+                    if _overnight:
+                        is_pre_shift = sched_obj.shift_end <= now_time < sched_obj.shift_start
+                        is_shift_done = now_time >= sched_obj.shift_end and now_time < sched_obj.shift_start
+                    else:
+                        is_pre_shift = now_time < sched_obj.shift_start
+                        is_shift_done = now_time > sched_obj.shift_end
 
                     if ag:
                         # Agent has activity today
