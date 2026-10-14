@@ -167,8 +167,26 @@ def _read_agent_status_sheet():
 
             doc = client.open_by_key(AGENT_STATUS_SHEET_ID)
             ws = doc.get_worksheet(0)
-            rows = ws.get_all_records()
-            log.info(f"Agent status sheet: fetched {len(rows)} rows directly")
+            all_vals = ws.get_all_values()
+            if not all_vals:
+                rows = []
+            else:
+                headers = all_vals[0]
+                # Find start_time column to filter by date
+                st_idx = headers.index("start_time") if "start_time" in headers else None
+                if st_idx is not None:
+                    from zoneinfo import ZoneInfo
+                    _now = datetime.datetime.now(ZoneInfo("America/Toronto"))
+                    today_pfx = _now.strftime("%Y-%m-%d")
+                    yest_pfx = (_now.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+                    rows = [
+                        dict(zip(headers, r))
+                        for r in all_vals[1:]
+                        if str(r[st_idx]).startswith(today_pfx) or str(r[st_idx]).startswith(yest_pfx)
+                    ]
+                else:
+                    rows = [dict(zip(headers, r)) for r in all_vals[1:]]
+            log.info(f"Agent status sheet: fetched {len(rows)} relevant rows (from {len(all_vals)-1 if all_vals else 0} total)")
 
             # Don't cache suspiciously small results — serve stale
             if len(rows) < 5:
