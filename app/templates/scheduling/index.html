@@ -1815,7 +1815,8 @@ function renderTimelineView(container) {
     let minH = 24, maxH = 0;
     day.shifts.forEach(s => {
       const sh = parseInt(s.start.split(':')[0]);
-      const eh = parseInt(s.end.split(':')[0]) + (parseInt(s.end.split(':')[1]) > 0 ? 1 : 0);
+      let eh = parseInt(s.end.split(':')[0]) + (parseInt(s.end.split(':')[1]) > 0 ? 1 : 0);
+      if (eh <= sh) eh += 24; // overnight shift — extends past midnight
       if (sh < minH) minH = sh;
       if (eh > maxH) maxH = eh;
     });
@@ -1828,7 +1829,7 @@ function renderTimelineView(container) {
     }
     if (minH >= maxH) { minH = 6; maxH = 22; }
     minH = Math.max(0, minH - 1);
-    maxH = Math.min(24, maxH + 1);
+    maxH = Math.min(30, maxH + 1); // allow up to 06:00 next day for overnight shifts
     const numHours = maxH - minH;
 
     html += `<div class="sched-card">
@@ -1851,7 +1852,7 @@ function renderTimelineView(container) {
       <div class="tl-name-col">Employee</div>
       <div class="tl-time-axis">`;
     for (let h = minH; h < maxH; h++) {
-      html += `<div class="tl-hour-mark">${String(h).padStart(2,'0')}:00</div>`;
+      html += `<div class="tl-hour-mark">${String(h % 24).padStart(2,'0')}:00</div>`;
     }
     html += `</div></div>`;
 
@@ -1876,7 +1877,8 @@ function renderTimelineView(container) {
 
       // Base bar: solid on-call spanning the full shift
       const shiftSMin = timeToMins(shift.start);
-      const shiftEMin = timeToMins(shift.end);
+      let shiftEMin = timeToMins(shift.end);
+      if (shiftEMin <= shiftSMin) shiftEMin += 24 * 60; // overnight
       const baseLeft = ((shiftSMin - minH * 60) / 60) * TL_PX_PER_HOUR;
       const baseWidth = ((shiftEMin - shiftSMin) / 60) * TL_PX_PER_HOUR;
       html += `<div class="tl-segment tl-seg-oncall tl-seg-base" style="left:${baseLeft}px;width:${Math.max(baseWidth,2)}px"
