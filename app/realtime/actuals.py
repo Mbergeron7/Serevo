@@ -112,14 +112,29 @@ def _db_interval_actuals(lob, date_obj):
         return None
 
 
-def _sheet_records(tab, sheet=None):
+def _sheet_records(tab, sheet=None, date_col=None, date_obj=None):
+    """Read sheet tab rows as dicts.  When *date_col* and *date_obj* are given
+    the rows are filtered to today+yesterday before building dicts (avoids
+    timeout on large sheets)."""
     try:
         if sheet is None:
             from app.data_source import _open_capacity_sheet
             sheet, err = _open_capacity_sheet()
             if err:
                 return []
-        return sheet.worksheet(tab).get_all_records()
+        ws = sheet.worksheet(tab)
+        all_vals = ws.get_all_values()
+        if not all_vals:
+            return []
+        headers = all_vals[0]
+        data_rows = all_vals[1:]
+        # Optional date filtering to trim large sheets before dict construction
+        if date_col and date_obj and date_col in headers:
+            idx = headers.index(date_col)
+            today_pfx = date_obj.strftime("%Y-%m-%d")
+            yest_pfx = (date_obj - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            data_rows = [r for r in data_rows if str(r[idx]).startswith(today_pfx) or str(r[idx]).startswith(yest_pfx)]
+        return [dict(zip(headers, r)) for r in data_rows]
     except Exception as e:
         log.debug(f"Sheet tab {tab} unavailable: {e}")
         return []
@@ -128,7 +143,7 @@ def _sheet_records(tab, sheet=None):
 def _sheet_interval_actuals(lob, date_obj, sheet=None):
     target = date_obj.strftime("%Y-%m-%d")
     out = []
-    for r in _sheet_records(TAB_ACTUALS, sheet):
+    for r in _sheet_records(TAB_ACTUALS, sheet, date_col="Timestamp", date_obj=date_obj):
         if str(r.get("LOB", "")).strip().lower() != lob.lower():
             continue
         ts = _parse_ts(r.get("Timestamp"))
@@ -200,7 +215,7 @@ def _sheet_agent_events(date_obj, sheet=None):
             name_by_id[str(e.get("Employee ID", ""))] = f"{e.get('First Name','')} {e.get('Last Name','')}".strip()
     except Exception:
         pass
-    for r in _sheet_records(TAB_AGENT_STATUS, sheet):
+    for r in _sheet_records(TAB_AGENT_STATUS, sheet, date_col="Start", date_obj=date_obj):
         start = _parse_ts(r.get("Start"))
         if not start:
             continue

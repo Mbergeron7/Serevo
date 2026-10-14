@@ -387,6 +387,9 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
             ext = str(s.get("employee_id", ""))
             sh_start = datetime.datetime.combine(date_obj, datetime.time(*map(int, s["start"].split(":")[:2])))
             sh_end = datetime.datetime.combine(date_obj, datetime.time(*map(int, s["end"].split(":")[:2])))
+            # Overnight shift: end is next day
+            if sh_end <= sh_start:
+                sh_end += datetime.timedelta(days=1)
             first, last_end, current = _first_last_login(ev_by_emp.get(ext, []))
             base = {"employee": s.get("employee", ext), "employee_id": ext, "lob": lob,
                     "scheduled_from": s["start"], "scheduled_to": s["end"]}
