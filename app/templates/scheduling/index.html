@@ -1180,7 +1180,7 @@ const nextWeek = new Date(today);
 nextWeek.setDate(nextWeek.getDate() + 6);
 document.getElementById('cfgEnd').value = fmt(nextWeek);
 
-function fmt(d) { return d.toISOString().slice(0, 10); }
+function fmt(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 function showToast(msg, type) {
   const t = document.getElementById('toast');
