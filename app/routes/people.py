@@ -591,7 +591,7 @@ def profile_assign():
     item_id = data.get("item_id")
     assignment_id = data.get("assignment_id")  # if editing existing
 
-    if not emp_id or (not item_id and not assignment_id):
+    if not emp_id or (not item_id and not assignment_id and not data.get("schedule_quartile_id")):
         return jsonify({"success": False, "error": "Missing employee or item ID."})
 
     valid_from = _dt.datetime.strptime(data["valid_from"], "%Y-%m-%d").date() if data.get("valid_from") else None
