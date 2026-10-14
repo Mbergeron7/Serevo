@@ -874,6 +874,70 @@ def _get_wtpm_eligible_shifts(employee_db_id, date_obj):
         return []
 
 
+def _get_quartile_eligible_shifts(employee_db_id, date_obj):
+    """
+    Resolve eligible day models from an employee's quartile entity assignment.
+
+    Chain: Employee → EmployeeQuartile.schedule_quartile_id → WeekTimePattern → DayModels
+
+    This is the direct quartile path (as opposed to the WTPM rotation path).
+    Returns list of DayModel dicts or empty list if no quartile assigned.
+    """
+    try:
+        from app.models import (EmployeeQuartile, WeekTimePattern,
+                                WeekTimePatternDayModel)
+
+        eq = EmployeeQuartile.query.filter_by(
+            employee_id=employee_db_id
+        ).filter(EmployeeQuartile.end_date.is_(None)).first()
+
+        if not eq or not eq.schedule_quartile_id:
+            return []
+
+        wtp = WeekTimePattern.query.get(eq.schedule_quartile_id)
+        if not wtp or not wtp.is_active:
+            return []
+
+        dm_links = WeekTimePatternDayModel.query.filter_by(
+            week_time_pattern_id=wtp.id
+        ).order_by(WeekTimePatternDayModel.position).all()
+
+        if not dm_links:
+            return []
+
+        day_of_week = date_obj.weekday()
+        if day_of_week < 5:
+            today_type = "weekday"
+        elif day_of_week == 5:
+            today_type = "saturday"
+        else:
+            today_type = "sunday"
+
+        eligible = []
+        for link in dm_links:
+            dm = link.day_model
+            if not dm or not dm.is_active:
+                continue
+            if dm.day_type and dm.day_type != "any" and dm.day_type != today_type:
+                continue
+            eligible.append({
+                "day_model_id": dm.id,
+                "name": dm.name,
+                "abbreviation": dm.abbreviation or "",
+                "start_time": dm.start_time,
+                "end_time": dm.end_time,
+                "paid_hours": dm.paid_hours or 8.0,
+                "total_hours": dm.total_hours or 8.5,
+                "model_type": dm.model_type or "Fixed",
+                "color": dm.color or "#4472C4",
+                "activities_json": dm.activities_json or "[]",
+            })
+        return eligible
+    except Exception as e:
+        log.warning(f"Quartile shift resolution error for employee {employee_db_id}: {e}")
+        return []
+
+
 def _get_employee_quartile(employee_db_id, planning_unit_id=None):
     """
     Get an employee's quartile assignment (1-4).
@@ -1306,8 +1370,10 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 hours = rot_shift.get("hours", shift_length_hrs)
                 stype = rot_shift.get("type", "full")
             else:
-                # Check WTPM eligible shifts
+                # Check WTPM eligible shifts, then fall back to quartile entity
                 wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj) if db_id else []
+                if not wtpm_shifts and db_id:
+                    wtpm_shifts = _get_quartile_eligible_shifts(db_id, date_obj)
                 if wtpm_shifts:
                     # Filter by availability, pick first eligible
                     chosen_dm = None
