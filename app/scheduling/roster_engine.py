@@ -428,6 +428,20 @@ def _process_day(day_date, group, members, slots_by_day_type,
                          if m.id not in assigned_member_ids
                          and m not in static_picks]
 
+        # When this is a dedicated-weekend day and the primary is absent,
+        # restrict rotation pool to fill-in eligible members only.
+        if (group.weekend_mode == "dedicated"
+                and day_type in ("saturday", "sunday")
+                and remaining > 0):
+            has_primaries = any(
+                _is_weekend_primary_for(m, day_date, group)
+                for m in members if m.active
+            )
+            if has_primaries:
+                fill_in_pool = [m for m in rotation_pool if m.is_fill_in]
+                if fill_in_pool:
+                    rotation_pool = fill_in_pool
+
         # Sort by fairness score
         scored = []
         for m in rotation_pool:

@@ -3090,6 +3090,7 @@ class RosterMember(db.Model):
     employee_id           = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
     is_display_only       = db.Column(db.Boolean, default=False)
     is_weekend_primary    = db.Column(db.Boolean, default=False)
+    is_fill_in            = db.Column(db.Boolean, default=False)       # eligible to fill in for dedicated day workers
     weekend_primary_days  = db.Column(db.Text, nullable=True)         # JSON: ["saturday"]
     max_closings_per_week = db.Column(db.Integer, default=1)
     excluded_closing_days = db.Column(db.Text, nullable=True)         # JSON: ["wednesday"]
@@ -3128,6 +3129,7 @@ class RosterMember(db.Model):
             "employee_name": emp.full_name if emp else "",
             "is_display_only": self.is_display_only,
             "is_weekend_primary": self.is_weekend_primary,
+            "is_fill_in": self.is_fill_in,
             "weekend_primary_days": self._json("weekend_primary_days"),
             "max_closings_per_week": self.max_closings_per_week,
             "excluded_closing_days": self._json("excluded_closing_days"),
