@@ -60,6 +60,91 @@
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
   .empty-state p { margin: 8px 0; }
 
+  /* ── Config panel (matches Scheduling) ───────── */
+  .config-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 24px;
+  }
+  .config-row {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .config-group { display: flex; flex-direction: column; }
+  .config-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .config-group select, .config-group input {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+
+  /* ── Action buttons (matches Scheduling) ──────── */
+  .btn-action {
+    border: none; padding: 8px 20px; border-radius: 6px; font-weight: 700;
+    font-size: .82rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-generate { background: var(--brand-accent); color: #fff; }
+  .btn-publish { background: #059669; color: #fff; }
+  .btn-clear-drafts { background: #dc2626; color: #fff; }
+  .btn-export { background: #7c3aed; color: #fff; }
+  .btn-refresh { background: #2563eb; color: #fff; }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Stats row ─────────────────────────────────── */
+  .stat-row {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 20px; min-width: 130px; flex: 1;
+  }
+  .stat-card .stat-num {
+    font-size: 1.6rem; font-weight: 800; color: var(--brand-accent);
+  }
+  .stat-card .stat-label {
+    font-size: .78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-top: 2px;
+  }
+  .stat-num.good { color: #059669; }
+
+  /* ── Schedule result card ─────────────────────── */
+  .sched-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .sched-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    background: var(--brand-accent); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  /* ── Loading overlay ──────────────────────────── */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3);
+    z-index: 900; justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: var(--surface); padding: 30px 40px; border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: center;
+    font-weight: 600; font-size: .95rem;
+  }
+
+  /* ── Toast ─────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 12px 24px;
+    border-radius: 8px; font-weight: 600; font-size: .85rem; color: #fff;
+    z-index: 1100; opacity: 0; transition: opacity .3s;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  }
+  .toast.show { opacity: 1; }
+  .toast-success { background: #059669; }
+  .toast-error { background: #dc2626; }
+  .toast-warning { background: #d97706; }
+
   /* Modal overlay */
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -127,46 +212,72 @@
 
 <!-- ═══ Tab 3: Generate & Calendar ═══ -->
 <div id="tab-calendar" class="tab-pane">
-  <div class="card">
-    <div class="card-header">
-      <h3>Roster Generation</h3>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
+  <!-- Config bar -->
+  <div class="config-card">
+    <div class="config-row">
+      <div class="config-group">
         <label>Group</label>
-        <select id="cal-group" style="padding:5px 10px;"></select>
+        <select id="cal-group"></select>
       </div>
-      <div class="form-group">
+      <div class="config-group">
         <label>Start Date</label>
-        <input id="cal-start" type="date" style="padding:5px 10px;">
+        <input id="cal-start" type="date">
       </div>
-      <div class="form-group">
+      <div class="config-group">
         <label>End Date</label>
-        <input id="cal-end" type="date" style="padding:5px 10px;">
+        <input id="cal-end" type="date">
       </div>
-      <button class="btn btn-primary" onclick="generateRoster()" style="align-self:flex-end;">Generate</button>
-      <button class="btn btn-secondary" onclick="loadCalendar()" style="align-self:flex-end;">Refresh</button>
-    </div>
-    <div id="cal-status" style="margin:10px 0; font-size:.84rem; color:var(--text-muted);"></div>
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
-      <button class="btn btn-sm btn-primary" onclick="publishRoster()" id="btn-publish" style="display:none;">Publish Drafts</button>
-      <button class="btn btn-sm btn-danger" onclick="clearDrafts()" id="btn-clear" style="display:none;">Clear Drafts</button>
+      <button class="btn-action btn-generate" onclick="generateRoster()">⚡ Generate</button>
+      <button class="btn-action btn-refresh" onclick="loadCalendar()">↻ Refresh</button>
+      <button class="btn-action btn-publish" onclick="publishRoster()" id="btn-publish" style="display:none;">✓ Publish</button>
+      <button class="btn-action btn-clear-drafts" onclick="clearDrafts()" id="btn-clear" style="display:none;">✕ Clear Drafts</button>
+      <button class="btn-action btn-export" onclick="exportRosterCSV()" id="btn-export-csv" style="display:none;">Export CSV</button>
+      <button class="btn-action btn-export" onclick="exportRosterXlsx()" id="btn-export-xlsx" style="display:none;">Export Excel</button>
     </div>
   </div>
 
-  <div class="card" id="cal-container" style="display:none;">
-    <div class="card-header">
-      <h3>Calendar</h3>
-      <div style="font-size:.78rem; color:var(--text-muted);">
+  <!-- Stats row -->
+  <div class="stat-row" id="roster-stats" style="display:none;">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">Total Assignments</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-days">0</div>
+      <div class="stat-label">Days Covered</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-drafts">0</div>
+      <div class="stat-label">Drafts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num good" id="stat-published">0</div>
+      <div class="stat-label">Published</div>
+    </div>
+  </div>
+
+  <!-- Calendar result -->
+  <div class="sched-card" id="cal-container" style="display:none;">
+    <div class="sched-card-header">
+      <span>Roster Calendar</span>
+      <div style="font-size:.78rem; display:flex; gap:8px; align-items:center;">
         <span class="badge badge-blue">Opener</span>
         <span class="badge badge-orange">Closer</span>
         <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#ffe0e0; color:#b01a1a;">Stat</span>
         <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#fff3cd; color:#856404;">Draft</span>
       </div>
     </div>
-    <div id="cal-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; font-size:.78rem;"></div>
+    <div id="cal-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; font-size:.78rem; padding:12px;"></div>
   </div>
 </div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box" id="loadingMsg">Generating roster…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <!-- ═══ New Group Modal ═══ -->
 <div class="modal-overlay" id="modal-new-group">
@@ -529,13 +640,27 @@ async function saveAllSlots(gid) {
   alert('Slots saved!');
 }
 
+// ── Toast / Loading ──────────────────────
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast toast-' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'Loading…';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
 // ── Calendar / Generate ───────────────────
 let _calData = [];
 
 function initCalendarTab() {
   const sel = document.getElementById('cal-group');
   sel.innerHTML = _groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-  // Default to current month
   const now = new Date();
   const y = now.getFullYear(), m = now.getMonth();
   const firstDay = new Date(y, m, 1);
@@ -552,12 +677,18 @@ function _calDates() {
   const start = new Date(sv + 'T00:00:00');
   const end = new Date(ev + 'T00:00:00');
   if (end < start) return null;
-  return {
-    start: sv,
-    end: ev,
-    startDate: start,
-    endDate: end,
-  };
+  return { start: sv, end: ev, startDate: start, endDate: end };
+}
+
+function updateRosterStats() {
+  const total = _calData.length;
+  const draftCount = _calData.filter(r => r.status === 'draft').length;
+  const pubCount = _calData.filter(r => r.status === 'scheduled').length;
+  const uniqueDays = new Set(_calData.map(r => r.date)).size;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-days').textContent = uniqueDays;
+  document.getElementById('stat-drafts').textContent = draftCount;
+  document.getElementById('stat-published').textContent = pubCount;
 }
 
 async function loadCalendar() {
@@ -567,17 +698,26 @@ async function loadCalendar() {
 
   const r = await fetch(`${API}/calendar?group_id=${gid}&start_date=${d.start}&end_date=${d.end}`);
   const data = await r.json();
-  if (data.error) { document.getElementById('cal-status').textContent = data.error; return; }
+  if (data.error) { showToast(data.error, 'error'); return; }
   _calData = data.rows || [];
 
   const hasDrafts = _calData.some(r => r.status === 'draft');
+  const hasData = _calData.length > 0;
   document.getElementById('btn-publish').style.display = hasDrafts ? '' : 'none';
   document.getElementById('btn-clear').style.display = hasDrafts ? '' : 'none';
+  document.getElementById('btn-export-csv').style.display = hasData ? '' : 'none';
+  document.getElementById('btn-export-xlsx').style.display = hasData ? '' : 'none';
+  document.getElementById('roster-stats').style.display = hasData ? 'flex' : 'none';
 
-  renderCalendarGrid(d);
-  document.getElementById('cal-container').style.display = '';
-  document.getElementById('cal-status').textContent =
-    _calData.length ? `${_calData.length} assignments loaded.` : 'No assignments for this period.';
+  if (hasData) {
+    updateRosterStats();
+    renderCalendarGrid(d);
+    document.getElementById('cal-container').style.display = '';
+    showToast(`${_calData.length} assignments loaded.`, 'success');
+  } else {
+    document.getElementById('cal-container').style.display = 'none';
+    showToast('No assignments for this period.', 'warning');
+  }
 }
 
 function renderCalendarGrid(d) {
@@ -660,48 +800,95 @@ function renderCalendarGrid(d) {
 async function generateRoster() {
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
-  if (!gid || !d) return;
+  if (!gid || !d) { showToast('Select a group and date range.', 'warning'); return; }
 
-  document.getElementById('cal-status').textContent = 'Generating...';
-  const r = await fetch(`${API}/generate`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
-  });
-  const data = await r.json();
-  if (data.error) {
-    document.getElementById('cal-status').textContent = 'Error: ' + data.error;
-    return;
-  }
-  document.getElementById('cal-status').textContent =
-    `Generated ${data.count} assignments (${data.schedule_rows} schedule rows).`;
-  loadCalendar();
+  showLoading('Generating roster…');
+  try {
+    const r = await fetch(`${API}/generate`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+    });
+    const data = await r.json();
+    hideLoading();
+    if (data.error) { showToast('Error: ' + data.error, 'error'); return; }
+    showToast(`Generated ${data.count} assignments (${data.schedule_rows} schedule rows).`, 'success');
+    loadCalendar();
+  } catch (e) { hideLoading(); showToast('Generation failed: ' + e, 'error'); }
 }
 
 async function publishRoster() {
   if (!confirm('Publish all draft roster schedules for this date range?')) return;
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
-  const r = await fetch(`${API}/publish`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
-  });
-  const data = await r.json();
-  document.getElementById('cal-status').textContent =
-    data.error ? 'Error: ' + data.error : `Published ${data.published} schedules.`;
-  loadCalendar();
+  showLoading('Publishing…');
+  try {
+    const r = await fetch(`${API}/publish`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+    });
+    const data = await r.json();
+    hideLoading();
+    if (data.error) { showToast('Error: ' + data.error, 'error'); return; }
+    showToast(`Published ${data.published} schedules.`, 'success');
+    loadCalendar();
+  } catch (e) { hideLoading(); showToast('Publish failed: ' + e, 'error'); }
 }
 
 async function clearDrafts() {
   if (!confirm('Delete all unpublished draft roster schedules for this date range?')) return;
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
-  const r = await fetch(`${API}/clear`, {
+  showLoading('Clearing drafts…');
+  try {
+    const r = await fetch(`${API}/clear`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+    });
+    const data = await r.json();
+    hideLoading();
+    if (data.error) { showToast('Error: ' + data.error, 'error'); return; }
+    showToast('Drafts cleared.', 'success');
+    loadCalendar();
+  } catch (e) { hideLoading(); showToast('Clear failed: ' + e, 'error'); }
+}
+
+// ── Export ────────────────────────────────
+function exportRosterCSV() {
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  if (!gid || !d) { showToast('Select group and dates first.', 'warning'); return; }
+  fetch(`${API}/export-csv`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
-  });
-  const data = await r.json();
-  document.getElementById('cal-status').textContent = data.error ? 'Error: ' + data.error : 'Drafts cleared.';
-  loadCalendar();
+  })
+  .then(r => { if (!r.ok) throw new Error('Export failed'); return r.blob(); })
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `roster_${d.start}_to_${d.end}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('CSV exported.', 'success');
+  })
+  .catch(e => showToast('Export failed: ' + e, 'error'));
+}
+
+function exportRosterXlsx() {
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  if (!gid || !d) { showToast('Select group and dates first.', 'warning'); return; }
+  fetch(`${API}/export-xlsx`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+  })
+  .then(r => { if (!r.ok) throw new Error('Export failed'); return r.blob(); })
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `roster_${d.start}_to_${d.end}.xlsx`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Excel exported.', 'success');
+  })
+  .catch(e => showToast('Export failed: ' + e, 'error'));
 }
 
 // ── Init ───────────────────────────────────

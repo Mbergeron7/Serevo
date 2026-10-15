@@ -4,11 +4,13 @@ routes/rosters.py — Roster Rotation blueprint
 CRUD for roster groups, members, slots, and roster generation/publish.
 """
 
+import csv
+import io
 import json
 import logging
 import datetime
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, RosterGroup, RosterMember, RosterSlot,
                          RosterRotationState, Employee, PlanningUnit, Schedule)
@@ -285,6 +287,97 @@ def api_calendar():
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
+
+
+# ── Export CSV ──────────────────────────────────────────────
+
+@rosters_bp.route("/api/export-csv", methods=["POST"])
+@login_required
+def api_export_csv():
+    d = request.get_json(force=True)
+    group_id = d.get("group_id")
+    start = _parse_date(d.get("start_date"))
+    end = _parse_date(d.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+
+    result = get_roster_calendar(group_id, start, end)
+    rows = result.get("rows", [])
+    group = RosterGroup.query.get(group_id)
+    group_name = group.name if group else "roster"
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Date", "Employee", "Role", "Shift Start", "Shift End", "Status"])
+    for r in rows:
+        writer.writerow([r["date"], r["employee"], r["type"], r["start"], r["end"], r["status"]])
+
+    output = buf.getvalue()
+    safe_name = group_name.replace(" ", "_")
+    filename = f"roster_{safe_name}_{start}_{end}.csv"
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@rosters_bp.route("/api/export-xlsx", methods=["POST"])
+@login_required
+def api_export_xlsx():
+    d = request.get_json(force=True)
+    group_id = d.get("group_id")
+    start = _parse_date(d.get("start_date"))
+    end = _parse_date(d.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+
+    result = get_roster_calendar(group_id, start, end)
+    rows = result.get("rows", [])
+    group = RosterGroup.query.get(group_id)
+    group_name = group.name if group else "roster"
+
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        return jsonify({"error": "openpyxl not installed on server"}), 500
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Roster Schedule"
+
+    headers = ["Date", "Employee", "Role", "Shift Start", "Shift End", "Status"]
+    header_font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for i, r in enumerate(rows, 2):
+        ws.cell(row=i, column=1, value=r["date"])
+        ws.cell(row=i, column=2, value=r["employee"])
+        ws.cell(row=i, column=3, value=r["type"])
+        ws.cell(row=i, column=4, value=r["start"])
+        ws.cell(row=i, column=5, value=r["end"])
+        ws.cell(row=i, column=6, value=r["status"])
+
+    for col in range(1, 7):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 16
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    safe_name = group_name.replace(" ", "_")
+    filename = f"roster_{safe_name}_{start}_{end}.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────
