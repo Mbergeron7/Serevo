@@ -13,12 +13,30 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(name):
+    """Check if a table already exists (handles both Postgres and SQLite)."""
+    from alembic import op as _op
+    bind = _op.get_bind()
+    insp = sa.inspect(bind)
+    return name in insp.get_table_names()
+
+
+def _column_exists(table, column):
+    """Check if a column already exists on a table."""
+    from alembic import op as _op
+    bind = _op.get_bind()
+    insp = sa.inspect(bind)
+    return any(c['name'] == column for c in insp.get_columns(table))
+
+
 def upgrade():
-    # Add source column to schedules
-    op.add_column('schedules', sa.Column('source', sa.String(20), nullable=True))
+    # Add source column to schedules (skip if already added by db.create_all)
+    if not _column_exists('schedules', 'source'):
+        op.add_column('schedules', sa.Column('source', sa.String(20), nullable=True))
 
     # RosterGroup
-    op.create_table('roster_groups',
+    if not _table_exists('roster_groups'):
+        op.create_table('roster_groups',
         sa.Column('id', sa.Integer, primary_key=True),
         sa.Column('planning_unit_id', sa.Integer, sa.ForeignKey('planning_units.id'), nullable=False, index=True),
         sa.Column('name', sa.String(100), nullable=False),
@@ -32,7 +50,8 @@ def upgrade():
     )
 
     # RosterMember
-    op.create_table('roster_members',
+    if not _table_exists('roster_members'):
+        op.create_table('roster_members',
         sa.Column('id', sa.Integer, primary_key=True),
         sa.Column('roster_group_id', sa.Integer, sa.ForeignKey('roster_groups.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('employee_id', sa.Integer, sa.ForeignKey('employees.id'), nullable=False, index=True),
@@ -52,7 +71,8 @@ def upgrade():
     )
 
     # RosterSlot
-    op.create_table('roster_slots',
+    if not _table_exists('roster_slots'):
+        op.create_table('roster_slots',
         sa.Column('id', sa.Integer, primary_key=True),
         sa.Column('roster_group_id', sa.Integer, sa.ForeignKey('roster_groups.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('day_type', sa.String(20), nullable=False),
@@ -63,7 +83,8 @@ def upgrade():
     )
 
     # RosterRotationState
-    op.create_table('roster_rotation_states',
+    if not _table_exists('roster_rotation_states'):
+        op.create_table('roster_rotation_states',
         sa.Column('id', sa.Integer, primary_key=True),
         sa.Column('roster_member_id', sa.Integer, sa.ForeignKey('roster_members.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('period_start', sa.Date, nullable=False),
