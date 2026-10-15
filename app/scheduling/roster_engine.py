@@ -59,11 +59,22 @@ def generate_roster(group_id, start_date, end_date):
     _clear_draft_rosters(group, start_date, end_date)
 
     assignments = []
+    # Track weekly closings across the entire generation loop so
+    # max_closings_per_week is enforced across days, not just within one day.
+    week_closings = {}
+    current_week_start = start_date - timedelta(days=start_date.weekday())
+
     current = start_date
     while current <= end_date:
+        # Reset weekly counter when a new week begins
+        this_week_start = current - timedelta(days=current.weekday())
+        if this_week_start != current_week_start:
+            week_closings = {}
+            current_week_start = this_week_start
+
         day_assignments = _process_day(
             current, group, active_members, slots_by_day_type,
-            stat_dates, pto_dates, states
+            stat_dates, pto_dates, states, week_closings
         )
         assignments.extend(day_assignments)
         current += timedelta(days=1)
@@ -351,8 +362,13 @@ def _fairness_score(member, state, day_date, slot, week_closings):
 
 
 def _process_day(day_date, group, members, slots_by_day_type,
-                 stat_dates, pto_dates, states):
-    """Process one day: assign roles and return assignment dicts."""
+                 stat_dates, pto_dates, states, week_closings):
+    """Process one day: assign roles and return assignment dicts.
+
+    week_closings is a dict member_id → int tracking how many closings
+    each member has this week.  It is maintained by the caller across
+    the entire generation loop so the max-per-week cap works correctly.
+    """
     day_type = _detect_day_type(day_date, stat_dates)
 
     # Find applicable slots
@@ -366,10 +382,6 @@ def _process_day(day_date, group, members, slots_by_day_type,
 
     assignments = []
     assigned_member_ids = set()  # track who's already assigned today
-
-    # Track closings this week for max-per-week cap
-    week_start = day_date - timedelta(days=day_date.weekday())
-    week_closings = _count_week_closings(members, week_start, day_date, states)
 
     for slot in applicable_slots:
         # How many needed for this slot
@@ -391,7 +403,7 @@ def _process_day(day_date, group, members, slots_by_day_type,
                 continue
             if _is_static_assignment(m, day_date, slot.role):
                 static_picks.append(m)
-            elif _is_weekend_primary_for(m, day_date, group) and slot.role == "closer":
+            elif _is_weekend_primary_for(m, day_date, group):
                 static_picks.append(m)
 
         for m in static_picks[:needed]:
@@ -454,13 +466,8 @@ def _update_state_for_assignment(state, day_date, slot):
         state.last_close_weekday = dow
 
 
-def _count_week_closings(members, week_start, current_date, states):
-    """Approximate weekly closings from generated assignments so far.
-    For the first generation this is tracked in-memory via the generation loop.
-    Returns a dict member_id → count.
-    """
-    # This is populated incrementally during _process_day, start at 0
-    return {}
+# _count_week_closings removed — weekly closings are now tracked
+# by the caller across the generation loop in generate_roster().
 
 
 def _write_schedule_rows(assignments, group):
