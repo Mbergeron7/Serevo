@@ -76,6 +76,7 @@ def api_create_group():
         closers_required_weekend=d.get("closers_required_weekend", 1),
         weekend_mode=d.get("weekend_mode", "rotate"),
         stat_role=d.get("stat_role"),
+        sunday_non_closer=d.get("sunday_non_closer", False),
     )
     db.session.add(g)
     db.session.commit()
@@ -88,7 +89,8 @@ def api_update_group(gid):
     g = RosterGroup.query.get_or_404(gid)
     d = request.get_json(force=True)
     for k in ("name", "planning_unit_id", "closers_required_weekday",
-              "closers_required_weekend", "weekend_mode", "stat_role"):
+              "closers_required_weekend", "weekend_mode", "stat_role",
+              "sunday_non_closer"):
         if k in d:
             setattr(g, k, d[k])
     db.session.commit()
@@ -172,8 +174,10 @@ def api_add_slot(gid):
         roster_group_id=g.id,
         day_type=d["day_type"],
         role=d["role"],
+        label=d.get("label"),
         shift_start=_parse_time(d["shift_start"]),
         shift_end=_parse_time(d["shift_end"]),
+        sort_order=d.get("sort_order", 0),
     )
     db.session.add(s)
     db.session.commit()
@@ -189,10 +193,14 @@ def api_update_slot(sid):
         s.day_type = d["day_type"]
     if "role" in d:
         s.role = d["role"]
+    if "label" in d:
+        s.label = d["label"]
     if "shift_start" in d:
         s.shift_start = _parse_time(d["shift_start"])
     if "shift_end" in d:
         s.shift_end = _parse_time(d["shift_end"])
+    if "sort_order" in d:
+        s.sort_order = d.get("sort_order", 0)
     db.session.commit()
     return jsonify(s.to_dict())
 
@@ -221,8 +229,10 @@ def api_bulk_save_slots(gid):
             roster_group_id=g.id,
             day_type=s["day_type"],
             role=s["role"],
+            label=s.get("label"),
             shift_start=_parse_time(s["shift_start"]),
             shift_end=_parse_time(s["shift_end"]),
+            sort_order=s.get("sort_order", 0),
         ))
     db.session.commit()
     return jsonify({"ok": True, "count": len(slots)})

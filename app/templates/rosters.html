@@ -263,6 +263,7 @@
       <div style="font-size:.78rem; display:flex; gap:8px; align-items:center;">
         <span class="badge badge-blue">Opener</span>
         <span class="badge badge-orange">Closer</span>
+        <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#e0ffe0; color:#1a7a1a;">Day Shift</span>
         <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#ffe0e0; color:#b01a1a;">Stat</span>
         <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#fff3cd; color:#856404;">Draft</span>
       </div>
@@ -317,6 +318,12 @@
           <option value="always_open">Always Opens</option>
           <option value="always_close">Always Closes</option>
         </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="check-row">
+        <input type="checkbox" id="grp-sun-non-closer"> <label for="grp-sun-non-closer">Sunday = Non-Closer Rule</label>
+        <small style="color:var(--text-muted); font-size:0.75rem; margin-left:8px;">Sunday goes to whoever didn't close that week</small>
       </div>
     </div>
     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
@@ -461,6 +468,7 @@ function renderGroups() {
           <span style="font-size:.78rem; color:var(--text-muted);">
             ${g.planning_unit} · ${g.member_count} members · Weekend: ${g.weekend_mode}
             ${g.stat_role ? ' · Stat: ' + g.stat_role.replace('_',' ') : ''}
+            ${g.sunday_non_closer ? ' · Sun=Non-Closer' : ''}
           </span>
         </div>
         <div style="display:flex; gap:6px;">
@@ -511,6 +519,7 @@ function openNewGroupModal() {
   document.getElementById('grp-close-we').value = '1';
   document.getElementById('grp-wknd-mode').value = 'rotate';
   document.getElementById('grp-stat-role').value = '';
+  document.getElementById('grp-sun-non-closer').checked = false;
   document.getElementById('group-modal-title').textContent = 'New Roster Group';
   openModal('modal-new-group');
 }
@@ -525,6 +534,7 @@ function editGroup(id) {
   document.getElementById('grp-close-we').value = g.closers_required_weekend;
   document.getElementById('grp-wknd-mode').value = g.weekend_mode;
   document.getElementById('grp-stat-role').value = g.stat_role || '';
+  document.getElementById('grp-sun-non-closer').checked = !!g.sunday_non_closer;
   document.getElementById('group-modal-title').textContent = 'Edit Group';
   openModal('modal-new-group');
 }
@@ -538,6 +548,7 @@ async function saveGroup() {
     closers_required_weekend: +document.getElementById('grp-close-we').value,
     weekend_mode: document.getElementById('grp-wknd-mode').value,
     stat_role: document.getElementById('grp-stat-role').value || null,
+    sunday_non_closer: document.getElementById('grp-sun-non-closer').checked,
   };
   const url = editId ? `${API}/groups/${editId}` : `${API}/groups`;
   const method = editId ? 'PUT' : 'POST';
@@ -673,49 +684,76 @@ function loadSlots() {
 }
 
 function renderSlotEditor(g) {
-  const dayTypes = ['weekday', 'saturday', 'sunday', 'stat'];
-  const roles = ['opener', 'closer'];
-  const slotMap = {};
-  (g.slots || []).forEach(s => { slotMap[s.day_type + '|' + s.role] = s; });
+  const slots = (g.slots || []).sort((a,b) => {
+    const dtOrder = {weekday:0, saturday:1, sunday:2, stat:3};
+    return (dtOrder[a.day_type]||9) - (dtOrder[b.day_type]||9) || (a.sort_order||0) - (b.sort_order||0);
+  });
 
-  let html = `<table class="tbl">
-    <thead><tr><th>Day Type</th><th>Role</th><th>Start</th><th>End</th></tr></thead><tbody>`;
-  for (const dt of dayTypes) {
-    for (const role of roles) {
-      const key = dt + '|' + role;
-      const s = slotMap[key] || {};
-      html += `<tr>
-        <td>${dt.charAt(0).toUpperCase()+dt.slice(1)}</td>
-        <td><span class="badge ${role==='opener'?'badge-blue':'badge-orange'}">${role.charAt(0).toUpperCase()+role.slice(1)}</span></td>
-        <td><input type="time" class="slot-input" data-dt="${dt}" data-role="${role}" data-field="start" value="${s.shift_start||''}" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
-        <td><input type="time" class="slot-input" data-dt="${dt}" data-role="${role}" data-field="end" value="${s.shift_end||''}" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
-      </tr>`;
-    }
+  let html = `<div style="margin-bottom:12px; display:flex; justify-content:flex-end;">
+    <button class="btn btn-primary btn-sm" onclick="addSlotRow(${g.id})">+ Add Slot</button>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>Day Type</th><th>Role Key</th><th>Label</th><th>Start</th><th>End</th><th>Order</th><th></th></tr></thead><tbody id="slot-rows">`;
+
+  for (const s of slots) {
+    html += _slotRowHtml(s);
   }
+
   html += `</tbody></table>
-    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
-      <button class="btn btn-primary" onclick="saveAllSlots(${g.id})">Save Slots</button>
+    <div style="display:flex; justify-content:flex-end; margin-top:14px; gap:8px;">
+      <button class="btn btn-primary" onclick="saveAllSlots(${g.id})">Save All Slots</button>
     </div>`;
   document.getElementById('slots-content').innerHTML = html;
 }
 
+let _slotCounter = 0;
+function _slotRowHtml(s) {
+  const dayTypes = ['weekday','saturday','sunday','stat'];
+  const id = 'sr' + (_slotCounter++);
+  return `<tr data-slot-row="${id}">
+    <td><select class="slot-dt" style="padding:4px; border:1px solid var(--border); border-radius:4px;">
+      ${dayTypes.map(dt => `<option value="${dt}" ${s.day_type===dt?'selected':''}>${dt.charAt(0).toUpperCase()+dt.slice(1)}</option>`).join('')}
+    </select></td>
+    <td><input class="slot-role" value="${s.role||''}" placeholder="closer, opener, day_0800…" style="width:120px; padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
+    <td><input class="slot-label" value="${s.label||''}" placeholder="e.g. Day 8:00" style="width:120px; padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
+    <td><input type="time" class="slot-start" value="${s.shift_start||''}" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
+    <td><input type="time" class="slot-end" value="${s.shift_end||''}" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
+    <td><input type="number" class="slot-order" value="${s.sort_order||0}" min="0" style="width:60px; padding:4px 8px; border:1px solid var(--border); border-radius:4px;"></td>
+    <td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()">✕</button></td>
+  </tr>`;
+}
+
+function addSlotRow(gid) {
+  const tbody = document.getElementById('slot-rows');
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = _slotRowHtml({day_type:'weekday', role:'', label:'', shift_start:'', shift_end:'', sort_order:0});
+  tbody.appendChild(tmp.firstElementChild);
+}
+
 async function saveAllSlots(gid) {
-  const inputs = document.querySelectorAll('.slot-input');
-  const map = {};
-  inputs.forEach(inp => {
-    const key = inp.dataset.dt + '|' + inp.dataset.role;
-    if (!map[key]) map[key] = { day_type: inp.dataset.dt, role: inp.dataset.role };
-    if (inp.dataset.field === 'start') map[key].shift_start = inp.value;
-    else map[key].shift_end = inp.value;
+  const rows = document.querySelectorAll('#slot-rows tr');
+  const slots = [];
+  rows.forEach(tr => {
+    const role = tr.querySelector('.slot-role').value.trim();
+    const start = tr.querySelector('.slot-start').value;
+    const end = tr.querySelector('.slot-end').value;
+    if (!role || !start || !end) return;
+    slots.push({
+      day_type: tr.querySelector('.slot-dt').value,
+      role: role,
+      label: tr.querySelector('.slot-label').value.trim() || null,
+      shift_start: start,
+      shift_end: end,
+      sort_order: +tr.querySelector('.slot-order').value || 0,
+    });
   });
-  const slots = Object.values(map).filter(s => s.shift_start && s.shift_end);
   await fetch(`${API}/groups/${gid}/slots/bulk`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ slots })
   });
-  loadGroups();  // refresh cached data
+  loadGroups();
   loadSlots();
-  alert('Slots saved!');
+  showToast(`Saved ${slots.length} slots.`, 'success');
 }
 
 // ── Toast / Loading ──────────────────────
@@ -857,10 +895,11 @@ function renderCalendarGrid(d) {
 
       for (const e of entries) {
         const isDraft = e.status === 'draft';
-        const isCloser = e.type === 'closer';
-        const badgeClass = isCloser ? 'badge-orange' : 'badge-blue';
+        const role = e.type || '';
+        const badgeClass = role === 'closer' ? 'badge-orange' : role === 'opener' ? 'badge-blue' : 'badge-grey';
+        const badgeStyle = role !== 'closer' && role !== 'opener' ? 'background:#e0ffe0; color:#1a7a1a;' : '';
         html += `<div style="margin:1px 0; ${isDraft?'border-left:2px solid #f0ad4e; padding-left:3px':''}">
-          <span class="badge ${badgeClass}" style="font-size:.65rem;">${e.type}</span>
+          <span class="badge ${badgeClass}" style="font-size:.65rem; ${badgeStyle}">${role}</span>
           <span style="font-size:.7rem;">${e.employee}</span>
           <span style="font-size:.65rem; color:var(--text-muted);">${e.start}-${e.end}</span>
         </div>`;

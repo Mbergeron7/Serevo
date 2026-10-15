@@ -3053,6 +3053,7 @@ class RosterGroup(db.Model):
     closers_required_weekend = db.Column(db.Integer, default=1)
     weekend_mode            = db.Column(db.String(20), default="rotate")   # rotate | dedicated
     stat_role               = db.Column(db.String(20), nullable=True)      # always_open | always_close
+    sunday_non_closer       = db.Column(db.Boolean, default=False)        # Sunday assigned to whoever didn't close that week
     active                  = db.Column(db.Boolean, default=True)
     created_at              = db.Column(db.DateTime, default=_utcnow)
     updated_at              = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
@@ -3073,6 +3074,7 @@ class RosterGroup(db.Model):
             "closers_required_weekend": self.closers_required_weekend,
             "weekend_mode": self.weekend_mode,
             "stat_role": self.stat_role,
+            "sunday_non_closer": self.sunday_non_closer,
             "active": self.active,
             "member_count": len([m for m in self.members if m.active]),
             "members": [m.to_dict() for m in self.members if m.active],
@@ -3144,20 +3146,18 @@ class RosterMember(db.Model):
 
 
 class RosterSlot(db.Model):
-    """Defines a role (opener/closer) for a day type with its shift times."""
+    """Defines a shift slot for a day type with its times and role label."""
     __tablename__ = "roster_slots"
 
     id              = db.Column(db.Integer, primary_key=True)
     roster_group_id = db.Column(db.Integer, db.ForeignKey("roster_groups.id", ondelete="CASCADE"),
                                 nullable=False, index=True)
     day_type        = db.Column(db.String(20), nullable=False)        # weekday | saturday | sunday | stat
-    role            = db.Column(db.String(20), nullable=False)        # opener | closer
+    role            = db.Column(db.String(40), nullable=False)        # opener | closer | day_0800 | any custom label
+    label           = db.Column(db.String(60), nullable=True)         # human-readable label e.g. "Day 8:00"
     shift_start     = db.Column(db.Time, nullable=False)
     shift_end       = db.Column(db.Time, nullable=False)
-
-    __table_args__ = (
-        db.UniqueConstraint("roster_group_id", "day_type", "role", name="uq_roster_slot"),
-    )
+    sort_order      = db.Column(db.Integer, default=0)
 
     def to_dict(self):
         return {
@@ -3165,8 +3165,10 @@ class RosterSlot(db.Model):
             "roster_group_id": self.roster_group_id,
             "day_type": self.day_type,
             "role": self.role,
+            "label": self.label or self.role,
             "shift_start": self.shift_start.strftime("%H:%M") if self.shift_start else "",
             "shift_end": self.shift_end.strftime("%H:%M") if self.shift_end else "",
+            "sort_order": self.sort_order or 0,
         }
 
 

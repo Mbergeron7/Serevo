@@ -1,14 +1,16 @@
 """
 scheduling/roster_engine.py — Roster Rotation generation engine
 ================================================================
-Generates fair role assignments (opener/closer) for roster groups.
-The algorithm:
-  1. Detect day type (stat → weekend → weekday)
-  2. Filter eligible members per slot
-  3. Lock static assignments first
-  4. Rotate remaining slots using fairness scoring
-  5. Write draft Schedule rows with source='roster'
-  6. Update RosterRotationState counters
+Generates full weekly schedules for roster groups.
+
+Algorithm (week-level planning):
+  1. For each week in the date range:
+     a. Assign closing shifts first — one per member per week (rotating fairly)
+     b. Apply Sunday = non-closer rule if enabled
+     c. Fill remaining days with configured day shift slots
+  2. Handle dedicated weekend members (Saturday/Sunday)
+  3. Write draft Schedule rows with source='roster'
+  4. Update RosterRotationState counters for fairness
 """
 
 import json
@@ -58,26 +60,36 @@ def generate_roster(group_id, start_date, end_date):
     # Clear any existing draft roster schedules for this group's members in date range
     _clear_draft_rosters(group, start_date, end_date)
 
+    # Determine if we have closer slots (enables week-level planning)
+    has_closers = any(
+        s.role == "closer"
+        for slots in slots_by_day_type.values()
+        for s in slots
+    )
+
     assignments = []
-    # Track weekly closings across the entire generation loop so
-    # max_closings_per_week is enforced across days, not just within one day.
-    week_closings = {}
-    current_week_start = start_date - timedelta(days=start_date.weekday())
 
-    current = start_date
-    while current <= end_date:
-        # Reset weekly counter when a new week begins
-        this_week_start = current - timedelta(days=current.weekday())
-        if this_week_start != current_week_start:
-            week_closings = {}
-            current_week_start = this_week_start
-
-        day_assignments = _process_day(
-            current, group, active_members, slots_by_day_type,
-            stat_dates, pto_dates, states, week_closings
-        )
-        assignments.extend(day_assignments)
-        current += timedelta(days=1)
+    if has_closers:
+        # ── Week-level planning mode ──
+        # Process week by week to enforce one-closing-per-week and Sunday rule
+        weeks = _split_into_weeks(start_date, end_date)
+        for week_start, week_end in weeks:
+            week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
+            week_assignments = _process_week(
+                week_days, group, active_members, slots_by_day_type,
+                stat_dates, pto_dates, states
+            )
+            assignments.extend(week_assignments)
+    else:
+        # ── Simple day-by-day mode (no closers, just day shifts) ──
+        current = start_date
+        while current <= end_date:
+            day_assignments = _process_day_simple(
+                current, group, active_members, slots_by_day_type,
+                stat_dates, pto_dates, states
+            )
+            assignments.extend(day_assignments)
+            current += timedelta(days=1)
 
     # Persist updated states
     for state in states.values():
@@ -148,10 +160,13 @@ def get_roster_calendar(group_id, start_date, end_date):
 # ── Internal helpers ────────────────────────────────────────────
 
 def _index_slots(slots):
-    """Group slots by day_type → list of slots."""
+    """Group slots by day_type → list of slots, sorted by sort_order."""
     out = {}
     for s in slots:
         out.setdefault(s.day_type, []).append(s)
+    # Sort each day_type's slots by sort_order
+    for dt in out:
+        out[dt].sort(key=lambda s: (s.sort_order or 0, s.role))
     return out
 
 
@@ -196,7 +211,6 @@ def _get_or_create_states(members, period_start):
             period_start=period_start,
         ).first()
         if not state:
-            # Look for the most recent previous state to carry forward
             prev = (RosterRotationState.query
                     .filter_by(roster_member_id=m.id)
                     .filter(RosterRotationState.period_start < period_start)
@@ -245,16 +259,318 @@ def _detect_day_type(dt, stat_dates):
     return "weekday"
 
 
+def _split_into_weeks(start_date, end_date):
+    """Split date range into (week_start_monday, week_end_sunday) tuples."""
+    weeks = []
+    current = start_date - timedelta(days=start_date.weekday())  # Monday
+    while current <= end_date:
+        week_end = current + timedelta(days=6)  # Sunday
+        weeks.append((current, week_end))
+        current += timedelta(days=7)
+    return weeks
+
+
+def _date_range(start, end):
+    """Return list of dates from start to end inclusive."""
+    days = []
+    d = start
+    while d <= end:
+        days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
+# ── Week-level planning ────────────────────────────────────────
+
+def _process_week(week_days, group, members, slots_by_day_type,
+                  stat_dates, pto_dates, states):
+    """Process one week: assign closings first, then day shifts, then Sunday rule.
+
+    Returns list of assignment dicts for the whole week.
+    """
+    assignments = []
+    # Track who's assigned to what each day this week
+    # day_date → set of member_ids already assigned
+    daily_assigned = {d: set() for d in week_days}
+    # Track who got a closing this week
+    week_closings = {}  # member_id → count
+    # Track which members closed on which day (for Sunday rule)
+    closer_days = {}  # member_id → [dates]
+
+    # ── Phase 1: Assign closing slots across the week ──────────
+    for day_date in week_days:
+        day_type = _detect_day_type(day_date, stat_dates)
+        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+        closer_slots = [s for s in applicable_slots if s.role == "closer"]
+
+        for slot in closer_slots:
+            needed = _slots_needed(slot, group, day_type)
+
+            # Static/dedicated assignments first
+            eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+            static_picks, rotation_pool = _split_static_rotation(
+                eligible, day_date, slot, group, daily_assigned[day_date]
+            )
+
+            for m in static_picks[:needed]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
+                daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                closer_days.setdefault(m.id, []).append(day_date)
+
+            remaining = needed - len(static_picks[:needed])
+            if remaining <= 0:
+                continue
+
+            # Rotation assignment respecting max_closings_per_week
+            scored = []
+            for m in rotation_pool:
+                if m.id in daily_assigned[day_date]:
+                    continue
+                s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
+                scored.append((s, m))
+            scored.sort(key=lambda x: (x[0], getattr(x[1], 'rotation_order', 0) or 0))
+
+            for _, m in scored[:remaining]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
+                daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                closer_days.setdefault(m.id, []).append(day_date)
+
+    # ── Phase 2: Sunday = non-closer rule ──────────────────────
+    # If enabled, assign Sunday opener/day slots to members who didn't close this week
+    sunday_dates = [d for d in week_days if d.weekday() == 6]
+    if group.sunday_non_closer and sunday_dates:
+        closers_this_week = set(week_closings.keys())
+        non_closers = [m for m in members if m.id not in closers_this_week]
+
+        for sun_date in sunday_dates:
+            day_type = _detect_day_type(sun_date, stat_dates)
+            applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+            non_closer_slots = [s for s in applicable_slots if s.role != "closer"]
+
+            for slot in non_closer_slots:
+                needed = _slots_needed(slot, group, day_type)
+                eligible = [m for m in non_closers
+                           if m.id not in daily_assigned[sun_date]
+                           and _is_available(m, sun_date, pto_dates)]
+
+                # Dedicated weekend members first
+                dedicated = [m for m in eligible
+                            if _is_weekend_primary_for(m, sun_date, group)]
+                pool = dedicated if dedicated else eligible
+
+                for m in pool[:needed]:
+                    assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
+                    daily_assigned[sun_date].add(m.id)
+
+                remaining = needed - len(pool[:needed])
+                if remaining > 0:
+                    # Fill from remaining eligible
+                    rest = [m for m in eligible if m not in pool[:needed]]
+                    for m in rest[:remaining]:
+                        assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
+                        daily_assigned[sun_date].add(m.id)
+
+    # ── Phase 3: Assign opener slots ───────────────────────────
+    for day_date in week_days:
+        day_type = _detect_day_type(day_date, stat_dates)
+        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+        opener_slots = [s for s in applicable_slots if s.role == "opener"]
+
+        for slot in opener_slots:
+            needed = _slots_needed(slot, group, day_type)
+            eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+
+            # Static/dedicated first
+            static_picks, rotation_pool = _split_static_rotation(
+                eligible, day_date, slot, group, daily_assigned[day_date]
+            )
+
+            for m in static_picks[:needed]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
+                daily_assigned[day_date].add(m.id)
+
+            remaining = needed - len(static_picks[:needed])
+            if remaining <= 0:
+                continue
+
+            pool = [m for m in rotation_pool if m.id not in daily_assigned[day_date]]
+            for m in pool[:remaining]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
+                daily_assigned[day_date].add(m.id)
+
+    # ── Phase 4: Assign day shift slots (everything else) ──────
+    for day_date in week_days:
+        day_type = _detect_day_type(day_date, stat_dates)
+        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+        day_slots = [s for s in applicable_slots
+                     if s.role not in ("closer", "opener")]
+
+        for slot in day_slots:
+            needed = _slots_needed(slot, group, day_type)
+            eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+
+            # For day shifts, skip members already assigned today (they have closer/opener)
+            available = [m for m in eligible if m.id not in daily_assigned[day_date]]
+
+            # Static/dedicated first
+            static_picks = []
+            rotation_pool = []
+            for m in available:
+                if _is_static_assignment(m, day_date, slot.role):
+                    static_picks.append(m)
+                elif _is_weekend_primary_for(m, day_date, group) and day_type in ("saturday", "sunday"):
+                    static_picks.append(m)
+                else:
+                    rotation_pool.append(m)
+
+            for m in static_picks[:needed]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
+                daily_assigned[day_date].add(m.id)
+
+            remaining = needed - len(static_picks[:needed])
+            if remaining <= 0:
+                continue
+
+            # For day shifts, prefer members who have the fewest total assignments
+            rotation_pool.sort(key=lambda m: (
+                sum(1 for d, ids in daily_assigned.items() if m.id in ids),
+                getattr(m, 'rotation_order', 0) or 0
+            ))
+
+            for m in rotation_pool[:remaining]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
+                daily_assigned[day_date].add(m.id)
+
+    return assignments
+
+
+def _process_day_simple(day_date, group, members, slots_by_day_type,
+                        stat_dates, pto_dates, states):
+    """Process one day in simple mode (no closers — just assign all slots)."""
+    day_type = _detect_day_type(day_date, stat_dates)
+    applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+    if not applicable_slots:
+        return []
+
+    assignments = []
+    assigned_ids = set()
+
+    for slot in applicable_slots:
+        needed = _slots_needed(slot, group, day_type)
+        eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+
+        available = [m for m in eligible if m.id not in assigned_ids]
+        # Static first
+        static_picks = [m for m in available
+                       if _is_static_assignment(m, day_date, slot.role)
+                       or (_is_weekend_primary_for(m, day_date, group)
+                           and day_type in ("saturday", "sunday"))]
+
+        for m in static_picks[:needed]:
+            assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
+            assigned_ids.add(m.id)
+
+        remaining = needed - len(static_picks[:needed])
+        if remaining <= 0:
+            continue
+
+        pool = [m for m in available if m not in static_picks]
+        pool.sort(key=lambda m: getattr(m, 'rotation_order', 0) or 0)
+        for m in pool[:remaining]:
+            assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
+            assigned_ids.add(m.id)
+
+    return assignments
+
+
+# ── Slot helpers ───────────────────────────────────────────────
+
+def _get_applicable_slots(slots_by_day_type, day_type):
+    """Get slots for this day type, with fallbacks."""
+    applicable = slots_by_day_type.get(day_type, [])
+    if not applicable and day_type == "stat":
+        applicable = slots_by_day_type.get("weekday", [])
+    return applicable
+
+
+def _slots_needed(slot, group, day_type):
+    """How many of this slot are needed."""
+    if slot.role == "closer":
+        return (group.closers_required_weekday
+                if day_type == "weekday"
+                else group.closers_required_weekend)
+    # For opener and day shifts, one per slot definition
+    return 1
+
+
+def _make_assignment(member, slot, day_date, day_type, reason):
+    """Create an assignment dict."""
+    return {
+        "member": member,
+        "slot": slot,
+        "date": day_date,
+        "day_type": day_type,
+        "reason": reason,
+    }
+
+
+def _split_static_rotation(eligible, day_date, slot, group, assigned_ids):
+    """Split eligible members into static picks and rotation pool."""
+    static_picks = []
+    rotation_pool = []
+    for m in eligible:
+        if m.id in assigned_ids:
+            continue
+        if _is_static_assignment(m, day_date, slot.role):
+            static_picks.append(m)
+        elif _is_weekend_primary_for(m, day_date, group):
+            static_picks.append(m)
+        else:
+            rotation_pool.append(m)
+
+    # When dedicated weekend day and primary is absent, restrict to fill-in pool
+    day_type = DOW_FULL[day_date.weekday()]
+    if (group.weekend_mode == "dedicated"
+            and day_type in ("saturday", "sunday")
+            and not static_picks):
+        has_primaries = any(
+            _is_weekend_primary_for(m, day_date, group)
+            for m in eligible if m.active if m.id not in assigned_ids
+        )
+        if has_primaries:
+            fill_in_pool = [m for m in rotation_pool if m.is_fill_in]
+            if fill_in_pool:
+                rotation_pool = fill_in_pool
+
+    return static_picks, rotation_pool
+
+
+def _is_available(member, day_date, pto_dates):
+    """Check if member is available (not on PTO, works this day)."""
+    emp_pto = pto_dates.get(member.employee_id, set())
+    if day_date in emp_pto:
+        return False
+    work_days = _parse_json(member.work_days)
+    if work_days is not None:
+        dow = day_date.weekday()
+        if DOW_ABBR[dow] not in work_days and DOW_FULL[dow] not in work_days:
+            return False
+    return True
+
+
 def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
     """Filter members eligible for a specific slot on a specific day."""
     dow = day_date.weekday()
     day_abbr = DOW_ABBR[dow]
     day_full = DOW_FULL[dow]
-    role = slot.role  # "opener" or "closer"
+    role = slot.role
 
     eligible = []
     for m in members:
-        # Skip display-only
         if m.is_display_only:
             continue
 
@@ -331,7 +647,6 @@ def _fairness_score(member, state, day_date, slot, week_closings):
     if role == "closer":
         count = state.weekday_close_count if day_date.weekday() < 5 else state.weekend_count
     else:
-        # For openers, use a simple counter (less critical for fairness)
         count = 0
 
     score = count * 10
@@ -348,7 +663,6 @@ def _fairness_score(member, state, day_date, slot, week_closings):
     if role == "closer" and day_date.weekday() < 5:
         target_weekday = state.weekday_rotation_index
         actual_weekday = day_date.weekday()
-        # Distance in the Mon→Fri cycle
         distance = (actual_weekday - target_weekday) % 5
         if distance > 0:
             score += distance * 5
@@ -359,111 +673,6 @@ def _fairness_score(member, state, day_date, slot, week_closings):
         score += 10000  # effectively skip
 
     return score
-
-
-def _process_day(day_date, group, members, slots_by_day_type,
-                 stat_dates, pto_dates, states, week_closings):
-    """Process one day: assign roles and return assignment dicts.
-
-    week_closings is a dict member_id → int tracking how many closings
-    each member has this week.  It is maintained by the caller across
-    the entire generation loop so the max-per-week cap works correctly.
-    """
-    day_type = _detect_day_type(day_date, stat_dates)
-
-    # Find applicable slots
-    applicable_slots = slots_by_day_type.get(day_type, [])
-    if not applicable_slots:
-        # Fall back: weekday slots for stat days if no stat-specific slots
-        if day_type == "stat":
-            applicable_slots = slots_by_day_type.get("weekday", [])
-        if not applicable_slots:
-            return []
-
-    assignments = []
-    assigned_member_ids = set()  # track who's already assigned today
-
-    for slot in applicable_slots:
-        # How many needed for this slot
-        if slot.role == "closer":
-            needed = (group.closers_required_weekday
-                      if day_type == "weekday"
-                      else group.closers_required_weekend)
-        else:
-            needed = 1  # typically 1 opener
-
-        eligible = _get_eligible_members(
-            members, day_date, slot, pto_dates, states, group
-        )
-
-        # Step 3: Static assignments first
-        static_picks = []
-        for m in eligible:
-            if m.id in assigned_member_ids:
-                continue
-            if _is_static_assignment(m, day_date, slot.role):
-                static_picks.append(m)
-            elif _is_weekend_primary_for(m, day_date, group):
-                static_picks.append(m)
-
-        for m in static_picks[:needed]:
-            assignments.append({
-                "member": m,
-                "slot": slot,
-                "date": day_date,
-                "day_type": day_type,
-                "reason": "static",
-            })
-            assigned_member_ids.add(m.id)
-            _update_state_for_assignment(states[m.id], day_date, slot)
-            if slot.role == "closer":
-                week_closings[m.id] = week_closings.get(m.id, 0) + 1
-
-        remaining = needed - len(static_picks[:needed])
-        if remaining <= 0:
-            continue
-
-        # Step 4: Rotation assignment for remaining slots
-        rotation_pool = [m for m in eligible
-                         if m.id not in assigned_member_ids
-                         and m not in static_picks]
-
-        # When this is a dedicated-weekend day and the primary is absent,
-        # restrict rotation pool to fill-in eligible members only.
-        if (group.weekend_mode == "dedicated"
-                and day_type in ("saturday", "sunday")
-                and remaining > 0):
-            has_primaries = any(
-                _is_weekend_primary_for(m, day_date, group)
-                for m in members if m.active
-            )
-            if has_primaries:
-                fill_in_pool = [m for m in rotation_pool if m.is_fill_in]
-                if fill_in_pool:
-                    rotation_pool = fill_in_pool
-
-        # Sort by fairness score
-        scored = []
-        for m in rotation_pool:
-            s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
-            scored.append((s, m))
-        # Sort by fairness score, then rotation_order as tiebreaker
-        scored.sort(key=lambda x: (x[0], getattr(x[1], 'rotation_order', 0) or 0))
-
-        for _, m in scored[:remaining]:
-            assignments.append({
-                "member": m,
-                "slot": slot,
-                "date": day_date,
-                "day_type": day_type,
-                "reason": "rotation",
-            })
-            assigned_member_ids.add(m.id)
-            _update_state_for_assignment(states[m.id], day_date, slot)
-            if slot.role == "closer":
-                week_closings[m.id] = week_closings.get(m.id, 0) + 1
-
-    return assignments
 
 
 def _update_state_for_assignment(state, day_date, slot):
@@ -480,10 +689,6 @@ def _update_state_for_assignment(state, day_date, slot):
         state.last_close_weekday = dow
 
 
-# _count_week_closings removed — weekly closings are now tracked
-# by the caller across the generation loop in generate_roster().
-
-
 def _write_schedule_rows(assignments, group):
     """Create Schedule rows for all assignments."""
     rows = []
@@ -498,13 +703,16 @@ def _write_schedule_rows(assignments, group):
         if hours < 0:
             hours += 24  # overnight shift
 
+        # Use label if available, otherwise role
+        shift_type = slot.label or slot.role
+
         row = Schedule(
             employee_id=member.employee_id,
             planning_unit_id=group.planning_unit_id,
             schedule_date=a["date"],
             shift_start=slot.shift_start,
             shift_end=slot.shift_end,
-            shift_type=slot.role,      # "opener" or "closer"
+            shift_type=shift_type,
             hours=round(hours, 2),
             status="draft",
             source="roster",
@@ -518,14 +726,15 @@ def _write_schedule_rows(assignments, group):
 def _assignment_to_dict(a):
     """Convert assignment dict to JSON-serializable form."""
     emp = a["member"].employee
+    slot = a["slot"]
     return {
         "date": a["date"].isoformat(),
         "employee_name": emp.full_name if emp else "",
         "employee_id": emp.employee_id if emp else "",
-        "role": a["slot"].role,
+        "role": slot.label or slot.role,
         "day_type": a["day_type"],
-        "shift_start": a["slot"].shift_start.strftime("%H:%M"),
-        "shift_end": a["slot"].shift_end.strftime("%H:%M"),
+        "shift_start": slot.shift_start.strftime("%H:%M"),
+        "shift_end": slot.shift_end.strftime("%H:%M"),
         "reason": a["reason"],
     }
 
