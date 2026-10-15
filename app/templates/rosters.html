@@ -137,8 +137,12 @@
         <select id="cal-group" style="padding:5px 10px;"></select>
       </div>
       <div class="form-group">
-        <label>Month</label>
-        <input id="cal-month" type="month" style="padding:5px 10px;">
+        <label>Start Date</label>
+        <input id="cal-start" type="date" style="padding:5px 10px;">
+      </div>
+      <div class="form-group">
+        <label>End Date</label>
+        <input id="cal-end" type="date" style="padding:5px 10px;">
       </div>
       <button class="btn btn-primary" onclick="generateRoster()" style="align-self:flex-end;">Generate</button>
       <button class="btn btn-secondary" onclick="loadCalendar()" style="align-self:flex-end;">Refresh</button>
@@ -533,22 +537,26 @@ function initCalendarTab() {
   sel.innerHTML = _groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
   // Default to current month
   const now = new Date();
-  document.getElementById('cal-month').value =
-    now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const y = now.getFullYear(), m = now.getMonth();
+  const firstDay = new Date(y, m, 1);
+  const lastDay = new Date(y, m+1, 0);
+  document.getElementById('cal-start').value = firstDay.toISOString().slice(0,10);
+  document.getElementById('cal-end').value = lastDay.toISOString().slice(0,10);
   loadCalendar();
 }
 
 function _calDates() {
-  const mv = document.getElementById('cal-month').value;
-  if (!mv) return null;
-  const [y, m] = mv.split('-').map(Number);
-  const start = new Date(y, m-1, 1);
-  const end = new Date(y, m, 0);  // last day of month
+  const sv = document.getElementById('cal-start').value;
+  const ev = document.getElementById('cal-end').value;
+  if (!sv || !ev) return null;
+  const start = new Date(sv + 'T00:00:00');
+  const end = new Date(ev + 'T00:00:00');
+  if (end < start) return null;
   return {
-    start: start.toISOString().slice(0,10),
-    end: end.toISOString().slice(0,10),
-    year: y, month: m,
-    startDate: start, endDate: end,
+    start: sv,
+    end: ev,
+    startDate: start,
+    endDate: end,
   };
 }
 
@@ -574,11 +582,7 @@ async function loadCalendar() {
 
 function renderCalendarGrid(d) {
   const grid = document.getElementById('cal-grid');
-  // Header row
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  let html = days.map(d =>
-    `<div style="font-weight:700; text-align:center; padding:6px; background:var(--surface); border-bottom:2px solid var(--border);">${d}</div>`
-  ).join('');
+  const dayHeaders = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
   // Build map date → assignments
   const byDate = {};
@@ -587,40 +591,67 @@ function renderCalendarGrid(d) {
     byDate[r.date].push(r);
   });
 
-  // Fill calendar starting from Monday of the first week
-  const first = new Date(d.startDate);
-  let dow = first.getDay();
-  dow = dow === 0 ? 6 : dow - 1;  // convert Sun=0 to Mon-based
-  const calStart = new Date(first);
-  calStart.setDate(calStart.getDate() - dow);
+  // Render one month block per month in the range
+  let html = '';
+  const rangeStart = new Date(d.startDate);
+  const rangeEnd = new Date(d.endDate);
+  let cur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
 
-  // 6 weeks max
-  for (let i = 0; i < 42; i++) {
-    const cur = new Date(calStart);
-    cur.setDate(cur.getDate() + i);
-    const iso = cur.toISOString().slice(0,10);
-    const inMonth = cur.getMonth() === d.month - 1;
-    const isWeekend = cur.getDay() === 0 || cur.getDay() === 6;
-    const entries = byDate[iso] || [];
+  while (cur <= rangeEnd) {
+    const mYear = cur.getFullYear(), mMonth = cur.getMonth();
+    const monthName = cur.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    let bg = 'var(--bg)';
-    if (!inMonth) bg = '#f8f8f8';
-    else if (isWeekend) bg = '#f0f7ff';
+    // Month header spanning all 7 columns
+    html += `<div style="grid-column:1/-1; font-weight:700; font-size:.95rem; padding:12px 4px 6px; border-bottom:2px solid var(--brand-accent);">${monthName}</div>`;
 
-    html += `<div style="min-height:70px; padding:4px; background:${bg}; border:1px solid var(--border); border-radius:4px; ${!inMonth?'opacity:.4':''}">
-      <div style="font-weight:600; font-size:.72rem; margin-bottom:2px;">${cur.getDate()}</div>`;
+    // Day-of-week headers
+    html += dayHeaders.map(dh =>
+      `<div style="font-weight:700; text-align:center; padding:6px; background:var(--surface); border-bottom:2px solid var(--border);">${dh}</div>`
+    ).join('');
 
-    for (const e of entries) {
-      const isDraft = e.status === 'draft';
-      const isCloser = e.type === 'closer';
-      const badgeClass = isCloser ? 'badge-orange' : 'badge-blue';
-      html += `<div style="margin:1px 0; ${isDraft?'border-left:2px solid #f0ad4e; padding-left:3px':''}">
-        <span class="badge ${badgeClass}" style="font-size:.65rem;">${e.type}</span>
-        <span style="font-size:.7rem;">${e.employee}</span>
-        <span style="font-size:.65rem; color:var(--text-muted);">${e.start}-${e.end}</span>
-      </div>`;
+    const firstOfMonth = new Date(mYear, mMonth, 1);
+    const lastOfMonth = new Date(mYear, mMonth + 1, 0);
+    let dow = firstOfMonth.getDay();
+    dow = dow === 0 ? 6 : dow - 1;  // Mon-based
+    const calStart = new Date(firstOfMonth);
+    calStart.setDate(calStart.getDate() - dow);
+
+    // Calculate weeks needed (up to 6)
+    const totalDays = dow + lastOfMonth.getDate();
+    const weeks = Math.ceil(totalDays / 7);
+
+    for (let i = 0; i < weeks * 7; i++) {
+      const cell = new Date(calStart);
+      cell.setDate(cell.getDate() + i);
+      const iso = cell.toISOString().slice(0,10);
+      const inMonth = cell.getMonth() === mMonth;
+      const inRange = cell >= rangeStart && cell <= rangeEnd;
+      const isWeekend = cell.getDay() === 0 || cell.getDay() === 6;
+      const entries = byDate[iso] || [];
+
+      let bg = 'var(--bg)';
+      if (!inMonth) bg = '#f8f8f8';
+      else if (isWeekend) bg = '#f0f7ff';
+
+      const dimmed = !inMonth || !inRange;
+      html += `<div style="min-height:70px; padding:4px; background:${bg}; border:1px solid var(--border); border-radius:4px; ${dimmed?'opacity:.4':''}">
+        <div style="font-weight:600; font-size:.72rem; margin-bottom:2px;">${cell.getDate()}</div>`;
+
+      for (const e of entries) {
+        const isDraft = e.status === 'draft';
+        const isCloser = e.type === 'closer';
+        const badgeClass = isCloser ? 'badge-orange' : 'badge-blue';
+        html += `<div style="margin:1px 0; ${isDraft?'border-left:2px solid #f0ad4e; padding-left:3px':''}">
+          <span class="badge ${badgeClass}" style="font-size:.65rem;">${e.type}</span>
+          <span style="font-size:.7rem;">${e.employee}</span>
+          <span style="font-size:.65rem; color:var(--text-muted);">${e.start}-${e.end}</span>
+        </div>`;
+      }
+      html += '</div>';
     }
-    html += '</div>';
+
+    // Next month
+    cur = new Date(mYear, mMonth + 1, 1);
   }
 
   grid.innerHTML = html;
@@ -647,7 +678,7 @@ async function generateRoster() {
 }
 
 async function publishRoster() {
-  if (!confirm('Publish all draft roster schedules for this month?')) return;
+  if (!confirm('Publish all draft roster schedules for this date range?')) return;
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
   const r = await fetch(`${API}/publish`, {
@@ -661,7 +692,7 @@ async function publishRoster() {
 }
 
 async function clearDrafts() {
-  if (!confirm('Delete all unpublished draft roster schedules for this month?')) return;
+  if (!confirm('Delete all unpublished draft roster schedules for this date range?')) return;
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
   const r = await fetch(`${API}/clear`, {
