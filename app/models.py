@@ -184,7 +184,7 @@ class Employee(db.Model):
 
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.String(30), unique=True, nullable=False, index=True)
-    external_id_1    = db.Column(db.String(50), nullable=True, index=True)   # e.g. IntelYStorageVault ID
+    external_id_1    = db.Column(db.String(50), nullable=True, index=True)   # e.g. external system ID
     external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # e.g. CallPotential ID
     first_name       = db.Column(db.String(80), nullable=False)
     last_name        = db.Column(db.String(80), nullable=False)
@@ -3000,7 +3000,7 @@ class WfmTicketHistory(db.Model):
 # ── Roster Rotation Module ──────────────────────────────────────
 
 class RosterGroup(db.Model):
-    """A named rotation group within a planning unit (e.g. 'SS Team Leads')."""
+    """A named rotation group within a planning unit (e.g. 'Sales Team Leads')."""
     __tablename__ = "roster_groups"
 
     id                      = db.Column(db.Integer, primary_key=True)

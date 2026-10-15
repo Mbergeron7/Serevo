@@ -1,6 +1,6 @@
 # Serevo
 
-**Workforce Management Platform**
+**Workforce Management Platform** by Bergeron WFM Solutions.
 
 Forecasting, capacity planning, scheduling, real-time management, and ticketing — built for contact centres.
 
