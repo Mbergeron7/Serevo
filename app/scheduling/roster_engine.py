@@ -170,7 +170,14 @@ def _get_pto_dates(employee_ids, start, end):
 
 
 def _get_or_create_states(members, period_start):
-    """Load or create RosterRotationState for each member. Returns dict member_id → state."""
+    """Load or create RosterRotationState for each member.
+
+    When no state exists for the requested period, the most recent
+    previous state is carried forward so the rotation picks up where
+    it left off instead of resetting to zero.
+
+    Returns dict member_id → state.
+    """
     states = {}
     for m in members:
         state = RosterRotationState.query.filter_by(
@@ -178,13 +185,22 @@ def _get_or_create_states(members, period_start):
             period_start=period_start,
         ).first()
         if not state:
+            # Look for the most recent previous state to carry forward
+            prev = (RosterRotationState.query
+                    .filter_by(roster_member_id=m.id)
+                    .filter(RosterRotationState.period_start < period_start)
+                    .order_by(RosterRotationState.period_start.desc())
+                    .first())
             state = RosterRotationState(
                 roster_member_id=m.id,
                 period_start=period_start,
-                weekday_close_count=0,
-                weekend_count=0,
-                stat_count=0,
-                weekday_rotation_index=0,
+                weekday_close_count=prev.weekday_close_count if prev else 0,
+                weekend_count=prev.weekend_count if prev else 0,
+                stat_count=prev.stat_count if prev else 0,
+                weekday_rotation_index=prev.weekday_rotation_index if prev else 0,
+                last_close_weekday=prev.last_close_weekday if prev else None,
+                last_close_date=prev.last_close_date if prev else None,
+                last_weekend_date=prev.last_weekend_date if prev else None,
             )
             db.session.add(state)
             db.session.flush()
@@ -405,7 +421,8 @@ def _process_day(day_date, group, members, slots_by_day_type,
         for m in rotation_pool:
             s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
             scored.append((s, m))
-        scored.sort(key=lambda x: x[0])
+        # Sort by fairness score, then rotation_order as tiebreaker
+        scored.sort(key=lambda x: (x[0], getattr(x[1], 'rotation_order', 0) or 0))
 
         for _, m in scored[:remaining]:
             assignments.append({

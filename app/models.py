@@ -3055,6 +3055,7 @@ class RosterMember(db.Model):
     accommodation_end     = db.Column(db.Time, nullable=True)
     accommodation_no_close = db.Column(db.Boolean, default=False)
     work_days             = db.Column(db.Text, nullable=True)         # JSON: ["mon","tue",...]
+    rotation_order        = db.Column(db.Integer, default=0)          # lower = picked first on ties
     active                = db.Column(db.Boolean, default=True)
     created_at            = db.Column(db.DateTime, default=_utcnow)
 
@@ -3092,6 +3093,7 @@ class RosterMember(db.Model):
             "accommodation_end": self.accommodation_end.strftime("%H:%M") if self.accommodation_end else None,
             "accommodation_no_close": self.accommodation_no_close,
             "work_days": self._json("work_days"),
+            "rotation_order": self.rotation_order or 0,
             "active": self.active,
         }
 
