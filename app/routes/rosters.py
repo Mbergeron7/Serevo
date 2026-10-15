@@ -33,7 +33,7 @@ def index():
 @rosters_bp.route("/api/planning-units")
 @login_required
 def api_planning_units():
-    pus = PlanningUnit.query.filter_by(active=True).order_by(PlanningUnit.name).all()
+    pus = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
     return jsonify([{"id": p.id, "name": p.name} for p in pus])
 
 
