@@ -339,33 +339,159 @@ def api_export_xlsx():
 
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
     except ImportError:
         return jsonify({"error": "openpyxl not installed on server"}), 500
 
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Roster Schedule"
+    thin = Side(style="thin", color="D0D0D0")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    headers = ["Date", "Employee", "Role", "Shift Start", "Shift End", "Status"]
-    header_font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
-    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center")
+    def _fill(hex_color):
+        return PatternFill("solid", fgColor=hex_color.lstrip("#"))
 
-    for i, r in enumerate(rows, 2):
-        ws.cell(row=i, column=1, value=r["date"])
-        ws.cell(row=i, column=2, value=r["employee"])
-        ws.cell(row=i, column=3, value=r["type"])
-        ws.cell(row=i, column=4, value=r["start"])
-        ws.cell(row=i, column=5, value=r["end"])
-        ws.cell(row=i, column=6, value=r["status"])
+    def _write_header(ws, headers, fill_color):
+        hdr_font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(1, ci, h)
+            c.font = hdr_font
+            c.fill = _fill(fill_color)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = border
+        ws.row_dimensions[1].height = 25
+        ws.freeze_panes = "A2"
 
-    for col in range(1, 7):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 16
+    def _set_widths(ws, widths):
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    # ── Sheet 1: Roster Schedule ──────────────────────────────
+    ws_sched = wb.active
+    ws_sched.title = "Roster Schedule"
+    sched_headers = ["Date", "Day", "Employee", "Role", "Shift Start", "Shift End", "Status"]
+    _write_header(ws_sched, sched_headers, "1F4973")
+
+    alt_fill = _fill("EBF1FC")
+    white_fill = _fill("FFFFFF")
+    draft_font = Font(name="Arial", size=10, italic=True, color="B45309")
+    normal_font = Font(name="Arial", size=10)
+    center = Alignment(horizontal="center", vertical="center")
+    left = Alignment(horizontal="left", vertical="center")
+
+    for ri, r in enumerate(rows, 2):
+        bg = alt_fill if ri % 2 == 0 else white_fill
+        # Parse date for day-of-week
+        try:
+            dt = datetime.date.fromisoformat(r["date"])
+            day_name = dt.strftime("%a")
+        except (ValueError, AttributeError):
+            day_name = ""
+
+        vals = [r["date"], day_name, r["employee"], r["type"],
+                r["start"], r["end"], r["status"]]
+        is_draft = r.get("status", "").lower() == "draft"
+        for ci, v in enumerate(vals, 1):
+            c = ws_sched.cell(ri, ci, v or "")
+            c.fill = bg
+            c.border = border
+            c.font = draft_font if is_draft else normal_font
+            c.alignment = center if ci != 3 else left
+        ws_sched.row_dimensions[ri].height = 20
+
+    _set_widths(ws_sched, [12, 6, 20, 10, 12, 12, 12])
+
+    # ── Sheet 2: Summary ──────────────────────────────────────
+    ws_sum = wb.create_sheet("Summary")
+
+    # Build per-employee stats from rows
+    emp_stats = {}
+    for r in rows:
+        name = r.get("employee", "Unknown")
+        if name not in emp_stats:
+            emp_stats[name] = {
+                "total": 0, "weekday": 0, "weekend": 0,
+                "draft": 0, "published": 0,
+                "roles": {},
+            }
+        s = emp_stats[name]
+        s["total"] += 1
+        try:
+            dt = datetime.date.fromisoformat(r["date"])
+            if dt.weekday() < 5:
+                s["weekday"] += 1
+            else:
+                s["weekend"] += 1
+        except (ValueError, AttributeError):
+            pass
+        status = r.get("status", "").lower()
+        if status == "draft":
+            s["draft"] += 1
+        else:
+            s["published"] += 1
+        role = r.get("type", "")
+        s["roles"][role] = s["roles"].get(role, 0) + 1
+
+    # Collect all unique roles for columns
+    all_roles = sorted({role for s in emp_stats.values() for role in s["roles"]})
+
+    sum_headers = ["Employee", "Total", "Weekday", "Weekend", "Draft", "Published"] + all_roles
+    _write_header(ws_sum, sum_headers, "548235")
+
+    sum_alt = _fill("EBF4E6")
+    bold_font = Font(name="Arial", size=10, bold=True)
+    for ri, (name, s) in enumerate(sorted(emp_stats.items()), 2):
+        bg = sum_alt if ri % 2 == 0 else white_fill
+        vals = [name, s["total"], s["weekday"], s["weekend"],
+                s["draft"], s["published"]] + [s["roles"].get(r, 0) for r in all_roles]
+        for ci, v in enumerate(vals, 1):
+            c = ws_sum.cell(ri, ci, v)
+            c.fill = bg
+            c.border = border
+            c.font = bold_font if ci == 1 else normal_font
+            c.alignment = left if ci == 1 else center
+        ws_sum.row_dimensions[ri].height = 20
+
+    # Totals row
+    total_row = len(emp_stats) + 2
+    ws_sum.cell(total_row, 1, "TOTAL").font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    ws_sum.cell(total_row, 1).fill = _fill("548235")
+    ws_sum.cell(total_row, 1).border = border
+    ws_sum.cell(total_row, 1).alignment = left
+    for ci in range(2, len(sum_headers) + 1):
+        c = ws_sum.cell(total_row, ci)
+        c.value = sum(ws_sum.cell(r, ci).value or 0 for r in range(2, total_row))
+        c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        c.fill = _fill("548235")
+        c.border = border
+        c.alignment = center
+    ws_sum.row_dimensions[total_row].height = 25
+
+    base_widths = [20, 8, 10, 10, 8, 10]
+    role_widths = [max(10, len(r) + 4) for r in all_roles]
+    _set_widths(ws_sum, base_widths + role_widths)
+
+    # ── Sheet 3: Info ─────────────────────────────────────────
+    ws_info = wb.create_sheet("Info")
+    _write_header(ws_info, ["Field", "Value"], "6B4C9A")
+    info_rows = [
+        ["Group", group_name],
+        ["Period", f"{start} to {end}"],
+        ["Generated", datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")],
+        ["Total Assignments", len(rows)],
+        ["Employees", len(emp_stats)],
+        ["Powered by", "Serevo — Bergeron WFM Solutions"],
+    ]
+    info_alt = _fill("F5F0FF")
+    for ri, (field, val) in enumerate(info_rows, 2):
+        bg = info_alt if ri % 2 == 0 else white_fill
+        for ci, v in enumerate([field, val], 1):
+            c = ws_info.cell(ri, ci, v)
+            c.fill = bg
+            c.border = border
+            c.font = bold_font if ci == 1 else normal_font
+            c.alignment = left
+    _set_widths(ws_info, [20, 40])
 
     buf = io.BytesIO()
     wb.save(buf)
