@@ -892,6 +892,101 @@ def seed_demo_user(app):
             demo.is_active = True
         db.session.commit()
 
+        # Seed specialty schedules (roster) demo data
+        _seed_demo_rosters(app)
+
+
+def _seed_demo_rosters(app):
+    """Seed demo RosterGroup, RosterMember, and RosterSlot rows if none exist."""
+    with app.app_context():
+        from app.models import (db, RosterGroup, RosterMember, RosterSlot,
+                                PlanningUnit, Employee)
+
+        # Skip if groups already exist
+        if RosterGroup.query.first() is not None:
+            return
+
+        # Look up planning units and employees by external ID
+        pu_sales = PlanningUnit.query.filter_by(name="Sales Support").first()
+        pu_tech = PlanningUnit.query.filter_by(name="Tech Help Desk").first()
+        if not pu_sales or not pu_tech:
+            return  # Planning units not seeded yet
+
+        def _emp(ext_id):
+            return Employee.query.filter_by(employee_id=ext_id).first()
+
+        _t = datetime.time
+
+        # ── Group 1: Sales TL Closers ──
+        g1 = RosterGroup(
+            planning_unit_id=pu_sales.id, name="Sales TL Closers",
+            closers_required_weekday=1, closers_required_weekend=1,
+            weekend_mode="rotate", stat_role="closer", active=True,
+        )
+        db.session.add(g1)
+        db.session.flush()  # get g1.id
+
+        for ext_id, kwargs in [
+            ("E1001", {"max_closings_per_week": 2, "work_days": '["mon","tue","wed","thu","fri"]'}),
+            ("E1002", {"max_closings_per_week": 2, "work_days": '["mon","tue","wed","thu","fri"]'}),
+            ("E1004", {"max_closings_per_week": 1, "is_weekend_primary": True,
+                       "weekend_primary_days": '["saturday"]',
+                       "work_days": '["mon","tue","wed","thu","fri","saturday"]'}),
+            ("E1006", {"max_closings_per_week": 2, "excluded_closing_days": '["friday"]',
+                       "work_days": '["mon","tue","wed","thu","fri"]'}),
+        ]:
+            emp = _emp(ext_id)
+            if emp:
+                db.session.add(RosterMember(
+                    roster_group_id=g1.id, employee_id=emp.id, active=True, **kwargs
+                ))
+
+        # Slots for Sales TL Closers
+        for day_type, role, start, end in [
+            ("weekday",  "opener", _t(8, 0),   _t(16, 30)),
+            ("weekday",  "closer", _t(13, 30), _t(22, 0)),
+            ("saturday", "opener", _t(9, 0),   _t(17, 30)),
+            ("saturday", "closer", _t(13, 30), _t(22, 0)),
+            ("sunday",   "opener", _t(10, 0),  _t(18, 30)),
+        ]:
+            db.session.add(RosterSlot(
+                roster_group_id=g1.id, day_type=day_type, role=role,
+                shift_start=start, shift_end=end,
+            ))
+
+        # ── Group 2: Tech Weekend Coverage ──
+        g2 = RosterGroup(
+            planning_unit_id=pu_tech.id, name="Tech Weekend Coverage",
+            closers_required_weekday=1, closers_required_weekend=1,
+            weekend_mode="rotate", stat_role=None, active=True,
+        )
+        db.session.add(g2)
+        db.session.flush()
+
+        for ext_id, kwargs in [
+            ("E2001", {"max_closings_per_week": 2, "work_days": '["mon","tue","wed","thu","fri"]'}),
+            ("E2003", {"max_closings_per_week": 2, "work_days": '["mon","tue","wed","thu","fri"]'}),
+            ("E2005", {"max_closings_per_week": 1, "work_days": '["mon","tue","wed","thu","fri","saturday"]'}),
+        ]:
+            emp = _emp(ext_id)
+            if emp:
+                db.session.add(RosterMember(
+                    roster_group_id=g2.id, employee_id=emp.id, active=True, **kwargs
+                ))
+
+        for day_type, role, start, end in [
+            ("weekday",  "opener", _t(8, 0),   _t(16, 30)),
+            ("weekday",  "closer", _t(13, 30), _t(22, 0)),
+            ("saturday", "opener", _t(9, 0),   _t(17, 30)),
+            ("saturday", "closer", _t(13, 30), _t(22, 0)),
+        ]:
+            db.session.add(RosterSlot(
+                roster_group_id=g2.id, day_type=day_type, role=role,
+                shift_start=start, shift_end=end,
+            ))
+
+        db.session.commit()
+
 
 # ═══════════════════════════════════════════════════════════════
 # DEMO SETTINGS / CUSTOMIZATION DATA

@@ -19,6 +19,7 @@
     <a href="#dashboard" class="help-chip" onclick="openSection('dashboard')">Dashboard</a>
     <a href="#people" class="help-chip" onclick="openSection('people')">People</a>
     <a href="#scheduling" class="help-chip" onclick="openSection('scheduling')">Scheduling</a>
+    <a href="#specialty-schedules" class="help-chip" onclick="openSection('specialty-schedules')">Specialty Schedules</a>
     <a href="#shift-swaps" class="help-chip" onclick="openSection('shift-swaps')">Shift Swaps</a>
     <a href="#forecasting" class="help-chip" onclick="openSection('forecasting')">Forecasting</a>
     <a href="#capacity" class="help-chip" onclick="openSection('capacity')">Capacity</a>
@@ -341,6 +342,44 @@
         <li><strong>Publish</strong> — When coverage looks good across all days, click <em>Publish</em> to make the schedule visible to agents.</li>
         <li><strong>Monitor</strong> — After publishing, use <em>Real-Time Management</em> to track adherence and make intraday adjustments as needed.</li>
       </ol>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SPECIALTY SCHEDULES -->
+  <!-- ============================================================ -->
+  <div class="help-section" id="specialty-schedules" data-keywords="specialty schedules roster rotation closer closing weekend coverage stat holiday team lead TL role shift slot group member generate calendar fairness">
+    <div class="help-header" onclick="toggleSection(this)">
+      <h2>Specialty Schedules</h2><span class="help-chevron">▸</span>
+    </div>
+    <div class="help-body">
+      <p><strong>Specialty Schedules</strong> handles role-based assignments that follow rules different from regular scheduling — closer rotations, weekend coverage, and stat-day assignments. The output feeds into the same schedule your agents see, so attendance, adherence, and PTO all work automatically.</p>
+
+      <h3>Key Concepts</h3>
+      <p><strong>Groups</strong> — A group is a set of team members who share the same rotation rules within a planning unit. For example, "Sales TL Closers" might contain every team lead in Sales Support who rotates through closing shifts. Each group defines how many closers are needed on weekdays and weekends, the weekend-coverage mode (rotate, fixed, or volunteer), and an optional stat-day role.</p>
+
+      <p><strong>Members</strong> — Employees added to a group. Each member can have individual settings: whether they are a weekend primary, which days they're excluded from closing, maximum closings per week, accommodation hours (e.g. cannot close after a certain time), and their regular work days.</p>
+
+      <p><strong>Shift Slots</strong> — Define the actual shift times for each day type (weekday, Saturday, Sunday, stat holiday) and role (opener, closer). For example, a weekday closer slot might run 13:30–22:00. These slots tell the generator what shifts to create when it assigns someone to a role on a given day.</p>
+
+      <h3>Getting Started</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Navigate to <strong>Scheduling → Specialty Schedules</strong> (or use the link on the main Scheduling page).</li>
+        <li>On the <strong>Groups &amp; Members</strong> tab, click <strong>New Group</strong>. Choose a planning unit, name the group, and set your closer and weekend requirements.</li>
+        <li>Add members to the group by selecting employees from that planning unit. Configure each member's work-day preferences and any accommodations.</li>
+        <li>Switch to the <strong>Shift Slots</strong> tab. Select your group and fill in the start/end times for each day-type and role combination (weekday opener, weekday closer, Saturday opener, etc.). Click <strong>Save All Slots</strong>.</li>
+        <li>Once groups, members, and slots are configured, use the <strong>Generate &amp; Calendar</strong> tab to produce the specialty schedule for a date range. The generated shifts appear in the main schedule with a <em>roster</em> source tag.</li>
+      </ol>
+
+      <h3>How Generation Works</h3>
+      <p>The generator distributes closing and weekend assignments fairly across all eligible members using a rotation algorithm. It respects each member's constraints — excluded days, max closings per week, accommodation hours — and avoids clustering (back-to-back closings or consecutive weekends for the same person). The fairness state tracks each member's counts so the rotation stays balanced over time.</p>
+
+      <h3>Tips</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Use <strong>Display Only</strong> members for people whose shifts appear on the calendar but who don't participate in the closing/weekend rotation.</li>
+        <li>Set <strong>Weekend Primary</strong> for members who always work a specific weekend day — the generator will skip them for the rotating weekend pool.</li>
+        <li>Specialty schedule entries merge with the regular schedule. If a team lead already has a regular shift that day, the specialty shift takes precedence.</li>
+      </ul>
     </div>
   </div>
 
