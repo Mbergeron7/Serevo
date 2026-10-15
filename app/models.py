@@ -508,6 +508,7 @@ class Schedule(db.Model):
     shift_type       = db.Column(db.String(10), default="full")      # full | half
     hours            = db.Column(db.Float, default=0)
     status           = db.Column(db.String(20), default="scheduled")  # scheduled | off | pto
+    source           = db.Column(db.String(20), nullable=True)       # 'roster' | 'schedule' | NULL (legacy)
     created_at       = db.Column(db.DateTime, default=_utcnow)
     updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -535,6 +536,7 @@ class Schedule(db.Model):
             "type": self.shift_type or "full",
             "hours": self.hours or 0,
             "status": self.status or "scheduled",
+            "source": self.source,
             "segments": [seg.to_dict() for seg in self.segments],
             "team_lead": emp.team_lead if emp and emp.team_lead else "",
             "lob": pu.name if pu else "",
@@ -2993,3 +2995,154 @@ class WfmTicketHistory(db.Model):
             "new_value": self.new_value,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ── Roster Rotation Module ──────────────────────────────────────
+
+class RosterGroup(db.Model):
+    """A named rotation group within a planning unit (e.g. 'SS Team Leads')."""
+    __tablename__ = "roster_groups"
+
+    id                      = db.Column(db.Integer, primary_key=True)
+    planning_unit_id        = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False, index=True)
+    name                    = db.Column(db.String(100), nullable=False)
+    closers_required_weekday = db.Column(db.Integer, default=1)
+    closers_required_weekend = db.Column(db.Integer, default=1)
+    weekend_mode            = db.Column(db.String(20), default="rotate")   # rotate | dedicated
+    stat_role               = db.Column(db.String(20), nullable=True)      # always_open | always_close
+    active                  = db.Column(db.Boolean, default=True)
+    created_at              = db.Column(db.DateTime, default=_utcnow)
+    updated_at              = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref="roster_groups")
+    members       = db.relationship("RosterMember", backref="roster_group",
+                                    cascade="all, delete-orphan", lazy="joined")
+    slots         = db.relationship("RosterSlot", backref="roster_group",
+                                    cascade="all, delete-orphan", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "planning_unit_id": self.planning_unit_id,
+            "planning_unit": self.planning_unit.name if self.planning_unit else "",
+            "name": self.name,
+            "closers_required_weekday": self.closers_required_weekday,
+            "closers_required_weekend": self.closers_required_weekend,
+            "weekend_mode": self.weekend_mode,
+            "stat_role": self.stat_role,
+            "active": self.active,
+            "member_count": len([m for m in self.members if m.active]),
+            "members": [m.to_dict() for m in self.members if m.active],
+            "slots": [s.to_dict() for s in self.slots],
+        }
+
+
+class RosterMember(db.Model):
+    """Links an employee to a roster group with individual scheduling constraints."""
+    __tablename__ = "roster_members"
+
+    id                    = db.Column(db.Integer, primary_key=True)
+    roster_group_id       = db.Column(db.Integer, db.ForeignKey("roster_groups.id", ondelete="CASCADE"),
+                                      nullable=False, index=True)
+    employee_id           = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    is_display_only       = db.Column(db.Boolean, default=False)
+    is_weekend_primary    = db.Column(db.Boolean, default=False)
+    weekend_primary_days  = db.Column(db.Text, nullable=True)         # JSON: ["saturday"]
+    max_closings_per_week = db.Column(db.Integer, default=1)
+    excluded_closing_days = db.Column(db.Text, nullable=True)         # JSON: ["wednesday"]
+    static_days_json      = db.Column(db.Text, nullable=True)         # JSON: {"monday":"close"}
+    accommodation_start   = db.Column(db.Time, nullable=True)
+    accommodation_end     = db.Column(db.Time, nullable=True)
+    accommodation_no_close = db.Column(db.Boolean, default=False)
+    work_days             = db.Column(db.Text, nullable=True)         # JSON: ["mon","tue",...]
+    active                = db.Column(db.Boolean, default=True)
+    created_at            = db.Column(db.DateTime, default=_utcnow)
+
+    employee = db.relationship("Employee", backref="roster_memberships")
+
+    __table_args__ = (
+        db.UniqueConstraint("roster_group_id", "employee_id", name="uq_roster_member"),
+    )
+
+    def _json(self, col):
+        import json as _json
+        v = getattr(self, col)
+        if not v:
+            return None
+        try:
+            return _json.loads(v)
+        except (_json.JSONDecodeError, TypeError):
+            return None
+
+    def to_dict(self):
+        emp = self.employee
+        return {
+            "id": self.id,
+            "roster_group_id": self.roster_group_id,
+            "employee_id": self.employee_id,
+            "employee_db_id": emp.id if emp else None,
+            "employee_name": emp.full_name if emp else "",
+            "is_display_only": self.is_display_only,
+            "is_weekend_primary": self.is_weekend_primary,
+            "weekend_primary_days": self._json("weekend_primary_days"),
+            "max_closings_per_week": self.max_closings_per_week,
+            "excluded_closing_days": self._json("excluded_closing_days"),
+            "static_days_json": self._json("static_days_json"),
+            "accommodation_start": self.accommodation_start.strftime("%H:%M") if self.accommodation_start else None,
+            "accommodation_end": self.accommodation_end.strftime("%H:%M") if self.accommodation_end else None,
+            "accommodation_no_close": self.accommodation_no_close,
+            "work_days": self._json("work_days"),
+            "active": self.active,
+        }
+
+
+class RosterSlot(db.Model):
+    """Defines a role (opener/closer) for a day type with its shift times."""
+    __tablename__ = "roster_slots"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    roster_group_id = db.Column(db.Integer, db.ForeignKey("roster_groups.id", ondelete="CASCADE"),
+                                nullable=False, index=True)
+    day_type        = db.Column(db.String(20), nullable=False)        # weekday | saturday | sunday | stat
+    role            = db.Column(db.String(20), nullable=False)        # opener | closer
+    shift_start     = db.Column(db.Time, nullable=False)
+    shift_end       = db.Column(db.Time, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("roster_group_id", "day_type", "role", name="uq_roster_slot"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "roster_group_id": self.roster_group_id,
+            "day_type": self.day_type,
+            "role": self.role,
+            "shift_start": self.shift_start.strftime("%H:%M") if self.shift_start else "",
+            "shift_end": self.shift_end.strftime("%H:%M") if self.shift_end else "",
+        }
+
+
+class RosterRotationState(db.Model):
+    """Fairness counters per member, persisted between generation runs."""
+    __tablename__ = "roster_rotation_states"
+
+    id                      = db.Column(db.Integer, primary_key=True)
+    roster_member_id        = db.Column(db.Integer, db.ForeignKey("roster_members.id", ondelete="CASCADE"),
+                                        nullable=False, index=True)
+    period_start            = db.Column(db.Date, nullable=False)
+    weekday_close_count     = db.Column(db.Integer, default=0)
+    weekend_count           = db.Column(db.Integer, default=0)
+    stat_count              = db.Column(db.Integer, default=0)
+    last_close_weekday      = db.Column(db.Integer, nullable=True)    # 0=Mon..4=Fri
+    last_close_date         = db.Column(db.Date, nullable=True)
+    last_weekend_date       = db.Column(db.Date, nullable=True)
+    weekday_rotation_index  = db.Column(db.Integer, default=0)        # position in Mon→Fri cycle
+    updated_at              = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    member = db.relationship("RosterMember", backref=db.backref("rotation_state", uselist=False,
+                                                                  cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("roster_member_id", "period_start", name="uq_roster_state"),
+    )

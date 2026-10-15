@@ -263,6 +263,7 @@ def create_app():
     from app.routes.wfm_tickets import wfm_tickets_bp
     from app.routes.scheduling_config import scheduling_config_bp
     from app.routes.realtime_sync import realtime_sync_bp
+    from app.routes.rosters import rosters_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -294,6 +295,7 @@ def create_app():
     app.register_blueprint(wfm_tickets_bp)
     app.register_blueprint(scheduling_config_bp)
     app.register_blueprint(realtime_sync_bp)
+    app.register_blueprint(rosters_bp)
 
     # Exempt blueprints whose POST endpoints are called via fetch() with
     # JSON payloads.  CSRF tokens are unnecessary for JSON requests —
@@ -307,7 +309,7 @@ def create_app():
         attendance_bp, announce_bp, payroll_bp, shift_notes_bp,
         employee_docs_bp, training_bp, support_bp, wfm_tickets_bp,
         scheduling_config_bp, realtime_sync_bp, notif_bp, search_bp,
-        agent_bp, audit_bp,
+        agent_bp, audit_bp, rosters_bp,
     ]:
         csrf.exempt(bp)
 
