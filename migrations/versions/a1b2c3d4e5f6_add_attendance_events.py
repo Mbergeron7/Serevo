@@ -17,6 +17,14 @@ depends_on = None
 
 
 def upgrade():
+    # Table may already exist via db.create_all() — skip if so
+    bind = op.get_bind()
+    result = bind.execute(sa.text(
+        "SELECT 1 FROM information_schema.tables WHERE table_name='attendance_events'"
+    ))
+    if result.fetchone():
+        return
+
     op.create_table(
         'attendance_events',
         sa.Column('id', sa.Integer(), primary_key=True),
