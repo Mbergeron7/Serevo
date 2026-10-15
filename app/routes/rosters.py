@@ -12,6 +12,9 @@ from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, RosterGroup, RosterMember, RosterSlot,
                          RosterRotationState, Employee, PlanningUnit, Schedule)
+from app.scheduling.roster_engine import (
+    generate_roster, publish_roster, clear_roster_drafts, get_roster_calendar,
+)
 
 log = logging.getLogger("serevo.rosters")
 
@@ -221,6 +224,69 @@ def api_bulk_save_slots(gid):
     return jsonify({"ok": True, "count": len(slots)})
 
 
+# ── Generation / Publish / Clear ─────────────────────────────
+
+@rosters_bp.route("/api/generate", methods=["POST"])
+@login_required
+def api_generate():
+    d = request.get_json(force=True)
+    group_id = d.get("group_id")
+    start = _parse_date(d.get("start_date"))
+    end = _parse_date(d.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+    if end < start:
+        return jsonify({"error": "end_date must be >= start_date"}), 400
+    result = generate_roster(group_id, start, end)
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@rosters_bp.route("/api/publish", methods=["POST"])
+@login_required
+def api_publish():
+    d = request.get_json(force=True)
+    group_id = d.get("group_id")
+    start = _parse_date(d.get("start_date"))
+    end = _parse_date(d.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+    result = publish_roster(group_id, start, end)
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@rosters_bp.route("/api/clear", methods=["POST"])
+@login_required
+def api_clear():
+    d = request.get_json(force=True)
+    group_id = d.get("group_id")
+    start = _parse_date(d.get("start_date"))
+    end = _parse_date(d.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+    result = clear_roster_drafts(group_id, start, end)
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@rosters_bp.route("/api/calendar")
+@login_required
+def api_calendar():
+    group_id = request.args.get("group_id", type=int)
+    start = _parse_date(request.args.get("start_date"))
+    end = _parse_date(request.args.get("end_date"))
+    if not group_id or not start or not end:
+        return jsonify({"error": "group_id, start_date, and end_date required"}), 400
+    result = get_roster_calendar(group_id, start, end)
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
+
 # ── Helpers ──────────────────────────────────────────────────
 
 def _parse_time(v):
@@ -232,4 +298,15 @@ def _parse_time(v):
         parts = v.split(":")
         return datetime.time(int(parts[0]), int(parts[1]))
     except (ValueError, AttributeError, IndexError):
+        return None
+
+
+def _parse_date(v):
+    if not v:
+        return None
+    if isinstance(v, datetime.date):
+        return v
+    try:
+        return datetime.date.fromisoformat(v)
+    except (ValueError, AttributeError):
         return None

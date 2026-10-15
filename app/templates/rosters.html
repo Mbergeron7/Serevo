@@ -128,10 +128,39 @@
 <!-- ═══ Tab 3: Generate & Calendar ═══ -->
 <div id="tab-calendar" class="tab-pane">
   <div class="card">
-    <div class="empty-state">
-      <p><strong>Coming soon</strong></p>
-      <p>The generation engine and calendar view will be built in Phase 2.</p>
+    <div class="card-header">
+      <h3>Roster Generation</h3>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Group</label>
+        <select id="cal-group" style="padding:5px 10px;"></select>
+      </div>
+      <div class="form-group">
+        <label>Month</label>
+        <input id="cal-month" type="month" style="padding:5px 10px;">
+      </div>
+      <button class="btn btn-primary" onclick="generateRoster()" style="align-self:flex-end;">Generate</button>
+      <button class="btn btn-secondary" onclick="loadCalendar()" style="align-self:flex-end;">Refresh</button>
+    </div>
+    <div id="cal-status" style="margin:10px 0; font-size:.84rem; color:var(--text-muted);"></div>
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button class="btn btn-sm btn-primary" onclick="publishRoster()" id="btn-publish" style="display:none;">Publish Drafts</button>
+      <button class="btn btn-sm btn-danger" onclick="clearDrafts()" id="btn-clear" style="display:none;">Clear Drafts</button>
+    </div>
+  </div>
+
+  <div class="card" id="cal-container" style="display:none;">
+    <div class="card-header">
+      <h3>Calendar</h3>
+      <div style="font-size:.78rem; color:var(--text-muted);">
+        <span class="badge badge-blue">Opener</span>
+        <span class="badge badge-orange">Closer</span>
+        <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#ffe0e0; color:#b01a1a;">Stat</span>
+        <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#fff3cd; color:#856404;">Draft</span>
+      </div>
+    </div>
+    <div id="cal-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; font-size:.78rem;"></div>
   </div>
 </div>
 
@@ -265,6 +294,7 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
   event.target.classList.add('active');
   if (name === 'slots') populateSlotGroupSelect();
+  if (name === 'calendar') initCalendarTab();
 }
 
 // ── Modals ────────────────────────────────
@@ -493,6 +523,154 @@ async function saveAllSlots(gid) {
   loadGroups();  // refresh cached data
   loadSlots();
   alert('Slots saved!');
+}
+
+// ── Calendar / Generate ───────────────────
+let _calData = [];
+
+function initCalendarTab() {
+  const sel = document.getElementById('cal-group');
+  sel.innerHTML = _groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+  // Default to current month
+  const now = new Date();
+  document.getElementById('cal-month').value =
+    now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  loadCalendar();
+}
+
+function _calDates() {
+  const mv = document.getElementById('cal-month').value;
+  if (!mv) return null;
+  const [y, m] = mv.split('-').map(Number);
+  const start = new Date(y, m-1, 1);
+  const end = new Date(y, m, 0);  // last day of month
+  return {
+    start: start.toISOString().slice(0,10),
+    end: end.toISOString().slice(0,10),
+    year: y, month: m,
+    startDate: start, endDate: end,
+  };
+}
+
+async function loadCalendar() {
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  if (!gid || !d) return;
+
+  const r = await fetch(`${API}/calendar?group_id=${gid}&start_date=${d.start}&end_date=${d.end}`);
+  const data = await r.json();
+  if (data.error) { document.getElementById('cal-status').textContent = data.error; return; }
+  _calData = data.rows || [];
+
+  const hasDrafts = _calData.some(r => r.status === 'draft');
+  document.getElementById('btn-publish').style.display = hasDrafts ? '' : 'none';
+  document.getElementById('btn-clear').style.display = hasDrafts ? '' : 'none';
+
+  renderCalendarGrid(d);
+  document.getElementById('cal-container').style.display = '';
+  document.getElementById('cal-status').textContent =
+    _calData.length ? `${_calData.length} assignments loaded.` : 'No assignments for this period.';
+}
+
+function renderCalendarGrid(d) {
+  const grid = document.getElementById('cal-grid');
+  // Header row
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let html = days.map(d =>
+    `<div style="font-weight:700; text-align:center; padding:6px; background:var(--surface); border-bottom:2px solid var(--border);">${d}</div>`
+  ).join('');
+
+  // Build map date → assignments
+  const byDate = {};
+  _calData.forEach(r => {
+    if (!byDate[r.date]) byDate[r.date] = [];
+    byDate[r.date].push(r);
+  });
+
+  // Fill calendar starting from Monday of the first week
+  const first = new Date(d.startDate);
+  let dow = first.getDay();
+  dow = dow === 0 ? 6 : dow - 1;  // convert Sun=0 to Mon-based
+  const calStart = new Date(first);
+  calStart.setDate(calStart.getDate() - dow);
+
+  // 6 weeks max
+  for (let i = 0; i < 42; i++) {
+    const cur = new Date(calStart);
+    cur.setDate(cur.getDate() + i);
+    const iso = cur.toISOString().slice(0,10);
+    const inMonth = cur.getMonth() === d.month - 1;
+    const isWeekend = cur.getDay() === 0 || cur.getDay() === 6;
+    const entries = byDate[iso] || [];
+
+    let bg = 'var(--bg)';
+    if (!inMonth) bg = '#f8f8f8';
+    else if (isWeekend) bg = '#f0f7ff';
+
+    html += `<div style="min-height:70px; padding:4px; background:${bg}; border:1px solid var(--border); border-radius:4px; ${!inMonth?'opacity:.4':''}">
+      <div style="font-weight:600; font-size:.72rem; margin-bottom:2px;">${cur.getDate()}</div>`;
+
+    for (const e of entries) {
+      const isDraft = e.status === 'draft';
+      const isCloser = e.type === 'closer';
+      const badgeClass = isCloser ? 'badge-orange' : 'badge-blue';
+      html += `<div style="margin:1px 0; ${isDraft?'border-left:2px solid #f0ad4e; padding-left:3px':''}">
+        <span class="badge ${badgeClass}" style="font-size:.65rem;">${e.type}</span>
+        <span style="font-size:.7rem;">${e.employee}</span>
+        <span style="font-size:.65rem; color:var(--text-muted);">${e.start}-${e.end}</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+
+  grid.innerHTML = html;
+}
+
+async function generateRoster() {
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  if (!gid || !d) return;
+
+  document.getElementById('cal-status').textContent = 'Generating...';
+  const r = await fetch(`${API}/generate`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+  });
+  const data = await r.json();
+  if (data.error) {
+    document.getElementById('cal-status').textContent = 'Error: ' + data.error;
+    return;
+  }
+  document.getElementById('cal-status').textContent =
+    `Generated ${data.count} assignments (${data.schedule_rows} schedule rows).`;
+  loadCalendar();
+}
+
+async function publishRoster() {
+  if (!confirm('Publish all draft roster schedules for this month?')) return;
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  const r = await fetch(`${API}/publish`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+  });
+  const data = await r.json();
+  document.getElementById('cal-status').textContent =
+    data.error ? 'Error: ' + data.error : `Published ${data.published} schedules.`;
+  loadCalendar();
+}
+
+async function clearDrafts() {
+  if (!confirm('Delete all unpublished draft roster schedules for this month?')) return;
+  const gid = document.getElementById('cal-group').value;
+  const d = _calDates();
+  const r = await fetch(`${API}/clear`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ group_id: +gid, start_date: d.start, end_date: d.end })
+  });
+  const data = await r.json();
+  document.getElementById('cal-status').textContent = data.error ? 'Error: ' + data.error : 'Drafts cleared.';
+  loadCalendar();
 }
 
 // ── Init ───────────────────────────────────
