@@ -3054,6 +3054,7 @@ class RosterGroup(db.Model):
     weekend_mode            = db.Column(db.String(20), default="rotate")   # rotate | dedicated
     stat_role               = db.Column(db.String(20), nullable=True)      # always_open | always_close
     sunday_non_closer       = db.Column(db.Boolean, default=False)        # Sunday assigned to whoever didn't close that week
+    weekend_close_week_parity = db.Column(db.String(4), nullable=True)   # "odd" | "even" — ISO week parity when this group closes weekends; null = every weekend
     active                  = db.Column(db.Boolean, default=True)
     created_at              = db.Column(db.DateTime, default=_utcnow)
     updated_at              = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
@@ -3075,6 +3076,7 @@ class RosterGroup(db.Model):
             "weekend_mode": self.weekend_mode,
             "stat_role": self.stat_role,
             "sunday_non_closer": self.sunday_non_closer,
+            "weekend_close_week_parity": self.weekend_close_week_parity,
             "active": self.active,
             "member_count": len([m for m in self.members if m.active]),
             "members": [m.to_dict() for m in self.members if m.active],

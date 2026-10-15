@@ -326,6 +326,15 @@
         <small style="color:var(--text-muted); font-size:0.75rem; margin-left:8px;">Sunday goes to whoever didn't close that week</small>
       </div>
     </div>
+    <div class="form-row">
+      <label for="grp-wknd-parity">Weekend Close Weeks</label>
+      <select id="grp-wknd-parity" class="form-control">
+        <option value="">Every Weekend</option>
+        <option value="odd">Odd Weeks Only</option>
+        <option value="even">Even Weeks Only</option>
+      </select>
+      <small style="color:var(--text-muted); font-size:0.75rem;">Alternate weekends — set the other group to the opposite parity</small>
+    </div>
     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-group')">Cancel</button>
       <button class="btn btn-primary" onclick="saveGroup()">Save Group</button>
@@ -469,6 +478,7 @@ function renderGroups() {
             ${g.planning_unit} · ${g.member_count} members · Weekend: ${g.weekend_mode}
             ${g.stat_role ? ' · Stat: ' + g.stat_role.replace('_',' ') : ''}
             ${g.sunday_non_closer ? ' · Sun=Non-Closer' : ''}
+            ${g.weekend_close_week_parity ? ' · WE Close: ' + g.weekend_close_week_parity + ' weeks' : ''}
           </span>
         </div>
         <div style="display:flex; gap:6px;">
@@ -520,6 +530,7 @@ function openNewGroupModal() {
   document.getElementById('grp-wknd-mode').value = 'rotate';
   document.getElementById('grp-stat-role').value = '';
   document.getElementById('grp-sun-non-closer').checked = false;
+  document.getElementById('grp-wknd-parity').value = '';
   document.getElementById('group-modal-title').textContent = 'New Roster Group';
   openModal('modal-new-group');
 }
@@ -535,6 +546,7 @@ function editGroup(id) {
   document.getElementById('grp-wknd-mode').value = g.weekend_mode;
   document.getElementById('grp-stat-role').value = g.stat_role || '';
   document.getElementById('grp-sun-non-closer').checked = !!g.sunday_non_closer;
+  document.getElementById('grp-wknd-parity').value = g.weekend_close_week_parity || '';
   document.getElementById('group-modal-title').textContent = 'Edit Group';
   openModal('modal-new-group');
 }
@@ -549,6 +561,7 @@ async function saveGroup() {
     weekend_mode: document.getElementById('grp-wknd-mode').value,
     stat_role: document.getElementById('grp-stat-role').value || null,
     sunday_non_closer: document.getElementById('grp-sun-non-closer').checked,
+    weekend_close_week_parity: document.getElementById('grp-wknd-parity').value || null,
   };
   const url = editId ? `${API}/groups/${editId}` : `${API}/groups`;
   const method = editId ? 'PUT' : 'POST';

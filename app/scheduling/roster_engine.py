@@ -67,6 +67,9 @@ def generate_roster(group_id, start_date, end_date):
         for s in slots
     )
 
+    # Weekend close week parity: "odd" or "even" ISO week numbers
+    wk_parity = group.weekend_close_week_parity  # None = every weekend
+
     assignments = []
 
     if has_closers:
@@ -77,7 +80,7 @@ def generate_roster(group_id, start_date, end_date):
             week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
             week_assignments = _process_week(
                 week_days, group, active_members, slots_by_day_type,
-                stat_dates, pto_dates, states
+                stat_dates, pto_dates, states, wk_parity
             )
             assignments.extend(week_assignments)
     else:
@@ -283,7 +286,7 @@ def _date_range(start, end):
 # ── Week-level planning ────────────────────────────────────────
 
 def _process_week(week_days, group, members, slots_by_day_type,
-                  stat_dates, pto_dates, states):
+                  stat_dates, pto_dates, states, wk_parity=None):
     """Process one week: assign closings first, then day shifts, then Sunday rule.
 
     Returns list of assignment dicts for the whole week.
@@ -297,11 +300,25 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # Track which members closed on which day (for Sunday rule)
     closer_days = {}  # member_id → [dates]
 
+    # ── Determine if this is a weekend-close week for this group ──
+    # Use the ISO week number of the first day in this week slice
+    iso_week = week_days[0].isocalendar()[1]
+    is_close_weekend = True
+    if wk_parity:
+        week_is_odd = (iso_week % 2 == 1)
+        is_close_weekend = (wk_parity == "odd" and week_is_odd) or \
+                           (wk_parity == "even" and not week_is_odd)
+
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
         day_type = _detect_day_type(day_date, stat_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
-        closer_slots = [s for s in applicable_slots if s.role == "closer"]
+
+        # Skip weekend closer slots on this group's off-week
+        if day_type in ("saturday", "sunday") and not is_close_weekend:
+            closer_slots = []
+        else:
+            closer_slots = [s for s in applicable_slots if s.role == "closer"]
 
         for slot in closer_slots:
             needed = _slots_needed(slot, group, day_type)

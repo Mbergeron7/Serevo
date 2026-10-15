@@ -77,6 +77,7 @@ def api_create_group():
         weekend_mode=d.get("weekend_mode", "rotate"),
         stat_role=d.get("stat_role"),
         sunday_non_closer=d.get("sunday_non_closer", False),
+        weekend_close_week_parity=d.get("weekend_close_week_parity") or None,
     )
     db.session.add(g)
     db.session.commit()
@@ -90,9 +91,12 @@ def api_update_group(gid):
     d = request.get_json(force=True)
     for k in ("name", "planning_unit_id", "closers_required_weekday",
               "closers_required_weekend", "weekend_mode", "stat_role",
-              "sunday_non_closer"):
+              "sunday_non_closer", "weekend_close_week_parity"):
         if k in d:
-            setattr(g, k, d[k])
+            val = d[k]
+            if k == "weekend_close_week_parity":
+                val = val or None  # empty string → null
+            setattr(g, k, val)
     db.session.commit()
     return jsonify(g.to_dict())
 
