@@ -326,11 +326,12 @@
   </div>
 </div>
 
-<!-- ═══ Add Member Modal ═══ -->
+<!-- ═══ Add/Edit Member Modal ═══ -->
 <div class="modal-overlay" id="modal-add-member">
   <div class="modal">
-    <h3>Add Member</h3>
+    <h3 id="member-modal-title">Add Member</h3>
     <input type="hidden" id="mbr-group-id">
+    <input type="hidden" id="mbr-edit-id">
     <div class="form-row">
       <div class="form-group" style="flex:1;">
         <label>Employee</label>
@@ -392,7 +393,7 @@
     </div>
     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-member')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveMember()">Add Member</button>
+      <button class="btn btn-primary" onclick="saveMember()" id="btn-save-member">Add Member</button>
     </div>
   </div>
 </div>
@@ -475,7 +476,10 @@ function renderMembersTable(g) {
           ${m.excluded_closing_days ? 'Excl: '+m.excluded_closing_days.join(', ')+' · ' : ''}
           ${m.accommodation_start ? m.accommodation_start+'-'+m.accommodation_end : ''}
         </td>
-        <td><button class="btn btn-sm btn-danger" onclick="removeMember(${m.id})">✕</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-secondary" onclick="editMember(${g.id}, ${m.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="removeMember(${m.id})">✕</button>
+        </td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -526,14 +530,18 @@ async function saveGroup() {
 // ── Members ────────────────────────────────
 async function openAddMember(groupId) {
   document.getElementById('mbr-group-id').value = groupId;
+  document.getElementById('mbr-edit-id').value = '';
+  document.getElementById('member-modal-title').textContent = 'Add Member';
+  document.getElementById('btn-save-member').textContent = 'Add Member';
   const g = _groups.find(x => x.id === groupId);
   const r = await fetch(`${API}/employees?planning_unit_id=${g.planning_unit_id}`);
   const emps = await r.json();
   const existingIds = new Set(g.members.map(m => m.employee_db_id));
   const available = emps.filter(e => !existingIds.has(e.id));
-  document.getElementById('mbr-employee').innerHTML = available.map(e =>
-    `<option value="${e.id}">${e.name}</option>`
-  ).join('');
+  const empSel = document.getElementById('mbr-employee');
+  empSel.innerHTML = available.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+  empSel.closest('.form-row').style.display = '';
+  empSel.disabled = false;
   // Reset form
   document.getElementById('mbr-display-only').checked = false;
   document.getElementById('mbr-no-close').checked = false;
@@ -546,12 +554,38 @@ async function openAddMember(groupId) {
   openModal('modal-add-member');
 }
 
+async function editMember(groupId, memberId) {
+  const g = _groups.find(x => x.id === groupId);
+  const m = g.members.find(x => x.id === memberId);
+  if (!m) return;
+  document.getElementById('mbr-group-id').value = groupId;
+  document.getElementById('mbr-edit-id').value = memberId;
+  document.getElementById('member-modal-title').textContent = 'Edit Member — ' + m.employee_name;
+  document.getElementById('btn-save-member').textContent = 'Save Changes';
+  // Hide employee dropdown when editing (can't change who it is)
+  const empSel = document.getElementById('mbr-employee');
+  empSel.innerHTML = `<option value="${m.employee_db_id}">${m.employee_name}</option>`;
+  empSel.closest('.form-row').style.display = 'none';
+  // Fill form with current values
+  document.getElementById('mbr-display-only').checked = !!m.is_display_only;
+  document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close;
+  document.getElementById('mbr-wknd-primary').checked = !!m.is_weekend_primary;
+  document.getElementById('mbr-max-close').value = m.max_closings_per_week || 1;
+  document.getElementById('mbr-acc-start').value = m.accommodation_start || '';
+  document.getElementById('mbr-acc-end').value = m.accommodation_end || '';
+  const wd = m.work_days || ['mon','tue','wed','thu','fri'];
+  document.querySelectorAll('.mbr-wd-cb').forEach(cb => cb.checked = wd.includes(cb.value));
+  const excl = m.excluded_closing_days || [];
+  document.querySelectorAll('.mbr-excl-cb').forEach(cb => cb.checked = excl.includes(cb.value));
+  openModal('modal-add-member');
+}
+
 async function saveMember() {
   const gid = document.getElementById('mbr-group-id').value;
+  const editId = document.getElementById('mbr-edit-id').value;
   const workDays = [...document.querySelectorAll('.mbr-wd-cb:checked')].map(cb => cb.value);
   const exclDays = [...document.querySelectorAll('.mbr-excl-cb:checked')].map(cb => cb.value);
   const body = {
-    employee_id: +document.getElementById('mbr-employee').value,
     is_display_only: document.getElementById('mbr-display-only').checked,
     is_weekend_primary: document.getElementById('mbr-wknd-primary').checked,
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
@@ -561,9 +595,18 @@ async function saveMember() {
     work_days: workDays.length ? workDays : null,
     excluded_closing_days: exclDays.length ? exclDays : null,
   };
-  await fetch(`${API}/groups/${gid}/members`, {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
-  });
+  if (editId) {
+    // Update existing member
+    await fetch(`${API}/members/${editId}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+  } else {
+    // Add new member
+    body.employee_id = +document.getElementById('mbr-employee').value;
+    await fetch(`${API}/groups/${gid}/members`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+  }
   closeModal('modal-add-member');
   loadGroups();
 }
