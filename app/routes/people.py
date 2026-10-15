@@ -18,7 +18,9 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         SkillMapping, PlanningUnit, ShiftSequence,
                         EmployeeShiftSequence, CoachingSession,
                         TimeClock, EmployeeWorkTimePattern, WorkTimePatternModel,
-                        EmployeeQuartile, WeekTimePattern)
+                        EmployeeQuartile, WeekTimePattern,
+                        AttendanceEvent, AdherenceException,
+                        PTOEntry, TimeOffType)
 
 log = logging.getLogger("serevo.people")
 
@@ -327,24 +329,7 @@ def delete_accommodation():
 @login_required
 def pto():
     user = get_current_user()
-
-    if user and user.get("is_demo"):
-        from app.demo_data import get_demo_pto, get_demo_employees
-        pto_list, err = get_demo_pto()
-        emps, _ = get_demo_employees()
-        emp_names = [f"{e['First Name']} {e['Last Name']}" for e in emps]
-    else:
-        from app.people.manager import get_pto, get_employee_names
-        sheet = _get_sheet()
-        pto_list, err = get_pto(sheet)
-        emp_names, _ = get_employee_names(sheet)
-
-    return render_template("people/pto.html",
-        user=user,
-        pto_list=pto_list,
-        employee_names=emp_names,
-        error=err,
-    )
+    return render_template("people/pto.html", user=user)
 
 
 @people_bp.route("/pto/save", methods=["POST"])
@@ -383,6 +368,11 @@ def delete_pto():
 @people_bp.route("/api/names")
 @login_required
 def api_names():
+    # Return DB employees with IDs for dropdowns
+    emps = Employee.query.filter(Employee.status.in_(["Active", "active"])).order_by(Employee.last_name, Employee.first_name).all()
+    if emps:
+        return jsonify({"names": [{"id": e.id, "name": e.full_name} for e in emps]})
+    # Fallback to sheets-based names
     from app.people.manager import get_employee_names
     names, err = get_employee_names()
     if err:
@@ -1077,14 +1067,297 @@ def profile_attendance():
     total_hours = sum(e.total_hours or 0 for e in completed)
     avg_hours = round(total_hours / len(completed), 1) if completed else 0
 
+    # ── Attendance events (coded by supervisor) ──
+    from datetime import date, timedelta as _td
+    cutoff_date = date.today() - _td(days=days)
+    events = AttendanceEvent.query.filter(
+        AttendanceEvent.employee_id == employee_id,
+        AttendanceEvent.event_date >= cutoff_date,
+    ).order_by(AttendanceEvent.event_date.desc()).all()
+    event_rows = [ev.to_dict() for ev in events]
+
+    # Counts by category
+    cat_counts = {}
+    for ev in events:
+        exc = ev.adherence_exception
+        cat = exc.category if exc else "other"
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+
+    # ── PTO entries ──
+    pto_entries = PTOEntry.query.filter(
+        PTOEntry.employee_id == employee_id,
+        PTOEntry.start_date >= cutoff_date,
+    ).order_by(PTOEntry.start_date.desc()).all()
+    pto_rows = []
+    for p in pto_entries:
+        tot = p.time_off_type
+        pto_rows.append({
+            "id": p.id,
+            "start_date": p.start_date.isoformat(),
+            "end_date": p.end_date.isoformat(),
+            "pto_type": p.pto_type,
+            "time_off_type": tot.label if tot else "Time Off",
+            "time_off_color": tot.color if tot else "#6b7280",
+            "approval_status": p.approval_status,
+            "note": p.note or "",
+        })
+
     return jsonify(
         success=True,
         rows=rows,
+        events=event_rows,
+        pto=pto_rows,
         summary={
             "total_entries": len(entries),
             "completed": len(completed),
             "total_hours": round(total_hours, 1),
             "avg_hours_per_shift": avg_hours,
             "days": days,
+            "absences": cat_counts.get("absence", 0),
+            "lates": cat_counts.get("late", 0),
+            "early_outs": cat_counts.get("early_out", 0),
+            "other_events": cat_counts.get("other", 0) + cat_counts.get("break_overrun", 0),
+            "pto_count": len([p for p in pto_entries if p.approval_status == "approved"]),
+            "pto_pending": len([p for p in pto_entries if p.approval_status == "pending"]),
         },
     )
+
+
+# ── Attendance Event CRUD ───────────────────────────────────────
+
+@people_bp.route("/api/attendance-events", methods=["POST"])
+@login_required
+def list_attendance_events():
+    """List attendance events, optionally filtered by employee."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    employee_id = payload.get("employee_id")
+    days = int(payload.get("days", 30))
+
+    from datetime import date, timedelta
+    cutoff = date.today() - timedelta(days=days)
+
+    q = AttendanceEvent.query.filter(AttendanceEvent.event_date >= cutoff)
+    if employee_id:
+        q = q.filter(AttendanceEvent.employee_id == employee_id)
+    events = q.order_by(AttendanceEvent.event_date.desc()).limit(200).all()
+
+    return jsonify(success=True, events=[e.to_dict() for e in events])
+
+
+@people_bp.route("/api/attendance-events/save", methods=["POST"])
+@login_required
+def save_attendance_event():
+    """Create or update an attendance event."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    event_id = payload.get("id")
+    employee_id = payload.get("employee_id")
+    event_date_str = payload.get("event_date")
+    exception_id = payload.get("adherence_exception_id")
+
+    if not employee_id or not event_date_str or not exception_id:
+        return jsonify(success=False, error="Missing required fields")
+
+    from datetime import date
+    try:
+        event_date = date.fromisoformat(event_date_str)
+    except (ValueError, TypeError):
+        return jsonify(success=False, error="Invalid date format")
+
+    # Check the exception code exists
+    exc = AdherenceException.query.get(exception_id)
+    if not exc:
+        return jsonify(success=False, error="Invalid adherence code")
+
+    from app.models import User
+    uid = None
+    if user.get("username"):
+        u = User.query.filter_by(username=user["username"]).first()
+        uid = u.id if u else None
+
+    if event_id:
+        ev = AttendanceEvent.query.get(event_id)
+        if not ev:
+            return jsonify(success=False, error="Event not found")
+        ev.employee_id = employee_id
+        ev.event_date = event_date
+        ev.adherence_exception_id = exception_id
+        ev.note = payload.get("note", "")
+        ev.is_excused = bool(payload.get("is_excused", exc.is_excused))
+    else:
+        ev = AttendanceEvent(
+            employee_id=employee_id,
+            event_date=event_date,
+            adherence_exception_id=exception_id,
+            note=payload.get("note", ""),
+            is_excused=bool(payload.get("is_excused", exc.is_excused)),
+            coded_by=uid,
+        )
+        db.session.add(ev)
+
+    db.session.commit()
+    return jsonify(success=True, event=ev.to_dict())
+
+
+@people_bp.route("/api/attendance-events/delete", methods=["POST"])
+@login_required
+def delete_attendance_event():
+    """Delete an attendance event."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    event_id = payload.get("id")
+    if not event_id:
+        return jsonify(success=False, error="Missing event id")
+
+    ev = AttendanceEvent.query.get(event_id)
+    if not ev:
+        return jsonify(success=False, error="Event not found")
+
+    db.session.delete(ev)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@people_bp.route("/api/adherence-codes", methods=["POST"])
+@login_required
+def list_adherence_codes():
+    """Return active adherence exception codes for dropdowns."""
+    codes = AdherenceException.query.filter_by(is_active=True)\
+        .order_by(AdherenceException.sort_order, AdherenceException.label).all()
+    return jsonify(success=True, codes=[c.to_dict() for c in codes])
+
+
+# ── PTO / Time Off (DB-backed) ──────────────────────────────────
+
+@people_bp.route("/api/pto-entries", methods=["POST"])
+@login_required
+def list_pto_entries():
+    """Return PTO entries, optionally filtered."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    employee_id = payload.get("employee_id")
+    status_filter = payload.get("status")  # pending | approved | denied
+    days = int(payload.get("days", 90))
+
+    from datetime import date, timedelta
+    cutoff = date.today() - timedelta(days=days)
+
+    q = PTOEntry.query.filter(PTOEntry.start_date >= cutoff)
+    if employee_id:
+        q = q.filter(PTOEntry.employee_id == employee_id)
+    if status_filter:
+        q = q.filter(PTOEntry.approval_status == status_filter)
+
+    entries = q.order_by(PTOEntry.start_date.desc()).limit(200).all()
+
+    rows = []
+    for p in entries:
+        emp = Employee.query.get(p.employee_id)
+        tot = p.time_off_type
+        pu = emp.planning_unit if emp else None
+        rows.append({
+            "id": p.id,
+            "employee_id": p.employee_id,
+            "employee_name": emp.full_name if emp else "",
+            "group": pu.name if pu else "",
+            "start_date": p.start_date.isoformat(),
+            "end_date": p.end_date.isoformat(),
+            "pto_type": p.pto_type,
+            "time_off_type": tot.label if tot else "Time Off",
+            "time_off_color": tot.color if tot else "#6b7280",
+            "approval_status": p.approval_status,
+            "note": p.note or "",
+            "updated_at": p.updated_at.strftime("%Y-%m-%d %H:%M") if p.updated_at else "",
+        })
+
+    return jsonify(success=True, entries=rows)
+
+
+@people_bp.route("/api/pto-entries/save", methods=["POST"])
+@login_required
+def save_pto_entry():
+    """Create a PTO entry (admin/supervisor adding directly)."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    employee_id = payload.get("employee_id")
+    start_str = payload.get("start_date")
+    end_str = payload.get("end_date")
+    time_off_type_id = payload.get("time_off_type_id")
+
+    if not employee_id or not start_str or not end_str:
+        return jsonify(success=False, error="Missing required fields")
+
+    from datetime import date
+    try:
+        start = date.fromisoformat(start_str)
+        end = date.fromisoformat(end_str)
+    except (ValueError, TypeError):
+        return jsonify(success=False, error="Invalid date format")
+
+    from app.models import User
+    uid = None
+    if user.get("username"):
+        u = User.query.filter_by(username=user["username"]).first()
+        uid = u.id if u else None
+
+    entry = PTOEntry(
+        employee_id=employee_id,
+        start_date=start,
+        end_date=end,
+        pto_type=payload.get("pto_type", "full"),
+        time_off_type_id=time_off_type_id,
+        approval_status="approved",  # admin-added = auto-approved
+        requested_by=uid,
+        reviewed_by=uid,
+        note=payload.get("note", ""),
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@people_bp.route("/api/pto-entries/delete", methods=["POST"])
+@login_required
+def delete_pto_entry():
+    """Delete a PTO entry."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    entry_id = payload.get("id")
+    if not entry_id:
+        return jsonify(success=False, error="Missing entry id")
+
+    entry = PTOEntry.query.get(entry_id)
+    if not entry:
+        return jsonify(success=False, error="Entry not found")
+
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@people_bp.route("/api/time-off-types", methods=["POST"])
+@login_required
+def list_time_off_types():
+    """Return active time-off types for dropdowns."""
+    types = TimeOffType.query.filter_by(is_active=True)\
+        .order_by(TimeOffType.sort_order, TimeOffType.label).all()
+    return jsonify(success=True, types=[t.to_dict() for t in types])

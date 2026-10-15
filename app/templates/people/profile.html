@@ -724,9 +724,58 @@
   </div>
 
   <div class="section-card">
+    <div class="section-card-header">
+      Attendance Events
+      <button class="btn-action" onclick="openProfileEventModal()" style="font-size:.75rem; padding:4px 12px;">+ Code</button>
+    </div>
+    <div class="section-card-body" id="attEventsBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-header">Time Off</div>
+    <div class="section-card-body" id="attPTOBody">
+      <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+
+  <div class="section-card">
     <div class="section-card-header">Clock History</div>
     <div class="section-card-body" id="attHistoryBody">
       <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- Code Attendance Modal (profile) -->
+<div id="profileEvModal" class="mini-modal" style="display:none;" onclick="if(event.target===this)closeProfileEventModal()">
+  <div class="modal" style="max-width:480px;">
+    <h3>Code Attendance</h3>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div>
+        <label style="font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Date</label>
+        <input type="date" id="profEvDate" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.85rem;">
+      </div>
+      <div>
+        <label style="font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Adherence Code</label>
+        <select id="profEvCode" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.85rem;"></select>
+      </div>
+      <div>
+        <label style="font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Excused</label>
+        <select id="profEvExcused" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.85rem;">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Note</label>
+        <textarea id="profEvNote" rows="2" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.85rem;" placeholder="Optional…"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+        <button class="btn-action" onclick="closeProfileEventModal()" style="background:var(--bg); color:var(--text); border:1px solid var(--border);">Cancel</button>
+        <button class="btn-action" onclick="saveProfileEvent()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1530,30 +1579,157 @@ function loadAttendance() {
     document.getElementById('attShiftCount').textContent = s.completed;
     document.getElementById('attAvgHours').textContent = s.avg_hours_per_shift + 'h';
 
+    /* ── Summary cards: add absence/late/pto counts ── */
+    const sc = document.getElementById('attSummaryCards');
+    // Append extra stat cards if not already there
+    if (!document.getElementById('attAbsences')) {
+      sc.insertAdjacentHTML('beforeend', `
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Absences</div>
+          <div id="attAbsences" style="font-size:1.6rem; font-weight:700; color:#dc2626;">—</div>
+        </div>
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Lates</div>
+          <div id="attLates" style="font-size:1.6rem; font-weight:700; color:#d97706;">—</div>
+        </div>
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+          <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Time Off</div>
+          <div id="attPTOCount" style="font-size:1.6rem; font-weight:700; color:#2563eb;">—</div>
+        </div>
+      `);
+    }
+    document.getElementById('attAbsences').textContent = s.absences || 0;
+    document.getElementById('attLates').textContent = s.lates || 0;
+    document.getElementById('attPTOCount').textContent = s.pto_count || 0;
+
+    /* ── Attendance Events table ── */
+    const evts = data.events || [];
+    const evBody = document.getElementById('attEventsBody');
+    if (!evts.length) {
+      evBody.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No attendance events for this period.</p>';
+    } else {
+      let eh = '<div style="overflow-x:auto"><table class="assign-table"><thead><tr><th>Date</th><th>Code</th><th>Category</th><th>Excused</th><th>Note</th><th></th></tr></thead><tbody>';
+      evts.forEach(e => {
+        const excBadge = e.is_excused
+          ? '<span style="color:#059669;font-weight:600;">Yes</span>'
+          : '<span style="color:#dc2626;font-weight:600;">No</span>';
+        eh += `<tr>
+          <td style="font-weight:600;">${esc(e.event_date)}</td>
+          <td><span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:.72rem;font-weight:600;background:color-mix(in srgb,${e.color} 15%,transparent);color:${e.color};">${esc(e.label)}</span></td>
+          <td>${esc(e.category)}</td>
+          <td>${excBadge}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(e.note)}</td>
+          <td><button class="btn-action" style="background:color-mix(in srgb,#dc2626 12%,transparent);color:#dc2626;font-size:.72rem;padding:3px 8px;" onclick="deleteProfileEvent(${e.id})">Del</button></td>
+        </tr>`;
+      });
+      eh += '</tbody></table></div>';
+      evBody.innerHTML = eh;
+    }
+
+    /* ── PTO entries table ── */
+    const ptos = data.pto || [];
+    const pBody = document.getElementById('attPTOBody');
+    if (!ptos.length) {
+      pBody.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No time-off entries for this period.</p>';
+    } else {
+      let ph = '<div style="overflow-x:auto"><table class="assign-table"><thead><tr><th>Start</th><th>End</th><th>Type</th><th>Day</th><th>Status</th><th>Note</th></tr></thead><tbody>';
+      ptos.forEach(p => {
+        const stClass = p.approval_status === 'approved' ? '#059669' : p.approval_status === 'pending' ? '#d97706' : '#dc2626';
+        ph += `<tr>
+          <td style="font-weight:600;">${p.start_date}</td>
+          <td>${p.end_date}</td>
+          <td><span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:.72rem;font-weight:600;background:color-mix(in srgb,${p.time_off_color||'#6b7280'} 15%,transparent);color:${p.time_off_color||'#6b7280'};">${esc(p.time_off_type)}</span></td>
+          <td>${p.pto_type === 'full' ? 'Full' : 'Partial'}</td>
+          <td><span style="color:${stClass};font-weight:600;">${p.approval_status}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(p.note)}</td>
+        </tr>`;
+      });
+      ph += '</tbody></table></div>';
+      pBody.innerHTML = ph;
+    }
+
+    /* ── Clock History table ── */
     const rows = data.rows;
     const body = document.getElementById('attHistoryBody');
     if (!rows.length) {
-      body.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No attendance records for this period.</p>';
-      return;
+      body.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">No clock records for this period.</p>';
+    } else {
+      let html = '<div style="overflow-x:auto"><table class="assign-table"><thead><tr><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
+      rows.forEach(r => {
+        const statusColor = r.status === 'active' ? '#059669' : '#6b7280';
+        html += `<tr>
+          <td style="font-weight:600;">${esc(r.date)}</td>
+          <td>${esc(r.clock_in)}</td>
+          <td>${r.clock_out || '—'}</td>
+          <td>${r.total_hours != null ? r.total_hours.toFixed(1) + 'h' : '—'}</td>
+          <td><span style="color:${statusColor}; font-weight:600;">${esc(r.status)}</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+      body.innerHTML = html;
     }
-    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-    let html = '<div style="overflow-x:auto"><table class="assign-table"><thead><tr><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
-    rows.forEach(r => {
-      const statusColor = r.status === 'active' ? '#059669' : '#6b7280';
-      html += `<tr>
-        <td style="font-weight:600;">${esc(r.date)}</td>
-        <td>${esc(r.clock_in)}</td>
-        <td>${r.clock_out || '—'}</td>
-        <td>${r.total_hours != null ? r.total_hours.toFixed(1) + 'h' : '—'}</td>
-        <td><span style="color:${statusColor}; font-weight:600;">${esc(r.status)}</span></td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-    body.innerHTML = html;
   })
   .catch(() => {
     document.getElementById('attHistoryBody').innerHTML =
       '<p style="color:#b91c1c; font-size:.85rem;">Error loading attendance data.</p>';
+  });
+}
+
+/* ── Profile: Code Attendance modal ── */
+let _profCodesLoaded = false;
+function loadProfileCodes() {
+  if (_profCodesLoaded) return;
+  _profCodesLoaded = true;
+  fetch('/people/api/adherence-codes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(r => r.json())
+    .then(d => {
+      const sel = document.getElementById('profEvCode');
+      sel.innerHTML = '';
+      (d.codes || []).forEach(c => {
+        sel.innerHTML += '<option value="' + c.id + '">' + (c.label||'') + ' (' + (c.category||'') + ')</option>';
+      });
+    });
+}
+
+function openProfileEventModal() {
+  loadProfileCodes();
+  document.getElementById('profEvDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('profEvExcused').value = 'false';
+  document.getElementById('profEvNote').value = '';
+  document.getElementById('profileEvModal').style.display = 'flex';
+}
+function closeProfileEventModal() { document.getElementById('profileEvModal').style.display = 'none'; }
+
+function saveProfileEvent() {
+  const codeId = document.getElementById('profEvCode').value;
+  const dt = document.getElementById('profEvDate').value;
+  if (!codeId || !dt) { showToast('Please fill in date and code.', 'warning'); return; }
+  fetch('/people/api/attendance-events/save', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      employee_id: EMP_ID, event_date: dt,
+      adherence_exception_id: +codeId,
+      is_excused: document.getElementById('profEvExcused').value === 'true',
+      note: document.getElementById('profEvNote').value,
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { closeProfileEventModal(); loadAttendance(); showToast('Attendance event saved.', 'success'); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  });
+}
+
+function deleteProfileEvent(id) {
+  if (!confirm('Delete this attendance event?')) return;
+  fetch('/people/api/attendance-events/delete', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: id }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { loadAttendance(); showToast('Event deleted.', 'success'); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   });
 }
 
