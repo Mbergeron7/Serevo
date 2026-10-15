@@ -1352,6 +1352,49 @@ class AdherenceException(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# ATTENDANCE EVENTS — supervisor-coded attendance records
+# ═══════════════════════════════════════════════════════════════
+
+class AttendanceEvent(db.Model):
+    """Supervisor-coded attendance record: absence, late, early leave, etc."""
+    __tablename__ = "attendance_events"
+
+    id                    = db.Column(db.Integer, primary_key=True)
+    employee_id           = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    event_date            = db.Column(db.Date, nullable=False, index=True)
+    adherence_exception_id = db.Column(db.Integer, db.ForeignKey("adherence_exceptions.id"), nullable=False)
+    note                  = db.Column(db.Text, default="")
+    is_excused            = db.Column(db.Boolean, default=False)
+    coded_by              = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at            = db.Column(db.DateTime, default=_utcnow)
+    updated_at            = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    employee              = db.relationship("Employee", backref=db.backref("attendance_events", lazy="dynamic"))
+    adherence_exception   = db.relationship("AdherenceException")
+    coded_by_user         = db.relationship("User", foreign_keys=[coded_by])
+
+    def to_dict(self):
+        exc = self.adherence_exception
+        emp = self.employee
+        coder = self.coded_by_user
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "employee_name": emp.full_name if emp else "",
+            "event_date": self.event_date.isoformat() if self.event_date else "",
+            "adherence_exception_id": self.adherence_exception_id,
+            "code": exc.code if exc else "",
+            "label": exc.label if exc else "",
+            "color": exc.color if exc else "#6b7280",
+            "category": exc.category if exc else "",
+            "is_excused": self.is_excused,
+            "note": self.note or "",
+            "coded_by": coder.username if coder else "",
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M") if self.created_at else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
 # NOTIFICATION / ALERT SETTINGS
 # ═══════════════════════════════════════════════════════════════
 
