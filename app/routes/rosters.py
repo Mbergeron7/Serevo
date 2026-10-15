@@ -43,7 +43,7 @@ def api_planning_units():
 @login_required
 def api_employees():
     pu_id = request.args.get("planning_unit_id", type=int)
-    q = Employee.query.filter_by(active=True)
+    q = Employee.query.filter_by(status="Active")
     if pu_id:
         q = q.filter_by(planning_unit_id=pu_id)
     emps = q.order_by(Employee.last_name, Employee.first_name).all()
