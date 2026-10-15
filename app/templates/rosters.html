@@ -349,8 +349,9 @@
       </div>
     </div>
     <div class="form-row">
-      <div class="check-row">
-        <input type="checkbox" id="mbr-wknd-primary"> <label for="mbr-wknd-primary">Weekend Primary</label>
+      <div class="check-row" style="gap:16px; flex-wrap:wrap;">
+        <span><input type="checkbox" id="mbr-wknd-sat"> <label for="mbr-wknd-sat">Dedicated Saturday</label></span>
+        <span><input type="checkbox" id="mbr-wknd-sun"> <label for="mbr-wknd-sun">Dedicated Sunday</label></span>
       </div>
     </div>
     <div class="form-row">
@@ -481,7 +482,9 @@ function renderMembersTable(g) {
       ${g.members.map(m => `<tr>
         <td>${m.employee_name}</td>
         <td>${m.is_display_only ? '<span class="badge badge-grey">Display Only</span>' :
-              m.is_weekend_primary ? '<span class="badge badge-orange">Weekend Primary</span>' :
+              m.is_weekend_primary ? '<span class="badge badge-orange">' +
+                ((m.weekend_primary_days||[]).includes('saturday') && (m.weekend_primary_days||[]).includes('sunday') ? 'Wknd Primary' :
+                 (m.weekend_primary_days||[]).includes('saturday') ? 'Sat Primary' : 'Sun Primary') + '</span>' :
               m.is_fill_in ? '<span class="badge badge-green">Fill-In</span>' :
               '<span class="badge badge-blue">Rotation</span>'}</td>
         <td>${m.rotation_order || '—'}</td>
@@ -561,7 +564,8 @@ async function openAddMember(groupId) {
   // Reset form
   document.getElementById('mbr-display-only').checked = false;
   document.getElementById('mbr-no-close').checked = false;
-  document.getElementById('mbr-wknd-primary').checked = false;
+  document.getElementById('mbr-wknd-sat').checked = false;
+  document.getElementById('mbr-wknd-sun').checked = false;
   document.getElementById('mbr-fill-in').checked = false;
   document.getElementById('mbr-max-close').value = '1';
   document.getElementById('mbr-acc-start').value = '';
@@ -587,7 +591,9 @@ async function editMember(groupId, memberId) {
   // Fill form with current values
   document.getElementById('mbr-display-only').checked = !!m.is_display_only;
   document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close;
-  document.getElementById('mbr-wknd-primary').checked = !!m.is_weekend_primary;
+  const wpd = m.weekend_primary_days || [];
+  document.getElementById('mbr-wknd-sat').checked = !!m.is_weekend_primary && wpd.includes('saturday');
+  document.getElementById('mbr-wknd-sun').checked = !!m.is_weekend_primary && wpd.includes('sunday');
   document.getElementById('mbr-fill-in').checked = !!m.is_fill_in;
   document.getElementById('mbr-max-close').value = m.max_closings_per_week || 1;
   document.getElementById('mbr-acc-start').value = m.accommodation_start || '';
@@ -607,7 +613,14 @@ async function saveMember() {
   const exclDays = [...document.querySelectorAll('.mbr-excl-cb:checked')].map(cb => cb.value);
   const body = {
     is_display_only: document.getElementById('mbr-display-only').checked,
-    is_weekend_primary: document.getElementById('mbr-wknd-primary').checked,
+    is_weekend_primary: document.getElementById('mbr-wknd-sat').checked || document.getElementById('mbr-wknd-sun').checked,
+    weekend_primary_days: [
+      ...(document.getElementById('mbr-wknd-sat').checked ? ['saturday'] : []),
+      ...(document.getElementById('mbr-wknd-sun').checked ? ['sunday'] : []),
+    ].length ? [
+      ...(document.getElementById('mbr-wknd-sat').checked ? ['saturday'] : []),
+      ...(document.getElementById('mbr-wknd-sun').checked ? ['sunday'] : []),
+    ] : null,
     is_fill_in: document.getElementById('mbr-fill-in').checked,
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
     accommodation_no_close: document.getElementById('mbr-no-close').checked,
