@@ -486,13 +486,6 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     states[m.id].weekend_count,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
-            else:
-                # Weekday openers: sort by cross-week total for fairness
-                pool.sort(key=lambda m: (
-                    (states[m.id].weekday_close_count or 0) + (states[m.id].weekend_count or 0) + (states[m.id].stat_count or 0),
-                    sum(1 for d, ids in daily_assigned.items() if m.id in ids),
-                    getattr(m, 'rotation_order', 0) or 0
-                ))
             for m in pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
@@ -545,7 +538,6 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 ))
             else:
                 rotation_pool.sort(key=lambda m: (
-                    (states[m.id].weekday_close_count or 0) + (states[m.id].weekend_count or 0) + (states[m.id].stat_count or 0),
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
                     getattr(m, 'rotation_order', 0) or 0
                 ))
