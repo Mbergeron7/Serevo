@@ -309,16 +309,55 @@ def _process_week(week_days, group, members, slots_by_day_type,
         is_close_weekend = (wk_parity == "odd" and week_is_odd) or \
                            (wk_parity == "even" and not week_is_odd)
 
+    # ── When parity is set, handle weekend days as single-role days ──
+    # On close-week: only assign closer (1 person). Off-week: only opener (1 person).
+    # This prevents 2 people from the same group on the same weekend day.
+    parity_weekend_days = set()  # dates handled by parity logic (skip in later phases)
+    if wk_parity:
+        for day_date in week_days:
+            day_type = _detect_day_type(day_date, stat_dates)
+            if day_type not in ("saturday", "sunday"):
+                continue
+            parity_weekend_days.add(day_date)
+            applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+
+            # Pick the right role: closer on close-week, opener on off-week
+            if is_close_weekend:
+                target_slots = [s for s in applicable_slots if s.role == "closer"]
+            else:
+                target_slots = [s for s in applicable_slots if s.role == "opener"]
+
+            if not target_slots:
+                continue
+            slot = target_slots[0]
+
+            eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+            # Prefer dedicated weekend primary
+            dedicated = [m for m in eligible
+                        if _is_weekend_primary_for(m, day_date, group)
+                        and m.id not in daily_assigned[day_date]]
+            pool = dedicated if dedicated else [
+                m for m in eligible if m.id not in daily_assigned[day_date]
+            ]
+            if not pool:
+                continue
+
+            m = pool[0]
+            reason = "parity_weekend"
+            assignments.append(_make_assignment(m, slot, day_date, day_type, reason))
+            daily_assigned[day_date].add(m.id)
+            if slot.role == "closer":
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                closer_days.setdefault(m.id, []).append(day_date)
+
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
+        if day_date in parity_weekend_days:
+            continue  # already handled above
         day_type = _detect_day_type(day_date, stat_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
-
-        # Skip weekend closer slots on this group's off-week
-        if day_type in ("saturday", "sunday") and not is_close_weekend:
-            closer_slots = []
-        else:
-            closer_slots = [s for s in applicable_slots if s.role == "closer"]
+        closer_slots = [s for s in applicable_slots if s.role == "closer"]
 
         for slot in closer_slots:
             needed = _slots_needed(slot, group, day_type)
@@ -358,7 +397,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 2: Sunday = non-closer rule ──────────────────────
     # If enabled, assign Sunday opener/day slots to members who didn't close this week
-    sunday_dates = [d for d in week_days if d.weekday() == 6]
+    sunday_dates = [d for d in week_days if d.weekday() == 6 and d not in parity_weekend_days]
     if group.sunday_non_closer and sunday_dates:
         closers_this_week = set(week_closings.keys())
         non_closers = [m for m in members if m.id not in closers_this_week]
@@ -385,7 +424,6 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
                 remaining = needed - len(pool[:needed])
                 if remaining > 0:
-                    # Fill from remaining eligible
                     rest = [m for m in eligible if m not in pool[:needed]]
                     for m in rest[:remaining]:
                         assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
@@ -393,6 +431,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 3: Assign opener slots ───────────────────────────
     for day_date in week_days:
+        if day_date in parity_weekend_days:
+            continue  # already handled by parity logic
         day_type = _detect_day_type(day_date, stat_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         opener_slots = [s for s in applicable_slots if s.role == "opener"]
@@ -421,6 +461,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 4: Assign day shift slots (everything else) ──────
     for day_date in week_days:
+        if day_date in parity_weekend_days:
+            continue  # parity weekends = single person, no day shifts from this group
         day_type = _detect_day_type(day_date, stat_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         day_slots = [s for s in applicable_slots
