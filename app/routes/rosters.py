@@ -672,7 +672,7 @@ def api_export_xlsx():
     # Check for shift time anomalies (start_time > end_time, likely overnight)
     from app.models import RosterSlot
     anomaly_slots = []
-    group_slots = RosterSlot.query.filter_by(group_id=roster.group_id).all()
+    group_slots = RosterSlot.query.filter_by(roster_group_id=group_id).all()
     for sl in group_slots:
         if sl.start_time and sl.end_time and sl.start_time > sl.end_time:
             anomaly_slots.append(f"{sl.label or sl.role}: {sl.start_time.strftime('%H:%M')}→{sl.end_time.strftime('%H:%M')}")
