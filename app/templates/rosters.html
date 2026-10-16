@@ -187,7 +187,10 @@
 <div id="tab-groups" class="tab-pane active">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
     <h2 style="font-size:1.1rem; margin:0;">Roster Groups</h2>
-    <button class="btn btn-primary" onclick="openNewGroupModal()">+ New Group</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-action btn-export" onclick="exportGroupsCSV()">Export CSV</button>
+      <button class="btn btn-primary" onclick="openNewGroupModal()">+ New Group</button>
+    </div>
   </div>
   <div id="groups-list"></div>
 </div>
@@ -980,6 +983,20 @@ async function clearDrafts() {
     showToast('Drafts cleared.', 'success');
     loadCalendar();
   } catch (e) { hideLoading(); showToast('Clear failed: ' + e, 'error'); }
+}
+
+// ── Export Groups & Members ───────────────
+function exportGroupsCSV() {
+  fetch(`${API}/export-groups-csv`)
+  .then(r => { if (!r.ok) throw new Error('Export failed'); return r.blob(); })
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'roster_groups_members.csv';
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Groups & Members exported.', 'success');
+  })
+  .catch(e => showToast('Export failed: ' + e, 'error'));
 }
 
 // ── Export ────────────────────────────────

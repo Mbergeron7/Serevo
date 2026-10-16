@@ -591,10 +591,9 @@ def _split_static_rotation(eligible, day_date, slot, group, assigned_ids):
         else:
             rotation_pool.append(m)
 
-    # When dedicated weekend day and primary is absent, restrict to fill-in pool
+    # When a dedicated weekend primary exists but is absent, restrict to fill-in pool
     day_type = DOW_FULL[day_date.weekday()]
-    if (group.weekend_mode == "dedicated"
-            and day_type in ("saturday", "sunday")
+    if (day_type in ("saturday", "sunday")
             and not static_picks):
         has_primaries = any(
             _is_weekend_primary_for(m, day_date, group)
@@ -686,9 +685,12 @@ def _is_static_assignment(member, day_date, role):
 
 
 def _is_weekend_primary_for(member, day_date, group):
-    """Check if member is a dedicated weekend worker for this day."""
-    if group.weekend_mode != "dedicated":
-        return False
+    """Check if member is a dedicated weekend worker for this day.
+
+    Honoured whenever the member's dedicated checkboxes are set, regardless
+    of the group's weekend_mode — a member flagged Dedicated Saturday should
+    always be preferred for Saturday even if the group is in 'rotate' mode.
+    """
     if not member.is_weekend_primary:
         return False
     day_full = DOW_FULL[day_date.weekday()]

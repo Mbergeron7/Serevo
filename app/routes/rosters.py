@@ -305,6 +305,60 @@ def api_calendar():
     return jsonify(result)
 
 
+# ── Export Groups & Members CSV ─────────────────────────────
+
+@rosters_bp.route("/api/export-groups-csv")
+@login_required
+def api_export_groups_csv():
+    """Export all roster groups and their members as CSV."""
+    groups = RosterGroup.query.order_by(RosterGroup.name).all()
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Group", "Member", "Employee ID", "Role", "Rotation Order",
+        "Work Days", "Max Closings/Week", "Weekend Primary", "Weekend Days",
+        "Fill-In Eligible", "Display Only", "No Closing Shifts",
+    ])
+    for g in groups:
+        members = RosterMember.query.filter_by(group_id=g.id).order_by(
+            RosterMember.rotation_order
+        ).all()
+        for m in members:
+            emp = Employee.query.get(m.employee_id)
+            name = emp.full_name if emp else f"ID {m.employee_id}"
+            eid = emp.employee_id if emp else ""
+            work_days = ""
+            try:
+                wd = json.loads(m.work_days) if m.work_days else None
+                if wd:
+                    work_days = ", ".join(wd)
+            except Exception:
+                pass
+            wpd = ""
+            try:
+                wp = json.loads(m.weekend_primary_days) if m.weekend_primary_days else None
+                if wp:
+                    wpd = ", ".join(wp)
+            except Exception:
+                pass
+            writer.writerow([
+                g.name, name, eid, m.role or "",
+                m.rotation_order or "", work_days,
+                m.max_closings_per_week if m.max_closings_per_week is not None else "",
+                "Yes" if m.is_weekend_primary else "",
+                wpd,
+                "Yes" if m.is_fill_in else "",
+                "Yes" if m.is_display_only else "",
+                "Yes" if m.accommodation_no_close else "",
+            ])
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=roster_groups_members.csv"},
+    )
+
+
 # ── Export CSV ──────────────────────────────────────────────
 
 @rosters_bp.route("/api/export-csv", methods=["POST"])
