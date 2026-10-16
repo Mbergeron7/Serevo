@@ -32,6 +32,18 @@ def payroll_summary():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
+    # Demo mode
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_payroll_summary
+        data = request.get_json(silent=True) or {}
+        try:
+            s = date.fromisoformat(data.get("start_date", ""))
+            e = date.fromisoformat(data.get("end_date", ""))
+        except (ValueError, TypeError):
+            e = date.today()
+            s = e - timedelta(days=13)
+        return jsonify(get_demo_payroll_summary(s, e))
+
     data = request.get_json(silent=True) or {}
     try:
         start = date.fromisoformat(data.get("start_date", ""))

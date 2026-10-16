@@ -43,6 +43,13 @@ def summary():
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
+    # Demo mode — return canned metrics
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_reports_summary
+        payload = request.get_json(silent=True) or {}
+        days = int(payload.get("days", 30))
+        return jsonify(get_demo_reports_summary(days))
+
     try:
         payload = request.get_json(silent=True) or {}
         days = int(payload.get("days", 30))
@@ -182,6 +189,13 @@ def attendance_report():
     user = _require_admin_or_sup()
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
+
+    # Demo mode
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_reports_attendance
+        payload = request.get_json(silent=True) or {}
+        days = int(payload.get("days", 7))
+        return jsonify(success=True, rows=get_demo_reports_attendance(days), period_days=days)
 
     payload = request.get_json(silent=True) or {}
     days = int(payload.get("days", 7))

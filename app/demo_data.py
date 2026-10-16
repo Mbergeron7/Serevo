@@ -2302,3 +2302,169 @@ def get_demo_agent_detail(user_id):
         "segments": segments,
         "timeline": timeline,
     }
+
+
+# ── Reports demo data ───────────────────────────────────────
+def get_demo_reports_summary(days=30):
+    """Return realistic summary metrics for the reports dashboard."""
+    today = datetime.date.today()
+    rng = random.Random(42)
+    total_employees = len([e for e in DEMO_EMPLOYEES if e["Status"] == "Active"])
+
+    # Weekly hours trend
+    weekly_hours = []
+    for w in range(min(days // 7, 12)):
+        week_start = today - datetime.timedelta(days=(w + 1) * 7)
+        hrs = rng.uniform(600, 800)
+        weekly_hours.append({"week": week_start.isoformat(), "hours": round(hrs, 1)})
+    weekly_hours.reverse()
+
+    # Quality trend
+    quality_trend = []
+    for w in range(min(days // 7, 12)):
+        week_start = today - datetime.timedelta(days=(w + 1) * 7)
+        avg = rng.uniform(78, 94)
+        quality_trend.append({"week": week_start.isoformat(), "avg_score": round(avg, 1)})
+    quality_trend.reverse()
+
+    return {
+        "success": True,
+        "period_days": days,
+        "headcount": total_employees,
+        "schedule": {
+            "total_shifts": rng.randint(250, 400),
+            "total_hours": round(rng.uniform(1800, 2800), 1),
+            "weekly_hours": weekly_hours,
+        },
+        "pto": {
+            "pending": rng.randint(1, 4),
+            "approved": rng.randint(8, 18),
+            "denied": rng.randint(0, 3),
+            "days_consumed": rng.randint(20, 45),
+            "by_type": [
+                {"type": "Vacation", "count": rng.randint(5, 12)},
+                {"type": "Sick", "count": rng.randint(2, 6)},
+                {"type": "Personal", "count": rng.randint(1, 4)},
+            ],
+        },
+        "quality": {
+            "avg_score": round(rng.uniform(82, 91), 1),
+            "eval_count": rng.randint(30, 60),
+            "trend": quality_trend,
+        },
+        "self_service": {
+            "open_shifts": rng.randint(1, 5),
+            "pending_bids": rng.randint(0, 3),
+            "pending_swaps": rng.randint(0, 2),
+        },
+    }
+
+
+def get_demo_reports_attendance(days=7):
+    """Return demo attendance rows for the reports attendance tab."""
+    rng = random.Random(99)
+    rows = []
+    for emp in DEMO_EMPLOYEES:
+        if emp["Status"] != "Active":
+            continue
+        scheduled = round(emp["Hours Per Day"] * min(days, emp["Days Per Week"]), 1)
+        variance = round(rng.uniform(-2.0, 1.5), 1)
+        actual = round(scheduled + variance, 1)
+        if actual < 0:
+            actual = 0.0
+        rows.append({
+            "name": f"{emp['First Name']} {emp['Last Name']}",
+            "employee_id": emp["Employee ID"],
+            "actual_hours": actual,
+            "scheduled_hours": scheduled,
+            "difference": round(actual - scheduled, 1),
+        })
+    return rows
+
+
+# ── Payroll demo data ────────────────────────────────────────
+def get_demo_payroll_summary(start_date=None, end_date=None):
+    """Return realistic payroll summary for demo users."""
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=13)
+    if not end_date:
+        end_date = today
+    span = (end_date - start_date).days + 1
+
+    rng = random.Random(77)
+    rows = []
+    for emp in DEMO_EMPLOYEES:
+        if emp["Status"] != "Active":
+            continue
+        weeks = span / 7
+        scheduled = round(emp["Weekly Hours"] * weeks, 2)
+        actual = round(scheduled + rng.uniform(-3, 4), 2)
+        if actual < 0:
+            actual = 0
+        overtime = max(0, round(actual - 40 * weeks, 2))
+        regular = round(actual - overtime, 2)
+        days_worked = min(span, round(emp["Days Per Week"] * weeks))
+        pto = rng.choice([0, 0, 0, 1, 2])
+        rows.append({
+            "employee_id": emp["Employee ID"],
+            "name": f"{emp['First Name']} {emp['Last Name']}",
+            "department": emp["Latest Skill Name"],
+            "days_worked": days_worked,
+            "total_hours": actual,
+            "regular_hours": regular,
+            "overtime_hours": overtime,
+            "scheduled_hours": scheduled,
+            "variance": round(actual - scheduled, 2),
+            "pto_days": pto,
+            "entries": days_worked,
+            "edited_entries": rng.randint(0, 1),
+        })
+    totals = {
+        "total_employees": len(rows),
+        "total_hours": round(sum(r["total_hours"] for r in rows), 2),
+        "total_regular": round(sum(r["regular_hours"] for r in rows), 2),
+        "total_overtime": round(sum(r["overtime_hours"] for r in rows), 2),
+        "total_pto_days": sum(r["pto_days"] for r in rows),
+    }
+    return {
+        "success": True,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "rows": rows,
+        "totals": totals,
+    }
+
+
+# ── Search demo data ────────────────────────────────────────
+def get_demo_search_results(q):
+    """Return matching demo employees and nav links for demo search."""
+    q_lower = q.lower()
+    results = []
+    for emp in DEMO_EMPLOYEES:
+        full_name = f"{emp['First Name']} {emp['Last Name']}"
+        if (q_lower in full_name.lower() or
+                q_lower in emp["Employee ID"].lower() or
+                q_lower in emp.get("Latest Skill Name", "").lower()):
+            results.append({
+                "type": "employee",
+                "icon": "👤",
+                "title": full_name,
+                "subtitle": f"{emp['Employee ID']} · {emp['Latest Skill Name']}",
+                "url": f"/people/demo-{emp['Employee ID']}/profile",
+                "status": emp["Status"],
+            })
+
+    # Nav links
+    nav_links = [
+        ("Dashboard", "/", "📊"), ("People", "/people/", "👥"),
+        ("Scheduling", "/scheduling/", "📅"), ("Forecasting", "/forecasting/", "📈"),
+        ("Reports", "/reports/", "📋"), ("Settings", "/settings/", "⚙️"),
+    ]
+    for label, url, icon in nav_links:
+        if q_lower in label.lower():
+            results.append({
+                "type": "page", "icon": icon, "title": label,
+                "subtitle": "Navigate to page", "url": url,
+            })
+    return results[:15]

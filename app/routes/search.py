@@ -25,6 +25,11 @@ def query():
     if len(q) < 2:
         return jsonify({"success": True, "results": []})
 
+    # Demo mode
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_search_results
+        return jsonify({"success": True, "results": get_demo_search_results(q)})
+
     results = []
     search_term = f"%{q}%"
 
