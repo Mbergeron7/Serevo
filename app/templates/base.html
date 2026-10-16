@@ -36,10 +36,11 @@
       {# Admin / Supervisor nav — grouped dropdowns #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
 
-      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/forecasting') or request.path.startswith('/capacity') or request.path.startswith('/realtime') or request.path.startswith('/team-calendar') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/forecasting') or request.path.startswith('/capacity') or request.path.startswith('/realtime') or request.path.startswith('/team-calendar') or request.path.startswith('/scheduling/config') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Operations <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/scheduling/"{% if request.path == '/scheduling/' %} class="active"{% endif %}>Scheduling</a>
+          <a href="/scheduling/config/"{% if request.path.startswith('/scheduling/config') %} class="active"{% endif %}>Schedule Setup</a>
           <a href="/scheduling/rosters"{% if request.path.startswith('/scheduling/rosters') %} class="active"{% endif %}>Specialty Schedules</a>
           <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
           <a href="/capacity/"{% if request.path.startswith('/capacity') %} class="active"{% endif %}>Capacity</a>
