@@ -456,6 +456,7 @@ def api_export_xlsx():
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
+        from openpyxl.formatting.rule import CellIsRule
     except ImportError:
         return jsonify({"error": "openpyxl not installed on server"}), 500
 
@@ -556,16 +557,20 @@ def api_export_xlsx():
     all_roles = sorted({role for s in emp_stats.values() for role in s["roles"]})
 
     sum_headers = (["Employee"] + day_names +
-                   ["Total", "Saturday", "Sunday", "Wknd Total",
+                   ["Total", "% of Total", "Saturday", "Sunday", "Wknd Total",
                     "Closings", "Draft", "Published"] + all_roles)
     _write_header(ws_sum, sum_headers, "548235")
 
     sum_alt = _fill("EBF4E6")
     bold_font = Font(name="Arial", size=10, bold=True)
+    grand_total = sum(s["total"] for s in emp_stats.values()) or 1
+    pct_fmt = '0.0%'
+
     for ri, (name, s) in enumerate(sorted(emp_stats.items()), 2):
         bg = sum_alt if ri % 2 == 0 else white_fill
+        pct = s["total"] / grand_total
         vals = ([name] + s["days"] +
-                [s["total"], s["sat"], s["sun"], s["sat"] + s["sun"],
+                [s["total"], pct, s["sat"], s["sun"], s["sat"] + s["sun"],
                  s["closings"], s["draft"], s["published"]] +
                 [s["roles"].get(r, 0) for r in all_roles])
         for ci, v in enumerate(vals, 1):
@@ -574,24 +579,81 @@ def api_export_xlsx():
             c.border = border
             c.font = bold_font if ci == 1 else normal_font
             c.alignment = left if ci == 1 else center
+            # Format the % column
+            if ci == 9:  # "% of Total" column
+                c.number_format = pct_fmt
         ws_sum.row_dimensions[ri].height = 20
 
+    num_employees = len(emp_stats)
     # Totals row
-    total_row = len(emp_stats) + 2
+    total_row = num_employees + 2
     ws_sum.cell(total_row, 1, "TOTAL").font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     ws_sum.cell(total_row, 1).fill = _fill("548235")
     ws_sum.cell(total_row, 1).border = border
     ws_sum.cell(total_row, 1).alignment = left
     for ci in range(2, len(sum_headers) + 1):
         c = ws_sum.cell(total_row, ci)
-        c.value = sum(ws_sum.cell(r, ci).value or 0 for r in range(2, total_row))
+        if ci == 9:  # % column — show 100%
+            c.value = 1.0
+            c.number_format = pct_fmt
+        else:
+            c.value = sum(ws_sum.cell(r, ci).value or 0 for r in range(2, total_row))
         c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
         c.fill = _fill("548235")
         c.border = border
         c.alignment = center
     ws_sum.row_dimensions[total_row].height = 25
 
-    base_widths = [20, 6, 6, 6, 6, 6, 6, 6, 8, 10, 10, 12, 10, 8, 10]
+    # Averages row
+    avg_row = total_row + 1
+    ws_sum.cell(avg_row, 1, "AVG / Employee").font = Font(name="Arial", size=10, bold=True, italic=True, color="548235")
+    ws_sum.cell(avg_row, 1).border = border
+    ws_sum.cell(avg_row, 1).alignment = left
+    ws_sum.cell(avg_row, 1).fill = white_fill
+    for ci in range(2, len(sum_headers) + 1):
+        c = ws_sum.cell(avg_row, ci)
+        if ci == 9:  # % column
+            c.value = 1.0 / num_employees if num_employees else 0
+            c.number_format = pct_fmt
+        else:
+            total_val = ws_sum.cell(total_row, ci).value or 0
+            c.value = round(total_val / num_employees, 1) if num_employees else 0
+        c.font = Font(name="Arial", size=10, italic=True, color="548235")
+        c.fill = white_fill
+        c.border = border
+        c.alignment = center
+    ws_sum.row_dimensions[avg_row].height = 20
+
+    # Conditional formatting — highlight high/low day counts
+    if num_employees > 1:
+        data_range_end = num_employees + 1  # last data row
+        # Green for low counts (fewer shifts = lighter load)
+        low_fill = PatternFill("solid", fgColor="C6EFCE")
+        low_font = Font(name="Arial", size=10, color="006100")
+        # Red for high counts (heavier load)
+        high_fill = PatternFill("solid", fgColor="FFC7CE")
+        high_font = Font(name="Arial", size=10, color="9C0006")
+        # Apply to day columns (B through H = cols 2-8) and Total (col 9)
+        for col_letter in ["B", "C", "D", "E", "F", "G", "H"]:
+            rng = f"{col_letter}2:{col_letter}{data_range_end}"
+            # Compute per-day average for threshold
+            col_idx = ord(col_letter) - ord("A") + 1
+            col_vals = [ws_sum.cell(r, col_idx).value or 0 for r in range(2, data_range_end + 1)]
+            if not col_vals:
+                continue
+            avg_val = sum(col_vals) / len(col_vals)
+            high_thresh = avg_val * 1.3 if avg_val > 0 else 999
+            low_thresh = avg_val * 0.7 if avg_val > 0 else -1
+            ws_sum.conditional_formatting.add(
+                rng, CellIsRule(operator="greaterThan", formula=[str(round(high_thresh))],
+                                fill=high_fill, font=high_font)
+            )
+            ws_sum.conditional_formatting.add(
+                rng, CellIsRule(operator="lessThan", formula=[str(round(low_thresh))],
+                                fill=low_fill, font=low_font)
+            )
+
+    base_widths = [20, 6, 6, 6, 6, 6, 6, 6, 8, 10, 10, 10, 12, 10, 8, 10]
     role_widths = [max(10, len(r) + 4) for r in all_roles]
     _set_widths(ws_sum, base_widths + role_widths)
 
@@ -606,16 +668,32 @@ def api_export_xlsx():
         ["Employees", len(emp_stats)],
         ["Powered by", "Serevo — Bergeron WFM Solutions"],
     ]
+
+    # Check for shift time anomalies (start_time > end_time, likely overnight)
+    from app.models import RosterSlot
+    anomaly_slots = []
+    group_slots = RosterSlot.query.filter_by(group_id=roster.group_id).all()
+    for sl in group_slots:
+        if sl.start_time and sl.end_time and sl.start_time > sl.end_time:
+            anomaly_slots.append(f"{sl.label or sl.role}: {sl.start_time.strftime('%H:%M')}→{sl.end_time.strftime('%H:%M')}")
+    if anomaly_slots:
+        info_rows.append(["", ""])
+        info_rows.append(["⚠ Shift Time Warnings", "Slots where start > end (possible overnight or config issue)"])
+        for a in anomaly_slots:
+            info_rows.append(["", a])
+
     info_alt = _fill("F5F0FF")
+    warn_fill = _fill("FFF3CD")
     for ri, (field, val) in enumerate(info_rows, 2):
-        bg = info_alt if ri % 2 == 0 else white_fill
+        is_warning = field.startswith("⚠") if field else (ri > len(info_rows) - len(anomaly_slots) + 1 and anomaly_slots)
+        bg = warn_fill if is_warning else (info_alt if ri % 2 == 0 else white_fill)
         for ci, v in enumerate([field, val], 1):
             c = ws_info.cell(ri, ci, v)
             c.fill = bg
             c.border = border
             c.font = bold_font if ci == 1 else normal_font
             c.alignment = left
-    _set_widths(ws_info, [20, 40])
+    _set_widths(ws_info, [25, 55])
 
     buf = io.BytesIO()
     wb.save(buf)
