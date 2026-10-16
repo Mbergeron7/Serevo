@@ -505,7 +505,7 @@ class Schedule(db.Model):
     schedule_date    = db.Column(db.Date, nullable=False, index=True)
     shift_start      = db.Column(db.Time, nullable=True)
     shift_end        = db.Column(db.Time, nullable=True)
-    shift_type       = db.Column(db.String(10), default="full")      # full | half
+    shift_type       = db.Column(db.String(60), default="full")      # full | half | roster role labels
     hours            = db.Column(db.Float, default=0)
     status           = db.Column(db.String(20), default="scheduled")  # scheduled | off | pto
     source           = db.Column(db.String(20), nullable=True)       # 'roster' | 'schedule' | NULL (legacy)
