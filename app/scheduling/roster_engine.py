@@ -342,12 +342,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if not pool:
                 continue
 
+            # Sort pool by weekend_count so weekends rotate fairly
+            pool.sort(key=lambda m: (
+                states[m.id].weekend_count,
+                getattr(m, 'rotation_order', 0) or 0
+            ))
             m = pool[0]
             reason = "parity_weekend"
             assignments.append(_make_assignment(m, slot, day_date, day_type, reason))
             daily_assigned[day_date].add(m.id)
+            _update_state_for_assignment(states[m.id], day_date, slot)
             if slot.role == "closer":
-                _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
 
@@ -418,16 +423,28 @@ def _process_week(week_days, group, members, slots_by_day_type,
                             if _is_weekend_primary_for(m, sun_date, group)]
                 pool = dedicated if dedicated else eligible
 
+                # Sort by weekend_count for fair rotation
+                pool.sort(key=lambda m: (
+                    states[m.id].weekend_count,
+                    getattr(m, 'rotation_order', 0) or 0
+                ))
+
                 for m in pool[:needed]:
                     assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
                     daily_assigned[sun_date].add(m.id)
+                    _update_state_for_assignment(states[m.id], sun_date, slot)
 
                 remaining = needed - len(pool[:needed])
                 if remaining > 0:
                     rest = [m for m in eligible if m not in pool[:needed]]
+                    rest.sort(key=lambda m: (
+                        states[m.id].weekend_count,
+                        getattr(m, 'rotation_order', 0) or 0
+                    ))
                     for m in rest[:remaining]:
                         assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
                         daily_assigned[sun_date].add(m.id)
+                        _update_state_for_assignment(states[m.id], sun_date, slot)
 
     # ── Phase 3: Assign opener slots ───────────────────────────
     for day_date in week_days:
@@ -449,15 +466,23 @@ def _process_week(week_days, group, members, slots_by_day_type,
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
                 daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
             if remaining <= 0:
                 continue
 
             pool = [m for m in rotation_pool if m.id not in daily_assigned[day_date]]
+            # Sort by weekend count on weekends so openers rotate fairly
+            if day_type in ("saturday", "sunday"):
+                pool.sort(key=lambda m: (
+                    states[m.id].weekend_count,
+                    getattr(m, 'rotation_order', 0) or 0
+                ))
             for m in pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
 
     # ── Phase 4: Assign day shift slots (everything else) ──────
     for day_date in week_days:
@@ -489,20 +514,30 @@ def _process_week(week_days, group, members, slots_by_day_type,
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
                 daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
             if remaining <= 0:
                 continue
 
             # For day shifts, prefer members who have the fewest total assignments
-            rotation_pool.sort(key=lambda m: (
-                sum(1 for d, ids in daily_assigned.items() if m.id in ids),
-                getattr(m, 'rotation_order', 0) or 0
-            ))
+            # On weekends, also factor in weekend_count for fair rotation
+            if day_type in ("saturday", "sunday"):
+                rotation_pool.sort(key=lambda m: (
+                    states[m.id].weekend_count,
+                    sum(1 for d, ids in daily_assigned.items() if m.id in ids),
+                    getattr(m, 'rotation_order', 0) or 0
+                ))
+            else:
+                rotation_pool.sort(key=lambda m: (
+                    sum(1 for d, ids in daily_assigned.items() if m.id in ids),
+                    getattr(m, 'rotation_order', 0) or 0
+                ))
 
             for m in rotation_pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
+                _update_state_for_assignment(states[m.id], day_date, slot)
 
     return assignments
 
@@ -542,6 +577,8 @@ def _process_day_simple(day_date, group, members, slots_by_day_type,
         for m in pool[:remaining]:
             assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
             assigned_ids.add(m.id)
+            if day_type in ("saturday", "sunday"):
+                _update_state_for_assignment(states[m.id], day_date, slot)
 
     return assignments
 
@@ -707,6 +744,8 @@ def _fairness_score(member, state, day_date, slot, week_closings):
 
     if role == "closer":
         count = state.weekday_close_count if day_date.weekday() < 5 else state.weekend_count
+    elif day_date.weekday() in (5, 6):
+        count = state.weekend_count  # track weekend rotation for all roles
     else:
         count = 0
 
@@ -738,8 +777,8 @@ def _fairness_score(member, state, day_date, slot, week_closings):
 
 def _update_state_for_assignment(state, day_date, slot):
     """Update fairness counters after assigning a slot."""
+    dow = day_date.weekday()
     if slot.role == "closer":
-        dow = day_date.weekday()
         if dow < 5:  # weekday
             state.weekday_close_count += 1
             state.weekday_rotation_index = (dow + 1) % 5
@@ -748,6 +787,9 @@ def _update_state_for_assignment(state, day_date, slot):
             state.last_weekend_date = day_date
         state.last_close_date = day_date
         state.last_close_weekday = dow
+    elif dow in (5, 6):  # weekend non-closer (opener/day)
+        state.weekend_count += 1
+        state.last_weekend_date = day_date
 
 
 def _write_schedule_rows(assignments, group):
