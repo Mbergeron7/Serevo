@@ -259,6 +259,25 @@
     </div>
   </div>
 
+  <!-- Assignment Summary -->
+  <div class="sched-card" id="summary-container" style="display:none;">
+    <div class="sched-card-header" style="cursor:pointer;" onclick="toggleSummary()">
+      <span>📊 Assignment Summary</span>
+      <span id="summary-toggle" style="font-size:.8rem; color:var(--muted);">▼ Show</span>
+    </div>
+    <div id="summary-body" style="display:none; overflow-x:auto;">
+      <table class="data-table" id="summary-table" style="font-size:.82rem;"></table>
+      <div style="margin-top:12px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600;">Weekend Counts</h4>
+        <table class="data-table" id="weekend-table" style="font-size:.82rem;"></table>
+      </div>
+      <div style="margin-top:12px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600;">Total Closings</h4>
+        <table class="data-table" id="closings-table" style="font-size:.82rem;"></table>
+      </div>
+    </div>
+  </div>
+
   <!-- Calendar result -->
   <div class="sched-card" id="cal-container" style="display:none;">
     <div class="sched-card-header">
@@ -823,6 +842,81 @@ function updateRosterStats() {
   document.getElementById('stat-published').textContent = pubCount;
 }
 
+function toggleSummary() {
+  const body = document.getElementById('summary-body');
+  const tog = document.getElementById('summary-toggle');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    tog.textContent = '▲ Hide';
+  } else {
+    body.style.display = 'none';
+    tog.textContent = '▼ Show';
+  }
+}
+
+function buildRosterSummary() {
+  const container = document.getElementById('summary-container');
+  if (!_calData.length) { container.style.display = 'none'; return; }
+  container.style.display = '';
+
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Build per-employee stats
+  const empMap = {}; // name -> {days:[0..6 counts], closings:0, satCount:0, sunCount:0}
+  _calData.forEach(r => {
+    const name = r.employee || 'Unknown';
+    if (!empMap[name]) empMap[name] = {days:[0,0,0,0,0,0,0], closings:0, satCount:0, sunCount:0};
+    const d = new Date(r.date + 'T00:00:00');
+    let dow = d.getDay(); // 0=Sun
+    dow = dow === 0 ? 6 : dow - 1; // convert to 0=Mon..6=Sun
+    empMap[name].days[dow]++;
+    const role = (r.type || '').toLowerCase();
+    if (role === 'closer' || role === 'close') empMap[name].closings++;
+    if (dow === 5) empMap[name].satCount++;
+    if (dow === 6) empMap[name].sunCount++;
+  });
+
+  const names = Object.keys(empMap).sort();
+
+  // Table 1: Day-of-week assignment counts
+  let html = '<thead><tr><th>Employee</th>';
+  dayNames.forEach(d => html += `<th style="text-align:center;">${d}</th>`);
+  html += '<th style="text-align:center;">Total</th></tr></thead><tbody>';
+  names.forEach(name => {
+    const e = empMap[name];
+    const total = e.days.reduce((a,b) => a+b, 0);
+    html += `<tr><td>${name}</td>`;
+    e.days.forEach(c => html += `<td style="text-align:center;">${c}</td>`);
+    html += `<td style="text-align:center; font-weight:600;">${total}</td></tr>`;
+  });
+  // Totals row
+  html += '<tr style="font-weight:600; border-top:2px solid var(--border);"><td>Total</td>';
+  for (let i = 0; i < 7; i++) {
+    const colTotal = names.reduce((s, n) => s + empMap[n].days[i], 0);
+    html += `<td style="text-align:center;">${colTotal}</td>`;
+  }
+  const grandTotal = names.reduce((s, n) => s + empMap[n].days.reduce((a,b)=>a+b,0), 0);
+  html += `<td style="text-align:center;">${grandTotal}</td></tr>`;
+  html += '</tbody>';
+  document.getElementById('summary-table').innerHTML = html;
+
+  // Table 2: Weekend counts
+  let whtml = '<thead><tr><th>Employee</th><th style="text-align:center;">Saturday</th><th style="text-align:center;">Sunday</th><th style="text-align:center;">Total</th></tr></thead><tbody>';
+  names.forEach(name => {
+    const e = empMap[name];
+    whtml += `<tr><td>${name}</td><td style="text-align:center;">${e.satCount}</td><td style="text-align:center;">${e.sunCount}</td><td style="text-align:center; font-weight:600;">${e.satCount + e.sunCount}</td></tr>`;
+  });
+  whtml += '</tbody>';
+  document.getElementById('weekend-table').innerHTML = whtml;
+
+  // Table 3: Closing counts
+  let chtml = '<thead><tr><th>Employee</th><th style="text-align:center;">Times Closing</th></tr></thead><tbody>';
+  names.forEach(name => {
+    chtml += `<tr><td>${name}</td><td style="text-align:center;">${empMap[name].closings}</td></tr>`;
+  });
+  chtml += '</tbody>';
+  document.getElementById('closings-table').innerHTML = chtml;
+}
+
 async function loadCalendar() {
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
@@ -843,11 +937,13 @@ async function loadCalendar() {
 
   if (hasData) {
     updateRosterStats();
+    buildRosterSummary();
     renderCalendarGrid(d);
     document.getElementById('cal-container').style.display = '';
     showToast(`${_calData.length} assignments loaded.`, 'success');
   } else {
     document.getElementById('cal-container').style.display = 'none';
+    document.getElementById('summary-container').style.display = 'none';
     showToast('No assignments for this period.', 'warning');
   }
 }
