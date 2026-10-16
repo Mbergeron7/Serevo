@@ -224,6 +224,8 @@ def _get_or_create_states(members, period_start):
                 period_start=period_start,
                 weekday_close_count=prev.weekday_close_count if prev else 0,
                 weekend_count=prev.weekend_count if prev else 0,
+                saturday_count=getattr(prev, 'saturday_count', 0) or 0 if prev else 0,
+                sunday_count=getattr(prev, 'sunday_count', 0) or 0 if prev else 0,
                 stat_count=prev.stat_count if prev else 0,
                 weekday_rotation_index=prev.weekday_rotation_index if prev else 0,
                 last_close_weekday=prev.last_close_weekday if prev else None,
@@ -342,8 +344,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if not pool:
                 continue
 
-            # Sort pool by weekend_count so weekends rotate fairly
+            # Sort pool by day-specific count so Sat/Sun rotate independently
+            _dow = day_date.weekday()
             pool.sort(key=lambda m: (
+                (states[m.id].saturday_count or 0) if _dow == 5 else (states[m.id].sunday_count or 0),
                 states[m.id].weekend_count,
                 getattr(m, 'rotation_order', 0) or 0
             ))
@@ -423,8 +427,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
                             if _is_weekend_primary_for(m, sun_date, group)]
                 pool = dedicated if dedicated else eligible
 
-                # Sort by weekend_count for fair rotation
+                # Sort by sunday_count for fair rotation
                 pool.sort(key=lambda m: (
+                    (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
@@ -438,6 +443,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 if remaining > 0:
                     rest = [m for m in eligible if m not in pool[:needed]]
                     rest.sort(key=lambda m: (
+                        (states[m.id].sunday_count or 0),
                         states[m.id].weekend_count,
                         getattr(m, 'rotation_order', 0) or 0
                     ))
@@ -473,9 +479,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             pool = [m for m in rotation_pool if m.id not in daily_assigned[day_date]]
-            # Sort by weekend count on weekends so openers rotate fairly
+            # Sort by day-specific count on weekends so openers rotate fairly
             if day_type in ("saturday", "sunday"):
                 pool.sort(key=lambda m: (
+                    (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
@@ -521,9 +528,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             # For day shifts, prefer members who have the fewest total assignments
-            # On weekends, also factor in weekend_count for fair rotation
+            # On weekends, also factor in day-specific count for fair rotation
             if day_type in ("saturday", "sunday"):
                 rotation_pool.sort(key=lambda m: (
+                    (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
                     getattr(m, 'rotation_order', 0) or 0
@@ -742,10 +750,18 @@ def _fairness_score(member, state, day_date, slot, week_closings):
     """Compute priority score for rotation assignment. Lower = picked first."""
     role = slot.role
 
+    dow = day_date.weekday()
     if role == "closer":
-        count = state.weekday_close_count if day_date.weekday() < 5 else state.weekend_count
-    elif day_date.weekday() in (5, 6):
-        count = state.weekend_count  # track weekend rotation for all roles
+        if dow < 5:
+            count = state.weekday_close_count
+        elif dow == 5:
+            count = (state.saturday_count or 0)
+        else:
+            count = (state.sunday_count or 0)
+    elif dow == 5:
+        count = (state.saturday_count or 0)
+    elif dow == 6:
+        count = (state.sunday_count or 0)
     else:
         count = 0
 
@@ -784,11 +800,19 @@ def _update_state_for_assignment(state, day_date, slot):
             state.weekday_rotation_index = (dow + 1) % 5
         elif dow in (5, 6):  # weekend
             state.weekend_count += 1
+            if dow == 5:
+                state.saturday_count = (state.saturday_count or 0) + 1
+            else:
+                state.sunday_count = (state.sunday_count or 0) + 1
             state.last_weekend_date = day_date
         state.last_close_date = day_date
         state.last_close_weekday = dow
     elif dow in (5, 6):  # weekend non-closer (opener/day)
         state.weekend_count += 1
+        if dow == 5:
+            state.saturday_count = (state.saturday_count or 0) + 1
+        else:
+            state.sunday_count = (state.sunday_count or 0) + 1
         state.last_weekend_date = day_date
 
 
