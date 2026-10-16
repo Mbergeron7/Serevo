@@ -674,8 +674,8 @@ def api_export_xlsx():
     anomaly_slots = []
     group_slots = RosterSlot.query.filter_by(roster_group_id=group_id).all()
     for sl in group_slots:
-        if sl.start_time and sl.end_time and sl.start_time > sl.end_time:
-            anomaly_slots.append(f"{sl.label or sl.role}: {sl.start_time.strftime('%H:%M')}→{sl.end_time.strftime('%H:%M')}")
+        if sl.shift_start and sl.shift_end and sl.shift_start > sl.shift_end:
+            anomaly_slots.append(f"{sl.label or sl.role} ({sl.day_type}): {sl.shift_start.strftime('%H:%M')}→{sl.shift_end.strftime('%H:%M')}")
     if anomaly_slots:
         info_rows.append(["", ""])
         info_rows.append(["⚠ Shift Time Warnings", "Slots where start > end (possible overnight or config issue)"])
