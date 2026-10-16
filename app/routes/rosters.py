@@ -580,7 +580,7 @@ def api_export_xlsx():
             c.font = bold_font if ci == 1 else normal_font
             c.alignment = left if ci == 1 else center
             # Format the % column
-            if ci == 9:  # "% of Total" column
+            if ci == 10:  # "% of Total" column
                 c.number_format = pct_fmt
         ws_sum.row_dimensions[ri].height = 20
 
@@ -593,7 +593,7 @@ def api_export_xlsx():
     ws_sum.cell(total_row, 1).alignment = left
     for ci in range(2, len(sum_headers) + 1):
         c = ws_sum.cell(total_row, ci)
-        if ci == 9:  # % column — show 100%
+        if ci == 10:  # % column — show 100%
             c.value = 1.0
             c.number_format = pct_fmt
         else:
@@ -612,7 +612,7 @@ def api_export_xlsx():
     ws_sum.cell(avg_row, 1).fill = white_fill
     for ci in range(2, len(sum_headers) + 1):
         c = ws_sum.cell(avg_row, ci)
-        if ci == 9:  # % column
+        if ci == 10:  # % column
             c.value = 1.0 / num_employees if num_employees else 0
             c.number_format = pct_fmt
         else:
