@@ -211,7 +211,7 @@
 </div>
 
 <div class="view-tabs">
-  <button class="view-tab active" data-view="intraday" onclick="showView('intraday')">Intraday</button>
+  <button class="view-tab" data-view="intraday" onclick="showView('intraday')">Intraday</button>
   <button class="view-tab" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
   <button class="view-tab" data-view="forecast" onclick="showView('forecast')">Forecast &amp; OTF</button>
   <button class="view-tab" data-view="interval" onclick="showView('interval')">Interval Report</button>
@@ -222,11 +222,11 @@
   <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing</button>
   <button class="view-tab" data-view="optimizer" onclick="showView('optimizer')">⚡ Optimizer</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
-  <button class="view-tab" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents</button>
+  <button class="view-tab active" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents</button>
 </div>
 
 <!-- ═══════════ INTRADAY (live monitor) ═══════════ -->
-<div id="view-intraday" class="view-panel active">
+<div id="view-intraday" class="view-panel">
   <div id="intradayEmpty" class="empty"><strong>Click Load to see real-time status</strong></div>
   <div id="intradayContent" style="display:none;">
     <div class="stats-row" id="currentStats"></div>
@@ -337,7 +337,7 @@
 </div>
 
 <!-- ═══════════ LIVE AGENTS ═══════════ -->
-<div id="view-liveagents" class="view-panel">
+<div id="view-liveagents" class="view-panel active">
   <style>
     .la-controls { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; padding:10px 0; }
     .la-refresh-btn { background:var(--brand-accent); color:#fff; border:none; border-radius:6px; padding:6px 16px; cursor:pointer; font-size:.82rem; font-weight:600; }
@@ -548,7 +548,7 @@ async function api(url, body) {
   return r.json();
 }
 function selectedLobs() { return [$('selLob').value || 'All']; }
-let _activeView = 'intraday';
+let _activeView = 'liveagents';
 const _loaded = {};  // track which tabs have data loaded
 
 function showView(name) {
@@ -568,7 +568,7 @@ function showView(name) {
     main.style.paddingRight = '';
   }
   // Lazy-load tab data on first view
-  if (!_loaded[name] && name !== 'intraday') loadTab(name);
+  if (!_loaded[name] && name !== 'liveagents') loadTab(name);
 }
 const fmt = (v, d=0) => (v === null || v === undefined) ? '—' : Number(v).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
 const pct = v => (v === null || v === undefined) ? '—' : fmt(v, 1) + '%';
@@ -1625,6 +1625,6 @@ if (_origShowView) {
 }
 
 // Deep link (#interval etc.) + auto-load
-(function(){ try { const h = (location.hash || '').replace('#',''); if (h) showView(h); } catch(e) { console.error("showView init error:", e); } loadAll(); })();
+(function(){ try { const h = (location.hash || '').replace('#',''); if (h) showView(h); else showView('liveagents'); } catch(e) { console.error("showView init error:", e); } loadAll(); })();
 </script>
 {% endblock %}
