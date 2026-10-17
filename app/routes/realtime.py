@@ -247,6 +247,9 @@ def _get_live_agents_from_sheet():
             continue
 
         status = _get_status_map().get(sid, sid[:20] if sid else "Unknown")
+        # Hardcoded fallback for known Offline SID if DB map is missing it
+        if sid == "WAd1f6c9952f3d04482bb9b6b28dd9819e" and "offline" not in status.lower():
+            status = "Offline"
         by_uid.setdefault(uid, []).append({"dt": dt_est, "status": status})
 
     # Derive current status per agent (latest event)
@@ -1740,8 +1743,10 @@ def api_live_agents():
             # ── Attendance flags ──────────────────────────────
             attendance = ""       # live view: "", "left_early"
             was_late = False      # for schedule coloring only
-            is_offline = ag["status"] in ("Offline", "offline", "Logged Out",
-                                          "logged out", "LoggedOut")
+            _status_lower = (ag["status"] or "").strip().lower()
+            is_offline = ("offline" in _status_lower or
+                          _status_lower in ("logged out", "loggedout",
+                                            "unavailable - logged out"))
             if sched and sched.shift_start and sched.shift_end:
                 # Left Early: agent offline during their scheduled shift
                 if is_offline and not is_shift_done and not is_pre_shift:
