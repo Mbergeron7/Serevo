@@ -1740,8 +1740,9 @@ def api_live_agents():
             # ── Attendance flags ──────────────────────────────
             attendance = ""       # live view: "", "left_early"
             was_late = False      # for schedule coloring only
+            is_offline = ag["status"] in ("Offline", "offline", "Logged Out",
+                                          "logged out", "LoggedOut")
             if sched and sched.shift_start and sched.shift_end:
-                is_offline = ag["status"] in ("Offline", "offline")
                 # Left Early: agent offline during their scheduled shift
                 if is_offline and not is_shift_done and not is_pre_shift:
                     attendance = "left_early"
@@ -1753,6 +1754,19 @@ def api_live_agents():
                                        + datetime.timedelta(minutes=LATE_GRACE_MINS)).time()
                         if first_seen.time() > grace_start:
                             was_late = True
+
+            # ── Hide agents who have left for the day ────────────
+            # 1) Explicitly offline + shift done → gone
+            if is_offline and is_shift_done:
+                continue
+            # 2) Shift ended 30+ min ago and no new status events since
+            #    (ACD may not write a logout event, so agent looks stuck)
+            STALE_AFTER_SHIFT_MINS = 30
+            if is_shift_done and sched and sched.shift_end:
+                shift_end_dt = datetime.datetime.combine(today, sched.shift_end)
+                mins_past_shift = (now_est - shift_end_dt).total_seconds() / 60
+                if mins_past_shift >= STALE_AFTER_SHIFT_MINS and ag["minutes_in_status"] >= STALE_AFTER_SHIFT_MINS:
+                    continue  # no activity since well past shift end — treat as gone
 
             agent = {
                 "name": emp.full_name,
