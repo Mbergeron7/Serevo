@@ -246,10 +246,7 @@ def _get_live_agents_from_sheet():
         if is_yesterday_cst and dt_est.date() != now_est.date():
             continue
 
-        status = _get_status_map().get(sid, sid[:20] if sid else "Unknown")
-        # Hardcoded fallback for known Offline SID if DB map is missing it
-        if sid == "WAd1f6c9952f3d04482bb9b6b28dd9819e" and "offline" not in status.lower():
-            status = "Offline"
+        status = _get_status_map().get(sid, "Unknown")
         by_uid.setdefault(uid, []).append({"dt": dt_est, "status": status})
 
     # Derive current status per agent (latest event)
@@ -1745,6 +1742,7 @@ def api_live_agents():
             was_late = False      # for schedule coloring only
             _status_lower = (ag["status"] or "").strip().lower()
             is_offline = ("offline" in _status_lower or
+                          "unknown" in _status_lower or
                           _status_lower in ("logged out", "loggedout",
                                             "unavailable - logged out"))
             if sched and sched.shift_start and sched.shift_end:
