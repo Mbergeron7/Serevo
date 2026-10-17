@@ -393,6 +393,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
             for m in rotation_pool:
                 if m.id in daily_assigned[day_date]:
                     continue
+                # Hard cap: skip members who already hit their weekly closing limit
+                max_pw = m.max_closings_per_week or 1
+                if week_closings.get(m.id, 0) >= max_pw:
+                    continue
                 s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
                 scored.append((s, m))
             scored.sort(key=lambda x: (x[0], getattr(x[1], 'rotation_order', 0) or 0))
