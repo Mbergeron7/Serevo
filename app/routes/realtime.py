@@ -1742,7 +1742,6 @@ def api_live_agents():
             was_late = False      # for schedule coloring only
             _status_lower = (ag["status"] or "").strip().lower()
             is_offline = ("offline" in _status_lower or
-                          "unknown" in _status_lower or
                           _status_lower in ("logged out", "loggedout",
                                             "unavailable - logged out"))
             if sched and sched.shift_start and sched.shift_end:
