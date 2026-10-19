@@ -593,13 +593,22 @@ def api_export_xlsx():
 
     # ── Helper: write a mini-table with totals/avg rows ──
     def _write_section(ws, headers, data_fn, start_row, header_color,
-                       pct_col=None, widths=None, cond_fmt_cols=None):
+                       pct_col=None, widths=None, cond_fmt_cols=None,
+                       section_title=None):
         """Write header + data rows + TOTAL + AVG for a section.
         data_fn(name, stats) → list of values (no name col — prepended here).
         pct_col = 1-based column index for the % column (if any).
         Returns the next available row after this section.
         """
-        # Section header
+        # Section title row
+        if section_title:
+            tc = ws.cell(start_row, 1, section_title)
+            tc.font = Font(name="Arial", size=12, bold=True, color=header_color)
+            tc.alignment = left
+            ws.row_dimensions[start_row].height = 28
+            start_row += 1
+
+        # Column header
         for ci, h in enumerate(headers, 1):
             c = ws.cell(start_row, ci, h)
             c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -705,7 +714,8 @@ def api_export_xlsx():
     next_row = _write_section(
         ws_sum, ov_headers, _overall_data, 1, "548235",
         pct_col=10, cond_fmt_cols=list(range(2, 9)),
-        widths=[20] + [6]*7 + [8, 10, 10, 10, 12, 8, 10])
+        widths=[20] + [6]*7 + [8, 10, 10, 10, 12, 8, 10],
+        section_title="Overall Shift Totals")
 
     # ────────────────────────────────────────────────────────────
     # SECTION 2: Closings Breakdown (dark blue)
@@ -718,7 +728,8 @@ def api_export_xlsx():
     next_row = _write_section(
         ws_sum, cl_headers, _close_data, next_row, "1F4E79",
         cond_fmt_cols=list(range(2, 9)),
-        widths=[20] + [6]*7 + [8])
+        widths=[20] + [6]*7 + [8],
+        section_title="Closings Breakdown")
 
     # ────────────────────────────────────────────────────────────
     # SECTION 3: Openings Breakdown (teal)
@@ -731,7 +742,8 @@ def api_export_xlsx():
     next_row = _write_section(
         ws_sum, op_headers, _open_data, next_row, "0D7377",
         cond_fmt_cols=list(range(2, 9)),
-        widths=[20] + [6]*7 + [8])
+        widths=[20] + [6]*7 + [8],
+        section_title="Openings Breakdown")
 
     # ────────────────────────────────────────────────────────────
     # SECTION 4: Weekends Breakdown (purple)
@@ -744,7 +756,8 @@ def api_export_xlsx():
     next_row = _write_section(
         ws_sum, wk_headers, _wknd_data, next_row, "6B4C9A",
         cond_fmt_cols=[2, 3, 4],
-        widths=[20, 10, 10, 12])
+        widths=[20, 10, 10, 12],
+        section_title="Weekends Breakdown")
 
     # ────────────────────────────────────────────────────────────
     # SECTION 5: Role Totals (olive)
@@ -757,7 +770,8 @@ def api_export_xlsx():
 
         _write_section(
             ws_sum, role_headers, _role_data, next_row, "7D6B3A",
-            widths=[20] + [max(10, len(r) + 4) for r in all_roles] + [8])
+            widths=[20] + [max(10, len(r) + 4) for r in all_roles] + [8],
+            section_title="Role Totals")
 
     # ── Sheet 3: Info ─────────────────────────────────────────
     ws_info = wb.create_sheet("Info")
