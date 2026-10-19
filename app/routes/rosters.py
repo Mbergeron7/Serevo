@@ -392,7 +392,10 @@ def api_export_csv():
     for r in rows:
         name = r.get("employee", "Unknown")
         if name not in emp_sum:
-            emp_sum[name] = {"days": [0]*7, "sat": 0, "sun": 0, "closings": 0}
+            emp_sum[name] = {"days": [0]*7, "sat": 0, "sun": 0,
+                             "closings": 0, "openings": 0,
+                             "close_days": [0]*7, "open_days": [0]*7}
+        dow = None
         try:
             dt = datetime.date.fromisoformat(r["date"])
             dow = dt.weekday()  # 0=Mon
@@ -406,6 +409,12 @@ def api_export_csv():
         role = (r.get("type") or "").lower()
         if role in ("closer", "close"):
             emp_sum[name]["closings"] += 1
+            if dow is not None:
+                emp_sum[name]["close_days"][dow] += 1
+        if role in ("opener", "open"):
+            emp_sum[name]["openings"] += 1
+            if dow is not None:
+                emp_sum[name]["open_days"][dow] += 1
 
     # Day-of-week counts
     writer.writerow(["Day-of-Week Counts"])
@@ -422,10 +431,20 @@ def api_export_csv():
         writer.writerow([name, s["sat"], s["sun"], s["sat"] + s["sun"]])
 
     writer.writerow([])
-    writer.writerow(["Total Closings"])
-    writer.writerow(["Employee", "Times Closing"])
+    close_hdr = ["Employee", "Total"] + [f"Close {d}" for d in day_names]
+    writer.writerow(["Closings Breakdown"])
+    writer.writerow(close_hdr)
     for name in sorted(emp_sum):
-        writer.writerow([name, emp_sum[name]["closings"]])
+        s = emp_sum[name]
+        writer.writerow([name, s["closings"]] + s["close_days"])
+
+    writer.writerow([])
+    open_hdr = ["Employee", "Total"] + [f"Open {d}" for d in day_names]
+    writer.writerow(["Openings Breakdown"])
+    writer.writerow(open_hdr)
+    for name in sorted(emp_sum):
+        s = emp_sum[name]
+        writer.writerow([name, s["openings"]] + s["open_days"])
 
     output = buf.getvalue()
     safe_name = group_name.replace(" ", "_")
@@ -529,10 +548,14 @@ def api_export_xlsx():
             emp_stats[name] = {
                 "total": 0, "days": [0]*7, "sat": 0, "sun": 0,
                 "draft": 0, "published": 0, "closings": 0,
+                "openings": 0,
+                "close_days": [0]*7,   # closings per weekday
+                "open_days": [0]*7,    # openings per weekday
                 "roles": {},
             }
         s = emp_stats[name]
         s["total"] += 1
+        dow = None
         try:
             dt = datetime.date.fromisoformat(r["date"])
             dow = dt.weekday()  # 0=Mon
@@ -552,13 +575,23 @@ def api_export_xlsx():
         s["roles"][role] = s["roles"].get(role, 0) + 1
         if role.lower() in ("closer", "close"):
             s["closings"] += 1
+            if dow is not None:
+                s["close_days"][dow] += 1
+        if role.lower() in ("opener", "open"):
+            s["openings"] += 1
+            if dow is not None:
+                s["open_days"][dow] += 1
 
     # Collect all unique roles for columns
     all_roles = sorted({role for s in emp_stats.values() for role in s["roles"]})
 
+    close_day_headers = [f"Close {d}" for d in day_names]
+    open_day_headers = [f"Open {d}" for d in day_names]
     sum_headers = (["Employee"] + day_names +
                    ["Total", "% of Total", "Saturday", "Sunday", "Wknd Total",
-                    "Closings", "Draft", "Published"] + all_roles)
+                    "Closings"] + close_day_headers +
+                   ["Openings"] + open_day_headers +
+                   ["Draft", "Published"] + all_roles)
     _write_header(ws_sum, sum_headers, "548235")
 
     sum_alt = _fill("EBF4E6")
@@ -571,7 +604,9 @@ def api_export_xlsx():
         pct = s["total"] / grand_total
         vals = ([name] + s["days"] +
                 [s["total"], pct, s["sat"], s["sun"], s["sat"] + s["sun"],
-                 s["closings"], s["draft"], s["published"]] +
+                 s["closings"]] + s["close_days"] +
+                [s["openings"]] + s["open_days"] +
+                [s["draft"], s["published"]] +
                 [s["roles"].get(r, 0) for r in all_roles])
         for ci, v in enumerate(vals, 1):
             c = ws_sum.cell(ri, ci, v)
@@ -653,7 +688,12 @@ def api_export_xlsx():
                                 fill=low_fill, font=low_font)
             )
 
-    base_widths = [20, 6, 6, 6, 6, 6, 6, 6, 8, 10, 10, 10, 12, 10, 8, 10]
+    # Employee, Mon-Sun(7), Total, %ofTotal, Sat, Sun, WkndTotal,
+    # Closings, Close Mon-Sun(7), Openings, Open Mon-Sun(7), Draft, Published
+    base_widths = ([20] + [6]*7 + [8, 10, 10, 10, 12,
+                   10] + [9]*7 +    # Close days
+                   [10] + [9]*7 +   # Open days
+                   [8, 10])
     role_widths = [max(10, len(r) + 4) for r in all_roles]
     _set_widths(ws_sum, base_widths + role_widths)
 
