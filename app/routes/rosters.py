@@ -584,118 +584,180 @@ def api_export_xlsx():
 
     # Collect all unique roles for columns
     all_roles = sorted({role for s in emp_stats.values() for role in s["roles"]})
-
-    close_day_headers = [f"Close {d}" for d in day_names]
-    open_day_headers = [f"Open {d}" for d in day_names]
-    sum_headers = (["Employee"] + day_names +
-                   ["Total", "% of Total", "Saturday", "Sunday", "Wknd Total",
-                    "Closings"] + close_day_headers +
-                   ["Openings"] + open_day_headers +
-                   ["Draft", "Published"] + all_roles)
-    _write_header(ws_sum, sum_headers, "548235")
-
-    sum_alt = _fill("EBF4E6")
-    bold_font = Font(name="Arial", size=10, bold=True)
+    sorted_names = sorted(emp_stats.keys())
+    num_employees = len(emp_stats)
     grand_total = sum(s["total"] for s in emp_stats.values()) or 1
     pct_fmt = '0.0%'
+    bold_font = Font(name="Arial", size=10, bold=True)
+    sum_alt = _fill("EBF4E6")
 
-    for ri, (name, s) in enumerate(sorted(emp_stats.items()), 2):
-        bg = sum_alt if ri % 2 == 0 else white_fill
-        pct = s["total"] / grand_total
-        vals = ([name] + s["days"] +
-                [s["total"], pct, s["sat"], s["sun"], s["sat"] + s["sun"],
-                 s["closings"]] + s["close_days"] +
-                [s["openings"]] + s["open_days"] +
-                [s["draft"], s["published"]] +
-                [s["roles"].get(r, 0) for r in all_roles])
-        for ci, v in enumerate(vals, 1):
-            c = ws_sum.cell(ri, ci, v)
-            c.fill = bg
+    # ── Helper: write a mini-table with totals/avg rows ──
+    def _write_section(ws, headers, data_fn, start_row, header_color,
+                       pct_col=None, widths=None, cond_fmt_cols=None):
+        """Write header + data rows + TOTAL + AVG for a section.
+        data_fn(name, stats) → list of values (no name col — prepended here).
+        pct_col = 1-based column index for the % column (if any).
+        Returns the next available row after this section.
+        """
+        # Section header
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(start_row, ci, h)
+            c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            c.fill = _fill(header_color)
             c.border = border
-            c.font = bold_font if ci == 1 else normal_font
-            c.alignment = left if ci == 1 else center
-            # Format the % column
-            if ci == 10:  # "% of Total" column
+            c.alignment = center if ci > 1 else left
+        ws.row_dimensions[start_row].height = 22
+
+        # Data rows
+        for ri_offset, name in enumerate(sorted_names):
+            ri = start_row + 1 + ri_offset
+            bg = sum_alt if ri_offset % 2 == 0 else white_fill
+            vals = [name] + data_fn(name, emp_stats[name])
+            for ci, v in enumerate(vals, 1):
+                c = ws.cell(ri, ci, v)
+                c.fill = bg
+                c.border = border
+                c.font = bold_font if ci == 1 else normal_font
+                c.alignment = left if ci == 1 else center
+                if pct_col and ci == pct_col:
+                    c.number_format = pct_fmt
+            ws.row_dimensions[ri].height = 20
+
+        # Totals row
+        t_row = start_row + 1 + num_employees
+        ws.cell(t_row, 1, "TOTAL").font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        ws.cell(t_row, 1).fill = _fill(header_color)
+        ws.cell(t_row, 1).border = border
+        ws.cell(t_row, 1).alignment = left
+        data_start = start_row + 1
+        for ci in range(2, len(headers) + 1):
+            c = ws.cell(t_row, ci)
+            if pct_col and ci == pct_col:
+                c.value = 1.0
                 c.number_format = pct_fmt
-        ws_sum.row_dimensions[ri].height = 20
+            else:
+                c.value = sum(ws.cell(r, ci).value or 0 for r in range(data_start, t_row))
+            c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            c.fill = _fill(header_color)
+            c.border = border
+            c.alignment = center
+        ws.row_dimensions[t_row].height = 25
 
-    num_employees = len(emp_stats)
-    # Totals row
-    total_row = num_employees + 2
-    ws_sum.cell(total_row, 1, "TOTAL").font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-    ws_sum.cell(total_row, 1).fill = _fill("548235")
-    ws_sum.cell(total_row, 1).border = border
-    ws_sum.cell(total_row, 1).alignment = left
-    for ci in range(2, len(sum_headers) + 1):
-        c = ws_sum.cell(total_row, ci)
-        if ci == 10:  # % column — show 100%
-            c.value = 1.0
-            c.number_format = pct_fmt
-        else:
-            c.value = sum(ws_sum.cell(r, ci).value or 0 for r in range(2, total_row))
-        c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-        c.fill = _fill("548235")
-        c.border = border
-        c.alignment = center
-    ws_sum.row_dimensions[total_row].height = 25
+        # Averages row
+        a_row = t_row + 1
+        ws.cell(a_row, 1, "AVG / Employee").font = Font(name="Arial", size=10, bold=True, italic=True, color=header_color)
+        ws.cell(a_row, 1).border = border
+        ws.cell(a_row, 1).alignment = left
+        ws.cell(a_row, 1).fill = white_fill
+        for ci in range(2, len(headers) + 1):
+            c = ws.cell(a_row, ci)
+            if pct_col and ci == pct_col:
+                c.value = 1.0 / num_employees if num_employees else 0
+                c.number_format = pct_fmt
+            else:
+                total_val = ws.cell(t_row, ci).value or 0
+                c.value = round(total_val / num_employees, 1) if num_employees else 0
+            c.font = Font(name="Arial", size=10, italic=True, color=header_color)
+            c.fill = white_fill
+            c.border = border
+            c.alignment = center
+        ws.row_dimensions[a_row].height = 20
 
-    # Averages row
-    avg_row = total_row + 1
-    ws_sum.cell(avg_row, 1, "AVG / Employee").font = Font(name="Arial", size=10, bold=True, italic=True, color="548235")
-    ws_sum.cell(avg_row, 1).border = border
-    ws_sum.cell(avg_row, 1).alignment = left
-    ws_sum.cell(avg_row, 1).fill = white_fill
-    for ci in range(2, len(sum_headers) + 1):
-        c = ws_sum.cell(avg_row, ci)
-        if ci == 10:  # % column
-            c.value = 1.0 / num_employees if num_employees else 0
-            c.number_format = pct_fmt
-        else:
-            total_val = ws_sum.cell(total_row, ci).value or 0
-            c.value = round(total_val / num_employees, 1) if num_employees else 0
-        c.font = Font(name="Arial", size=10, italic=True, color="548235")
-        c.fill = white_fill
-        c.border = border
-        c.alignment = center
-    ws_sum.row_dimensions[avg_row].height = 20
+        # Conditional formatting — highlight high/low
+        if cond_fmt_cols and num_employees > 1:
+            low_cfill = PatternFill("solid", fgColor="C6EFCE")
+            low_cfont = Font(name="Arial", size=10, color="006100")
+            high_cfill = PatternFill("solid", fgColor="FFC7CE")
+            high_cfont = Font(name="Arial", size=10, color="9C0006")
+            last_data = start_row + num_employees
+            for col_idx in cond_fmt_cols:
+                col_letter = chr(ord("A") + col_idx - 1)
+                rng = f"{col_letter}{data_start}:{col_letter}{last_data}"
+                col_vals = [ws.cell(r, col_idx).value or 0 for r in range(data_start, last_data + 1)]
+                if not col_vals:
+                    continue
+                avg_val = sum(col_vals) / len(col_vals)
+                high_t = avg_val * 1.3 if avg_val > 0 else 999
+                low_t = avg_val * 0.7 if avg_val > 0 else -1
+                ws.conditional_formatting.add(
+                    rng, CellIsRule(operator="greaterThan", formula=[str(round(high_t))],
+                                    fill=high_cfill, font=high_cfont))
+                ws.conditional_formatting.add(
+                    rng, CellIsRule(operator="lessThan", formula=[str(round(low_t))],
+                                    fill=low_cfill, font=low_cfont))
 
-    # Conditional formatting — highlight high/low day counts
-    if num_employees > 1:
-        data_range_end = num_employees + 1  # last data row
-        # Green for low counts (fewer shifts = lighter load)
-        low_fill = PatternFill("solid", fgColor="C6EFCE")
-        low_font = Font(name="Arial", size=10, color="006100")
-        # Red for high counts (heavier load)
-        high_fill = PatternFill("solid", fgColor="FFC7CE")
-        high_font = Font(name="Arial", size=10, color="9C0006")
-        # Apply to day columns (B through H = cols 2-8) and Total (col 9)
-        for col_letter in ["B", "C", "D", "E", "F", "G", "H"]:
-            rng = f"{col_letter}2:{col_letter}{data_range_end}"
-            # Compute per-day average for threshold
-            col_idx = ord(col_letter) - ord("A") + 1
-            col_vals = [ws_sum.cell(r, col_idx).value or 0 for r in range(2, data_range_end + 1)]
-            if not col_vals:
-                continue
-            avg_val = sum(col_vals) / len(col_vals)
-            high_thresh = avg_val * 1.3 if avg_val > 0 else 999
-            low_thresh = avg_val * 0.7 if avg_val > 0 else -1
-            ws_sum.conditional_formatting.add(
-                rng, CellIsRule(operator="greaterThan", formula=[str(round(high_thresh))],
-                                fill=high_fill, font=high_font)
-            )
-            ws_sum.conditional_formatting.add(
-                rng, CellIsRule(operator="lessThan", formula=[str(round(low_thresh))],
-                                fill=low_fill, font=low_font)
-            )
+        if widths:
+            _set_widths(ws, widths)
 
-    # Employee, Mon-Sun(7), Total, %ofTotal, Sat, Sun, WkndTotal,
-    # Closings, Close Mon-Sun(7), Openings, Open Mon-Sun(7), Draft, Published
-    base_widths = ([20] + [6]*7 + [8, 10, 10, 10, 12,
-                   10] + [9]*7 +    # Close days
-                   [10] + [9]*7 +   # Open days
-                   [8, 10])
-    role_widths = [max(10, len(r) + 4) for r in all_roles]
-    _set_widths(ws_sum, base_widths + role_widths)
+        return a_row + 2  # next section starts 2 rows after avg
+
+    # ────────────────────────────────────────────────────────────
+    # SECTION 1: Overall Shift Totals (green)
+    # ────────────────────────────────────────────────────────────
+    ov_headers = ["Employee"] + day_names + ["Total", "% of Total",
+                  "Saturday", "Sunday", "Wknd Total", "Draft", "Published"]
+
+    def _overall_data(name, s):
+        pct = s["total"] / grand_total
+        return (s["days"] + [s["total"], pct, s["sat"], s["sun"],
+                s["sat"] + s["sun"], s["draft"], s["published"]])
+
+    next_row = _write_section(
+        ws_sum, ov_headers, _overall_data, 1, "548235",
+        pct_col=10, cond_fmt_cols=list(range(2, 9)),
+        widths=[20] + [6]*7 + [8, 10, 10, 10, 12, 8, 10])
+
+    # ────────────────────────────────────────────────────────────
+    # SECTION 2: Closings Breakdown (dark blue)
+    # ────────────────────────────────────────────────────────────
+    cl_headers = ["Employee"] + day_names + ["Total"]
+
+    def _close_data(name, s):
+        return s["close_days"] + [s["closings"]]
+
+    next_row = _write_section(
+        ws_sum, cl_headers, _close_data, next_row, "1F4E79",
+        cond_fmt_cols=list(range(2, 9)),
+        widths=[20] + [6]*7 + [8])
+
+    # ────────────────────────────────────────────────────────────
+    # SECTION 3: Openings Breakdown (teal)
+    # ────────────────────────────────────────────────────────────
+    op_headers = ["Employee"] + day_names + ["Total"]
+
+    def _open_data(name, s):
+        return s["open_days"] + [s["openings"]]
+
+    next_row = _write_section(
+        ws_sum, op_headers, _open_data, next_row, "0D7377",
+        cond_fmt_cols=list(range(2, 9)),
+        widths=[20] + [6]*7 + [8])
+
+    # ────────────────────────────────────────────────────────────
+    # SECTION 4: Weekends Breakdown (purple)
+    # ────────────────────────────────────────────────────────────
+    wk_headers = ["Employee", "Saturday", "Sunday", "Wknd Total"]
+
+    def _wknd_data(name, s):
+        return [s["sat"], s["sun"], s["sat"] + s["sun"]]
+
+    next_row = _write_section(
+        ws_sum, wk_headers, _wknd_data, next_row, "6B4C9A",
+        cond_fmt_cols=[2, 3, 4],
+        widths=[20, 10, 10, 12])
+
+    # ────────────────────────────────────────────────────────────
+    # SECTION 5: Role Totals (olive)
+    # ────────────────────────────────────────────────────────────
+    if all_roles:
+        role_headers = ["Employee"] + all_roles + ["Total"]
+
+        def _role_data(name, s):
+            return [s["roles"].get(r, 0) for r in all_roles] + [s["total"]]
+
+        _write_section(
+            ws_sum, role_headers, _role_data, next_row, "7D6B3A",
+            widths=[20] + [max(10, len(r) + 4) for r in all_roles] + [8])
 
     # ── Sheet 3: Info ─────────────────────────────────────────
     ws_info = wb.create_sheet("Info")
