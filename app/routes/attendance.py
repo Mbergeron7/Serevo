@@ -52,8 +52,8 @@ def clock_in():
     payload = request.get_json(silent=True) or {}
     now = _utcnow()
     # Use employee's timezone for the date field so it matches their local calendar day
-    import pytz
-    emp_tz = pytz.timezone(emp.timezone or "America/New_York")
+    from zoneinfo import ZoneInfo
+    emp_tz = ZoneInfo(emp.timezone or "America/New_York")
     local_date = now.astimezone(emp_tz).date()
     entry = TimeClock(
         employee_id=emp.id,
