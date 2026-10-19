@@ -876,7 +876,8 @@ function buildRosterSummary() {
     const name = r.employee || 'Unknown';
     if (!empMap[name]) empMap[name] = {
       days:[0,0,0,0,0,0,0], closeDays:[0,0,0,0,0,0,0], openDays:[0,0,0,0,0,0,0],
-      closings:0, openings:0, satCount:0, sunCount:0, roles:{}
+      closings:0, openings:0, satCount:0, sunCount:0, roles:{},
+      draftCount:0, pubCount:0
     };
     const d = new Date(r.date + 'T00:00:00');
     let dow = d.getDay();
@@ -887,6 +888,8 @@ function buildRosterSummary() {
     if (role === 'opener' || role === 'open') { empMap[name].openings++; empMap[name].openDays[dow]++; }
     if (dow === 5) empMap[name].satCount++;
     if (dow === 6) empMap[name].sunCount++;
+    if (r.status === 'draft') empMap[name].draftCount++;
+    else if (r.status === 'scheduled') empMap[name].pubCount++;
     const rLabel = r.type || 'Unknown';
     empMap[name].roles[rLabel] = (empMap[name].roles[rLabel] || 0) + 1;
   });
@@ -923,8 +926,46 @@ function buildRosterSummary() {
     document.getElementById(getId).innerHTML = h;
   }
 
-  // 1. Overall Shift Totals
-  dayTable('summary-table', e => e.days);
+  // 1. Overall Shift Totals (full table with % of Total, Sat, Sun, Wknd Total, Draft, Published)
+  {
+    const grandTotal = names.reduce((s,n) => s + empMap[n].days.reduce((a,b)=>a+b,0), 0) || 1;
+    let oh = `<thead><tr><th>Employee</th>`;
+    dayNames.forEach(d => oh += `<th style="${tc}">${d}</th>`);
+    oh += `<th style="${tc}">Total</th><th style="${tc}">% of Total</th>`;
+    oh += `<th style="${tc}">Saturday</th><th style="${tc}">Sunday</th><th style="${tc}">Wknd Total</th>`;
+    oh += `<th style="${tc}">Draft</th><th style="${tc}">Published</th></tr></thead><tbody>`;
+    names.forEach(name => {
+      const e = empMap[name];
+      const total = e.days.reduce((a,b)=>a+b,0);
+      const pct = ((total / grandTotal) * 100).toFixed(1) + '%';
+      const wknd = e.satCount + e.sunCount;
+      oh += `<tr><td>${name}</td>`;
+      e.days.forEach(c => oh += `<td style="${tc}">${c}</td>`);
+      oh += `<td style="${tc}${bold}">${total}</td><td style="${tc}">${pct}</td>`;
+      oh += `<td style="${tc}">${e.satCount}</td><td style="${tc}">${e.sunCount}</td><td style="${tc}">${wknd}</td>`;
+      oh += `<td style="${tc}">${e.draftCount}</td><td style="${tc}">${e.pubCount}</td></tr>`;
+    });
+    // TOTAL row
+    const gt = names.reduce((s,n) => s + empMap[n].days.reduce((a,b)=>a+b,0), 0);
+    const totalSat = names.reduce((s,n)=>s+empMap[n].satCount,0);
+    const totalSun = names.reduce((s,n)=>s+empMap[n].sunCount,0);
+    const totalDraft = names.reduce((s,n)=>s+empMap[n].draftCount,0);
+    const totalPub = names.reduce((s,n)=>s+empMap[n].pubCount,0);
+    oh += `<tr style="${bold} border-top:2px solid var(--border);"><td>TOTAL</td>`;
+    for (let i = 0; i < 7; i++) oh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].days[i],0)}</td>`;
+    oh += `<td style="${tc}">${gt}</td><td style="${tc}">100.0%</td>`;
+    oh += `<td style="${tc}">${totalSat}</td><td style="${tc}">${totalSun}</td><td style="${tc}">${totalSat+totalSun}</td>`;
+    oh += `<td style="${tc}">${totalDraft}</td><td style="${tc}">${totalPub}</td></tr>`;
+    // AVG row
+    const cnt = names.length || 1;
+    oh += `<tr style="color:var(--muted); font-size:.78rem;"><td>AVG / Employee</td>`;
+    for (let i = 0; i < 7; i++) oh += `<td style="${tc}">${(names.reduce((s,n)=>s+empMap[n].days[i],0)/cnt).toFixed(1)}</td>`;
+    oh += `<td style="${tc}">${(gt/cnt).toFixed(1)}</td><td style="${tc}">${(100/cnt).toFixed(1)}%</td>`;
+    oh += `<td style="${tc}">${(totalSat/cnt).toFixed(1)}</td><td style="${tc}">${(totalSun/cnt).toFixed(1)}</td><td style="${tc}">${((totalSat+totalSun)/cnt).toFixed(1)}</td>`;
+    oh += `<td style="${tc}">${(totalDraft/cnt).toFixed(1)}</td><td style="${tc}">${(totalPub/cnt).toFixed(1)}</td></tr>`;
+    oh += '</tbody>';
+    document.getElementById('summary-table').innerHTML = oh;
+  }
 
   // 2. Closings Breakdown
   dayTable('closings-table', e => e.closeDays, e => e.closings);
@@ -942,6 +983,13 @@ function buildRosterSummary() {
   wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].satCount,0)}</td>`;
   wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].sunCount,0)}</td>`;
   wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].satCount+empMap[n].sunCount,0)}</td></tr>`;
+  const wcnt = names.length || 1;
+  const wSatT = names.reduce((s,n)=>s+empMap[n].satCount,0);
+  const wSunT = names.reduce((s,n)=>s+empMap[n].sunCount,0);
+  wh += `<tr style="color:var(--muted); font-size:.78rem;"><td>AVG / Employee</td>`;
+  wh += `<td style="${tc}">${(wSatT/wcnt).toFixed(1)}</td>`;
+  wh += `<td style="${tc}">${(wSunT/wcnt).toFixed(1)}</td>`;
+  wh += `<td style="${tc}">${((wSatT+wSunT)/wcnt).toFixed(1)}</td></tr>`;
   wh += '</tbody>';
   document.getElementById('weekend-table').innerHTML = wh;
 
@@ -962,6 +1010,10 @@ function buildRosterSummary() {
   rh += `<tr style="${bold} border-top:2px solid var(--border);"><td>Total</td>`;
   roleList.forEach(r => rh += `<td style="${tc}">${names.reduce((s,n)=>s+(empMap[n].roles[r]||0),0)}</td>`);
   rh += `<td style="${tc}">${names.reduce((s,n)=>s+roleList.reduce((ss,r)=>ss+(empMap[n].roles[r]||0),0),0)}</td></tr>`;
+  const rcnt = names.length || 1;
+  rh += `<tr style="color:var(--muted); font-size:.78rem;"><td>AVG / Employee</td>`;
+  roleList.forEach(r => rh += `<td style="${tc}">${(names.reduce((s,n)=>s+(empMap[n].roles[r]||0),0)/rcnt).toFixed(1)}</td>`);
+  rh += `<td style="${tc}">${(names.reduce((s,n)=>s+roleList.reduce((ss,r)=>ss+(empMap[n].roles[r]||0),0),0)/rcnt).toFixed(1)}</td></tr>`;
   rh += '</tbody>';
   document.getElementById('roles-table').innerHTML = rh;
 }
