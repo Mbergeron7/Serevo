@@ -17,6 +17,18 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+def _resolve_employee(user):
+    """Find the Employee linked to this user account.
+    Prefer the explicit employee_id link set in User Management,
+    fall back to email match."""
+    eid = user.get("employee_id")
+    if eid:
+        emp = Employee.query.filter_by(id=eid, status="Active").first()
+        if emp:
+            return emp
+    return Employee.query.filter_by(email=user.get("email"), status="Active").first()
+
+
 # ── Agent: clock in / out ─────────────────────────────────────────────
 
 @attendance_bp.route("/api/clock-in", methods=["POST"])
@@ -27,7 +39,7 @@ def clock_in():
     if not user:
         return jsonify(error="Forbidden"), 403
 
-    emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
+    emp = _resolve_employee(user)
     if not emp:
         return jsonify(success=False, error="No active employee record found for your account.")
 
@@ -59,7 +71,7 @@ def clock_out():
     if not user:
         return jsonify(error="Forbidden"), 403
 
-    emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
+    emp = _resolve_employee(user)
     if not emp:
         return jsonify(success=False, error="No active employee record found.")
 
@@ -92,7 +104,7 @@ def clock_status():
         from app.demo_data import get_demo_clock_status
         return jsonify(success=True, **get_demo_clock_status())
 
-    emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
+    emp = _resolve_employee(user)
     if not emp:
         return jsonify(success=True, clocked_in=False, employee_found=False)
 
@@ -114,7 +126,7 @@ def clock_history():
     if not user:
         return jsonify(error="Forbidden"), 403
 
-    emp = Employee.query.filter_by(email=user.get("email"), status="Active").first()
+    emp = _resolve_employee(user)
     if not emp:
         return jsonify(success=True, entries=[])
 
