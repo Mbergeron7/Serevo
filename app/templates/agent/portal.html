@@ -781,6 +781,24 @@ function timeAgo(iso) {
 }
 
 // ── Clock In / Out ─────────────────────────────
+let _clockTimer = null;
+function _startClockTimer(clockInISO) {
+  if (_clockTimer) clearInterval(_clockTimer);
+  const el = document.getElementById('clockElapsed');
+  function tick() {
+    const diff = Math.max(0, Math.floor((Date.now() - new Date(clockInISO).getTime()) / 1000));
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+    el.textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  tick();
+  _clockTimer = setInterval(tick, 1000);
+}
+function _stopClockTimer() {
+  if (_clockTimer) { clearInterval(_clockTimer); _clockTimer = null; }
+  document.getElementById('clockElapsed').textContent = '';
+}
 function loadClockStatus() {
   fetch('/attendance/api/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
   .then(r=>r.json()).then(d=>{
@@ -788,19 +806,18 @@ function loadClockStatus() {
     const st = document.getElementById('clockStatus');
     const btnIn = document.getElementById('btnClockIn');
     const btnOut = document.getElementById('btnClockOut');
-    const el = document.getElementById('clockElapsed');
     if (d.clocked_in) {
       st.textContent = 'You are clocked in';
       st.style.color = '#059669';
       btnIn.style.display = 'none';
       btnOut.style.display = '';
-      el.textContent = d.elapsed_hours.toFixed(1) + 'h elapsed';
+      _startClockTimer(d.clock_in);
     } else {
       st.textContent = d.employee_found === false ? 'No employee record linked' : 'You are clocked out';
       st.style.color = d.employee_found === false ? '#dc2626' : '';
       btnIn.style.display = d.employee_found === false ? 'none' : '';
       btnOut.style.display = 'none';
-      el.textContent = '';
+      _stopClockTimer();
     }
   }).catch(()=>{
     document.getElementById('clockStatus').textContent = 'Unable to load status';
