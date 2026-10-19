@@ -90,6 +90,28 @@
   </div>
 </div>
 
+<!-- ═══ My Punches ═══ -->
+<div class="p-card" style="margin-bottom:16px;">
+  <div class="p-card-header" style="display:flex; align-items:center; justify-content:space-between;">
+    <span>My Punches</span>
+    <select id="punchDays" onchange="loadPunchHistory()" style="font-size:.8rem; padding:2px 6px; border:1px solid var(--border); border-radius:4px;">
+      <option value="7">Last 7 days</option>
+      <option value="14" selected>Last 14 days</option>
+      <option value="30">Last 30 days</option>
+    </select>
+  </div>
+  <div class="p-card-body" style="padding:0; overflow-x:auto;">
+    <table id="punchTable" class="data-table" style="width:100%; font-size:.82rem;">
+      <thead>
+        <tr><th style="padding:8px 12px;">Date</th><th style="padding:8px 12px;">Clock In</th><th style="padding:8px 12px;">Clock Out</th><th style="padding:8px 12px;">Hours</th><th style="padding:8px 12px;">Status</th></tr>
+      </thead>
+      <tbody id="punchBody">
+        <tr><td colspan="5" style="padding:12px; text-align:center; color:var(--text-muted);">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ═══ Announcements ═══ -->
 <div id="announceBanner" style="display:none; margin-bottom:16px;"></div>
 
@@ -827,10 +849,39 @@ window.doClock = function(action) {
   const url = action === 'in' ? '/attendance/api/clock-in' : '/attendance/api/clock-out';
   fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
   .then(r=>r.json()).then(d=>{
-    if (d.success) { loadClockStatus(); }
+    if (d.success) { loadClockStatus(); loadPunchHistory(); }
     else { alert(d.error || 'Clock action failed'); }
   });
 };
+
+// ── Punch history ──────────────────────────────────────────
+function loadPunchHistory() {
+  const days = parseInt(document.getElementById('punchDays').value) || 14;
+  fetch('/attendance/api/history', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({days: days})})
+  .then(r=>r.json()).then(d=>{
+    const tb = document.getElementById('punchBody');
+    if (!d.success || !d.entries || d.entries.length === 0) {
+      tb.innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:var(--text-muted);">No punch records found.</td></tr>';
+      return;
+    }
+    tb.innerHTML = d.entries.map(e => {
+      const dt = e.date;
+      const ci = e.clock_in ? new Date(e.clock_in).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+      const co = e.clock_out ? new Date(e.clock_out).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+      const hrs = e.total_hours != null ? e.total_hours.toFixed(2) + 'h' : '—';
+      const st = e.status === 'active' ? '<span style="color:#059669; font-weight:600;">Active</span>'
+               : e.status === 'completed' ? '<span style="color:var(--text-muted);">Completed</span>'
+               : e.status || '—';
+      return '<tr><td style="padding:6px 12px;">' + dt + '</td><td style="padding:6px 12px;">' + ci +
+             '</td><td style="padding:6px 12px;">' + co + '</td><td style="padding:6px 12px;">' + hrs +
+             '</td><td style="padding:6px 12px;">' + st + '</td></tr>';
+    }).join('');
+  }).catch(()=>{
+    document.getElementById('punchBody').innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:#dc2626;">Failed to load punch history.</td></tr>';
+  });
+}
+loadPunchHistory();
 
 // ── Upcoming activity notifications ─────────────────────────
 (function() {
