@@ -307,10 +307,24 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # Track who's assigned to what each day this week
     # day_date → set of member_ids already assigned
     daily_assigned = {d: set() for d in week_days}
+    # Track how many DAYS each member has been assigned this week (for contract enforcement)
+    week_day_counts = {m.id: 0 for m in members}
+    # Contract lookup: member_id → contracted_days (default 5)
+    _contracted = {m.id: (m.contracted_days if m.contracted_days is not None else 5) for m in members}
     # Track who got a closing this week
     week_closings = {}  # member_id → count
     # Track which members closed on which day (for Sunday rule)
     closer_days = {}  # member_id → [dates]
+
+    def _track_day(member_id, the_date):
+        """Increment week_day_counts when a member is first assigned on a new day, and mark them assigned."""
+        if member_id not in daily_assigned[the_date]:
+            week_day_counts[member_id] = week_day_counts.get(member_id, 0) + 1
+            daily_assigned[the_date].add(member_id)
+
+    def _contract_deficit(member_id):
+        """How many more days this member needs to hit their contract. Higher = more urgently needs shifts."""
+        return _contracted.get(member_id, 5) - week_day_counts.get(member_id, 0)
 
     # ── Determine if this is a weekend-close week for this group ──
     # Use the ISO week number of the first day in this week slice
@@ -364,7 +378,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             m = pool[0]
             reason = "parity_weekend"
             assignments.append(_make_assignment(m, slot, day_date, day_type, reason))
-            daily_assigned[day_date].add(m.id)
+            _track_day(m.id, day_date)
             _update_state_for_assignment(states[m.id], day_date, slot)
             if slot.role == "closer":
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
@@ -391,7 +405,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
@@ -414,12 +428,13 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 dow = day_date.weekday()
                 s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
                 dow_cnt = closer_dow_counts[m.id][dow] if closer_dow_counts else 0
-                scored.append((dow_cnt, s, m))
-            scored.sort(key=lambda x: (x[0], x[1], getattr(x[2], 'rotation_order', 0) or 0))
+                deficit = -_contract_deficit(m.id)
+                scored.append((deficit, dow_cnt, s, m))
+            scored.sort(key=lambda x: (x[0], x[1], x[2], getattr(x[3], 'rotation_order', 0) or 0))
 
-            for _, _, m in scored[:remaining]:
+            for _, _, _, m in scored[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
@@ -458,7 +473,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
                 for m in pool[:needed]:
                     assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
-                    daily_assigned[sun_date].add(m.id)
+                    _track_day(m.id, sun_date)
                     _update_state_for_assignment(states[m.id], sun_date, slot)
 
                 remaining = needed - len(pool[:needed])
@@ -471,7 +486,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     ))
                     for m in rest[:remaining]:
                         assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
-                        daily_assigned[sun_date].add(m.id)
+                        _track_day(m.id, sun_date)
                         _update_state_for_assignment(states[m.id], sun_date, slot)
 
     # ── Phase 3: Assign opener slots ───────────────────────────
@@ -493,7 +508,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
@@ -505,21 +520,23 @@ def _process_week(week_days, group, members, slots_by_day_type,
             _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
                 pool.sort(key=lambda m: (
+                    -_contract_deficit(m.id),
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             else:
-                # Primary: how many times this person opened on THIS weekday
-                # Secondary: global opener count for overall balance
+                # Primary: contract deficit (members further below contract picked first)
+                # Then: day-of-week opener count, global opener count
                 pool.sort(key=lambda m: (
+                    -_contract_deficit(m.id),
                     opener_dow_counts[m.id][_dow] if opener_dow_counts else 0,
                     (states[m.id].opener_count or 0),
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             for m in pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if opener_dow_counts:
                     opener_dow_counts[m.id][_dow] += 1
@@ -553,7 +570,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
@@ -565,15 +582,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
             _slot_role = slot.label or slot.role
             if day_type in ("saturday", "sunday"):
                 rotation_pool.sort(key=lambda m: (
+                    -_contract_deficit(m.id),
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             else:
-                # Primary: how many times this person got THIS specific role
-                # Secondary: global day_shift_count, then weekly assignments
+                # Primary: contract deficit (members below contract get priority)
+                # Then: role-specific count, global day_shift_count, weekly assignments
                 rotation_pool.sort(key=lambda m: (
+                    -_contract_deficit(m.id),
                     role_counts.get(m.id, {}).get(_slot_role, 0) if role_counts else 0,
                     (states[m.id].day_shift_count or 0),
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
@@ -582,7 +601,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in rotation_pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                daily_assigned[day_date].add(m.id)
+                _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if role_counts is not None:
                     role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
