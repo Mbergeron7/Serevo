@@ -72,6 +72,11 @@ def generate_roster(group_id, start_date, end_date):
 
     assignments = []
 
+    # ── In-memory per-day-of-week and per-role counters ──
+    # These track distribution WITHIN this generation run for variety
+    opener_dow_counts = {m.id: [0]*7 for m in active_members}  # per day-of-week opener counts
+    role_counts = {m.id: {} for m in active_members}           # per role counts (for mid shifts)
+
     if has_closers:
         # ── Week-level planning mode ──
         # Process week by week to enforce one-closing-per-week and Sunday rule
@@ -80,7 +85,8 @@ def generate_roster(group_id, start_date, end_date):
             week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
             week_assignments = _process_week(
                 week_days, group, active_members, slots_by_day_type,
-                stat_dates, pto_dates, states, wk_parity
+                stat_dates, pto_dates, states, wk_parity,
+                opener_dow_counts, role_counts
             )
             assignments.extend(week_assignments)
     else:
@@ -290,7 +296,8 @@ def _date_range(start, end):
 # ── Week-level planning ────────────────────────────────────────
 
 def _process_week(week_days, group, members, slots_by_day_type,
-                  stat_dates, pto_dates, states, wk_parity=None):
+                  stat_dates, pto_dates, states, wk_parity=None,
+                  opener_dow_counts=None, role_counts=None):
     """Process one week: assign closings first, then day shifts, then Sunday rule.
 
     Returns list of assignment dicts for the whole week.
@@ -486,6 +493,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             pool = [m for m in rotation_pool if m.id not in daily_assigned[day_date]]
             # Sort by opener_count for fair rotation across all day types
+            _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
                 pool.sort(key=lambda m: (
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
@@ -493,7 +501,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             else:
+                # Primary: how many times this person opened on THIS weekday
+                # Secondary: global opener count for overall balance
                 pool.sort(key=lambda m: (
+                    opener_dow_counts[m.id][_dow] if opener_dow_counts else 0,
                     (states[m.id].opener_count or 0),
                     getattr(m, 'rotation_order', 0) or 0
                 ))
@@ -501,6 +512,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
                 _update_state_for_assignment(states[m.id], day_date, slot)
+                if opener_dow_counts:
+                    opener_dow_counts[m.id][_dow] += 1
 
     # ── Phase 4: Assign day shift slots (everything else) ──────
     for day_date in week_days:
@@ -540,6 +553,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             # For day shifts, prefer members who have the fewest total assignments
             # On weekends, also factor in day-specific count for fair rotation
+            _slot_role = slot.label or slot.role
             if day_type in ("saturday", "sunday"):
                 rotation_pool.sort(key=lambda m: (
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
@@ -548,7 +562,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             else:
+                # Primary: how many times this person got THIS specific role
+                # Secondary: global day_shift_count, then weekly assignments
                 rotation_pool.sort(key=lambda m: (
+                    role_counts.get(m.id, {}).get(_slot_role, 0) if role_counts else 0,
                     (states[m.id].day_shift_count or 0),
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
                     getattr(m, 'rotation_order', 0) or 0
@@ -558,6 +575,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
                 _update_state_for_assignment(states[m.id], day_date, slot)
+                if role_counts is not None:
+                    role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
 
     return assignments
 
