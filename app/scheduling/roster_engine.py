@@ -74,6 +74,7 @@ def generate_roster(group_id, start_date, end_date):
 
     # ── In-memory per-day-of-week and per-role counters ──
     # These track distribution WITHIN this generation run for variety
+    closer_dow_counts = {m.id: [0]*7 for m in active_members}  # per day-of-week closer counts
     opener_dow_counts = {m.id: [0]*7 for m in active_members}  # per day-of-week opener counts
     role_counts = {m.id: {} for m in active_members}           # per role counts (for mid shifts)
 
@@ -86,7 +87,7 @@ def generate_roster(group_id, start_date, end_date):
             week_assignments = _process_week(
                 week_days, group, active_members, slots_by_day_type,
                 stat_dates, pto_dates, states, wk_parity,
-                opener_dow_counts, role_counts
+                closer_dow_counts, opener_dow_counts, role_counts
             )
             assignments.extend(week_assignments)
     else:
@@ -297,7 +298,7 @@ def _date_range(start, end):
 
 def _process_week(week_days, group, members, slots_by_day_type,
                   stat_dates, pto_dates, states, wk_parity=None,
-                  opener_dow_counts=None, role_counts=None):
+                  closer_dow_counts=None, opener_dow_counts=None, role_counts=None):
     """Process one week: assign closings first, then day shifts, then Sunday rule.
 
     Returns list of assignment dicts for the whole week.
@@ -368,6 +369,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if slot.role == "closer":
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
+                if closer_dow_counts is not None:
+                    closer_dow_counts[m.id][day_date.weekday()] += 1
 
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
@@ -392,6 +395,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
+                if closer_dow_counts is not None:
+                    closer_dow_counts[m.id][day_date.weekday()] += 1
 
             remaining = needed - len(static_picks[:needed])
             if remaining <= 0:
@@ -406,16 +411,20 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 max_pw = m.max_closings_per_week or 1
                 if week_closings.get(m.id, 0) >= max_pw:
                     continue
+                dow = day_date.weekday()
                 s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
-                scored.append((s, m))
-            scored.sort(key=lambda x: (x[0], getattr(x[1], 'rotation_order', 0) or 0))
+                dow_cnt = closer_dow_counts[m.id][dow] if closer_dow_counts else 0
+                scored.append((dow_cnt, s, m))
+            scored.sort(key=lambda x: (x[0], x[1], getattr(x[2], 'rotation_order', 0) or 0))
 
-            for _, m in scored[:remaining]:
+            for _, _, m in scored[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 daily_assigned[day_date].add(m.id)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
+                if closer_dow_counts is not None:
+                    closer_dow_counts[m.id][day_date.weekday()] += 1
 
     # ── Phase 2: Sunday = non-closer rule ──────────────────────
     # If enabled, assign Sunday opener/day slots to members who didn't close this week
