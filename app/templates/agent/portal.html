@@ -90,28 +90,6 @@
   </div>
 </div>
 
-<!-- ═══ My Punches ═══ -->
-<div class="p-card" style="margin-bottom:16px;">
-  <div class="p-card-header" style="display:flex; align-items:center; justify-content:space-between;">
-    <span>My Punches</span>
-    <select id="punchDays" onchange="loadPunchHistory()" style="font-size:.8rem; padding:2px 6px; border:1px solid var(--border); border-radius:4px;">
-      <option value="7">Last 7 days</option>
-      <option value="14" selected>Last 14 days</option>
-      <option value="30">Last 30 days</option>
-    </select>
-  </div>
-  <div class="p-card-body" style="padding:0; overflow-x:auto;">
-    <table id="punchTable" class="data-table" style="width:100%; font-size:.82rem;">
-      <thead>
-        <tr><th style="padding:8px 12px;">Date</th><th style="padding:8px 12px;">Clock In</th><th style="padding:8px 12px;">Clock Out</th><th style="padding:8px 12px;">Hours</th><th style="padding:8px 12px;">Status</th></tr>
-      </thead>
-      <tbody id="punchBody">
-        <tr><td colspan="5" style="padding:12px; text-align:center; color:var(--text-muted);">Loading…</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
 <!-- ═══ Announcements ═══ -->
 <div id="announceBanner" style="display:none; margin-bottom:16px;"></div>
 
@@ -123,6 +101,7 @@
   <button onclick="switchTab('mybids', this)">⭐ My Bids</button>
   <button onclick="switchTab('balances', this)">📊 My Balances</button>
   <button onclick="switchTab('quality', this)">🏆 My Quality</button>
+  <button onclick="switchTab('punches', this); loadPunchHistory();">🕑 My Punches</button>
 </div>
 
 <!-- ═══ My Schedule Panel ═══ -->
@@ -229,6 +208,28 @@
     </div>
     <div class="p-card-body" id="qualityBody">
       <p class="empty-msg">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<div class="p-panel" id="pp-punches">
+  <div class="p-card">
+    <div class="p-card-header">My Punches
+      <select id="punchDays" onchange="loadPunchHistory()" style="font-size:.78rem; padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface);">
+        <option value="7">Last 7 days</option>
+        <option value="14" selected>Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="p-card-body" style="padding:0; overflow-x:auto;">
+      <table class="data-table" style="width:100%; font-size:.82rem;">
+        <thead>
+          <tr><th style="padding:8px 12px;">Date</th><th style="padding:8px 12px;">Clock In</th><th style="padding:8px 12px;">Clock Out</th><th style="padding:8px 12px;">Hours</th><th style="padding:8px 12px;">Status</th></tr>
+        </thead>
+        <tbody id="punchBody">
+          <tr><td colspan="5" style="padding:12px; text-align:center; color:var(--text-muted);">Select this tab to load punch history.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -881,8 +882,6 @@ function loadPunchHistory() {
     document.getElementById('punchBody').innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:#dc2626;">Failed to load punch history.</td></tr>';
   });
 }
-loadPunchHistory();
-
 // ── Upcoming activity notifications ─────────────────────────
 (function() {
   const LEAD_MINS = 5;           // notify this many minutes before
