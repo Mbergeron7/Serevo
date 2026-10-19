@@ -606,6 +606,53 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 if role_counts is not None:
                     role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
 
+    # ── Phase 5: Contract backfill ───────────────────────────────
+    # Members still below their contracted days get doubled-up on
+    # weekday non-closer slots (opener / mid shifts).  Weekend and
+    # closer slots are never doubled.
+    for day_date in week_days:
+        day_type = _detect_day_type(day_date, stat_dates)
+        if day_type in ("saturday", "sunday"):
+            continue  # no doubling on weekends
+
+        # Find members not yet assigned today who still need more days
+        unassigned_today = [
+            m for m in members
+            if m.id not in daily_assigned[day_date]
+            and _contract_deficit(m.id) > 0
+            and _is_available(m, day_date, pto_dates)
+        ]
+        if not unassigned_today:
+            continue
+
+        # Sort: biggest deficit first, then fewest total assignments
+        unassigned_today.sort(key=lambda m: (
+            -_contract_deficit(m.id),
+            sum(1 for d, ids in daily_assigned.items() if m.id in ids),
+            getattr(m, 'rotation_order', 0) or 0
+        ))
+
+        # Pick a non-closer slot to double up on
+        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+        backfill_slots = [s for s in applicable_slots if s.role != "closer"]
+        if not backfill_slots:
+            continue
+
+        for m in unassigned_today:
+            if _contract_deficit(m.id) <= 0:
+                break
+            # Pick the slot this member has done least (for variety)
+            best_slot = min(backfill_slots, key=lambda s: (
+                role_counts.get(m.id, {}).get(s.label or s.role, 0) if role_counts else 0,
+                s.sort_order or 0
+            ))
+            assignments.append(_make_assignment(m, best_slot, day_date, day_type, "backfill"))
+            _track_day(m.id, day_date)
+            _update_state_for_assignment(states[m.id], day_date, best_slot)
+            if role_counts is not None:
+                _slot_role = best_slot.label or best_slot.role
+                role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
+
     return assignments
 
 
