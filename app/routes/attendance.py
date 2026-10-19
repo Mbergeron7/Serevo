@@ -51,11 +51,15 @@ def clock_in():
 
     payload = request.get_json(silent=True) or {}
     now = _utcnow()
+    # Use employee's timezone for the date field so it matches their local calendar day
+    import pytz
+    emp_tz = pytz.timezone(emp.timezone or "America/New_York")
+    local_date = now.astimezone(emp_tz).date()
     entry = TimeClock(
         employee_id=emp.id,
         clock_in=now,
         clock_in_note=payload.get("note", ""),
-        date=now.date(),
+        date=local_date,
         status="active",
     )
     db.session.add(entry)
@@ -112,8 +116,11 @@ def clock_status():
     if active:
         ci = active.clock_in if active.clock_in.tzinfo else active.clock_in.replace(tzinfo=timezone.utc)
         elapsed = (_utcnow() - ci).total_seconds() / 3600
+        ci_iso = ci.isoformat()
+        if not ci_iso.endswith('Z') and '+' not in ci_iso and '-' not in ci_iso[10:]:
+            ci_iso += 'Z'
         return jsonify(success=True, clocked_in=True,
-                       clock_in=active.clock_in.isoformat(),
+                       clock_in=ci_iso,
                        elapsed_hours=round(elapsed, 2))
     return jsonify(success=True, clocked_in=False)
 
@@ -139,11 +146,20 @@ def clock_history():
         TimeClock.date >= since,
     ).order_by(TimeClock.clock_in.desc()).limit(50).all()
 
+    def _utc_iso(dt):
+        """Ensure UTC datetimes include Z so browsers convert to local time."""
+        if dt is None:
+            return None
+        s = dt.isoformat()
+        if not s.endswith('Z') and '+' not in s and '-' not in s[10:]:
+            s += 'Z'
+        return s
+
     return jsonify(success=True, entries=[{
         "id": e.id,
         "date": e.date.isoformat(),
-        "clock_in": e.clock_in.isoformat() if e.clock_in else None,
-        "clock_out": e.clock_out.isoformat() if e.clock_out else None,
+        "clock_in": _utc_iso(e.clock_in),
+        "clock_out": _utc_iso(e.clock_out),
         "total_hours": e.total_hours,
         "status": e.status,
     } for e in entries])
