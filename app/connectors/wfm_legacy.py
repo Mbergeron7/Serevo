@@ -72,7 +72,7 @@ class WFMLegacyConnector(BaseConnector):
         try:
             session = _make_session()
             resp = session.get(
-                f"{LEGACY_BASE}/employees",
+                f"{self.base_url}/employees",
                 headers=self._headers,
                 timeout=TIMEOUT,
                 params={"page[size]": 1},
@@ -98,7 +98,7 @@ class WFMLegacyConnector(BaseConnector):
         try:
             session = _make_session()
             resp = session.get(
-                f"{LEGACY_BASE}/planning_units",
+                f"{self.base_url}/planning_units",
                 headers=self._headers,
                 timeout=TIMEOUT,
             )
@@ -121,7 +121,7 @@ class WFMLegacyConnector(BaseConnector):
         try:
             session = _make_session()
             resp = session.get(
-                f"{LEGACY_BASE}/activities",
+                f"{self.base_url}/activities",
                 headers=self._headers,
                 timeout=TIMEOUT,
             )
@@ -152,7 +152,7 @@ class WFMLegacyConnector(BaseConnector):
             session = _make_session()
 
             # 1. Get all employees
-            resp = session.get(f"{LEGACY_BASE}/employees", headers=self._headers, timeout=TIMEOUT)
+            resp = session.get(f"{self.base_url}/employees", headers=self._headers, timeout=TIMEOUT)
             if not resp.ok:
                 return [], f"HTTP {resp.status_code}"
             emp_data = resp.json()
@@ -161,7 +161,7 @@ class WFMLegacyConnector(BaseConnector):
             # 2. Get planning unit names
             pu_names = {}
             try:
-                pu_resp = session.get(f"{LEGACY_BASE}/planning_units", headers=self._headers, timeout=TIMEOUT)
+                pu_resp = session.get(f"{self.base_url}/planning_units", headers=self._headers, timeout=TIMEOUT)
                 if pu_resp.ok:
                     for u in pu_resp.json().get("planning_units", []):
                         pu_names[int(u.get("planning_unit_id", 0))] = u.get("name", "")
@@ -171,7 +171,7 @@ class WFMLegacyConnector(BaseConnector):
             # 3. Get contract type names
             contract_lookup = {}
             try:
-                cr = session.get(f"{LEGACY_BASE}/contracts", headers=self._headers, timeout=TIMEOUT)
+                cr = session.get(f"{self.base_url}/contracts", headers=self._headers, timeout=TIMEOUT)
                 if cr.ok:
                     for c in cr.json().get("contracts", []):
                         contract_lookup[str(c.get("contract_id", ""))] = c.get("name", "")
@@ -181,7 +181,7 @@ class WFMLegacyConnector(BaseConnector):
             # 4. Get employment periods
             emp_periods = {}
             try:
-                ep = session.get(f"{LEGACY_BASE}/employee_employment_periods", headers=self._headers, timeout=TIMEOUT)
+                ep = session.get(f"{self.base_url}/employee_employment_periods", headers=self._headers, timeout=TIMEOUT)
                 if ep.ok:
                     for p in ep.json().get("employee_employment_periods", []):
                         eid = str(p.get("employee_id", ""))
@@ -253,7 +253,7 @@ class WFMLegacyConnector(BaseConnector):
 
         # Planning unit
         try:
-            r = session.get(f"{LEGACY_BASE}/employees/{eid}/planning_units", headers=self._headers, timeout=TIMEOUT)
+            r = session.get(f"{self.base_url}/employees/{eid}/planning_units", headers=self._headers, timeout=TIMEOUT)
             if r.ok:
                 data = r.json().get("data", [])
                 if data:
@@ -267,7 +267,7 @@ class WFMLegacyConnector(BaseConnector):
 
         # Contracts
         try:
-            r = session.get(f"{LEGACY_BASE}/employees/{eid}/contracts", headers=self._headers, timeout=TIMEOUT)
+            r = session.get(f"{self.base_url}/employees/{eid}/contracts", headers=self._headers, timeout=TIMEOUT)
             if r.ok:
                 contracts = r.json().get("data", [])
                 chosen = self._pick_contract(contracts)
@@ -282,7 +282,7 @@ class WFMLegacyConnector(BaseConnector):
 
         # Skills
         try:
-            r = session.get(f"{LEGACY_BASE}/employees/{eid}/skill_levels", headers=self._headers, timeout=TIMEOUT)
+            r = session.get(f"{self.base_url}/employees/{eid}/skill_levels", headers=self._headers, timeout=TIMEOUT)
             if r.ok:
                 skill_data = r.json().get("data", [])
                 today = date.today()
@@ -306,7 +306,7 @@ class WFMLegacyConnector(BaseConnector):
 
         # Address
         try:
-            r = session.get(f"{LEGACY_BASE}/employee_current_addresses/{eid}", headers=self._headers, timeout=TIMEOUT)
+            r = session.get(f"{self.base_url}/employee_current_addresses/{eid}", headers=self._headers, timeout=TIMEOUT)
             if r.ok:
                 a = r.json()
                 if isinstance(a, dict):
@@ -489,7 +489,7 @@ class WFMLegacyConnector(BaseConnector):
 
             # Get employee list if not provided
             if employee_ids is None:
-                resp = session.get(f"{LEGACY_BASE}/employees", headers=self._headers, timeout=TIMEOUT)
+                resp = session.get(f"{self.base_url}/employees", headers=self._headers, timeout=TIMEOUT)
                 if not resp.ok:
                     return [], f"HTTP {resp.status_code}"
                 emp_data = resp.json()
@@ -547,7 +547,7 @@ class WFMLegacyConnector(BaseConnector):
             if isinstance(emp, dict) else str(eid)
         )
 
-        url = f"{LEGACY_BASE}/employees/{eid}/schedule/{day.isoformat()}"
+        url = f"{self.base_url}/employees/{eid}/schedule/{day.isoformat()}"
         resp = session.get(url, headers=self._headers, timeout=TIMEOUT)
         if not resp.ok:
             return []

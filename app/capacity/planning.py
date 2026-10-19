@@ -227,8 +227,9 @@ def test_connection():
     results = {}
 
     # Test legacy API
+    base_url, _ = _get_wfm_connection()
     try:
-        r = requests.get(f"{API_LEGACY}/employees",
+        r = requests.get(f"{base_url}/employees",
                          headers=_wfm_headers(), timeout=8)
         results["legacy"] = {"status": r.status_code, "ok": r.status_code == 200}
     except Exception as e:
@@ -295,7 +296,8 @@ def fetch_forecast_for_day(workload_name, workload_id, day_date, utc_offset=None
 def fetch_planning_units():
     """Fetch all planning units from legacy API."""
     try:
-        r = requests.get(f"{API_LEGACY}/planning_units",
+        base_url, _ = _get_wfm_connection()
+        r = requests.get(f"{base_url}/planning_units",
                          headers=_wfm_headers(), timeout=20)
         if r.status_code != 200:
             return []
@@ -309,7 +311,8 @@ def fetch_planning_units():
 def fetch_requirements_for_day(planning_unit_id, planning_unit_name, day_date):
     """Fetch requirements for one planning unit for one day."""
     date_str = day_date.strftime("%Y-%m-%d")
-    url = f"{API_LEGACY}/planning_units/{planning_unit_id}/requirements/{date_str}"
+    base_url, _ = _get_wfm_connection()
+    url = f"{base_url}/planning_units/{planning_unit_id}/requirements/{date_str}"
     try:
         r = requests.get(url, headers=_wfm_headers(), timeout=20)
         if r.status_code != 200:
