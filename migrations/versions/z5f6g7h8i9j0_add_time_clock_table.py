@@ -17,6 +17,14 @@ depends_on = None
 
 
 def upgrade():
+    # Table may already exist from db.create_all(); skip if so
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.tables WHERE table_name = 'time_clock'"
+    ))
+    if result.fetchone():
+        return
+
     op.create_table(
         'time_clock',
         sa.Column('id', sa.Integer(), primary_key=True),
