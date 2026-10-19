@@ -3187,6 +3187,8 @@ class RosterRotationState(db.Model):
     saturday_count          = db.Column(db.Integer, default=0)
     sunday_count            = db.Column(db.Integer, default=0)
     stat_count              = db.Column(db.Integer, default=0)
+    opener_count            = db.Column(db.Integer, default=0)        # total opener assignments
+    day_shift_count         = db.Column(db.Integer, default=0)        # total mid-shift assignments
     last_close_weekday      = db.Column(db.Integer, nullable=True)    # 0=Mon..4=Fri
     last_close_date         = db.Column(db.Date, nullable=True)
     last_weekend_date       = db.Column(db.Date, nullable=True)
