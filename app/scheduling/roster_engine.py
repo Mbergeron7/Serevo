@@ -793,7 +793,13 @@ def _fairness_score(member, state, day_date, slot, week_closings):
     dow = day_date.weekday()
     if role == "closer":
         if dow < 5:
-            count = state.weekday_close_count
+            # Use TOTAL closings (weekday + weekend) so members excluded
+            # from weekend closings get prioritised on weekdays to keep
+            # overall closing counts fair across the team.
+            total_closings = (state.weekday_close_count or 0) + \
+                             (state.saturday_count or 0) + \
+                             (state.sunday_count or 0)
+            count = total_closings
         elif dow == 5:
             count = (state.saturday_count or 0)
         else:
