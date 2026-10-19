@@ -266,14 +266,25 @@
       <span id="summary-toggle" style="font-size:.8rem; color:var(--muted);">▼ Show</span>
     </div>
     <div id="summary-body" style="display:none; overflow-x:auto;">
-      <table class="data-table" id="summary-table" style="font-size:.82rem;"></table>
-      <div style="margin-top:12px;">
-        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600;">Weekend Counts</h4>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600; color:#548235;">📋 Overall Shift Totals</h4>
+        <table class="data-table" id="summary-table" style="font-size:.82rem;"></table>
+      </div>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600; color:#1F4E79;">🔒 Closings Breakdown</h4>
+        <table class="data-table" id="closings-table" style="font-size:.82rem;"></table>
+      </div>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600; color:#0D7377;">🔓 Openings Breakdown</h4>
+        <table class="data-table" id="openings-table" style="font-size:.82rem;"></table>
+      </div>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600; color:#6B4C9A;">📅 Weekends Breakdown</h4>
         <table class="data-table" id="weekend-table" style="font-size:.82rem;"></table>
       </div>
-      <div style="margin-top:12px;">
-        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600;">Total Closings</h4>
-        <table class="data-table" id="closings-table" style="font-size:.82rem;"></table>
+      <div>
+        <h4 style="margin:0 0 6px; font-size:.85rem; font-weight:600; color:#7D6B3A;">🏷️ Role Totals</h4>
+        <table class="data-table" id="roles-table" style="font-size:.82rem;"></table>
       </div>
     </div>
   </div>
@@ -860,61 +871,99 @@ function buildRosterSummary() {
   container.style.display = '';
 
   const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  // Build per-employee stats
-  const empMap = {}; // name -> {days:[0..6 counts], closings:0, satCount:0, sunCount:0}
+  const empMap = {};
   _calData.forEach(r => {
     const name = r.employee || 'Unknown';
-    if (!empMap[name]) empMap[name] = {days:[0,0,0,0,0,0,0], closings:0, satCount:0, sunCount:0};
+    if (!empMap[name]) empMap[name] = {
+      days:[0,0,0,0,0,0,0], closeDays:[0,0,0,0,0,0,0], openDays:[0,0,0,0,0,0,0],
+      closings:0, openings:0, satCount:0, sunCount:0, roles:{}
+    };
     const d = new Date(r.date + 'T00:00:00');
-    let dow = d.getDay(); // 0=Sun
-    dow = dow === 0 ? 6 : dow - 1; // convert to 0=Mon..6=Sun
+    let dow = d.getDay();
+    dow = dow === 0 ? 6 : dow - 1;
     empMap[name].days[dow]++;
     const role = (r.type || '').toLowerCase();
-    if (role === 'closer' || role === 'close') empMap[name].closings++;
+    if (role === 'closer' || role === 'close') { empMap[name].closings++; empMap[name].closeDays[dow]++; }
+    if (role === 'opener' || role === 'open') { empMap[name].openings++; empMap[name].openDays[dow]++; }
     if (dow === 5) empMap[name].satCount++;
     if (dow === 6) empMap[name].sunCount++;
+    const rLabel = r.type || 'Unknown';
+    empMap[name].roles[rLabel] = (empMap[name].roles[rLabel] || 0) + 1;
   });
 
   const names = Object.keys(empMap).sort();
+  const tc = 'text-align:center;';
+  const bold = 'font-weight:600;';
 
-  // Table 1: Day-of-week assignment counts
-  let html = '<thead><tr><th>Employee</th>';
-  dayNames.forEach(d => html += `<th style="text-align:center;">${d}</th>`);
-  html += '<th style="text-align:center;">Total</th></tr></thead><tbody>';
-  names.forEach(name => {
-    const e = empMap[name];
-    const total = e.days.reduce((a,b) => a+b, 0);
-    html += `<tr><td>${name}</td>`;
-    e.days.forEach(c => html += `<td style="text-align:center;">${c}</td>`);
-    html += `<td style="text-align:center; font-weight:600;">${total}</td></tr>`;
-  });
-  // Totals row
-  html += '<tr style="font-weight:600; border-top:2px solid var(--border);"><td>Total</td>';
-  for (let i = 0; i < 7; i++) {
-    const colTotal = names.reduce((s, n) => s + empMap[n].days[i], 0);
-    html += `<td style="text-align:center;">${colTotal}</td>`;
+  // Helper: build a day-breakdown table (Mon-Sun + Total)
+  function dayTable(getId, daysFn, totalFn) {
+    let h = `<thead><tr><th>Employee</th>`;
+    dayNames.forEach(d => h += `<th style="${tc}">${d}</th>`);
+    h += `<th style="${tc}">Total</th></tr></thead><tbody>`;
+    names.forEach(name => {
+      const arr = daysFn(empMap[name]);
+      const total = totalFn ? totalFn(empMap[name]) : arr.reduce((a,b)=>a+b,0);
+      h += `<tr><td>${name}</td>`;
+      arr.forEach(c => h += `<td style="${tc}">${c}</td>`);
+      h += `<td style="${tc}${bold}">${total}</td></tr>`;
+    });
+    h += `<tr style="${bold} border-top:2px solid var(--border);"><td>Total</td>`;
+    for (let i = 0; i < 7; i++) {
+      h += `<td style="${tc}">${names.reduce((s,n)=>s+daysFn(empMap[n])[i],0)}</td>`;
+    }
+    const gt = names.reduce((s,n)=> s + (totalFn ? totalFn(empMap[n]) : daysFn(empMap[n]).reduce((a,b)=>a+b,0)), 0);
+    h += `<td style="${tc}">${gt}</td></tr>`;
+    h += `<tr style="color:var(--muted); font-size:.78rem;"><td>Avg</td>`;
+    const cnt = names.length || 1;
+    for (let i = 0; i < 7; i++) {
+      h += `<td style="${tc}">${(names.reduce((s,n)=>s+daysFn(empMap[n])[i],0)/cnt).toFixed(1)}</td>`;
+    }
+    h += `<td style="${tc}">${(gt/cnt).toFixed(1)}</td></tr>`;
+    h += '</tbody>';
+    document.getElementById(getId).innerHTML = h;
   }
-  const grandTotal = names.reduce((s, n) => s + empMap[n].days.reduce((a,b)=>a+b,0), 0);
-  html += `<td style="text-align:center;">${grandTotal}</td></tr>`;
-  html += '</tbody>';
-  document.getElementById('summary-table').innerHTML = html;
 
-  // Table 2: Weekend counts
-  let whtml = '<thead><tr><th>Employee</th><th style="text-align:center;">Saturday</th><th style="text-align:center;">Sunday</th><th style="text-align:center;">Total</th></tr></thead><tbody>';
+  // 1. Overall Shift Totals
+  dayTable('summary-table', e => e.days);
+
+  // 2. Closings Breakdown
+  dayTable('closings-table', e => e.closeDays, e => e.closings);
+
+  // 3. Openings Breakdown
+  dayTable('openings-table', e => e.openDays, e => e.openings);
+
+  // 4. Weekends Breakdown
+  let wh = `<thead><tr><th>Employee</th><th style="${tc}">Sat</th><th style="${tc}">Sun</th><th style="${tc}">Total</th></tr></thead><tbody>`;
   names.forEach(name => {
     const e = empMap[name];
-    whtml += `<tr><td>${name}</td><td style="text-align:center;">${e.satCount}</td><td style="text-align:center;">${e.sunCount}</td><td style="text-align:center; font-weight:600;">${e.satCount + e.sunCount}</td></tr>`;
+    wh += `<tr><td>${name}</td><td style="${tc}">${e.satCount}</td><td style="${tc}">${e.sunCount}</td><td style="${tc}${bold}">${e.satCount+e.sunCount}</td></tr>`;
   });
-  whtml += '</tbody>';
-  document.getElementById('weekend-table').innerHTML = whtml;
+  wh += `<tr style="${bold} border-top:2px solid var(--border);"><td>Total</td>`;
+  wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].satCount,0)}</td>`;
+  wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].sunCount,0)}</td>`;
+  wh += `<td style="${tc}">${names.reduce((s,n)=>s+empMap[n].satCount+empMap[n].sunCount,0)}</td></tr>`;
+  wh += '</tbody>';
+  document.getElementById('weekend-table').innerHTML = wh;
 
-  // Table 3: Closing counts
-  let chtml = '<thead><tr><th>Employee</th><th style="text-align:center;">Times Closing</th></tr></thead><tbody>';
+  // 5. Role Totals
+  const allRoles = new Set();
+  names.forEach(n => Object.keys(empMap[n].roles).forEach(r => allRoles.add(r)));
+  const roleList = [...allRoles].sort();
+  let rh = `<thead><tr><th>Employee</th>`;
+  roleList.forEach(r => rh += `<th style="${tc}">${r}</th>`);
+  rh += `<th style="${tc}">Total</th></tr></thead><tbody>`;
   names.forEach(name => {
-    chtml += `<tr><td>${name}</td><td style="text-align:center;">${empMap[name].closings}</td></tr>`;
+    const e = empMap[name];
+    const total = roleList.reduce((s,r) => s + (e.roles[r]||0), 0);
+    rh += `<tr><td>${name}</td>`;
+    roleList.forEach(r => rh += `<td style="${tc}">${e.roles[r]||0}</td>`);
+    rh += `<td style="${tc}${bold}">${total}</td></tr>`;
   });
-  chtml += '</tbody>';
-  document.getElementById('closings-table').innerHTML = chtml;
+  rh += `<tr style="${bold} border-top:2px solid var(--border);"><td>Total</td>`;
+  roleList.forEach(r => rh += `<td style="${tc}">${names.reduce((s,n)=>s+(empMap[n].roles[r]||0),0)}</td>`);
+  rh += `<td style="${tc}">${names.reduce((s,n)=>s+roleList.reduce((ss,r)=>ss+(empMap[n].roles[r]||0),0),0)}</td></tr>`;
+  rh += '</tbody>';
+  document.getElementById('roles-table').innerHTML = rh;
 }
 
 async function loadCalendar() {
