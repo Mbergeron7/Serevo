@@ -130,6 +130,11 @@ def api_add_member(gid):
         accommodation_start=_parse_time(d.get("accommodation_start")),
         accommodation_end=_parse_time(d.get("accommodation_end")),
         accommodation_no_close=d.get("accommodation_no_close", False),
+        dedicated_closer=d.get("dedicated_closer", False),
+        dedicated_opener=d.get("dedicated_opener", False),
+        exclude_from_weekends=d.get("exclude_from_weekends", False),
+        exclude_from_opening=d.get("exclude_from_opening", False),
+        exclude_from_closing=d.get("exclude_from_closing", False),
         work_days=json.dumps(d["work_days"]) if d.get("work_days") else None,
         contracted_days=d.get("contracted_days", 5),
         contracted_hours=d.get("contracted_hours"),
@@ -147,7 +152,9 @@ def api_update_member(mid):
     d = request.get_json(force=True)
     for k in ("is_display_only", "is_weekend_primary", "is_fill_in",
               "max_closings_per_week", "accommodation_no_close", "rotation_order",
-              "contracted_days", "contracted_hours"):
+              "contracted_days", "contracted_hours",
+              "dedicated_closer", "dedicated_opener",
+              "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing"):
         if k in d:
             setattr(m, k, d[k])
     for k in ("weekend_primary_days", "excluded_closing_days", "static_days_json", "work_days"):
@@ -321,9 +328,11 @@ def api_export_groups_csv():
         "Group", "Member", "Employee ID", "Role", "Rotation Order",
         "Work Days", "Max Closings/Week", "Weekend Primary", "Weekend Days",
         "Fill-In Eligible", "Display Only", "No Closing Shifts",
+        "Dedicated Closer", "Dedicated Opener",
+        "Exclude Weekends", "Exclude Opening", "Exclude Closing",
     ])
     for g in groups:
-        members = RosterMember.query.filter_by(group_id=g.id).order_by(
+        members = RosterMember.query.filter_by(roster_group_id=g.id).order_by(
             RosterMember.rotation_order
         ).all()
         for m in members:
@@ -353,6 +362,11 @@ def api_export_groups_csv():
                 "Yes" if m.is_fill_in else "",
                 "Yes" if m.is_display_only else "",
                 "Yes" if m.accommodation_no_close else "",
+                "Yes" if m.dedicated_closer else "",
+                "Yes" if m.dedicated_opener else "",
+                "Yes" if m.exclude_from_weekends else "",
+                "Yes" if m.exclude_from_opening else "",
+                "Yes" if m.exclude_from_closing else "",
             ])
 
     return Response(

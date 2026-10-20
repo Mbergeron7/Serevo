@@ -3105,6 +3105,11 @@ class RosterMember(db.Model):
     work_days             = db.Column(db.Text, nullable=True)         # JSON: ["mon","tue",...]
     contracted_days       = db.Column(db.Integer, default=5)           # days per week (e.g. 5 for full-time)
     contracted_hours      = db.Column(db.Float, nullable=True)         # hours per week (e.g. 40.0)
+    dedicated_closer      = db.Column(db.Boolean, default=False)       # always assigned closer
+    dedicated_opener      = db.Column(db.Boolean, default=False)       # always assigned opener
+    exclude_from_weekends = db.Column(db.Boolean, default=False)       # never scheduled on Sat/Sun
+    exclude_from_opening  = db.Column(db.Boolean, default=False)       # never assigned opener
+    exclude_from_closing  = db.Column(db.Boolean, default=False)       # never assigned closer
     rotation_order        = db.Column(db.Integer, default=0)          # lower = picked first on ties
     active                = db.Column(db.Boolean, default=True)
     created_at            = db.Column(db.DateTime, default=_utcnow)
@@ -3146,6 +3151,11 @@ class RosterMember(db.Model):
             "work_days": self._json("work_days"),
             "contracted_days": self.contracted_days if self.contracted_days is not None else 5,
             "contracted_hours": self.contracted_hours,
+            "dedicated_closer": self.dedicated_closer,
+            "dedicated_opener": self.dedicated_opener,
+            "exclude_from_weekends": self.exclude_from_weekends,
+            "exclude_from_opening": self.exclude_from_opening,
+            "exclude_from_closing": self.exclude_from_closing,
             "rotation_order": self.rotation_order or 0,
             "active": self.active,
         }

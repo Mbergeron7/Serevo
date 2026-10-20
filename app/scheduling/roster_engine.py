@@ -416,11 +416,28 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if remaining <= 0:
                 continue
 
+            # Dedicated closers get priority — assign them first
+            dedicated_pool = [m for m in rotation_pool
+                              if m.dedicated_closer and m.id not in daily_assigned[day_date]]
+            for m in dedicated_pool[:remaining]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "dedicated_closer"))
+                _track_day(m.id, day_date)
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                closer_days.setdefault(m.id, []).append(day_date)
+                if closer_dow_counts is not None:
+                    closer_dow_counts[m.id][day_date.weekday()] += 1
+            remaining -= len(dedicated_pool[:remaining])
+            if remaining <= 0:
+                continue
+
             # Rotation assignment respecting max_closings_per_week
             scored = []
             for m in rotation_pool:
                 if m.id in daily_assigned[day_date]:
                     continue
+                if m.dedicated_closer:
+                    continue  # already assigned above
                 # Hard cap: skip members who already hit their weekly closing limit
                 max_pw = m.max_closings_per_week or 1
                 if week_closings.get(m.id, 0) >= max_pw:
@@ -516,6 +533,20 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             pool = [m for m in rotation_pool if m.id not in daily_assigned[day_date]]
+
+            # Dedicated openers get priority
+            dedicated_pool = [m for m in pool if m.dedicated_opener]
+            for m in dedicated_pool[:remaining]:
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "dedicated_opener"))
+                _track_day(m.id, day_date)
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                if opener_dow_counts:
+                    opener_dow_counts[m.id][day_date.weekday()] += 1
+            remaining -= len(dedicated_pool[:remaining])
+            if remaining <= 0:
+                continue
+
+            pool = [m for m in pool if not m.dedicated_opener]
             # Sort by opener_count for fair rotation across all day types
             _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
@@ -616,11 +647,14 @@ def _process_week(week_days, group, members, slots_by_day_type,
             continue  # no doubling on weekends
 
         # Find members not yet assigned today who still need more days
+        # Skip dedicated closer/opener — they only get their dedicated role
         unassigned_today = [
             m for m in members
             if m.id not in daily_assigned[day_date]
             and _contract_deficit(m.id) > 0
             and _is_available(m, day_date, pto_dates)
+            and not m.dedicated_closer
+            and not m.dedicated_opener
         ]
         if not unassigned_today:
             continue
@@ -783,6 +817,20 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
         if m.is_display_only:
             continue
 
+        # ── Role exclusion flags ──
+        if role == "closer" and (m.exclude_from_closing or m.dedicated_opener):
+            continue
+        if role == "opener" and (m.exclude_from_opening or m.dedicated_closer):
+            continue
+        # Dedicated closer/opener shouldn't get mid-shift roles
+        if role not in ("closer", "opener"):
+            if m.dedicated_closer or m.dedicated_opener:
+                continue
+
+        # ── Weekend exclusion ──
+        if day_full in ("saturday", "sunday") and m.exclude_from_weekends:
+            continue
+
         # Check work_days
         work_days = _parse_json(m.work_days)
         if work_days is not None:
@@ -892,10 +940,11 @@ def _fairness_score(member, state, day_date, slot, week_closings):
         if distance > 0:
             score += distance * 5
 
-    # Max-per-week cap check
-    max_pw = member.max_closings_per_week or 1
-    if role == "closer" and week_closings.get(member.id, 0) >= max_pw:
-        score += 10000  # effectively skip
+    # Max-per-week cap check (dedicated closers bypass the cap)
+    if role == "closer" and not member.dedicated_closer:
+        max_pw = member.max_closings_per_week or 1
+        if week_closings.get(member.id, 0) >= max_pw:
+            score += 10000  # effectively skip
 
     return score
 

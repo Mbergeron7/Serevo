@@ -41,6 +41,9 @@
   .badge-blue { background: #e0edff; color: #1a5cb0; }
   .badge-orange { background: #fff0e0; color: #b06e1a; }
   .badge-grey { background: #f0f0f0; color: #666; }
+  .badge-green { background: #e0ffe0; color: #1a7a1a; }
+  .badge-red { background: #ffe0e0; color: #b01a1a; }
+  .badge-purple { background: #f0e0ff; color: #6b1ab0; }
 
   /* Forms */
   .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
@@ -392,9 +395,23 @@
         <input type="checkbox" id="mbr-display-only"> <label for="mbr-display-only">Display Only (zero hours)</label>
       </div>
     </div>
+    <div class="form-row" style="margin-bottom:4px;">
+      <label style="font-weight:600; font-size:.85rem; margin-bottom:2px;">Role Assignment</label>
+    </div>
     <div class="form-row">
-      <div class="check-row">
-        <input type="checkbox" id="mbr-no-close"> <label for="mbr-no-close">No Closing Shifts</label>
+      <div class="check-row" style="gap:16px; flex-wrap:wrap;">
+        <span><input type="checkbox" id="mbr-dedicated-closer"> <label for="mbr-dedicated-closer">Dedicated Closer</label></span>
+        <span><input type="checkbox" id="mbr-dedicated-opener"> <label for="mbr-dedicated-opener">Dedicated Opener</label></span>
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:4px;">
+      <label style="font-weight:600; font-size:.85rem; margin-bottom:2px;">Exclusions</label>
+    </div>
+    <div class="form-row">
+      <div class="check-row" style="gap:16px; flex-wrap:wrap;">
+        <span><input type="checkbox" id="mbr-no-close"> <label for="mbr-no-close">Exclude from Closing</label></span>
+        <span><input type="checkbox" id="mbr-exclude-opening"> <label for="mbr-exclude-opening">Exclude from Opening</label></span>
+        <span><input type="checkbox" id="mbr-exclude-weekends"> <label for="mbr-exclude-weekends">Exclude from Weekends</label></span>
       </div>
     </div>
     <div class="form-row">
@@ -541,12 +558,19 @@ function renderMembersTable(g) {
     <tbody>
       ${g.members.map(m => `<tr>
         <td>${m.employee_name}</td>
-        <td>${m.is_display_only ? '<span class="badge badge-grey">Display Only</span>' :
+        <td style="font-size:.78rem;">
+          ${m.is_display_only ? '<span class="badge badge-grey">Display Only</span>' :
+              m.dedicated_closer ? '<span class="badge badge-red">Ded. Closer</span>' :
+              m.dedicated_opener ? '<span class="badge badge-purple">Ded. Opener</span>' :
               m.is_weekend_primary ? '<span class="badge badge-orange">' +
                 ((m.weekend_primary_days||[]).includes('saturday') && (m.weekend_primary_days||[]).includes('sunday') ? 'Wknd Primary' :
                  (m.weekend_primary_days||[]).includes('saturday') ? 'Sat Primary' : 'Sun Primary') + '</span>' :
               m.is_fill_in ? '<span class="badge badge-green">Fill-In</span>' :
-              '<span class="badge badge-blue">Rotation</span>'}</td>
+              '<span class="badge badge-blue">Rotation</span>'}
+          ${m.exclude_from_closing ? '<span class="badge badge-grey" title="Excluded from closing">🚫C</span>' : ''}
+          ${m.exclude_from_opening ? '<span class="badge badge-grey" title="Excluded from opening">🚫O</span>' : ''}
+          ${m.exclude_from_weekends ? '<span class="badge badge-grey" title="Excluded from weekends">🚫Wknd</span>' : ''}
+        </td>
         <td style="font-size:.78rem;">${m.contracted_days || 5}d${m.contracted_hours ? ' / '+m.contracted_hours+'h' : ''}</td>
         <td>${m.rotation_order || '—'}</td>
         <td>${m.max_closings_per_week}</td>
@@ -630,7 +654,11 @@ async function openAddMember(groupId) {
   empSel.disabled = false;
   // Reset form
   document.getElementById('mbr-display-only').checked = false;
+  document.getElementById('mbr-dedicated-closer').checked = false;
+  document.getElementById('mbr-dedicated-opener').checked = false;
   document.getElementById('mbr-no-close').checked = false;
+  document.getElementById('mbr-exclude-opening').checked = false;
+  document.getElementById('mbr-exclude-weekends').checked = false;
   document.getElementById('mbr-wknd-sat').checked = false;
   document.getElementById('mbr-wknd-sun').checked = false;
   document.getElementById('mbr-fill-in').checked = false;
@@ -659,7 +687,11 @@ async function editMember(groupId, memberId) {
   empSel.closest('.form-row').style.display = 'none';
   // Fill form with current values
   document.getElementById('mbr-display-only').checked = !!m.is_display_only;
-  document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close;
+  document.getElementById('mbr-dedicated-closer').checked = !!m.dedicated_closer;
+  document.getElementById('mbr-dedicated-opener').checked = !!m.dedicated_opener;
+  document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close || !!m.exclude_from_closing;
+  document.getElementById('mbr-exclude-opening').checked = !!m.exclude_from_opening;
+  document.getElementById('mbr-exclude-weekends').checked = !!m.exclude_from_weekends;
   const wpd = m.weekend_primary_days || [];
   document.getElementById('mbr-wknd-sat').checked = !!m.is_weekend_primary && wpd.includes('saturday');
   document.getElementById('mbr-wknd-sun').checked = !!m.is_weekend_primary && wpd.includes('sunday');
@@ -692,6 +724,11 @@ async function saveMember() {
       ...(document.getElementById('mbr-wknd-sat').checked ? ['saturday'] : []),
       ...(document.getElementById('mbr-wknd-sun').checked ? ['sunday'] : []),
     ] : null,
+    dedicated_closer: document.getElementById('mbr-dedicated-closer').checked,
+    dedicated_opener: document.getElementById('mbr-dedicated-opener').checked,
+    exclude_from_weekends: document.getElementById('mbr-exclude-weekends').checked,
+    exclude_from_opening: document.getElementById('mbr-exclude-opening').checked,
+    exclude_from_closing: document.getElementById('mbr-no-close').checked,
     is_fill_in: document.getElementById('mbr-fill-in').checked,
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
     accommodation_no_close: document.getElementById('mbr-no-close').checked,
