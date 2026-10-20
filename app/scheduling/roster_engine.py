@@ -874,10 +874,15 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
             continue
         if role == "opener" and (m.exclude_from_opening or m.dedicated_closer):
             continue
-        # Dedicated closer/opener shouldn't get mid-shift roles
+        # Dedicated closer/opener shouldn't get mid-shift roles on weekdays,
+        # but they CAN work weekend slots if they are weekend primaries
         if role not in ("closer", "opener"):
             if m.dedicated_closer or m.dedicated_opener:
-                continue
+                if day_full not in ("saturday", "sunday"):
+                    continue
+                # On weekends, only allow if they are a weekend primary for this day
+                if not _is_weekend_primary_for(m, day_date, group):
+                    continue
 
         # ── Weekend exclusion ──
         if day_full in ("saturday", "sunday") and m.exclude_from_weekends:
