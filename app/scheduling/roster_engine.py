@@ -424,6 +424,40 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 if closer_dow_counts is not None:
                     closer_dow_counts[m.id][day_date.weekday()] += 1
 
+    # ── Phase 0: Pre-assign accommodated members with limited slot options ──
+    # Members whose accommodation window restricts them to a single eligible
+    # slot must be placed first, otherwise other phases fill that slot and
+    # the accommodated member gets nothing.
+    for day_date in week_days:
+        if day_date in parity_weekend_days:
+            continue
+        day_type = _detect_day_type(day_date, stat_dates)
+        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
+        if not applicable_slots:
+            continue
+        for m in members:
+            if m.id in daily_assigned[day_date]:
+                continue
+            if not (m.accommodation_start or m.accommodation_end):
+                continue
+            if m.dedicated_closer or m.dedicated_opener:
+                continue
+            # Find which slots this member is eligible for
+            eligible_slots = [
+                s for s in applicable_slots
+                if m in _get_eligible_members([m], day_date, s, pto_dates, states, group)
+            ]
+            if len(eligible_slots) == 1:
+                slot = eligible_slots[0]
+                assignments.append(_make_assignment(m, slot, day_date, day_type, "accommodation"))
+                _track_day(m.id, day_date)
+                _update_state_for_assignment(states[m.id], day_date, slot)
+                if slot.role == "closer":
+                    week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                    closer_days.setdefault(m.id, []).append(day_date)
+                    if closer_dow_counts is not None:
+                        closer_dow_counts[m.id][day_date.weekday()] += 1
+
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
         if day_date in parity_weekend_days:
