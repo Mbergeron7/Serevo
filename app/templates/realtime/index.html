@@ -544,7 +544,9 @@ let timer = null;
 
 /* ── Helpers ───────────────────────────────────── */
 async function api(url, body) {
-  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const csrf = document.querySelector('meta[name=csrf-token]')?.content || '';
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, credentials:'same-origin', body: JSON.stringify(body)});
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 function selectedLobs() { return [$('selLob').value || 'All']; }
@@ -568,7 +570,13 @@ function showView(name) {
     main.style.paddingRight = '';
   }
   // Lazy-load tab data on first view
-  if (!_loaded[name] && name !== 'liveagents') loadTab(name);
+  if (!_loaded[name] && name !== 'liveagents') {
+    if (name === 'intraday' && !_loaded.intraday) {
+      loadAll();  // intraday needs the bundle
+    } else {
+      loadTab(name);
+    }
+  }
 }
 const fmt = (v, d=0) => (v === null || v === undefined) ? '—' : Number(v).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
 const pct = v => (v === null || v === undefined) ? '—' : fmt(v, 1) + '%';
@@ -1625,6 +1633,14 @@ if (_origShowView) {
 }
 
 // Deep link (#interval etc.) + auto-load
-(function(){ try { const h = (location.hash || '').replace('#',''); if (h) showView(h); else showView('liveagents'); } catch(e) { console.error("showView init error:", e); } loadAll(); })();
+(function(){
+  try {
+    const h = (location.hash || '').replace('#','');
+    if (h) showView(h); else showView('liveagents');
+  } catch(e) { console.error("showView init error:", e); }
+  // Skip the heavy bundle fetch when landing on Live Agents (default).
+  // The bundle is fetched on-demand when switching to another tab.
+  if (_activeView !== 'liveagents') loadAll();
+})();
 </script>
 {% endblock %}
