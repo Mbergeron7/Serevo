@@ -135,6 +135,7 @@ def api_add_member(gid):
         exclude_from_weekends=d.get("exclude_from_weekends", False),
         exclude_from_opening=d.get("exclude_from_opening", False),
         exclude_from_closing=d.get("exclude_from_closing", False),
+        consistent_start=d.get("consistent_start", False),
         work_days=json.dumps(d["work_days"]) if d.get("work_days") else None,
         contracted_days=d.get("contracted_days", 5),
         contracted_hours=d.get("contracted_hours"),
@@ -154,7 +155,8 @@ def api_update_member(mid):
               "max_closings_per_week", "accommodation_no_close", "rotation_order",
               "contracted_days", "contracted_hours",
               "dedicated_closer", "dedicated_opener",
-              "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing"):
+              "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing",
+              "consistent_start"):
         if k in d:
             setattr(m, k, d[k])
     for k in ("weekend_primary_days", "excluded_closing_days", "static_days_json", "work_days"):

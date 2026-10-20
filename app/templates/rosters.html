@@ -427,6 +427,12 @@
       </div>
     </div>
     <div class="form-row">
+      <div class="check-row">
+        <input type="checkbox" id="mbr-consistent-start"> <label for="mbr-consistent-start">Consistent Start Times</label>
+        <small style="color:var(--text-muted, #6b7280); font-size:0.75rem; margin-left:8px;">Keep same shift start time each day</small>
+      </div>
+    </div>
+    <div class="form-row">
       <div class="form-group">
         <label>Max Closings/Week</label>
         <input id="mbr-max-close" type="number" value="1" min="0" style="width:70px;">
@@ -570,6 +576,7 @@ function renderMembersTable(g) {
           ${m.exclude_from_closing ? '<span class="badge badge-grey" title="Excluded from closing">🚫C</span>' : ''}
           ${m.exclude_from_opening ? '<span class="badge badge-grey" title="Excluded from opening">🚫O</span>' : ''}
           ${m.exclude_from_weekends ? '<span class="badge badge-grey" title="Excluded from weekends">🚫Wknd</span>' : ''}
+          ${m.consistent_start ? '<span class="badge badge-blue" title="Consistent start times">⏰</span>' : ''}
         </td>
         <td style="font-size:.78rem;">${m.contracted_days || 5}d${m.contracted_hours ? ' / '+m.contracted_hours+'h' : ''}</td>
         <td>${m.rotation_order || '—'}</td>
@@ -659,6 +666,7 @@ async function openAddMember(groupId) {
   document.getElementById('mbr-no-close').checked = false;
   document.getElementById('mbr-exclude-opening').checked = false;
   document.getElementById('mbr-exclude-weekends').checked = false;
+  document.getElementById('mbr-consistent-start').checked = false;
   document.getElementById('mbr-wknd-sat').checked = false;
   document.getElementById('mbr-wknd-sun').checked = false;
   document.getElementById('mbr-fill-in').checked = false;
@@ -692,6 +700,7 @@ async function editMember(groupId, memberId) {
   document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close || !!m.exclude_from_closing;
   document.getElementById('mbr-exclude-opening').checked = !!m.exclude_from_opening;
   document.getElementById('mbr-exclude-weekends').checked = !!m.exclude_from_weekends;
+  document.getElementById('mbr-consistent-start').checked = !!m.consistent_start;
   const wpd = m.weekend_primary_days || [];
   document.getElementById('mbr-wknd-sat').checked = !!m.is_weekend_primary && wpd.includes('saturday');
   document.getElementById('mbr-wknd-sun').checked = !!m.is_weekend_primary && wpd.includes('sunday');
@@ -729,6 +738,7 @@ async function saveMember() {
     exclude_from_weekends: document.getElementById('mbr-exclude-weekends').checked,
     exclude_from_opening: document.getElementById('mbr-exclude-opening').checked,
     exclude_from_closing: document.getElementById('mbr-no-close').checked,
+    consistent_start: document.getElementById('mbr-consistent-start').checked,
     is_fill_in: document.getElementById('mbr-fill-in').checked,
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
     accommodation_no_close: document.getElementById('mbr-no-close').checked,

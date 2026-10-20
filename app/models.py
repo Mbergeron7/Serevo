@@ -3110,6 +3110,7 @@ class RosterMember(db.Model):
     exclude_from_weekends = db.Column(db.Boolean, default=False)       # never scheduled on Sat/Sun
     exclude_from_opening  = db.Column(db.Boolean, default=False)       # never assigned opener
     exclude_from_closing  = db.Column(db.Boolean, default=False)       # never assigned closer
+    consistent_start      = db.Column(db.Boolean, default=False)       # keep same start time each day
     rotation_order        = db.Column(db.Integer, default=0)          # lower = picked first on ties
     active                = db.Column(db.Boolean, default=True)
     created_at            = db.Column(db.DateTime, default=_utcnow)
@@ -3156,6 +3157,7 @@ class RosterMember(db.Model):
             "exclude_from_weekends": self.exclude_from_weekends,
             "exclude_from_opening": self.exclude_from_opening,
             "exclude_from_closing": self.exclude_from_closing,
+            "consistent_start": self.consistent_start,
             "rotation_order": self.rotation_order or 0,
             "active": self.active,
         }
