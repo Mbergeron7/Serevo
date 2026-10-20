@@ -3109,9 +3109,14 @@ class RosterMember(db.Model):
     contracted_hours      = db.Column(db.Float, nullable=True)         # hours per week (e.g. 40.0)
     dedicated_closer      = db.Column(db.Boolean, default=False)       # always assigned closer
     dedicated_opener      = db.Column(db.Boolean, default=False)       # always assigned opener
-    exclude_from_weekends = db.Column(db.Boolean, default=False)       # never scheduled on Sat/Sun
+    exclude_from_weekends = db.Column(db.Boolean, default=False)       # legacy — kept for migration compat
+    exclude_from_saturday = db.Column(db.Boolean, default=False)       # never scheduled on Saturday
+    exclude_from_sunday   = db.Column(db.Boolean, default=False)       # never scheduled on Sunday
     exclude_from_opening  = db.Column(db.Boolean, default=False)       # never assigned opener
     exclude_from_closing  = db.Column(db.Boolean, default=False)       # never assigned closer
+    excluded_opening_days = db.Column(db.Text, nullable=True)         # JSON: ["monday","friday"] — no opener on these days
+    allow_split_shift     = db.Column(db.Boolean, default=False)       # can be assigned two slots per day
+    split_shift_min_gap   = db.Column(db.Float, nullable=True)        # minimum hours gap between split shifts
     consistent_start      = db.Column(db.Boolean, default=False)       # keep same start time each day
     max_consecutive_days  = db.Column(db.Integer, nullable=True)      # max days in a row before forced day off
     preferred_days_off    = db.Column(db.Text, nullable=True)         # JSON: ["tue","thu"] — soft penalty
@@ -3165,8 +3170,13 @@ class RosterMember(db.Model):
             "dedicated_closer": self.dedicated_closer,
             "dedicated_opener": self.dedicated_opener,
             "exclude_from_weekends": self.exclude_from_weekends,
+            "exclude_from_saturday": self.exclude_from_saturday,
+            "exclude_from_sunday": self.exclude_from_sunday,
             "exclude_from_opening": self.exclude_from_opening,
             "exclude_from_closing": self.exclude_from_closing,
+            "excluded_opening_days": self._json("excluded_opening_days"),
+            "allow_split_shift": self.allow_split_shift,
+            "split_shift_min_gap": self.split_shift_min_gap,
             "consistent_start": self.consistent_start,
             "max_consecutive_days": self.max_consecutive_days,
             "preferred_days_off": self._json("preferred_days_off"),

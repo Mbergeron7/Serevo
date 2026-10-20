@@ -135,8 +135,13 @@ def api_add_member(gid):
         dedicated_closer=d.get("dedicated_closer", False),
         dedicated_opener=d.get("dedicated_opener", False),
         exclude_from_weekends=d.get("exclude_from_weekends", False),
+        exclude_from_saturday=d.get("exclude_from_saturday", False),
+        exclude_from_sunday=d.get("exclude_from_sunday", False),
         exclude_from_opening=d.get("exclude_from_opening", False),
         exclude_from_closing=d.get("exclude_from_closing", False),
+        excluded_opening_days=json.dumps(d["excluded_opening_days"]) if d.get("excluded_opening_days") else None,
+        allow_split_shift=d.get("allow_split_shift", False),
+        split_shift_min_gap=d.get("split_shift_min_gap"),
         consistent_start=d.get("consistent_start", False),
         max_consecutive_days=d.get("max_consecutive_days"),
         preferred_days_off=json.dumps(d["preferred_days_off"]) if d.get("preferred_days_off") else None,
@@ -164,14 +169,16 @@ def api_update_member(mid):
               "accommodation_no_close", "rotation_order",
               "contracted_days", "contracted_hours",
               "dedicated_closer", "dedicated_opener",
-              "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing",
+              "exclude_from_weekends", "exclude_from_saturday", "exclude_from_sunday",
+              "exclude_from_opening", "exclude_from_closing",
+              "allow_split_shift", "split_shift_min_gap",
               "consistent_start",
               "max_consecutive_days", "min_hours_per_week", "max_hours_per_week",
               "pair_with_member_id", "avoid_member_id"):
         if k in d:
             setattr(m, k, d[k])
-    for k in ("weekend_primary_days", "excluded_closing_days", "static_days_json",
-              "work_days", "preferred_days_off"):
+    for k in ("weekend_primary_days", "excluded_closing_days", "excluded_opening_days",
+              "static_days_json", "work_days", "preferred_days_off"):
         if k in d:
             setattr(m, k, json.dumps(d[k]) if d[k] else None)
     if "accommodation_start" in d:

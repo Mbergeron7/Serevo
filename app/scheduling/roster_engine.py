@@ -59,7 +59,7 @@ def generate_roster(group_id, start_date, end_date):
                  "work_days=%s, excluded_closing_days=%s, static_days=%s, fill_in=%s",
                  m.id, emp_name, m.max_closings_per_week,
                  m.dedicated_closer, m.dedicated_opener,
-                 m.exclude_from_closing, m.exclude_from_opening, m.exclude_from_weekends,
+                 m.exclude_from_closing, m.exclude_from_opening, m.exclude_from_saturday, m.exclude_from_sunday,
                  m.accommodation_no_close,
                  m.work_days, m.excluded_closing_days, m.static_days_json, m.is_fill_in)
         log.info("    accom_start=%s, accom_end=%s", m.accommodation_start, m.accommodation_end)
@@ -350,6 +350,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
     closer_days = {}  # member_id → [dates]
     # Track first assigned shift_start per member for consistent_start enforcement
     consistent_start_times = {}  # member_id → shift_start (time obj)
+    # Track assigned slot times per member per day for split shift gap checking
+    daily_slots = {d: {} for d in week_days}  # day_date → {member_id: [(start, end), ...]}
 
     def _track_day(member_id, the_date, slot=None):
         """Increment week_day_counts when a member is first assigned on a new day, and mark them assigned."""
@@ -360,6 +362,50 @@ def _process_week(week_days, group, members, slots_by_day_type,
         if slot is not None:
             _record_consistent_start(member_id, slot)
             week_hours[member_id] = week_hours.get(member_id, 0) + _slot_hours(slot)
+            # Record slot times for split shift gap checking
+            if the_date not in daily_slots:
+                daily_slots[the_date] = {}
+            if member_id not in daily_slots[the_date]:
+                daily_slots[the_date][member_id] = []
+            daily_slots[the_date][member_id].append((slot.shift_start, slot.shift_end))
+
+    def _split_shift_ok(member, day_date, slot):
+        """Check if a member with allow_split_shift can take this slot given existing assignments."""
+        if not member.allow_split_shift:
+            return False
+        existing = daily_slots.get(day_date, {}).get(member.id, [])
+        if len(existing) >= 2:
+            return False  # max 2 slots per day
+        if not existing:
+            return True  # first slot, always ok
+        min_gap = member.split_shift_min_gap or 0
+        for (ex_start, ex_end) in existing:
+            if slot.shift_start and slot.shift_end and ex_start and ex_end:
+                # Calculate gap in hours between existing slot and new slot
+                from datetime import datetime, date as date_cls
+                ref = date_cls(2000, 1, 1)
+                new_start_dt = datetime.combine(ref, slot.shift_start)
+                new_end_dt = datetime.combine(ref, slot.shift_end)
+                ex_start_dt = datetime.combine(ref, ex_start)
+                ex_end_dt = datetime.combine(ref, ex_end)
+                # Gap: time between end of earlier shift and start of later shift
+                if new_start_dt >= ex_end_dt:
+                    gap_hours = (new_start_dt - ex_end_dt).total_seconds() / 3600
+                elif ex_start_dt >= new_end_dt:
+                    gap_hours = (ex_start_dt - new_end_dt).total_seconds() / 3600
+                else:
+                    return False  # overlapping
+                if gap_hours < min_gap:
+                    return False
+        return True
+
+    def _is_available_for_slot(member, day_date, slot=None):
+        """Check if member can be assigned on this day — either not yet assigned, or split shift eligible."""
+        if member.id not in daily_assigned[day_date]:
+            return True
+        if slot is not None and _split_shift_ok(member, day_date, slot):
+            return True
+        return False
 
     def _contract_deficit(member_id):
         """How many more days this member needs to hit their contract. Higher = more urgently needs shifts."""
@@ -826,8 +872,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             needed = _slots_needed(slot, group, day_type)
             eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
 
-            # For day shifts, skip members already assigned today (they have closer/opener)
-            available = [m for m in eligible if m.id not in daily_assigned[day_date]]
+            # For day shifts, skip members already assigned today (unless split shift eligible)
+            available = [m for m in eligible if _is_available_for_slot(m, day_date, slot)]
 
             # Static/dedicated first
             static_picks = []
@@ -1075,8 +1121,10 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
                 if not _is_weekend_primary_for(m, day_date, group):
                     continue
 
-        # ── Weekend exclusion ──
-        if day_full in ("saturday", "sunday") and m.exclude_from_weekends:
+        # ── Saturday / Sunday exclusion ──
+        if day_full == "saturday" and m.exclude_from_saturday:
+            continue
+        if day_full == "sunday" and m.exclude_from_sunday:
             continue
 
         # Check work_days
@@ -1107,6 +1155,15 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
                 if trace:
                     log.info("    m%d SKIP excl_closing raw=%r parsed=%s abbr=%s full=%s",
                              m.id, m.excluded_closing_days, excluded, day_abbr, day_full)
+                continue
+
+        # For opener slots: check excluded_opening_days
+        if role == "opener":
+            excluded_open = _parse_json(m.excluded_opening_days)
+            if excluded_open and (day_abbr in excluded_open or day_full in excluded_open):
+                if trace:
+                    log.info("    m%d SKIP excl_opening raw=%r parsed=%s abbr=%s full=%s",
+                             m.id, m.excluded_opening_days, excluded_open, day_abbr, day_full)
                 continue
 
         # Check static_days_json — if member has a static assignment for a
