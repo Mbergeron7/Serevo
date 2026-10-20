@@ -1,4 +1,4 @@
-"""Add consistent_start flag to roster_member
+"""Add consistent_start flag to roster_members
 
 Revision ID: z8i9j0k1l2m3
 Revises: z7h8i9j0k1l2
@@ -14,10 +14,10 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('roster_member', schema=None) as batch_op:
+    with op.batch_alter_table('roster_members', schema=None) as batch_op:
         batch_op.add_column(sa.Column('consistent_start', sa.Boolean(), server_default=sa.false(), nullable=True))
 
 
 def downgrade():
-    with op.batch_alter_table('roster_member', schema=None) as batch_op:
+    with op.batch_alter_table('roster_members', schema=None) as batch_op:
         batch_op.drop_column('consistent_start')
