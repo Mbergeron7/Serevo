@@ -463,6 +463,52 @@
         <small style="color:var(--text-muted, #6b7280); font-size:0.75rem;">1 = first in rotation</small>
       </div>
     </div>
+    <h4 style="margin:16px 0 8px; font-size:.85rem; color:var(--text-muted,#6b7280); border-top:1px solid var(--border-color,#e5e7eb); padding-top:12px;">Advanced Options</h4>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Max Consecutive Days</label>
+        <input id="mbr-max-consecutive" type="number" min="1" max="14" value="" style="width:70px;"
+               placeholder="e.g. 5" title="Maximum days in a row before a forced day off">
+      </div>
+      <div class="form-group">
+        <label>Min Hours/Wk</label>
+        <input id="mbr-min-hours" type="number" min="0" step="0.5" value="" style="width:80px;"
+               placeholder="e.g. 20" title="Minimum weekly hours guardrail">
+      </div>
+      <div class="form-group">
+        <label>Max Hours/Wk</label>
+        <input id="mbr-max-hours" type="number" min="0" step="0.5" value="" style="width:80px;"
+               placeholder="e.g. 44" title="Maximum weekly hours guardrail">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Pair With</label>
+        <select id="mbr-pair-with" style="min-width:140px;">
+          <option value="">— None —</option>
+        </select>
+        <small style="color:var(--text-muted,#6b7280); font-size:0.7rem;">Prefer scheduling together</small>
+      </div>
+      <div class="form-group">
+        <label>Avoid</label>
+        <select id="mbr-avoid" style="min-width:140px;">
+          <option value="">— None —</option>
+        </select>
+        <small style="color:var(--text-muted,#6b7280); font-size:0.7rem;">Avoid scheduling together</small>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1;">
+        <label>Preferred Days Off <small style="color:var(--text-muted,#6b7280);">(soft — engine prefers others first)</small></label>
+        <div class="chip-list" id="mbr-pref-off-chips">
+          {% for d in ['mon','tue','wed','thu','fri','sat','sun'] %}
+          <label class="check-row" style="margin:0;">
+            <input type="checkbox" value="{{ d }}" class="mbr-pref-off-cb"> {{ d|capitalize }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group" style="flex:1;">
         <label>Work Days</label>
@@ -577,6 +623,10 @@ function renderMembersTable(g) {
           ${m.exclude_from_opening ? '<span class="badge badge-grey" title="Excluded from opening">🚫O</span>' : ''}
           ${m.exclude_from_weekends ? '<span class="badge badge-grey" title="Excluded from weekends">🚫Wknd</span>' : ''}
           ${m.consistent_start ? '<span class="badge badge-blue" title="Consistent start times">⏰</span>' : ''}
+          ${m.max_consecutive_days ? '<span class="badge badge-grey" title="Max '+m.max_consecutive_days+' consecutive days">'+m.max_consecutive_days+'d</span>' : ''}
+          ${m.min_hours_per_week||m.max_hours_per_week ? '<span class="badge badge-grey" title="Hours: '+(m.min_hours_per_week||'?')+'-'+(m.max_hours_per_week||'?')+'">'+(m.min_hours_per_week||'?')+'-'+(m.max_hours_per_week||'?')+'h</span>' : ''}
+          ${m.pair_with_member_id ? '<span class="badge badge-green" title="Paired">👫</span>' : ''}
+          ${m.avoid_member_id ? '<span class="badge badge-red" title="Avoid pairing">⛔</span>' : ''}
         </td>
         <td style="font-size:.78rem;">${m.contracted_days || 5}d${m.contracted_hours ? ' / '+m.contracted_hours+'h' : ''}</td>
         <td>${m.rotation_order || '—'}</td>
@@ -676,8 +726,21 @@ async function openAddMember(groupId) {
   document.getElementById('mbr-contracted-days').value = '5';
   document.getElementById('mbr-contracted-hours').value = '';
   document.getElementById('mbr-rotation-order').value = '0';
+  document.getElementById('mbr-max-consecutive').value = '';
+  document.getElementById('mbr-min-hours').value = '';
+  document.getElementById('mbr-max-hours').value = '';
+  document.getElementById('mbr-pair-with').value = '';
+  document.getElementById('mbr-avoid').value = '';
+  document.querySelectorAll('.mbr-pref-off-cb').forEach(cb => cb.checked = false);
   document.querySelectorAll('.mbr-wd-cb').forEach(cb => cb.checked = true);
   document.querySelectorAll('.mbr-excl-cb').forEach(cb => cb.checked = false);
+  // Populate pair/avoid dropdowns with group members
+  const pairSel = document.getElementById('mbr-pair-with');
+  const avoidSel = document.getElementById('mbr-avoid');
+  const g2 = _groups.find(x => x.id === groupId);
+  const mbrOpts = (g2 ? g2.members : []).map(m => `<option value="${m.id}">${m.employee_name}</option>`).join('');
+  pairSel.innerHTML = '<option value="">— None —</option>' + mbrOpts;
+  avoidSel.innerHTML = '<option value="">— None —</option>' + mbrOpts;
   openModal('modal-add-member');
 }
 
@@ -711,6 +774,19 @@ async function editMember(groupId, memberId) {
   document.getElementById('mbr-contracted-days').value = m.contracted_days || 5;
   document.getElementById('mbr-contracted-hours').value = m.contracted_hours || '';
   document.getElementById('mbr-rotation-order').value = m.rotation_order || 0;
+  document.getElementById('mbr-max-consecutive').value = m.max_consecutive_days || '';
+  document.getElementById('mbr-min-hours').value = m.min_hours_per_week || '';
+  document.getElementById('mbr-max-hours').value = m.max_hours_per_week || '';
+  const prefOff = m.preferred_days_off || [];
+  document.querySelectorAll('.mbr-pref-off-cb').forEach(cb => cb.checked = prefOff.includes(cb.value));
+  // Populate pair/avoid dropdowns
+  const pairSel = document.getElementById('mbr-pair-with');
+  const avoidSel = document.getElementById('mbr-avoid');
+  const mbrOpts = g.members.filter(x => x.id !== memberId).map(x => `<option value="${x.id}">${x.employee_name}</option>`).join('');
+  pairSel.innerHTML = '<option value="">— None —</option>' + mbrOpts;
+  avoidSel.innerHTML = '<option value="">— None —</option>' + mbrOpts;
+  pairSel.value = m.pair_with_member_id || '';
+  avoidSel.value = m.avoid_member_id || '';
   const wd = m.work_days || ['mon','tue','wed','thu','fri'];
   document.querySelectorAll('.mbr-wd-cb').forEach(cb => cb.checked = wd.includes(cb.value));
   const excl = m.excluded_closing_days || [];
@@ -749,6 +825,12 @@ async function saveMember() {
     contracted_days: +document.getElementById('mbr-contracted-days').value || 5,
     contracted_hours: +document.getElementById('mbr-contracted-hours').value || null,
     rotation_order: +document.getElementById('mbr-rotation-order').value || 0,
+    max_consecutive_days: +document.getElementById('mbr-max-consecutive').value || null,
+    min_hours_per_week: +document.getElementById('mbr-min-hours').value || null,
+    max_hours_per_week: +document.getElementById('mbr-max-hours').value || null,
+    pair_with_member_id: +document.getElementById('mbr-pair-with').value || null,
+    avoid_member_id: +document.getElementById('mbr-avoid').value || null,
+    preferred_days_off: [...document.querySelectorAll('.mbr-pref-off-cb:checked')].map(cb => cb.value),
   };
   if (editId) {
     // Update existing member

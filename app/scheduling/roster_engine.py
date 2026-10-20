@@ -87,13 +87,6 @@ def generate_roster(group_id, start_date, end_date):
     # Clear any existing draft roster schedules for this group's members in date range
     _clear_draft_rosters(group, start_date, end_date)
 
-    # Determine if we have closer slots (enables week-level planning)
-    has_closers = any(
-        s.role == "closer"
-        for slots in slots_by_day_type.values()
-        for s in slots
-    )
-
     # Weekend close week parity: "odd" or "even" ISO week numbers
     wk_parity = group.weekend_close_week_parity  # None = every weekend
 
@@ -105,28 +98,20 @@ def generate_roster(group_id, start_date, end_date):
     opener_dow_counts = {m.id: [0]*7 for m in active_members}  # per day-of-week opener counts
     role_counts = {m.id: {} for m in active_members}           # per role counts (for mid shifts)
 
-    if has_closers:
-        # ── Week-level planning mode ──
-        # Process week by week to enforce one-closing-per-week and Sunday rule
-        weeks = _split_into_weeks(start_date, end_date)
-        for week_start, week_end in weeks:
-            week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
-            week_assignments = _process_week(
-                week_days, group, active_members, slots_by_day_type,
-                stat_dates, pto_dates, states, wk_parity,
-                closer_dow_counts, opener_dow_counts, role_counts
-            )
-            assignments.extend(week_assignments)
-    else:
-        # ── Simple day-by-day mode (no closers, just day shifts) ──
-        current = start_date
-        while current <= end_date:
-            day_assignments = _process_day_simple(
-                current, group, active_members, slots_by_day_type,
-                stat_dates, pto_dates, states
-            )
-            assignments.extend(day_assignments)
-            current += timedelta(days=1)
+    # ── Unified week-level pipeline ──
+    # Always use week-level planning — when no closer slots exist,
+    # Phases 1-2 simply produce no assignments and the remaining
+    # phases (0, 3, 4, 5) handle all slot types with full fairness,
+    # contract enforcement, and consistent_start support.
+    weeks = _split_into_weeks(start_date, end_date)
+    for week_start, week_end in weeks:
+        week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
+        week_assignments = _process_week(
+            week_days, group, active_members, slots_by_day_type,
+            stat_dates, pto_dates, states, wk_parity,
+            closer_dow_counts, opener_dow_counts, role_counts
+        )
+        assignments.extend(week_assignments)
 
     # Persist updated states
     for state in states.values():
@@ -280,6 +265,9 @@ def _get_or_create_states(members, period_start):
                 opener_count=getattr(prev, 'opener_count', 0) or 0 if prev else 0,
                 day_shift_count=getattr(prev, 'day_shift_count', 0) or 0 if prev else 0,
                 weekday_rotation_index=prev.weekday_rotation_index if prev else 0,
+                role_counts_json=getattr(prev, 'role_counts_json', None) if prev else None,
+                consecutive_days=getattr(prev, 'consecutive_days', 0) or 0 if prev else 0,
+                last_work_date=getattr(prev, 'last_work_date', None) if prev else None,
                 last_close_weekday=prev.last_close_weekday if prev else None,
                 last_close_date=prev.last_close_date if prev else None,
                 last_weekend_date=prev.last_weekend_date if prev else None,
@@ -366,8 +354,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
         if member_id not in daily_assigned[the_date]:
             week_day_counts[member_id] = week_day_counts.get(member_id, 0) + 1
             daily_assigned[the_date].add(member_id)
+            _update_consecutive(member_id, the_date)
         if slot is not None:
             _record_consistent_start(member_id, slot)
+            week_hours[member_id] = week_hours.get(member_id, 0) + _slot_hours(slot)
 
     def _contract_deficit(member_id):
         """How many more days this member needs to hit their contract. Higher = more urgently needs shifts."""
@@ -393,6 +383,88 @@ def _process_week(week_days, group, members, slots_by_day_type,
             m_obj = next((m for m in members if m.id == member_id), None)
             if m_obj and getattr(m_obj, 'consistent_start', False) and slot.shift_start:
                 consistent_start_times[member_id] = slot.shift_start
+
+    # ── Hours tracking for min/max guardrails ──
+    week_hours = {m.id: 0.0 for m in members}
+
+    def _slot_hours(slot):
+        """Calculate hours for a slot."""
+        from datetime import datetime as _dt
+        start_dt = _dt.combine(date.today(), slot.shift_start)
+        end_dt = _dt.combine(date.today(), slot.shift_end)
+        h = (end_dt - start_dt).total_seconds() / 3600
+        return h + 24 if h < 0 else h
+
+    def _hours_ok(member, slot):
+        """Check if assigning this slot would exceed max_hours_per_week."""
+        max_h = member.max_hours_per_week
+        if max_h is None:
+            return True
+        return week_hours.get(member.id, 0) + _slot_hours(slot) <= max_h + 0.01
+
+    def _hours_deficit(member):
+        """How many more hours this member needs to hit min_hours. Higher = more urgently needs shifts."""
+        min_h = member.min_hours_per_week
+        if min_h is None:
+            return 0
+        return max(0, min_h - week_hours.get(member.id, 0))
+
+    # ── Consecutive day tracking ──
+    # Load from state, update as we assign
+    consecutive_tracker = {}  # member_id → current streak count
+    last_work_tracker = {}    # member_id → last work date
+    for m in members:
+        st = states[m.id]
+        consecutive_tracker[m.id] = getattr(st, 'consecutive_days', 0) or 0
+        consecutive_tracker[m.id] = consecutive_tracker[m.id]
+        last_work_tracker[m.id] = getattr(st, 'last_work_date', None)
+
+    def _consecutive_ok(member, day_date):
+        """Check if member can work this day without exceeding max_consecutive_days."""
+        max_c = member.max_consecutive_days
+        if max_c is None:
+            return True
+        mid = member.id
+        last_d = last_work_tracker.get(mid)
+        streak = consecutive_tracker.get(mid, 0)
+        if last_d and (day_date - last_d).days == 1:
+            return streak < max_c
+        return True  # gap resets streak
+
+    def _update_consecutive(member_id, day_date):
+        """Update consecutive day tracker after assignment."""
+        last_d = last_work_tracker.get(member_id)
+        if last_d and (day_date - last_d).days == 1:
+            consecutive_tracker[member_id] = consecutive_tracker.get(member_id, 0) + 1
+        elif last_d and (day_date - last_d).days == 0:
+            pass  # same day, no change
+        else:
+            consecutive_tracker[member_id] = 1
+        last_work_tracker[member_id] = day_date
+
+    def _preferred_off_penalty(member, day_date):
+        """Return soft penalty if this day is a preferred day off."""
+        pref = _parse_json(member.preferred_days_off) if hasattr(member, 'preferred_days_off') else None
+        if not pref:
+            return 0
+        dow = day_date.weekday()
+        if DOW_ABBR[dow] in pref or DOW_FULL[dow] in pref:
+            return 25  # soft penalty — prefer someone else but don't block
+        return 0
+
+    def _pairing_score(member, day_date, daily_assigned_set):
+        """Return bonus/penalty based on shift pairing/avoidance rules."""
+        score = 0
+        pair_id = getattr(member, 'pair_with_member_id', None)
+        avoid_id = getattr(member, 'avoid_member_id', None)
+        if pair_id and pair_id in daily_assigned_set:
+            score -= 10  # bonus — paired member already working this day
+        if avoid_id and avoid_id in daily_assigned_set:
+            score += 30  # penalty — avoid member already working this day
+        return score
+
+    # Wrap _track_day to also update hours and consecutive tracking
+    _orig_track_day = None  # will be set below
 
     # ── Determine if this is a weekend-close week for this group ──
     # Use the ISO week number of the first day in this week slice
@@ -553,9 +625,18 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 max_pw = m.max_closings_per_week or 1
                 if week_closings.get(m.id, 0) >= max_pw:
                     continue
+                # Enhancement: max consecutive days
+                if not _consecutive_ok(m, day_date):
+                    continue
+                # Enhancement: max hours guardrail
+                if not _hours_ok(m, slot):
+                    continue
                 dow = day_date.weekday()
                 st = states[m.id]
                 s = _fairness_score(m, st, day_date, slot, week_closings)
+                # Enhancement: preferred days off + pairing
+                s += _preferred_off_penalty(m, day_date)
+                s += _pairing_score(m, day_date, daily_assigned[day_date])
                 dow_cnt = closer_dow_counts[m.id][dow] if closer_dow_counts else 0
                 deficit = -_contract_deficit(m.id)
                 # Raw close count for primary fairness — rotation_order
@@ -675,11 +756,15 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             pool = [m for m in pool if not m.dedicated_opener]
+            # Enhancement: filter by consecutive days and hours
+            pool = [m for m in pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
             # Sort by opener_count for fair rotation across all day types
             _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
                 pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
+                    _preferred_off_penalty(m, day_date),
+                    _pairing_score(m, day_date, daily_assigned[day_date]),
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     getattr(m, 'rotation_order', 0) or 0
@@ -690,6 +775,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
                     _consistent_start_penalty(m, slot),
+                    _preferred_off_penalty(m, day_date),
+                    _pairing_score(m, day_date, daily_assigned[day_date]),
                     opener_dow_counts[m.id][_dow] if opener_dow_counts else 0,
                     (states[m.id].opener_count or 0),
                     getattr(m, 'rotation_order', 0) or 0
@@ -737,12 +824,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if remaining <= 0:
                 continue
 
+            # Enhancement: filter by consecutive days and hours
+            rotation_pool = [m for m in rotation_pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
+
             # For day shifts, prefer members who have the fewest total assignments
             # On weekends, also factor in day-specific count for fair rotation
             _slot_role = slot.label or slot.role
             if day_type in ("saturday", "sunday"):
                 rotation_pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
+                    _preferred_off_penalty(m, day_date),
+                    _pairing_score(m, day_date, daily_assigned[day_date]),
                     (states[m.id].saturday_count or 0) if day_type == "saturday" else (states[m.id].sunday_count or 0),
                     states[m.id].weekend_count,
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
@@ -754,6 +846,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 rotation_pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
                     _consistent_start_penalty(m, slot),
+                    _preferred_off_penalty(m, day_date),
+                    _pairing_score(m, day_date, daily_assigned[day_date]),
                     role_counts.get(m.id, {}).get(_slot_role, 0) if role_counts else 0,
                     (states[m.id].day_shift_count or 0),
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
@@ -796,6 +890,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             and _contract_deficit(m.id) > 0
             and not m.dedicated_closer
             and not m.dedicated_opener
+            and _consecutive_ok(m, day_date)
+            and _hours_ok(m, backfill_slot)
         ]
         if not unassigned_today:
             continue
@@ -829,47 +925,6 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if role_counts is not None:
                 _slot_role = best_slot.label or best_slot.role
                 role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
-
-    return assignments
-
-
-def _process_day_simple(day_date, group, members, slots_by_day_type,
-                        stat_dates, pto_dates, states):
-    """Process one day in simple mode (no closers — just assign all slots)."""
-    day_type = _detect_day_type(day_date, stat_dates)
-    applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
-    if not applicable_slots:
-        return []
-
-    assignments = []
-    assigned_ids = set()
-
-    for slot in applicable_slots:
-        needed = _slots_needed(slot, group, day_type)
-        eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
-
-        available = [m for m in eligible if m.id not in assigned_ids]
-        # Static first
-        static_picks = [m for m in available
-                       if _is_static_assignment(m, day_date, slot.role)
-                       or (_is_weekend_primary_for(m, day_date, group)
-                           and day_type in ("saturday", "sunday"))]
-
-        for m in static_picks[:needed]:
-            assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-            assigned_ids.add(m.id)
-
-        remaining = needed - len(static_picks[:needed])
-        if remaining <= 0:
-            continue
-
-        pool = [m for m in available if m not in static_picks]
-        pool.sort(key=lambda m: getattr(m, 'rotation_order', 0) or 0)
-        for m in pool[:remaining]:
-            assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-            assigned_ids.add(m.id)
-            if day_type in ("saturday", "sunday"):
-                _update_state_for_assignment(states[m.id], day_date, slot)
 
     return assignments
 
@@ -1130,6 +1185,25 @@ def _fairness_score(member, state, day_date, slot, week_closings):
 
 def _update_state_for_assignment(state, day_date, slot):
     """Update fairness counters after assigning a slot."""
+    # Update consecutive day tracking
+    last_d = getattr(state, 'last_work_date', None)
+    if last_d and (day_date - last_d).days == 1:
+        state.consecutive_days = (getattr(state, 'consecutive_days', 0) or 0) + 1
+    elif last_d and (day_date - last_d).days == 0:
+        pass  # same day
+    else:
+        state.consecutive_days = 1
+    state.last_work_date = day_date
+
+    # Update per-role counts for role rotation tracking
+    role_key = slot.label or slot.role
+    try:
+        rc = json.loads(state.role_counts_json) if getattr(state, 'role_counts_json', None) else {}
+    except (json.JSONDecodeError, TypeError):
+        rc = {}
+    rc[role_key] = rc.get(role_key, 0) + 1
+    state.role_counts_json = json.dumps(rc)
+
     dow = day_date.weekday()
     if slot.role == "closer":
         if dow < 5:  # weekday

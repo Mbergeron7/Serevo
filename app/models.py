@@ -3111,6 +3111,12 @@ class RosterMember(db.Model):
     exclude_from_opening  = db.Column(db.Boolean, default=False)       # never assigned opener
     exclude_from_closing  = db.Column(db.Boolean, default=False)       # never assigned closer
     consistent_start      = db.Column(db.Boolean, default=False)       # keep same start time each day
+    max_consecutive_days  = db.Column(db.Integer, nullable=True)      # max days in a row before forced day off
+    preferred_days_off    = db.Column(db.Text, nullable=True)         # JSON: ["tue","thu"] — soft penalty
+    min_hours_per_week    = db.Column(db.Float, nullable=True)        # minimum weekly hours guardrail
+    max_hours_per_week    = db.Column(db.Float, nullable=True)        # maximum weekly hours guardrail
+    pair_with_member_id   = db.Column(db.Integer, nullable=True)      # prefer scheduling with this member
+    avoid_member_id       = db.Column(db.Integer, nullable=True)      # avoid scheduling with this member
     rotation_order        = db.Column(db.Integer, default=0)          # lower = picked first on ties
     active                = db.Column(db.Boolean, default=True)
     created_at            = db.Column(db.DateTime, default=_utcnow)
@@ -3158,6 +3164,12 @@ class RosterMember(db.Model):
             "exclude_from_opening": self.exclude_from_opening,
             "exclude_from_closing": self.exclude_from_closing,
             "consistent_start": self.consistent_start,
+            "max_consecutive_days": self.max_consecutive_days,
+            "preferred_days_off": self._json("preferred_days_off"),
+            "min_hours_per_week": self.min_hours_per_week,
+            "max_hours_per_week": self.max_hours_per_week,
+            "pair_with_member_id": self.pair_with_member_id,
+            "avoid_member_id": self.avoid_member_id,
             "rotation_order": self.rotation_order or 0,
             "active": self.active,
         }
@@ -3205,6 +3217,9 @@ class RosterRotationState(db.Model):
     stat_count              = db.Column(db.Integer, default=0)
     opener_count            = db.Column(db.Integer, default=0)        # total opener assignments
     day_shift_count         = db.Column(db.Integer, default=0)        # total mid-shift assignments
+    role_counts_json        = db.Column(db.Text, nullable=True)       # JSON: {"day_0800": 5, "day_1000": 3} — per-role fairness
+    consecutive_days        = db.Column(db.Integer, default=0)        # current streak of consecutive work days
+    last_work_date          = db.Column(db.Date, nullable=True)       # for consecutive day tracking
     last_close_weekday      = db.Column(db.Integer, nullable=True)    # 0=Mon..4=Fri
     last_close_date         = db.Column(db.Date, nullable=True)
     last_weekend_date       = db.Column(db.Date, nullable=True)

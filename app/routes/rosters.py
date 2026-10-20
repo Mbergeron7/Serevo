@@ -136,6 +136,12 @@ def api_add_member(gid):
         exclude_from_opening=d.get("exclude_from_opening", False),
         exclude_from_closing=d.get("exclude_from_closing", False),
         consistent_start=d.get("consistent_start", False),
+        max_consecutive_days=d.get("max_consecutive_days"),
+        preferred_days_off=json.dumps(d["preferred_days_off"]) if d.get("preferred_days_off") else None,
+        min_hours_per_week=d.get("min_hours_per_week"),
+        max_hours_per_week=d.get("max_hours_per_week"),
+        pair_with_member_id=d.get("pair_with_member_id"),
+        avoid_member_id=d.get("avoid_member_id"),
         work_days=json.dumps(d["work_days"]) if d.get("work_days") else None,
         contracted_days=d.get("contracted_days", 5),
         contracted_hours=d.get("contracted_hours"),
@@ -156,10 +162,13 @@ def api_update_member(mid):
               "contracted_days", "contracted_hours",
               "dedicated_closer", "dedicated_opener",
               "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing",
-              "consistent_start"):
+              "consistent_start",
+              "max_consecutive_days", "min_hours_per_week", "max_hours_per_week",
+              "pair_with_member_id", "avoid_member_id"):
         if k in d:
             setattr(m, k, d[k])
-    for k in ("weekend_primary_days", "excluded_closing_days", "static_days_json", "work_days"):
+    for k in ("weekend_primary_days", "excluded_closing_days", "static_days_json",
+              "work_days", "preferred_days_off"):
         if k in d:
             setattr(m, k, json.dumps(d[k]) if d[k] else None)
     if "accommodation_start" in d:
