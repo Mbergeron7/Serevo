@@ -183,39 +183,26 @@ def _read_agent_status_sheet():
                     all_vals = ws.get_all_values()
                     rows = [dict(zip(header_row, r)) for r in all_vals[1:]] if all_vals else []
                 else:
-                    # Batch-fetch only the 3 columns we need (much less data)
-                    total_rows = ws.row_count
-                    ranges = []
-                    col_order = []
-                    for cn in needed:
-                        if cn in col_map:
-                            ci = col_map[cn]
-                            ranges.append(f"R2C{ci}:R{total_rows}C{ci}")
-                            col_order.append(cn)
-                    batch = ws.batch_get(ranges, major_dimension="COLUMNS")
-                    # Each batch entry is a list of lists; flatten to column arrays
-                    columns = {}
-                    for i, cn in enumerate(col_order):
-                        vals = batch[i]
-                        columns[cn] = [v[0] if v else "" for v in vals] if vals else []
-
+                    # Fetch all values but build dicts for only the 3 needed keys,
+                    # filtering by date as we go to keep memory low.
+                    all_vals = ws.get_all_values()
                     from zoneinfo import ZoneInfo
                     _now = datetime.datetime.now(ZoneInfo("America/Toronto"))
                     today_pfx = _now.strftime("%Y-%m-%d")
                     yest_pfx = (_now.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
-                    st_col = columns.get("start_time", [])
-                    uid_col = columns.get("user_id", [])
-                    sid_col = columns.get("c_activity_sid", [])
-                    max_len = max(len(st_col), len(uid_col), len(sid_col))
+                    st_idx = col_map["start_time"] - 1
+                    uid_idx = col_map.get("user_id", 0) - 1 if "user_id" in col_map else None
+                    sid_idx = col_map.get("c_activity_sid", 0) - 1 if "c_activity_sid" in col_map else None
+
                     rows = []
-                    for j in range(max_len):
-                        st_val = st_col[j] if j < len(st_col) else ""
+                    for r in all_vals[1:]:
+                        st_val = r[st_idx] if st_idx < len(r) else ""
                         if st_val.startswith(today_pfx) or st_val.startswith(yest_pfx):
                             rows.append({
-                                "user_id": uid_col[j] if j < len(uid_col) else "",
+                                "user_id": r[uid_idx] if uid_idx is not None and uid_idx < len(r) else "",
                                 "start_time": st_val,
-                                "c_activity_sid": sid_col[j] if j < len(sid_col) else "",
+                                "c_activity_sid": r[sid_idx] if sid_idx is not None and sid_idx < len(r) else "",
                             })
             log.info(f"Agent status sheet: fetched {len(rows)} relevant rows")
 
