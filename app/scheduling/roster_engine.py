@@ -899,20 +899,34 @@ def _is_available(member, day_date, pto_dates):
     return True
 
 
+_thu_debug_done = False  # module-level flag for one-shot Thursday debug
+
 def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
     """Filter members eligible for a specific slot on a specific day."""
+    global _thu_debug_done
     dow = day_date.weekday()
     day_abbr = DOW_ABBR[dow]
     day_full = DOW_FULL[dow]
     role = slot.role
 
+    # One-shot detailed debug for first Thursday closer
+    trace = (dow == 3 and role == "closer" and not _thu_debug_done)
+    if trace:
+        _thu_debug_done = True
+        log.info("  THU-TRACE %s: day_abbr=%s day_full=%s role=%s slot_start=%s slot_end=%s",
+                 day_date, day_abbr, day_full, role, slot.shift_start, slot.shift_end)
+
     eligible = []
     for m in members:
         if m.is_display_only:
+            if trace:
+                log.info("    m%d SKIP display_only", m.id)
             continue
 
         # ── Role exclusion flags ──
         if role == "closer" and (m.exclude_from_closing or m.dedicated_opener):
+            if trace:
+                log.info("    m%d SKIP role_excl close=%s ded_opener=%s", m.id, m.exclude_from_closing, m.dedicated_opener)
             continue
         if role == "opener" and (m.exclude_from_opening or m.dedicated_closer):
             continue
@@ -934,21 +948,30 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
         work_days = _parse_json(m.work_days)
         if work_days is not None:
             if day_abbr not in work_days and day_full not in work_days:
+                if trace:
+                    log.info("    m%d SKIP work_days=%s abbr=%s full=%s", m.id, work_days, day_abbr, day_full)
                 continue
 
         # Check PTO
         emp_pto = pto_dates.get(m.employee_id, set())
         if day_date in emp_pto:
+            if trace:
+                log.info("    m%d SKIP pto", m.id)
             continue
 
         # For closer slots: check accommodation_no_close
         if role == "closer" and m.accommodation_no_close:
+            if trace:
+                log.info("    m%d SKIP accom_no_close", m.id)
             continue
 
         # For closer slots: check excluded_closing_days
         if role == "closer":
             excluded = _parse_json(m.excluded_closing_days)
             if excluded and (day_abbr in excluded or day_full in excluded):
+                if trace:
+                    log.info("    m%d SKIP excl_closing raw=%r parsed=%s abbr=%s full=%s",
+                             m.id, m.excluded_closing_days, excluded, day_abbr, day_full)
                 continue
 
         # Check static_days_json — if member has a static assignment for a
@@ -957,16 +980,24 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
         if static and day_full in static:
             static_role = static[day_full]
             if static_role != role:
+                if trace:
+                    log.info("    m%d SKIP static_days=%s", m.id, static)
                 continue
 
         # For accommodation: check if shift times fit within accommodated window
         if m.accommodation_start and slot.shift_start:
             if slot.shift_start < m.accommodation_start:
+                if trace:
+                    log.info("    m%d SKIP accom_start m=%s slot=%s", m.id, m.accommodation_start, slot.shift_start)
                 continue
         if m.accommodation_end and slot.shift_end:
             if slot.shift_end > m.accommodation_end:
+                if trace:
+                    log.info("    m%d SKIP accom_end m=%s slot=%s", m.id, m.accommodation_end, slot.shift_end)
                 continue
 
+        if trace:
+            log.info("    m%d PASS", m.id)
         eligible.append(m)
 
     return eligible
