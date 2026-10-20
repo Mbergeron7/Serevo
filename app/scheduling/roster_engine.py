@@ -344,6 +344,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
     _contracted = {m.id: (m.contracted_days if m.contracted_days is not None else 5) for m in members}
     # Track who got a closing this week
     week_closings = {}  # member_id → count
+    week_openings = {}  # member_id → count
+    week_mids = {}      # member_id → count
     # Track which members closed on which day (for Sunday rule)
     closer_days = {}  # member_id → [dates]
     # Track first assigned shift_start per member for consistent_start enforcement
@@ -749,6 +751,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "dedicated_opener"))
                 _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
+                week_openings[m.id] = week_openings.get(m.id, 0) + 1
                 if opener_dow_counts:
                     opener_dow_counts[m.id][day_date.weekday()] += 1
             remaining -= len(dedicated_pool[:remaining])
@@ -756,8 +759,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             pool = [m for m in pool if not m.dedicated_opener]
-            # Enhancement: filter by consecutive days and hours
+            # Enhancement: filter by consecutive days, hours, and max openings cap
             pool = [m for m in pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
+            pool = [m for m in pool if m.max_openings_per_week is None or week_openings.get(m.id, 0) < m.max_openings_per_week]
             # Sort by opener_count for fair rotation across all day types
             _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
@@ -785,6 +789,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
+                week_openings[m.id] = week_openings.get(m.id, 0) + 1
                 if opener_dow_counts:
                     opener_dow_counts[m.id][_dow] += 1
 
@@ -824,8 +829,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if remaining <= 0:
                 continue
 
-            # Enhancement: filter by consecutive days and hours
+            # Enhancement: filter by consecutive days, hours, and max mids cap
             rotation_pool = [m for m in rotation_pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
+            rotation_pool = [m for m in rotation_pool if m.max_mids_per_week is None or week_mids.get(m.id, 0) < m.max_mids_per_week]
 
             # For day shifts, prefer members who have the fewest total assignments
             # On weekends, also factor in day-specific count for fair rotation
@@ -858,6 +864,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
+                week_mids[m.id] = week_mids.get(m.id, 0) + 1
                 if role_counts is not None:
                     role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
 

@@ -125,6 +125,8 @@ def api_add_member(gid):
         is_fill_in=d.get("is_fill_in", False),
         weekend_primary_days=json.dumps(d["weekend_primary_days"]) if d.get("weekend_primary_days") else None,
         max_closings_per_week=d.get("max_closings_per_week", 1),
+        max_openings_per_week=d.get("max_openings_per_week"),
+        max_mids_per_week=d.get("max_mids_per_week"),
         excluded_closing_days=json.dumps(d["excluded_closing_days"]) if d.get("excluded_closing_days") else None,
         static_days_json=json.dumps(d["static_days_json"]) if d.get("static_days_json") else None,
         accommodation_start=_parse_time(d.get("accommodation_start")),
@@ -158,7 +160,8 @@ def api_update_member(mid):
     m = RosterMember.query.get_or_404(mid)
     d = request.get_json(force=True)
     for k in ("is_display_only", "is_weekend_primary", "is_fill_in",
-              "max_closings_per_week", "accommodation_no_close", "rotation_order",
+              "max_closings_per_week", "max_openings_per_week", "max_mids_per_week",
+              "accommodation_no_close", "rotation_order",
               "contracted_days", "contracted_hours",
               "dedicated_closer", "dedicated_opener",
               "exclude_from_weekends", "exclude_from_opening", "exclude_from_closing",

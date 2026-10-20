@@ -434,8 +434,18 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Max Closings/Week</label>
+        <label>Max Closings/Wk</label>
         <input id="mbr-max-close" type="number" value="1" min="0" style="width:70px;">
+      </div>
+      <div class="form-group">
+        <label>Max Openings/Wk</label>
+        <input id="mbr-max-open" type="number" min="0" style="width:70px;" placeholder="—"
+               title="Leave blank for unlimited">
+      </div>
+      <div class="form-group">
+        <label>Max Mids/Wk</label>
+        <input id="mbr-max-mid" type="number" min="0" style="width:70px;" placeholder="—"
+               title="Leave blank for unlimited">
       </div>
       <div class="form-group">
         <label>Accom. Start</label>
@@ -721,6 +731,8 @@ async function openAddMember(groupId) {
   document.getElementById('mbr-wknd-sun').checked = false;
   document.getElementById('mbr-fill-in').checked = false;
   document.getElementById('mbr-max-close').value = '1';
+  document.getElementById('mbr-max-open').value = '';
+  document.getElementById('mbr-max-mid').value = '';
   document.getElementById('mbr-acc-start').value = '';
   document.getElementById('mbr-acc-end').value = '';
   document.getElementById('mbr-contracted-days').value = '5';
@@ -769,6 +781,8 @@ async function editMember(groupId, memberId) {
   document.getElementById('mbr-wknd-sun').checked = !!m.is_weekend_primary && wpd.includes('sunday');
   document.getElementById('mbr-fill-in').checked = !!m.is_fill_in;
   document.getElementById('mbr-max-close').value = m.max_closings_per_week || 1;
+  document.getElementById('mbr-max-open').value = m.max_openings_per_week || '';
+  document.getElementById('mbr-max-mid').value = m.max_mids_per_week || '';
   document.getElementById('mbr-acc-start').value = m.accommodation_start || '';
   document.getElementById('mbr-acc-end').value = m.accommodation_end || '';
   document.getElementById('mbr-contracted-days').value = m.contracted_days || 5;
@@ -817,6 +831,8 @@ async function saveMember() {
     consistent_start: document.getElementById('mbr-consistent-start').checked,
     is_fill_in: document.getElementById('mbr-fill-in').checked,
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
+    max_openings_per_week: +document.getElementById('mbr-max-open').value || null,
+    max_mids_per_week: +document.getElementById('mbr-max-mid').value || null,
     accommodation_no_close: document.getElementById('mbr-no-close').checked,
     accommodation_start: document.getElementById('mbr-acc-start').value || null,
     accommodation_end: document.getElementById('mbr-acc-end').value || null,

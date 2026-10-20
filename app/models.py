@@ -3097,6 +3097,8 @@ class RosterMember(db.Model):
     is_fill_in            = db.Column(db.Boolean, default=False)       # eligible to fill in for dedicated day workers
     weekend_primary_days  = db.Column(db.Text, nullable=True)         # JSON: ["saturday"]
     max_closings_per_week = db.Column(db.Integer, default=1)
+    max_openings_per_week = db.Column(db.Integer, nullable=True)       # cap opener assignments per week
+    max_mids_per_week     = db.Column(db.Integer, nullable=True)       # cap mid/day shift assignments per week
     excluded_closing_days = db.Column(db.Text, nullable=True)         # JSON: ["wednesday"]
     static_days_json      = db.Column(db.Text, nullable=True)         # JSON: {"monday":"close"}
     accommodation_start   = db.Column(db.Time, nullable=True)
@@ -3150,6 +3152,8 @@ class RosterMember(db.Model):
             "is_fill_in": self.is_fill_in,
             "weekend_primary_days": self._json("weekend_primary_days"),
             "max_closings_per_week": self.max_closings_per_week,
+            "max_openings_per_week": self.max_openings_per_week,
+            "max_mids_per_week": self.max_mids_per_week,
             "excluded_closing_days": self._json("excluded_closing_days"),
             "static_days_json": self._json("static_days_json"),
             "accommodation_start": self.accommodation_start.strftime("%H:%M") if self.accommodation_start else None,
