@@ -358,7 +358,7 @@
       <h3>Key Concepts</h3>
       <p><strong>Groups</strong> — A group is a set of team members who share the same rotation rules within a planning unit. For example, "Sales TL Closers" might contain every team lead in Sales Support who rotates through closing shifts. Each group defines how many closers are needed on weekdays and weekends, the weekend-coverage mode (rotate, fixed, or volunteer), and an optional stat-day role.</p>
 
-      <p><strong>Members</strong> — Employees added to a group. Each member can have individual settings: whether they are a weekend primary, which days they're excluded from closing, maximum closings per week, accommodation hours (e.g. cannot close after a certain time), and their regular work days.</p>
+      <p><strong>Members</strong> — Employees added to a group. Each member can have individual settings: whether they are a weekend primary, which days they're excluded from closing, maximum closings per week, accommodation hours (e.g. cannot close after a certain time), their regular work days, <strong>contracted days per week</strong> (default 5), and <strong>contracted hours per week</strong>. Members can also be flagged as <strong>Fill-In Eligible</strong> — these are part-time or relief staff who only get assigned when regular members are unavailable.</p>
 
       <p><strong>Shift Slots</strong> — Define the actual shift times for each day type (weekday, Saturday, Sunday, stat holiday) and role (opener, closer). For example, a weekday closer slot might run 13:30–22:00. These slots tell the generator what shifts to create when it assigns someone to a role on a given day.</p>
 
@@ -372,7 +372,15 @@
       </ol>
 
       <h3>How Generation Works</h3>
-      <p>The generator distributes closing and weekend assignments fairly across all eligible members using a rotation algorithm. It respects each member's constraints — excluded days, max closings per week, accommodation hours — and avoids clustering (back-to-back closings or consecutive weekends for the same person). The fairness state tracks each member's counts so the rotation stays balanced over time.</p>
+      <p>The generator uses a five-phase algorithm to distribute assignments fairly:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Phase 1 — Closers:</strong> Assigns closing shifts using a fairness score based on weekday close count, day-of-week spread, and contract deficit. Members with accommodations that prevent closing are skipped.</li>
+        <li><strong>Phase 2 — Sunday Non-Closer Rule:</strong> If enabled, the member who didn't close that week gets the Sunday non-closer slot.</li>
+        <li><strong>Phase 3 — Openers:</strong> Assigns opener shifts with day-of-week variety tracking to avoid clumping.</li>
+        <li><strong>Phase 4 — Day/Mid Shifts:</strong> Fills remaining mid-shift slots, distributing across different roles for variety.</li>
+        <li><strong>Phase 5 — Contract Backfill:</strong> Members still below their contracted days get doubled up on weekday non-closer slots (opener or mid shifts). Weekend and closer slots are never doubled.</li>
+      </ol>
+      <p>The fairness state persists across generations so the rotation stays balanced over time. Each phase prioritizes members with the largest contract deficit (fewest days assigned vs. their contracted amount).</p>
 
       <h3>Tips</h3>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">

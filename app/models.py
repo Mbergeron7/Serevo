@@ -1389,7 +1389,7 @@ class AttendanceEvent(db.Model):
             "category": exc.category if exc else "",
             "is_excused": self.is_excused,
             "note": self.note or "",
-            "coded_by": coder.username if coder else "",
+            "coded_by": coder.display_name if coder else "",
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M") if self.created_at else "",
         }
 
