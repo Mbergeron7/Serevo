@@ -704,7 +704,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
         unassigned_today = [
             m for m in _get_eligible_members(
                 members, day_date, backfill_slot, pto_dates, states, group)
-            if _contract_deficit(m.id) > 0
+            if m.id not in daily_assigned[day_date]
+            and _contract_deficit(m.id) > 0
             and not m.dedicated_closer
             and not m.dedicated_opener
         ]
@@ -917,12 +918,12 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
             if static_role != role:
                 continue
 
-        # For accommodation: check if shift times fit
-        if role == "closer" and m.accommodation_end:
-            if slot.shift_end and slot.shift_end > m.accommodation_end:
+        # For accommodation: check if shift times fit within accommodated window
+        if m.accommodation_start and slot.shift_start:
+            if slot.shift_start < m.accommodation_start:
                 continue
-        if role == "opener" and m.accommodation_start:
-            if slot.shift_start and slot.shift_start < m.accommodation_start:
+        if m.accommodation_end and slot.shift_end:
+            if slot.shift_end > m.accommodation_end:
                 continue
 
         eligible.append(m)
