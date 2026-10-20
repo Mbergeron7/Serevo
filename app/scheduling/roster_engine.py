@@ -358,16 +358,41 @@ def _process_week(week_days, group, members, slots_by_day_type,
     week_closings = {}  # member_id → count
     # Track which members closed on which day (for Sunday rule)
     closer_days = {}  # member_id → [dates]
+    # Track first assigned shift_start per member for consistent_start enforcement
+    consistent_start_times = {}  # member_id → shift_start (time obj)
 
-    def _track_day(member_id, the_date):
+    def _track_day(member_id, the_date, slot=None):
         """Increment week_day_counts when a member is first assigned on a new day, and mark them assigned."""
         if member_id not in daily_assigned[the_date]:
             week_day_counts[member_id] = week_day_counts.get(member_id, 0) + 1
             daily_assigned[the_date].add(member_id)
+        if slot is not None:
+            _record_consistent_start(member_id, slot)
 
     def _contract_deficit(member_id):
         """How many more days this member needs to hit their contract. Higher = more urgently needs shifts."""
         return _contracted.get(member_id, 5) - week_day_counts.get(member_id, 0)
+
+    def _consistent_start_penalty(member, slot):
+        """Return 0 if member has no consistent_start pref or hasn't been assigned yet.
+        Return -1 (bonus) if slot matches their established start time.
+        Return 50 (penalty) if it doesn't match."""
+        if not getattr(member, 'consistent_start', False):
+            return 0
+        established = consistent_start_times.get(member.id)
+        if established is None:
+            return 0  # first assignment, no preference yet
+        if slot.shift_start == established:
+            return -1  # bonus — prefer this slot
+        return 50  # penalty — avoid different start time
+
+    def _record_consistent_start(member_id, slot):
+        """Record the first shift_start for a consistent_start member."""
+        if member_id not in consistent_start_times:
+            # Find the member object
+            m_obj = next((m for m in members if m.id == member_id), None)
+            if m_obj and getattr(m_obj, 'consistent_start', False) and slot.shift_start:
+                consistent_start_times[member_id] = slot.shift_start
 
     # ── Determine if this is a weekend-close week for this group ──
     # Use the ISO week number of the first day in this week slice
@@ -421,7 +446,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             m = pool[0]
             reason = "parity_weekend"
             assignments.append(_make_assignment(m, slot, day_date, day_type, reason))
-            _track_day(m.id, day_date)
+            _track_day(m.id, day_date, slot)
             _update_state_for_assignment(states[m.id], day_date, slot)
             if slot.role == "closer":
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
@@ -459,7 +484,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 slot = eligible_slots[0]
                 log.info("  Phase0 ASSIGN m%d → %s on %s", m.id, slot.role, day_date)
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "accommodation"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if slot.role == "closer":
                     week_closings[m.id] = week_closings.get(m.id, 0) + 1
@@ -489,7 +514,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
@@ -505,7 +530,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                               if m.dedicated_closer and m.id not in daily_assigned[day_date]]
             for m in dedicated_pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "dedicated_closer"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
@@ -553,7 +578,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 log.info("  Phase1 ASSIGN closer: %s (id=%s) on %s (max_close/wk=%s, current_wk_closings=%s)",
                          emp_name, m.id, day_date, m.max_closings_per_week, week_closings.get(m.id, 0))
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 week_closings[m.id] = week_closings.get(m.id, 0) + 1
                 closer_days.setdefault(m.id, []).append(day_date)
@@ -593,7 +618,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
                 for m in pool[:needed]:
                     assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
-                    _track_day(m.id, sun_date)
+                    _track_day(m.id, sun_date, slot)
                     _update_state_for_assignment(states[m.id], sun_date, slot)
 
                 remaining = needed - len(pool[:needed])
@@ -606,7 +631,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     ))
                     for m in rest[:remaining]:
                         assignments.append(_make_assignment(m, slot, sun_date, day_type, "sunday_rule"))
-                        _track_day(m.id, sun_date)
+                        _track_day(m.id, sun_date, slot)
                         _update_state_for_assignment(states[m.id], sun_date, slot)
 
     # ── Phase 3: Assign opener slots ───────────────────────────
@@ -628,7 +653,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
@@ -641,7 +666,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             dedicated_pool = [m for m in pool if m.dedicated_opener]
             for m in dedicated_pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "dedicated_opener"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if opener_dow_counts:
                     opener_dow_counts[m.id][day_date.weekday()] += 1
@@ -661,16 +686,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 ))
             else:
                 # Primary: contract deficit (members further below contract picked first)
-                # Then: day-of-week opener count, global opener count
+                # Then: consistent_start preference, day-of-week opener count, global opener count
                 pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
+                    _consistent_start_penalty(m, slot),
                     opener_dow_counts[m.id][_dow] if opener_dow_counts else 0,
                     (states[m.id].opener_count or 0),
                     getattr(m, 'rotation_order', 0) or 0
                 ))
             for m in pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if opener_dow_counts:
                     opener_dow_counts[m.id][_dow] += 1
@@ -704,7 +730,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in static_picks[:needed]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
 
             remaining = needed - len(static_picks[:needed])
@@ -724,9 +750,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 ))
             else:
                 # Primary: contract deficit (members below contract get priority)
-                # Then: role-specific count, global day_shift_count, weekly assignments
+                # Then: consistent_start preference, role-specific count, global day_shift_count, weekly assignments
                 rotation_pool.sort(key=lambda m: (
                     -_contract_deficit(m.id),
+                    _consistent_start_penalty(m, slot),
                     role_counts.get(m.id, {}).get(_slot_role, 0) if role_counts else 0,
                     (states[m.id].day_shift_count or 0),
                     sum(1 for d, ids in daily_assigned.items() if m.id in ids),
@@ -735,7 +762,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for m in rotation_pool[:remaining]:
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
-                _track_day(m.id, day_date)
+                _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
                 if role_counts is not None:
                     role_counts.setdefault(m.id, {})[_slot_role] = role_counts.get(m.id, {}).get(_slot_role, 0) + 1
@@ -789,13 +816,15 @@ def _process_week(week_days, group, members, slots_by_day_type,
         for m in unassigned_today:
             if _contract_deficit(m.id) <= 0:
                 break
-            # Pick the slot this member has done least (for variety)
+            # Pick the slot this member has done least (for variety),
+            # but prefer their consistent start time if set
             best_slot = min(backfill_slots, key=lambda s: (
+                _consistent_start_penalty(m, s),
                 role_counts.get(m.id, {}).get(s.label or s.role, 0) if role_counts else 0,
                 s.sort_order or 0
             ))
             assignments.append(_make_assignment(m, best_slot, day_date, day_type, "backfill"))
-            _track_day(m.id, day_date)
+            _track_day(m.id, day_date, best_slot)
             _update_state_for_assignment(states[m.id], day_date, best_slot)
             if role_counts is not None:
                 _slot_role = best_slot.label or best_slot.role
