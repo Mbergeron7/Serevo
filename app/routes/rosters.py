@@ -286,6 +286,14 @@ def api_publish():
     return jsonify(result)
 
 
+@rosters_bp.route("/api/debug-groups")
+@login_required
+def api_debug_groups():
+    """List all roster groups with their IDs."""
+    groups = RosterGroup.query.all()
+    return jsonify([{"id": g.id, "name": g.name} for g in groups])
+
+
 @rosters_bp.route("/api/debug-slots/<int:gid>")
 @login_required
 def api_debug_slots(gid):
