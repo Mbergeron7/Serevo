@@ -1,13 +1,13 @@
 """Add member role flags: dedicated_closer, dedicated_opener, exclude_from_weekends, exclude_from_opening, exclude_from_closing
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: z7h8i9j0k1l2
 Revises: z6g7h8i9j0k1
 Create Date: 2026-10-20
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'a1b2c3d4e5f6'
+revision = 'z7h8i9j0k1l2'
 down_revision = 'z6g7h8i9j0k1'
 branch_labels = None
 depends_on = None
