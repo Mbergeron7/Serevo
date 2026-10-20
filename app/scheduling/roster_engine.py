@@ -504,6 +504,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 continue
 
             # Rotation assignment respecting max_closings_per_week
+            log.info("  Phase1 closer rotation on %s: dedicated_pool=%d, rotation_pool=%d, remaining=%d",
+                     day_date, len(dedicated_pool), len(rotation_pool), remaining)
             scored = []
             for m in rotation_pool:
                 if m.id in daily_assigned[day_date]:
@@ -520,6 +522,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 deficit = -_contract_deficit(m.id)
                 scored.append((deficit, dow_cnt, s, m))
             scored.sort(key=lambda x: (x[0], x[1], x[2], getattr(x[3], 'rotation_order', 0) or 0))
+            log.info("  Phase1 scored candidates on %s: %s", day_date,
+                     [(getattr(x[3], 'id', '?'), x[0], x[1], x[2]) for x in scored[:5]])
 
             for _, _, _, m in scored[:remaining]:
                 emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
