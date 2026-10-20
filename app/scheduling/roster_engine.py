@@ -529,15 +529,26 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 if week_closings.get(m.id, 0) >= max_pw:
                     continue
                 dow = day_date.weekday()
-                s = _fairness_score(m, states[m.id], day_date, slot, week_closings)
+                st = states[m.id]
+                s = _fairness_score(m, st, day_date, slot, week_closings)
                 dow_cnt = closer_dow_counts[m.id][dow] if closer_dow_counts else 0
                 deficit = -_contract_deficit(m.id)
-                scored.append((deficit, dow_cnt, s, m))
-            scored.sort(key=lambda x: (x[0], x[1], x[2], getattr(x[3], 'rotation_order', 0) or 0))
+                # Raw close count for primary fairness — rotation_order
+                # breaks ties between members with equal counts so week 1
+                # goes to rotation_order 1, week 2 to rotation_order 2, etc.
+                if dow < 5:
+                    raw_count = st.weekday_close_count or 0
+                elif dow == 5:
+                    raw_count = st.saturday_count or 0
+                else:
+                    raw_count = st.sunday_count or 0
+                rot_ord = getattr(m, 'rotation_order', 0) or 0
+                scored.append((deficit, dow_cnt, raw_count, rot_ord, s, m))
+            scored.sort(key=lambda x: (x[0], x[1], x[2], x[3], x[4]))
             log.info("  Phase1 scored candidates on %s: %s", day_date,
-                     [(getattr(x[3], 'id', '?'), x[0], x[1], x[2]) for x in scored[:5]])
+                     [(getattr(x[5], 'id', '?'), x[0], x[1], x[2], x[3], x[4]) for x in scored[:5]])
 
-            for _, _, _, m in scored[:remaining]:
+            for _, _, _, _, _, m in scored[:remaining]:
                 emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
                 log.info("  Phase1 ASSIGN closer: %s (id=%s) on %s (max_close/wk=%s, current_wk_closings=%s)",
                          emp_name, m.id, day_date, m.max_closings_per_week, week_closings.get(m.id, 0))
