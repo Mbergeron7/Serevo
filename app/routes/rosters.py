@@ -286,6 +286,53 @@ def api_publish():
     return jsonify(result)
 
 
+@rosters_bp.route("/api/debug-slots/<int:gid>")
+@login_required
+def api_debug_slots(gid):
+    """Debug endpoint: dump what the engine sees for a group."""
+    g = RosterGroup.query.get_or_404(gid)
+    members = [m for m in g.members if m.active and not m.is_display_only]
+    slots = []
+    for s in g.slots:
+        slots.append({
+            "id": s.id, "day_type": s.day_type, "role": s.role,
+            "label": s.label, "shift_start": str(s.shift_start),
+            "shift_end": str(s.shift_end), "sort_order": s.sort_order,
+        })
+    mbrs = []
+    for m in members:
+        emp = m.employee
+        name = f"{emp.first_name} {emp.last_name}" if emp else f"emp#{m.employee_id}"
+        mbrs.append({
+            "id": m.id, "name": name,
+            "dedicated_closer": m.dedicated_closer,
+            "dedicated_opener": m.dedicated_opener,
+            "exclude_from_closing": m.exclude_from_closing,
+            "exclude_from_opening": m.exclude_from_opening,
+            "exclude_from_weekends": m.exclude_from_weekends,
+            "is_weekend_primary": m.is_weekend_primary,
+            "weekend_primary_days": m.weekend_primary_days,
+            "work_days": m.work_days,
+            "excluded_closing_days": m.excluded_closing_days,
+            "accommodation_no_close": m.accommodation_no_close,
+            "max_closings_per_week": m.max_closings_per_week,
+            "rotation_order": m.rotation_order,
+            "is_fill_in": m.is_fill_in,
+            "is_display_only": m.is_display_only,
+            "static_days_json": m.static_days_json,
+        })
+    return jsonify({
+        "group": {"id": g.id, "name": g.name,
+                  "closers_required_weekday": g.closers_required_weekday,
+                  "closers_required_weekend": g.closers_required_weekend,
+                  "weekend_mode": g.weekend_mode,
+                  "sunday_non_closer": g.sunday_non_closer,
+                  "weekend_close_week_parity": g.weekend_close_week_parity},
+        "slots": slots,
+        "members": mbrs,
+    })
+
+
 @rosters_bp.route("/api/clear", methods=["POST"])
 @login_required
 def api_clear():
