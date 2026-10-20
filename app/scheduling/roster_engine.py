@@ -200,9 +200,16 @@ def _index_slots(slots):
     """
     out = {}
     for s in slots:
-        # Normalise role and day_type to lowercase once at index time
+        # Normalise role to canonical form so engine comparisons work.
+        # Users type free-text roles like "closer shift", "opener 1" etc.
+        # The engine expects exact "closer" or "opener".
         if s.role:
-            s.role = s.role.strip().lower()
+            r = s.role.strip().lower()
+            if "close" in r:
+                r = "closer"
+            elif "open" in r:
+                r = "opener"
+            s.role = r
         dt_key = (s.day_type or "").strip().lower()
         out.setdefault(dt_key, []).append(s)
     # Sort each day_type's slots by sort_order
