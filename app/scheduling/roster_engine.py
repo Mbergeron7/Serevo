@@ -45,9 +45,9 @@ def generate_roster(group_id, start_date, end_date):
     # ── Diagnostic logging ──
     log.info("=== ROSTER ENGINE START: group=%s (%s), range=%s to %s ===",
              group.id, group.name, start_date, end_date)
-    log.info("Group settings: closers_req_wd=%s, closers_req_we=%s, openers_req_wd=%s, openers_req_we=%s",
+    log.info("Group settings: closers_req_wd=%s, closers_req_we=%s, weekend_mode=%s, sunday_non_closer=%s, parity=%s",
              group.closers_required_weekday, group.closers_required_weekend,
-             group.openers_required_weekday, group.openers_required_weekend)
+             group.weekend_mode, group.sunday_non_closer, group.weekend_close_week_parity)
     for m in active_members:
         emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
         log.info("  Member %s (%s): max_close/wk=%s, ded_closer=%s, ded_opener=%s, "
