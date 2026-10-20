@@ -909,12 +909,12 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
     day_full = DOW_FULL[dow]
     role = slot.role
 
-    # One-shot detailed debug for first Thursday closer
-    trace = (dow == 3 and role == "closer" and not _thu_debug_done)
+    # One-shot detailed debug for first Thursday closer (full member list only, skip Phase 0 single-member calls)
+    trace = (dow == 3 and role == "closer" and not _thu_debug_done and len(members) > 1)
     if trace:
         _thu_debug_done = True
-        log.info("  THU-TRACE %s: day_abbr=%s day_full=%s role=%s slot_start=%s slot_end=%s",
-                 day_date, day_abbr, day_full, role, slot.shift_start, slot.shift_end)
+        log.info("  THU-TRACE %s: day_abbr=%s day_full=%s role=%s slot_start=%s slot_end=%s members=%d",
+                 day_date, day_abbr, day_full, role, slot.shift_start, slot.shift_end, len(members))
 
     eligible = []
     for m in members:
