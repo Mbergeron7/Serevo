@@ -42,6 +42,23 @@ def generate_roster(group_id, start_date, end_date):
     if not active_members:
         return {"error": "No active members in group"}
 
+    # ── Diagnostic logging ──
+    log.info("=== ROSTER ENGINE START: group=%s (%s), range=%s to %s ===",
+             group.id, group.name, start_date, end_date)
+    log.info("Group settings: closers_req_wd=%s, closers_req_we=%s, openers_req_wd=%s, openers_req_we=%s",
+             group.closers_required_weekday, group.closers_required_weekend,
+             group.openers_required_weekday, group.openers_required_weekend)
+    for m in active_members:
+        emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
+        log.info("  Member %s (%s): max_close/wk=%s, ded_closer=%s, ded_opener=%s, "
+                 "excl_close=%s, excl_open=%s, excl_wknd=%s, accom_no_close=%s, "
+                 "work_days=%s, excluded_closing_days=%s, static_days=%s, fill_in=%s",
+                 m.id, emp_name, m.max_closings_per_week,
+                 m.dedicated_closer, m.dedicated_opener,
+                 m.exclude_from_closing, m.exclude_from_opening, m.exclude_from_weekends,
+                 m.accommodation_no_close,
+                 m.work_days, m.excluded_closing_days, m.static_days_json, m.is_fill_in)
+
     slots_by_day_type = _index_slots(group.slots)
     if not slots_by_day_type:
         return {"error": "No shift slots defined for this group"}
@@ -450,6 +467,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
             scored.sort(key=lambda x: (x[0], x[1], x[2], getattr(x[3], 'rotation_order', 0) or 0))
 
             for _, _, _, m in scored[:remaining]:
+                emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
+                log.info("  Phase1 ASSIGN closer: %s (id=%s) on %s (max_close/wk=%s, current_wk_closings=%s)",
+                         emp_name, m.id, day_date, m.max_closings_per_week, week_closings.get(m.id, 0))
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "rotation"))
                 _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
