@@ -365,18 +365,33 @@ def _process_week(week_days, group, members, slots_by_day_type,
         """How many more days this member needs to hit their contract. Higher = more urgently needs shifts."""
         return _contracted.get(member_id, 5) - week_day_counts.get(member_id, 0)
 
+    def _consistent_start_ok(member, slot):
+        """Hard check: does this slot match the member's established start time?
+        Returns True if member has no pref, no established time yet, or slot matches."""
+        if not getattr(member, 'consistent_start', False):
+            return True
+        established = consistent_start_times.get(member.id)
+        if established is None:
+            return True  # first assignment, no preference yet
+        return slot.shift_start == established
+
+    def _apply_consistent_start_filter(pool, slot):
+        """Hard-filter pool by consistent_start, but fall back to full pool
+        if filtering would remove everyone."""
+        filtered = [m for m in pool if _consistent_start_ok(m, slot)]
+        return filtered if filtered else pool
+
     def _consistent_start_penalty(member, slot):
-        """Return 0 if member has no consistent_start pref or hasn't been assigned yet.
-        Return -1 (bonus) if slot matches their established start time.
-        Return 50 (penalty) if it doesn't match."""
+        """Soft tiebreaker for sorting — bonus for matching, penalty for mismatch.
+        The hard filter above does most of the work; this handles fallback cases."""
         if not getattr(member, 'consistent_start', False):
             return 0
         established = consistent_start_times.get(member.id)
         if established is None:
-            return 0  # first assignment, no preference yet
+            return 0
         if slot.shift_start == established:
-            return -1  # bonus — prefer this slot
-        return 50  # penalty — avoid different start time
+            return -1
+        return 50
 
     def _record_consistent_start(member_id, slot):
         """Record the first shift_start for a consistent_start member."""
@@ -633,6 +648,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 # Enhancement: max hours guardrail
                 if not _hours_ok(m, slot):
                     continue
+                # Enhancement: consistent start — hard filter
+                if not _consistent_start_ok(m, slot):
+                    continue
                 dow = day_date.weekday()
                 st = states[m.id]
                 s = _fairness_score(m, st, day_date, slot, week_closings)
@@ -762,6 +780,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             # Enhancement: filter by consecutive days, hours, and max openings cap
             pool = [m for m in pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
             pool = [m for m in pool if m.max_openings_per_week is None or week_openings.get(m.id, 0) < m.max_openings_per_week]
+            # Enhancement: consistent start — hard filter with fallback
+            pool = _apply_consistent_start_filter(pool, slot)
             # Sort by opener_count for fair rotation across all day types
             _dow = day_date.weekday()
             if day_type in ("saturday", "sunday"):
@@ -832,6 +852,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             # Enhancement: filter by consecutive days, hours, and max mids cap
             rotation_pool = [m for m in rotation_pool if _consecutive_ok(m, day_date) and _hours_ok(m, slot)]
             rotation_pool = [m for m in rotation_pool if m.max_mids_per_week is None or week_mids.get(m.id, 0) < m.max_mids_per_week]
+            # Enhancement: consistent start — hard filter with fallback
+            rotation_pool = _apply_consistent_start_filter(rotation_pool, slot)
 
             # For day shifts, prefer members who have the fewest total assignments
             # On weekends, also factor in day-specific count for fair rotation
@@ -920,8 +942,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
             if _contract_deficit(m.id) <= 0:
                 break
             # Pick the slot this member has done least (for variety),
-            # but prefer their consistent start time if set
-            best_slot = min(backfill_slots, key=lambda s: (
+            # hard-filter by consistent start, fallback to all if none match
+            m_slots = _apply_consistent_start_filter(backfill_slots, backfill_slots[0])
+            m_slots = [s for s in backfill_slots if _consistent_start_ok(m, s)] or backfill_slots
+            best_slot = min(m_slots, key=lambda s: (
                 _consistent_start_penalty(m, s),
                 role_counts.get(m.id, {}).get(s.label or s.role, 0) if role_counts else 0,
                 s.sort_order or 0
