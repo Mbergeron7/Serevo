@@ -507,8 +507,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             for slot in non_closer_slots:
                 needed = _slots_needed(slot, group, day_type)
                 eligible = _get_eligible_members(
-                    non_closers, sun_date, slot.role, pto_dates,
-                    daily_assigned[sun_date])
+                    non_closers, sun_date, slot, pto_dates, states, group)
                 eligible = [m for m in eligible
                            if m.id not in daily_assigned[sun_date]]
 
@@ -687,15 +686,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
         # exclusion flags, work_days, accommodations etc. are respected.
         # Skip dedicated closer/opener — they only get their dedicated role.
         applicable_slots_p5 = _get_applicable_slots(slots_by_day_type, day_type)
-        backfill_role = "day"  # generic role for eligibility check
+        # Find a non-closer slot to use for eligibility checks
+        backfill_slot = None
         for _bs in applicable_slots_p5:
             if _bs.role not in ("closer",):
-                backfill_role = _bs.role
+                backfill_slot = _bs
                 break
+        if not backfill_slot:
+            continue
         unassigned_today = [
             m for m in _get_eligible_members(
-                members, day_date, backfill_role, pto_dates,
-                daily_assigned[day_date])
+                members, day_date, backfill_slot, pto_dates, states, group)
             if _contract_deficit(m.id) > 0
             and not m.dedicated_closer
             and not m.dedicated_opener
