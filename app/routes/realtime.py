@@ -51,7 +51,7 @@ def _get_sheet():
 # matching the old portal's approach of reading the sheet directly.
 
 AGENT_STATUS_SHEET_ID = "15k9ahqgtuaigy4c7YNe2qy-OimAsjlbDQqd6F3VEt_g"
-_SHEET_CACHE_TTL = 30  # seconds — short TTL for near-real-time data
+_SHEET_CACHE_TTL = 60  # seconds — balance freshness vs Google Sheets load
 _sheet_cache = {}       # key -> (timestamp, data)
 _sheet_cache_lock = threading.Lock()
 _sheet_fetch_lock = threading.Lock()  # prevents thundering-herd fetches
@@ -167,26 +167,57 @@ def _read_agent_status_sheet():
 
             doc = client.open_by_key(AGENT_STATUS_SHEET_ID)
             ws = doc.get_worksheet(0)
-            all_vals = ws.get_all_values()
-            if not all_vals:
+            # Read only the header row first to find needed columns
+            header_row = ws.row_values(1)
+            if not header_row:
                 rows = []
             else:
-                headers = all_vals[0]
-                # Find start_time column to filter by date
-                st_idx = headers.index("start_time") if "start_time" in headers else None
-                if st_idx is not None:
+                needed = ["user_id", "start_time", "c_activity_sid"]
+                col_map = {}  # col_name -> 1-based col index
+                for col_name in needed:
+                    if col_name in header_row:
+                        col_map[col_name] = header_row.index(col_name) + 1
+
+                if "start_time" not in col_map:
+                    # Fallback: read all values if we can't find start_time
+                    all_vals = ws.get_all_values()
+                    rows = [dict(zip(header_row, r)) for r in all_vals[1:]] if all_vals else []
+                else:
+                    # Batch-fetch only the 3 columns we need (much less data)
+                    total_rows = ws.row_count
+                    ranges = []
+                    col_order = []
+                    for cn in needed:
+                        if cn in col_map:
+                            ci = col_map[cn]
+                            ranges.append(f"R2C{ci}:R{total_rows}C{ci}")
+                            col_order.append(cn)
+                    batch = ws.batch_get(ranges, major_dimension="COLUMNS")
+                    # Each batch entry is a list of lists; flatten to column arrays
+                    columns = {}
+                    for i, cn in enumerate(col_order):
+                        vals = batch[i]
+                        columns[cn] = [v[0] if v else "" for v in vals] if vals else []
+
                     from zoneinfo import ZoneInfo
                     _now = datetime.datetime.now(ZoneInfo("America/Toronto"))
                     today_pfx = _now.strftime("%Y-%m-%d")
                     yest_pfx = (_now.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-                    rows = [
-                        dict(zip(headers, r))
-                        for r in all_vals[1:]
-                        if str(r[st_idx]).startswith(today_pfx) or str(r[st_idx]).startswith(yest_pfx)
-                    ]
-                else:
-                    rows = [dict(zip(headers, r)) for r in all_vals[1:]]
-            log.info(f"Agent status sheet: fetched {len(rows)} relevant rows (from {len(all_vals)-1 if all_vals else 0} total)")
+
+                    st_col = columns.get("start_time", [])
+                    uid_col = columns.get("user_id", [])
+                    sid_col = columns.get("c_activity_sid", [])
+                    max_len = max(len(st_col), len(uid_col), len(sid_col))
+                    rows = []
+                    for j in range(max_len):
+                        st_val = st_col[j] if j < len(st_col) else ""
+                        if st_val.startswith(today_pfx) or st_val.startswith(yest_pfx):
+                            rows.append({
+                                "user_id": uid_col[j] if j < len(uid_col) else "",
+                                "start_time": st_val,
+                                "c_activity_sid": sid_col[j] if j < len(sid_col) else "",
+                            })
+            log.info(f"Agent status sheet: fetched {len(rows)} relevant rows")
 
             # Don't cache suspiciously small results — serve stale
             if len(rows) < 5:
