@@ -905,11 +905,16 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
 
     eligible = []
     for m in members:
+        member_name = f"{m.employee.first_name} {m.employee.last_name}" if m.employee else f"id={m.id}"
         if m.is_display_only:
+            if role == "closer":
+                log.info("    Elig %s on %s closer: SKIP display_only", member_name, day_date)
             continue
 
         # ── Role exclusion flags ──
         if role == "closer" and (m.exclude_from_closing or m.dedicated_opener):
+            log.info("    Elig %s on %s closer: SKIP excl_close=%s ded_opener=%s",
+                       member_name, day_date, m.exclude_from_closing, m.dedicated_opener)
             continue
         if role == "opener" and (m.exclude_from_opening or m.dedicated_closer):
             continue
@@ -931,21 +936,29 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
         work_days = _parse_json(m.work_days)
         if work_days is not None:
             if day_abbr not in work_days and day_full not in work_days:
+                if role == "closer":
+                    log.info("    Elig %s on %s closer: SKIP work_days=%s day_abbr=%s",
+                               member_name, day_date, work_days, day_abbr)
                 continue
 
         # Check PTO
         emp_pto = pto_dates.get(m.employee_id, set())
         if day_date in emp_pto:
+            if role == "closer":
+                log.info("    Elig %s on %s closer: SKIP PTO", member_name, day_date)
             continue
 
         # For closer slots: check accommodation_no_close
         if role == "closer" and m.accommodation_no_close:
+            log.info("    Elig %s on %s closer: SKIP accom_no_close", member_name, day_date)
             continue
 
         # For closer slots: check excluded_closing_days
         if role == "closer":
             excluded = _parse_json(m.excluded_closing_days)
             if excluded and (day_abbr in excluded or day_full in excluded):
+                log.info("    Elig %s on %s closer: SKIP excluded_closing_days=%s day_abbr=%s",
+                           member_name, day_date, excluded, day_abbr)
                 continue
 
         # Check static_days_json — if member has a static assignment for a
@@ -954,16 +967,26 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
         if static and day_full in static:
             static_role = static[day_full]
             if static_role != role:
+                if role == "closer":
+                    log.info("    Elig %s on %s closer: SKIP static=%s", member_name, day_date, static_role)
                 continue
 
         # For accommodation: check if shift times fit within accommodated window
         if m.accommodation_start and slot.shift_start:
             if slot.shift_start < m.accommodation_start:
+                if role == "closer":
+                    log.info("    Elig %s on %s closer: SKIP accom_start %s < %s",
+                               member_name, day_date, slot.shift_start, m.accommodation_start)
                 continue
         if m.accommodation_end and slot.shift_end:
             if slot.shift_end > m.accommodation_end:
+                if role == "closer":
+                    log.info("    Elig %s on %s closer: SKIP accom_end %s > %s",
+                               member_name, day_date, slot.shift_end, m.accommodation_end)
                 continue
 
+        if role == "closer":
+            log.info("    Elig %s on %s closer: PASS", member_name, day_date)
         eligible.append(m)
 
     return eligible
