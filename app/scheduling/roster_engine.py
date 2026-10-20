@@ -63,6 +63,11 @@ def generate_roster(group_id, start_date, end_date):
     if not slots_by_day_type:
         return {"error": "No shift slots defined for this group"}
 
+    # Log slot roles after normalisation
+    for dt, slot_list in slots_by_day_type.items():
+        for s in slot_list:
+            log.info("  Slot id=%s day_type=%s role='%s' label=%s", s.id, dt, s.role, s.label)
+
     # Load holiday dates for the planning unit's date range
     stat_dates = _get_stat_dates(start_date, end_date)
 
@@ -187,13 +192,22 @@ def get_roster_calendar(group_id, start_date, end_date):
 # ── Internal helpers ────────────────────────────────────────────
 
 def _index_slots(slots):
-    """Group slots by day_type → list of slots, sorted by sort_order."""
+    """Group slots by day_type → list of slots, sorted by sort_order.
+
+    Normalises role to lowercase so all engine comparisons
+    (e.g. ``s.role == "closer"``) work regardless of how the user
+    typed the role in the UI.
+    """
     out = {}
     for s in slots:
-        out.setdefault(s.day_type, []).append(s)
+        # Normalise role and day_type to lowercase once at index time
+        if s.role:
+            s.role = s.role.strip().lower()
+        dt_key = (s.day_type or "").strip().lower()
+        out.setdefault(dt_key, []).append(s)
     # Sort each day_type's slots by sort_order
     for dt in out:
-        out[dt].sort(key=lambda s: (s.sort_order or 0, s.role))
+        out[dt].sort(key=lambda s: (s.sort_order or 0, s.role or ""))
     return out
 
 
@@ -492,9 +506,11 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
             for slot in non_closer_slots:
                 needed = _slots_needed(slot, group, day_type)
-                eligible = [m for m in non_closers
-                           if m.id not in daily_assigned[sun_date]
-                           and _is_available(m, sun_date, pto_dates)]
+                eligible = _get_eligible_members(
+                    non_closers, sun_date, slot.role, pto_dates,
+                    daily_assigned[sun_date])
+                eligible = [m for m in eligible
+                           if m.id not in daily_assigned[sun_date]]
 
                 # Dedicated weekend members first
                 dedicated = [m for m in eligible
@@ -667,12 +683,20 @@ def _process_week(week_days, group, members, slots_by_day_type,
             continue  # no doubling on weekends
 
         # Find members not yet assigned today who still need more days
-        # Skip dedicated closer/opener — they only get their dedicated role
+        # Use _get_eligible_members with a generic "day" role so all
+        # exclusion flags, work_days, accommodations etc. are respected.
+        # Skip dedicated closer/opener — they only get their dedicated role.
+        applicable_slots_p5 = _get_applicable_slots(slots_by_day_type, day_type)
+        backfill_role = "day"  # generic role for eligibility check
+        for _bs in applicable_slots_p5:
+            if _bs.role not in ("closer",):
+                backfill_role = _bs.role
+                break
         unassigned_today = [
-            m for m in members
-            if m.id not in daily_assigned[day_date]
-            and _contract_deficit(m.id) > 0
-            and _is_available(m, day_date, pto_dates)
+            m for m in _get_eligible_members(
+                members, day_date, backfill_role, pto_dates,
+                daily_assigned[day_date])
+            if _contract_deficit(m.id) > 0
             and not m.dedicated_closer
             and not m.dedicated_opener
         ]
