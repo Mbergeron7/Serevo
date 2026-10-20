@@ -42,6 +42,10 @@ def generate_roster(group_id, start_date, end_date):
     if not active_members:
         return {"error": "No active members in group"}
 
+    # Reset one-shot debug flag each generation
+    global _thu_debug_done
+    _thu_debug_done = False
+
     # ── Diagnostic logging ──
     log.info("=== ROSTER ENGINE START: group=%s (%s), range=%s to %s ===",
              group.id, group.name, start_date, end_date)
@@ -58,6 +62,7 @@ def generate_roster(group_id, start_date, end_date):
                  m.exclude_from_closing, m.exclude_from_opening, m.exclude_from_weekends,
                  m.accommodation_no_close,
                  m.work_days, m.excluded_closing_days, m.static_days_json, m.is_fill_in)
+        log.info("    accom_start=%s, accom_end=%s", m.accommodation_start, m.accommodation_end)
 
     slots_by_day_type = _index_slots(group.slots)
     if not slots_by_day_type:
@@ -447,8 +452,12 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 s for s in applicable_slots
                 if m in _get_eligible_members([m], day_date, s, pto_dates, states, group)
             ]
+            if day_date.weekday() == 3:  # Thursday Phase 0 debug
+                log.info("  Phase0 THU %s: m%d eligible_slots=%s (of %d applicable)",
+                         day_date, m.id, [s.role for s in eligible_slots], len(applicable_slots))
             if len(eligible_slots) == 1:
                 slot = eligible_slots[0]
+                log.info("  Phase0 ASSIGN m%d → %s on %s", m.id, slot.role, day_date)
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "accommodation"))
                 _track_day(m.id, day_date)
                 _update_state_for_assignment(states[m.id], day_date, slot)
