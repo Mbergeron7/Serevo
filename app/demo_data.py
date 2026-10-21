@@ -2394,7 +2394,7 @@ def get_demo_payroll_summary(start_date=None, end_date=None):
 
     rng = random.Random(77)
     rows = []
-    for emp in DEMO_EMPLOYEES:
+    for i, emp in enumerate(DEMO_EMPLOYEES, start=1):
         if emp["Status"] != "Active":
             continue
         weeks = span / 7
@@ -2407,9 +2407,11 @@ def get_demo_payroll_summary(start_date=None, end_date=None):
         days_worked = min(span, round(emp["Days Per Week"] * weeks))
         pto = rng.choice([0, 0, 0, 1, 2])
         rows.append({
+            "id": i,
             "employee_id": emp["Employee ID"],
             "name": f"{emp['First Name']} {emp['Last Name']}",
             "department": emp["Latest Skill Name"],
+            "planning_unit": emp["Latest Skill Name"],
             "days_worked": days_worked,
             "total_hours": actual,
             "regular_hours": regular,
@@ -2433,6 +2435,107 @@ def get_demo_payroll_summary(start_date=None, end_date=None):
         "end_date": end_date.isoformat(),
         "rows": rows,
         "totals": totals,
+    }
+
+
+def get_demo_payroll_employees():
+    """Return demo employees for payroll filter dropdown."""
+    results = []
+    for i, emp in enumerate(DEMO_EMPLOYEES, start=1):
+        if emp["Status"] != "Active":
+            continue
+        results.append({
+            "id": i,
+            "name": f"{emp['First Name']} {emp['Last Name']}",
+            "employee_id": emp["Employee ID"],
+            "planning_unit": emp["Latest Skill Name"],
+            "status": emp["Status"],
+        })
+    return results
+
+
+def get_demo_planning_units():
+    """Return demo planning units for payroll filter dropdown."""
+    return [
+        {"id": 1, "name": "Sales Support"},
+        {"id": 2, "name": "Tech Help Desk"},
+        {"id": 3, "name": "Billing"},
+    ]
+
+
+def get_demo_payroll_punches(start_date=None, end_date=None, employee_id=None):
+    """Return realistic demo punch records for the View Punches modal.
+
+    employee_id is a numeric index (1-based) matching the ``id`` field
+    returned by ``get_demo_payroll_summary``.
+    """
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=6)
+    if not end_date:
+        end_date = today
+
+    rng = random.Random(99)
+    rows = []
+    punch_id = 1000
+
+    # Build indexed list matching summary id assignment
+    indexed = list(enumerate(DEMO_EMPLOYEES, start=1))
+    if employee_id:
+        indexed = [(i, e) for i, e in indexed if i == employee_id]
+    employees = [(i, e) for i, e in indexed]
+
+    for _idx, emp in employees:
+        if emp["Status"] != "Active":
+            continue
+        d = start_date
+        while d <= end_date:
+            dow = d.weekday()
+            if dow >= emp["Days Per Week"]:
+                d += datetime.timedelta(days=1)
+                continue
+            base_hour = rng.choice([6, 7, 8, 9])
+            shift_len = emp["Hours Per Day"]
+            ci = datetime.datetime(d.year, d.month, d.day, base_hour, rng.randint(0, 15))
+            co = ci + datetime.timedelta(hours=shift_len, minutes=rng.randint(-10, 20))
+            hrs = round((co - ci).total_seconds() / 3600, 2)
+            approval = rng.choice(["approved", "approved", "approved", "pending", "pending"])
+            adjusted = rng.random() < 0.1
+            rows.append({
+                "id": punch_id,
+                "employee_id": punch_id,  # fake DB id
+                "employee_name": f"{emp['First Name']} {emp['Last Name']}",
+                "employee_id_str": emp["Employee ID"],
+                "date": d.isoformat(),
+                "clock_in": ci.isoformat() + "Z",
+                "clock_out": co.isoformat() + "Z",
+                "total_hours": hrs,
+                "status": "edited" if adjusted else "completed",
+                "approval_status": approval,
+                "original_clock_in": (ci - datetime.timedelta(minutes=5)).isoformat() + "Z" if adjusted else None,
+                "original_clock_out": None,
+                "edited_by": "Demo Admin" if adjusted else None,
+                "edited_at": (ci + datetime.timedelta(hours=10)).isoformat() + "Z" if adjusted else None,
+                "approved_by": "Demo Admin" if approval == "approved" else None,
+                "approved_at": (ci + datetime.timedelta(hours=12)).isoformat() + "Z" if approval == "approved" else None,
+                "admin_note": "Adjusted — employee reported early arrival" if adjusted else None,
+                "clock_in_note": None,
+                "clock_out_note": None,
+            })
+            punch_id += 1
+            d += datetime.timedelta(days=1)
+
+    total = len(rows)
+    pending = sum(1 for r in rows if r["approval_status"] == "pending")
+    approved = sum(1 for r in rows if r["approval_status"] == "approved")
+    flagged = sum(1 for r in rows if r["approval_status"] == "flagged")
+
+    return {
+        "success": True,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "rows": rows,
+        "stats": {"total": total, "pending": pending, "approved": approved, "flagged": flagged},
     }
 
 

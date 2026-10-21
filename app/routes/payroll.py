@@ -32,7 +32,8 @@ def list_employees():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(employees=[])
+        from app.demo_data import get_demo_payroll_employees
+        return jsonify(employees=get_demo_payroll_employees())
     try:
         q = Employee.query.order_by(Employee.last_name, Employee.first_name)
         active_only = request.args.get("active_only", "1")
@@ -58,7 +59,8 @@ def list_planning_units():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(planning_units=[])
+        from app.demo_data import get_demo_planning_units
+        return jsonify(planning_units=get_demo_planning_units())
     try:
         from app.models import PlanningUnit
         pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
@@ -342,6 +344,12 @@ def list_punches():
     except (ValueError, TypeError):
         end = date.today()
         start = end - timedelta(days=6)
+
+    # Demo mode
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_payroll_punches
+        emp_filter = data.get("employee_id")  # numeric demo id
+        return jsonify(get_demo_payroll_punches(start, end, employee_id=emp_filter))
 
     employee_id = data.get("employee_id")  # optional filter
     status_filter = data.get("status")     # optional: pending, approved, flagged
