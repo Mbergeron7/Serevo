@@ -221,7 +221,7 @@ async function loadPayroll() {
     document.getElementById('sumPTO').textContent = t.total_pto_days;
     renderTable();
     closeDrawer();
-  } catch(err) { console.error('loadPayroll error:', err); }
+  } catch(err) { console.error('loadPayroll error:', err); alert('Payroll load error: ' + err.message); }
 }
 
 function renderTable() {
