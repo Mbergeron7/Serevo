@@ -141,30 +141,42 @@
 </style>
 
 <script>
+console.log('[Payroll] Script loaded v3');
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 let payrollRows = [];
 let sortKey = 'name', sortAsc = true;
 let allEmployees = [];
 let currentDrawerEmpId = null;
 
-// Init
-(function() {
+// Init — wait for DOM to be fully ready
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[Payroll] DOMContentLoaded fired');
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 13);
   document.getElementById('startDate').value = start.toISOString().slice(0,10);
   document.getElementById('endDate').value = end.toISOString().slice(0,10);
 
-  // Load filters in background — don't block payroll load
-  loadEmployees();
-  loadPlanningUnits();
-  loadPayroll();
+  // Load filters first, then payroll
+  Promise.all([loadEmployees(), loadPlanningUnits()]).then(function() {
+    console.log('[Payroll] Filters loaded, now loading payroll');
+    loadPayroll();
+  });
 
   // Auto-reload when filters change
-  document.getElementById('filterEmployee').addEventListener('change', loadPayroll);
-  document.getElementById('filterPU').addEventListener('change', loadPayroll);
-  document.getElementById('showInactive').addEventListener('change', function() { loadEmployees(); });
-})();
+  document.getElementById('filterEmployee').addEventListener('change', function() {
+    console.log('[Payroll] Employee filter changed to:', this.value);
+    loadPayroll();
+  });
+  document.getElementById('filterPU').addEventListener('change', function() {
+    console.log('[Payroll] PU filter changed to:', this.value);
+    loadPayroll();
+  });
+  document.getElementById('showInactive').addEventListener('change', function() {
+    console.log('[Payroll] Inactive toggle changed');
+    loadEmployees();
+  });
+});
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
@@ -203,11 +215,13 @@ async function loadPlanningUnits() {
 }
 
 async function loadPayroll() {
+  console.log('[Payroll] loadPayroll called');
   const tbody = document.getElementById('payrollBody');
   tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">Loading…</td></tr>';
   try {
     const start_date = document.getElementById('startDate').value;
     const end_date = document.getElementById('endDate').value;
+    console.log('[Payroll] Date range:', start_date, 'to', end_date);
     if (!start_date || !end_date) {
       tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">Please select a date range.</td></tr>';
       return;
@@ -216,15 +230,18 @@ async function loadPayroll() {
     const body = {start_date, end_date};
     const empFilter = document.getElementById('filterEmployee').value;
     const puFilter = document.getElementById('filterPU').value;
-    if (empFilter) body.employee_id = empFilter;
-    if (puFilter) body.planning_unit_id = puFilter;
+    if (empFilter) body.employee_id = parseInt(empFilter);
+    if (puFilter) body.planning_unit_id = parseInt(puFilter);
+    console.log('[Payroll] Request body:', JSON.stringify(body));
 
     const res = await fetch('/payroll/api/summary', {
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
       body:JSON.stringify(body)
     });
+    console.log('[Payroll] Response status:', res.status);
     if (!res.ok) throw new Error('Server error: ' + res.status);
     const d = await res.json();
+    console.log('[Payroll] Response data: success=' + d.success + ', rows=' + (d.rows ? d.rows.length : 'null'));
     if (!d.success) { alert(d.error || 'Error loading'); return; }
 
     payrollRows = d.rows;
@@ -234,15 +251,18 @@ async function loadPayroll() {
     document.getElementById('sumRegular').textContent = t.total_regular.toLocaleString(undefined, {maximumFractionDigits:1});
     document.getElementById('sumOT').textContent = t.total_overtime.toLocaleString(undefined, {maximumFractionDigits:1});
     document.getElementById('sumPTO').textContent = t.total_pto_days;
+    console.log('[Payroll] Calling renderTable with', payrollRows.length, 'rows');
     renderTable();
     closeDrawer();
   } catch(err) {
-    console.error('loadPayroll error:', err);
+    console.error('[Payroll] loadPayroll error:', err);
     tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:#dc2626;">Error loading data: ' + err.message + '</td></tr>';
   }
 }
 
 function renderTable() {
+  console.log('[Payroll] renderTable: payrollRows.length=' + payrollRows.length);
+  if (payrollRows.length > 0) console.log('[Payroll] First row:', JSON.stringify(payrollRows[0]));
   const rows = [...payrollRows].sort((a,b) => {
     let va = a[sortKey], vb = b[sortKey];
     if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -286,6 +306,7 @@ function sortTable(key) {
 // ── Punch Drawer ──
 
 async function viewPunches(empDbId, empName) {
+  console.log('[Payroll] viewPunches called: empDbId=' + empDbId + ', empName=' + empName);
   currentDrawerEmpId = empDbId;
   document.getElementById('drawerTitle').textContent = 'Punches \u2014 ' + empName;
   document.getElementById('punchDrawer').style.display = 'block';
