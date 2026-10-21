@@ -140,14 +140,18 @@ def payroll_summary():
             emp_data[eid]["edited_entries"] += 1
 
     # Get scheduled hours for comparison
-    schedules = (
-        Schedule.query
-        .filter(Schedule.schedule_date >= start, Schedule.schedule_date <= end)
-        .all()
+    sched_q = Schedule.query.filter(
+        Schedule.schedule_date >= start, Schedule.schedule_date <= end
     )
+    if filter_employee:
+        sched_q = sched_q.filter(Schedule.employee_id == int(filter_employee))
+    schedules = sched_q.all()
+
     sched_hours = {}
     for s in schedules:
         eid = s.employee_id
+        if pu_emp_ids is not None and eid not in pu_emp_ids:
+            continue
         hrs = 0
         if s.shift_start and s.shift_end:
             diff = (
@@ -160,15 +164,14 @@ def payroll_summary():
         sched_hours[eid] = sched_hours.get(eid, 0) + hrs
 
     # Get PTO days in range
-    pto_entries = (
-        PTOEntry.query
-        .filter(
-            PTOEntry.start_date <= end,
-            PTOEntry.end_date >= start,
-            PTOEntry.approval_status == "approved",
-        )
-        .all()
+    pto_q = PTOEntry.query.filter(
+        PTOEntry.start_date <= end,
+        PTOEntry.end_date >= start,
+        PTOEntry.approval_status == "approved",
     )
+    if filter_employee:
+        pto_q = pto_q.filter(PTOEntry.employee_id == int(filter_employee))
+    pto_entries = pto_q.all()
     pto_days = {}
     for p in pto_entries:
         eid = p.employee_id

@@ -290,7 +290,7 @@ function renderTable() {
       <td style="padding:8px 12px;text-align:right;${varColor ? 'color:'+varColor+';font-weight:600;' : ''}">${r.variance > 0 ? '+' : ''}${r.variance}h</td>
       <td style="padding:8px 12px;text-align:right;">${r.pto_days || '—'}</td>
       <td style="padding:8px 12px;text-align:center;">
-        ${r.id ? `<button class="btn-xs" onclick="viewPunches(${r.id},'${esc(r.name).replace(/'/g,'&#39;')}')">View Punches</button>` : ''}
+        ${r.id ? `<button class="btn-xs" data-empid="${r.id}" data-empname="${esc(r.name)}" onclick="viewPunches(Number(this.dataset.empid), this.dataset.empname)">View Punches</button>` : ''}
       </td>
     </tr>`;
   });
