@@ -31,12 +31,18 @@ def list_employees():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
-    return jsonify(employees=[
-        {"id": e.id, "name": e.full_name, "employee_id": e.employee_id,
-         "planning_unit": e.planning_unit.name if e.planning_unit else ""}
-        for e in emps
-    ])
+    if user.get("is_demo"):
+        return jsonify(employees=[])
+    try:
+        emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        return jsonify(employees=[
+            {"id": e.id, "name": e.full_name, "employee_id": e.employee_id,
+             "planning_unit": e.planning_unit.name if e.planning_unit else ""}
+            for e in emps
+        ])
+    except Exception as exc:
+        log.exception("list_employees failed")
+        return jsonify(employees=[])
 
 
 @payroll_bp.route("/api/planning-units", methods=["GET"])
@@ -46,9 +52,15 @@ def list_planning_units():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    from app.models import PlanningUnit
-    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
-    return jsonify(planning_units=[{"id": p.id, "name": p.name} for p in pus])
+    if user.get("is_demo"):
+        return jsonify(planning_units=[])
+    try:
+        from app.models import PlanningUnit
+        pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+        return jsonify(planning_units=[{"id": p.id, "name": p.name} for p in pus])
+    except Exception as exc:
+        log.exception("list_planning_units failed")
+        return jsonify(planning_units=[])
 
 
 @payroll_bp.route("/api/summary", methods=["POST"])

@@ -144,15 +144,21 @@ let allEmployees = [];
 let currentDrawerEmpId = null;
 
 // Init
-(async function() {
+(function() {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 13);
   document.getElementById('startDate').value = start.toISOString().slice(0,10);
   document.getElementById('endDate').value = end.toISOString().slice(0,10);
 
-  await Promise.all([loadEmployees(), loadPlanningUnits()]);
+  // Load filters in background — don't block payroll load
+  loadEmployees();
+  loadPlanningUnits();
   loadPayroll();
+
+  // Auto-reload when filters change
+  document.getElementById('filterEmployee').addEventListener('change', loadPayroll);
+  document.getElementById('filterPU').addEventListener('change', loadPayroll);
 })();
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
