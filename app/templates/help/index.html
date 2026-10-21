@@ -764,8 +764,17 @@
         <li>Find the attendance record in the table and click the <strong>Edit</strong> icon.</li>
         <li>Modify the clock-in time, clock-out time, or both.</li>
         <li>Add a note explaining the correction (e.g., "Employee forgot to clock in, verified by supervisor").</li>
-        <li>Click <strong>Save</strong>. The original and corrected times are both preserved in the audit log.</li>
+        <li>Click <strong>Save</strong>. The original and corrected times are both preserved for audit purposes.</li>
       </ol>
+
+      <h3>Punch Approval</h3>
+      <p>Clock punches go through an approval workflow. Each punch has an approval status:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Pending</strong> — the punch has been recorded but not yet reviewed</li>
+        <li><strong>Approved</strong> — an admin has verified the punch is accurate</li>
+        <li><strong>Adjusted</strong> — an admin has corrected the times (original timestamps are preserved)</li>
+      </ul>
+      <p>Admins can approve or adjust punches from the Attendance page or from the <strong>Payroll → View Punches</strong> screen. Adjusted punches always retain the original clock-in and clock-out times alongside the corrected values, ensuring a full audit trail.</p>
     </div>
   </div>
 
@@ -881,7 +890,7 @@
   <!-- ============================================================ -->
   <!-- PAYROLL -->
   <!-- ============================================================ -->
-  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export overtime regular hours scheduled clock aggregate submit">
+  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export overtime regular hours scheduled clock aggregate submit punches approval adjust edit filter planning unit active inactive">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Payroll</h2><span class="help-chevron">▸</span>
     </div>
@@ -895,13 +904,42 @@
         <li><strong>Approved time off</strong> — PTO, VTO, and other approved absences</li>
       </ul>
 
-      <h3>Pay Period Selection</h3>
+      <h3>Pay Period Selection &amp; Filters</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Go to <strong>Payroll</strong> from the navigation menu.</li>
         <li>Select the pay period start and end dates.</li>
-        <li>The system calculates totals for every employee: regular hours, overtime hours, PTO hours, and total payable hours.</li>
-        <li>Review the results. Flag any discrepancies for correction in the Attendance section.</li>
-        <li>Export the payroll data as CSV for import into your payroll system.</li>
+        <li>Use the <strong>Employee</strong> dropdown to filter to a specific person, or leave it on "All Employees".</li>
+        <li>Use the <strong>Planning Unit</strong> dropdown to filter by team/LOB (e.g., Sales Support, Tech Help Desk, Billing).</li>
+        <li>The system calculates totals for every matching employee: regular hours, overtime hours, PTO hours, and total payable hours.</li>
+      </ol>
+
+      <h3>View Punches</h3>
+      <p>Each employee row in the payroll summary includes a <strong>View Punches</strong> button. Click it to see all of that employee's individual clock punches for the selected pay period:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Clock-in and clock-out timestamps for each day</li>
+        <li>Total hours per punch pair</li>
+        <li>Approval status — whether the punch has been approved, is pending, or was adjusted</li>
+        <li>The name of the admin who approved or adjusted the punch, if applicable</li>
+        <li>Any admin notes attached to the punch</li>
+      </ul>
+
+      <h3>Punch Approval &amp; Adjustment</h3>
+      <p>Admins can review and adjust individual punches directly from the payroll punch view:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Click <strong>View Punches</strong> on an employee's payroll row to open their punch detail.</li>
+        <li>To adjust a punch, click the <strong>Adjust</strong> button on the punch row.</li>
+        <li>Modify the clock-in time, clock-out time, or both. The original timestamps are preserved and remain visible for audit purposes.</li>
+        <li>Add an admin note explaining the reason for the adjustment (e.g., "Employee forgot to clock out — verified shift end with supervisor").</li>
+        <li>Click <strong>Save</strong>. The punch is marked as adjusted, showing both the original and corrected times.</li>
+        <li>Approved and adjusted punches update the payroll totals automatically.</li>
+      </ol>
+
+      <h3>CSV Export</h3>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Configure your filters (date range, employee, planning unit).</li>
+        <li>Click the <strong>Export CSV</strong> button.</li>
+        <li>The CSV file downloads with all visible payroll data, including regular hours, overtime, PTO, and total payable hours per employee.</li>
+        <li>Import the file into your payroll system (compatible with Excel, Google Sheets, or any spreadsheet application).</li>
       </ol>
     </div>
   </div>
