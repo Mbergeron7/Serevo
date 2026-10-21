@@ -36,6 +36,10 @@
       <option value="">All Units</option>
     </select>
   </div>
+  <div style="display:flex;gap:4px;align-items:center;">
+    <input type="checkbox" id="showInactive" style="cursor:pointer;">
+    <label for="showInactive" style="font-size:.78rem;color:var(--text-muted);cursor:pointer;white-space:nowrap;">Include Inactive</label>
+  </div>
 </div>
 
 <!-- Summary Cards -->
@@ -159,22 +163,28 @@ let currentDrawerEmpId = null;
   // Auto-reload when filters change
   document.getElementById('filterEmployee').addEventListener('change', loadPayroll);
   document.getElementById('filterPU').addEventListener('change', loadPayroll);
+  document.getElementById('showInactive').addEventListener('change', function() { loadEmployees(); });
 })();
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
 async function loadEmployees() {
   try {
-    const r = await fetch('/payroll/api/employees', {headers:{'X-CSRFToken':csrf}});
+    const inclInactive = document.getElementById('showInactive').checked ? '0' : '1';
+    const r = await fetch('/payroll/api/employees?active_only=' + inclInactive, {headers:{'X-CSRFToken':csrf}});
     const d = await r.json();
     allEmployees = d.employees || [];
     const sel = document.getElementById('filterEmployee');
+    const curVal = sel.value;
+    // Keep first "All Employees" option, remove rest
+    while (sel.options.length > 1) sel.remove(1);
     allEmployees.forEach(e => {
       const o = document.createElement('option');
       o.value = e.id;
       o.textContent = e.name + (e.employee_id ? ` (${e.employee_id})` : '');
       sel.appendChild(o);
     });
+    sel.value = curVal; // restore selection if still present
   } catch(err) { console.error('Failed to load employees', err); }
 }
 
@@ -193,10 +203,15 @@ async function loadPlanningUnits() {
 }
 
 async function loadPayroll() {
+  const tbody = document.getElementById('payrollBody');
+  tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">Loading…</td></tr>';
   try {
     const start_date = document.getElementById('startDate').value;
     const end_date = document.getElementById('endDate').value;
-    if (!start_date || !end_date) return;
+    if (!start_date || !end_date) {
+      tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">Please select a date range.</td></tr>';
+      return;
+    }
 
     const body = {start_date, end_date};
     const empFilter = document.getElementById('filterEmployee').value;
@@ -208,7 +223,7 @@ async function loadPayroll() {
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
       body:JSON.stringify(body)
     });
-    if (!res.ok) throw new Error(res.statusText);
+    if (!res.ok) throw new Error('Server error: ' + res.status);
     const d = await res.json();
     if (!d.success) { alert(d.error || 'Error loading'); return; }
 
@@ -221,7 +236,10 @@ async function loadPayroll() {
     document.getElementById('sumPTO').textContent = t.total_pto_days;
     renderTable();
     closeDrawer();
-  } catch(err) { console.error('loadPayroll error:', err); alert('Payroll load error: ' + err.message); }
+  } catch(err) {
+    console.error('loadPayroll error:', err);
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:#dc2626;">Error loading data: ' + err.message + '</td></tr>';
+  }
 }
 
 function renderTable() {

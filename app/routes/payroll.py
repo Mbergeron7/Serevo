@@ -34,10 +34,15 @@ def list_employees():
     if user.get("is_demo"):
         return jsonify(employees=[])
     try:
-        emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        q = Employee.query.order_by(Employee.last_name, Employee.first_name)
+        active_only = request.args.get("active_only", "1")
+        if active_only == "1":
+            q = q.filter(Employee.status == "Active")
+        emps = q.all()
         return jsonify(employees=[
             {"id": e.id, "name": e.full_name, "employee_id": e.employee_id,
-             "planning_unit": e.planning_unit.name if e.planning_unit else ""}
+             "planning_unit": e.planning_unit.name if e.planning_unit else "",
+             "status": e.status}
             for e in emps
         ])
     except Exception as exc:
