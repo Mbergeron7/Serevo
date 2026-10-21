@@ -2758,8 +2758,17 @@ class TimeClock(db.Model):
     edited_by     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     edited_at     = db.Column(db.DateTime, nullable=True)
 
+    # Admin approval / adjustment fields
+    original_clock_in  = db.Column(db.DateTime, nullable=True)   # saved before admin edit
+    original_clock_out = db.Column(db.DateTime, nullable=True)
+    approval_status    = db.Column(db.String(20), default="pending")  # pending, approved, flagged
+    approved_by        = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approved_at        = db.Column(db.DateTime, nullable=True)
+    admin_note         = db.Column(db.String(500), nullable=True)
+
     employee = db.relationship("Employee", backref="time_punches")
     editor   = db.relationship("User", foreign_keys=[edited_by])
+    approver = db.relationship("User", foreign_keys=[approved_by])
 
 
 class Announcement(db.Model):

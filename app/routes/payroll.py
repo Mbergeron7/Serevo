@@ -1,15 +1,15 @@
 """
 Payroll Export — aggregate timesheet data by employee for a pay period.
-Admins can view summaries and export to CSV.
+Admins can view summaries, export to CSV, and approve/adjust punch times.
 """
 import csv
 import io
 import logging
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, get_current_user
-from app.models import Employee, TimeClock, Schedule, PTOEntry
+from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User
 
 log = logging.getLogger(__name__)
 payroll_bp = Blueprint("payroll", __name__, url_prefix="/payroll")
@@ -237,3 +237,220 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ADMIN PUNCH MANAGEMENT
+# ═══════════════════════════════════════════════════════════════
+
+@payroll_bp.route("/admin")
+@login_required
+def punch_admin():
+    """Admin page for reviewing / adjusting punch times."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return "Forbidden", 403
+    return render_template("payroll/admin.html", user=user)
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
+def _utc_iso(dt):
+    if dt is None:
+        return None
+    s = dt.isoformat()
+    if not s.endswith("Z") and "+" not in s and "-" not in s[10:]:
+        s += "Z"
+    return s
+
+
+@payroll_bp.route("/api/punches", methods=["POST"])
+@login_required
+def list_punches():
+    """List individual punch records for admin review."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        start = date.fromisoformat(data.get("start_date", ""))
+        end = date.fromisoformat(data.get("end_date", ""))
+    except (ValueError, TypeError):
+        end = date.today()
+        start = end - timedelta(days=6)
+
+    employee_id = data.get("employee_id")  # optional filter
+    status_filter = data.get("status")     # optional: pending, approved, flagged
+
+    q = TimeClock.query.filter(
+        TimeClock.date >= start,
+        TimeClock.date <= end,
+    )
+    if employee_id:
+        q = q.filter(TimeClock.employee_id == employee_id)
+    if status_filter:
+        q = q.filter(TimeClock.approval_status == status_filter)
+
+    q = q.order_by(TimeClock.date.desc(), TimeClock.clock_in.desc())
+    entries = q.limit(500).all()
+
+    # Gather employee & editor info
+    emp_ids = {e.employee_id for e in entries}
+    user_ids = {e.edited_by for e in entries if e.edited_by}
+    user_ids |= {e.approved_by for e in entries if e.approved_by}
+
+    emps = Employee.query.filter(Employee.id.in_(emp_ids)).all() if emp_ids else []
+    emp_map = {e.id: e for e in emps}
+    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+    user_map = {u.id: u for u in users}
+
+    rows = []
+    for e in entries:
+        emp = emp_map.get(e.employee_id)
+        editor = user_map.get(e.edited_by) if e.edited_by else None
+        approver = user_map.get(e.approved_by) if e.approved_by else None
+        rows.append({
+            "id": e.id,
+            "employee_id": e.employee_id,
+            "employee_name": (emp.first_name + " " + emp.last_name) if emp else "Unknown",
+            "employee_id_str": emp.employee_id if emp else "",
+            "date": e.date.isoformat(),
+            "clock_in": _utc_iso(e.clock_in),
+            "clock_out": _utc_iso(e.clock_out),
+            "total_hours": e.total_hours,
+            "status": e.status,
+            "approval_status": e.approval_status or "pending",
+            "original_clock_in": _utc_iso(e.original_clock_in),
+            "original_clock_out": _utc_iso(e.original_clock_out),
+            "edited_by": editor.username if editor else None,
+            "edited_at": _utc_iso(e.edited_at),
+            "approved_by": approver.username if approver else None,
+            "approved_at": _utc_iso(e.approved_at),
+            "admin_note": e.admin_note,
+            "clock_in_note": e.clock_in_note,
+            "clock_out_note": e.clock_out_note,
+        })
+
+    # Stats
+    total = len(rows)
+    pending = sum(1 for r in rows if r["approval_status"] == "pending")
+    approved = sum(1 for r in rows if r["approval_status"] == "approved")
+    flagged = sum(1 for r in rows if r["approval_status"] == "flagged")
+
+    return jsonify(
+        success=True,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        rows=rows,
+        stats={"total": total, "pending": pending, "approved": approved, "flagged": flagged},
+    )
+
+
+@payroll_bp.route("/api/punch/<int:punch_id>/adjust", methods=["POST"])
+@login_required
+def adjust_punch(punch_id):
+    """Admin adjusts clock_in / clock_out for a punch entry."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+
+    entry = TimeClock.query.get(punch_id)
+    if not entry:
+        return jsonify(success=False, error="Punch entry not found"), 404
+
+    data = request.get_json(silent=True) or {}
+    new_in = data.get("clock_in")
+    new_out = data.get("clock_out")
+    note = data.get("note", "")
+
+    if not new_in and not new_out:
+        return jsonify(success=False, error="Provide clock_in or clock_out to adjust")
+
+    # Save originals before first edit
+    if not entry.original_clock_in and entry.clock_in:
+        entry.original_clock_in = entry.clock_in
+    if not entry.original_clock_out and entry.clock_out:
+        entry.original_clock_out = entry.clock_out
+
+    if new_in:
+        try:
+            entry.clock_in = datetime.fromisoformat(new_in.replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify(success=False, error="Invalid clock_in format")
+    if new_out:
+        try:
+            entry.clock_out = datetime.fromisoformat(new_out.replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify(success=False, error="Invalid clock_out format")
+
+    # Recalculate total_hours
+    if entry.clock_in and entry.clock_out:
+        ci = entry.clock_in if entry.clock_in.tzinfo else entry.clock_in.replace(tzinfo=timezone.utc)
+        co = entry.clock_out if entry.clock_out.tzinfo else entry.clock_out.replace(tzinfo=timezone.utc)
+        entry.total_hours = round((co - ci).total_seconds() / 3600, 2)
+
+    entry.status = "edited"
+    entry.edited_by = user.get("id")
+    entry.edited_at = _utcnow()
+    if note:
+        entry.admin_note = note
+
+    db.session.commit()
+    return jsonify(success=True, total_hours=entry.total_hours)
+
+
+@payroll_bp.route("/api/punch/<int:punch_id>/approve", methods=["POST"])
+@login_required
+def approve_punch(punch_id):
+    """Admin approves or flags a punch entry."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+
+    entry = TimeClock.query.get(punch_id)
+    if not entry:
+        return jsonify(success=False, error="Punch entry not found"), 404
+
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("approval_status", "approved")
+    if new_status not in ("approved", "flagged", "pending"):
+        return jsonify(success=False, error="Invalid approval_status")
+
+    entry.approval_status = new_status
+    entry.approved_by = user.get("id")
+    entry.approved_at = _utcnow()
+    if data.get("note"):
+        entry.admin_note = data["note"]
+
+    db.session.commit()
+    return jsonify(success=True, approval_status=new_status)
+
+
+@payroll_bp.route("/api/punches/bulk-approve", methods=["POST"])
+@login_required
+def bulk_approve():
+    """Approve multiple punch entries at once."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify(success=False, error="No punch IDs provided")
+
+    now = _utcnow()
+    count = 0
+    for pid in ids:
+        entry = TimeClock.query.get(pid)
+        if entry and entry.approval_status != "approved":
+            entry.approval_status = "approved"
+            entry.approved_by = user.get("id")
+            entry.approved_at = now
+            count += 1
+
+    db.session.commit()
+    return jsonify(success=True, approved_count=count)

@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Punch Admin — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Punch Admin</h1>
+    <p style="color:var(--text-muted);margin:4px 0 0;">Review, adjust, and approve employee punch records.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <label style="font-size:.82rem;color:var(--text-muted);">From:</label>
+      <input type="date" id="startDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+      <label style="font-size:.82rem;color:var(--text-muted);">To:</label>
+      <input type="date" id="endDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+    </div>
+    <select id="filterStatus" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
+      <option value="">All Status</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="flagged">Flagged</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadPunches()" style="font-size:.82rem;padding:6px 16px;">Load</button>
+    <a href="/payroll/" class="btn btn-outline" style="font-size:.82rem;padding:6px 16px;text-decoration:none;">← Payroll Export</a>
+  </div>
+</div>
+
+<!-- Stats Cards -->
+<div id="statsCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
+  <div class="s-card"><div class="s-label">Total</div><div class="s-val" id="statTotal">—</div></div>
+  <div class="s-card"><div class="s-label">Pending</div><div class="s-val" id="statPending" style="color:#d97706;">—</div></div>
+  <div class="s-card"><div class="s-label">Approved</div><div class="s-val" id="statApproved" style="color:#059669;">—</div></div>
+  <div class="s-card"><div class="s-label">Flagged</div><div class="s-val" id="statFlagged" style="color:#dc2626;">—</div></div>
+</div>
+
+<!-- Bulk Actions -->
+<div id="bulkBar" style="display:none;margin-bottom:12px;padding:10px 16px;background:var(--primary);color:#fff;border-radius:8px;display:none;align-items:center;gap:12px;font-size:.85rem;">
+  <span id="bulkCount">0 selected</span>
+  <button onclick="bulkApprove()" style="padding:4px 14px;border:1px solid rgba(255,255,255,.4);border-radius:6px;background:transparent;color:#fff;cursor:pointer;font-size:.82rem;">✓ Approve Selected</button>
+  <button onclick="clearSelection()" style="padding:4px 14px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;font-size:.82rem;">Cancel</button>
+</div>
+
+<!-- Punch Table -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+  <div style="overflow-x:auto;">
+    <table id="punchTable" style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead>
+        <tr style="background:var(--bg);">
+          <th style="padding:10px 8px;border-bottom:2px solid var(--border);width:30px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)"></th>
+          <th style="text-align:left;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Employee</th>
+          <th style="text-align:left;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Date</th>
+          <th style="text-align:left;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Clock In</th>
+          <th style="text-align:left;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Clock Out</th>
+          <th style="text-align:right;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Hours</th>
+          <th style="text-align:center;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Status</th>
+          <th style="text-align:center;padding:10px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="punchBody">
+        <tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text-muted);">Select a date range and click Load.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit Punch Modal -->
+<div id="editModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <h3 style="margin:0 0 16px;">Edit Punch</h3>
+    <input type="hidden" id="editPunchId">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Employee</label>
+      <div id="editEmpName" style="font-weight:600;font-size:.9rem;"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Date</label>
+      <div id="editDate" style="font-size:.9rem;"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Clock In</label>
+        <input type="datetime-local" id="editClockIn" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.85rem;">
+        <div id="editOrigIn" style="font-size:.72rem;color:var(--text-muted);margin-top:2px;"></div>
+      </div>
+      <div>
+        <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Clock Out</label>
+        <input type="datetime-local" id="editClockOut" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.85rem;">
+        <div id="editOrigOut" style="font-size:.72rem;color:var(--text-muted);margin-top:2px;"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Admin Note</label>
+      <textarea id="editNote" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.85rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeEditModal()" style="font-size:.82rem;padding:6px 16px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()" style="font-size:.82rem;padding:6px 16px;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.s-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; text-align:center; }
+.s-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600; letter-spacing:.3px; margin-bottom:2px; }
+.s-val { font-size:1.5rem; font-weight:700; color:var(--text); }
+.badge-pending { background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600; }
+.badge-approved { background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600; }
+.badge-flagged { background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600; }
+.badge-edited { background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600;margin-left:4px; }
+.act-btn { padding:3px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:.75rem; }
+.act-btn:hover { background:var(--bg); }
+</style>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+let punchRows = [];
+let selectedIds = new Set();
+
+// Default to last 7 days
+(function() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 6);
+  document.getElementById('startDate').value = start.toISOString().slice(0,10);
+  document.getElementById('endDate').value = end.toISOString().slice(0,10);
+  loadPunches();
+})();
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+}
+
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+async function loadPunches() {
+  const start_date = document.getElementById('startDate').value;
+  const end_date = document.getElementById('endDate').value;
+  const status = document.getElementById('filterStatus').value;
+  if (!start_date || !end_date) return;
+
+  let res;
+  try {
+    res = await fetch('/payroll/api/punches', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({start_date, end_date, status: status || undefined})
+    });
+  } catch(err) { console.error(err); return; }
+  const d = await res.json();
+  if (!d.success) { alert(d.error || 'Error'); return; }
+
+  punchRows = d.rows;
+  selectedIds.clear();
+  updateBulkBar();
+
+  const s = d.stats;
+  document.getElementById('statTotal').textContent = s.total;
+  document.getElementById('statPending').textContent = s.pending;
+  document.getElementById('statApproved').textContent = s.approved;
+  document.getElementById('statFlagged').textContent = s.flagged;
+  renderPunches();
+}
+
+function renderPunches() {
+  const tbody = document.getElementById('punchBody');
+  if (!punchRows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text-muted);">No punch records found.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  punchRows.forEach(r => {
+    const checked = selectedIds.has(r.id) ? 'checked' : '';
+    const asBadge = r.approval_status === 'approved' ? 'badge-approved' :
+                    r.approval_status === 'flagged' ? 'badge-flagged' : 'badge-pending';
+    const editedBadge = r.status === 'edited' ? '<span class="badge-edited">edited</span>' : '';
+    const origIn = r.original_clock_in ? `<div style="font-size:.7rem;color:var(--text-muted);">was ${fmtTime(r.original_clock_in)}</div>` : '';
+    const origOut = r.original_clock_out ? `<div style="font-size:.7rem;color:var(--text-muted);">was ${fmtTime(r.original_clock_out)}</div>` : '';
+    const noteIcon = r.admin_note ? `<span title="${esc(r.admin_note)}" style="cursor:help;">📝</span>` : '';
+
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;text-align:center;"><input type="checkbox" ${checked} onchange="toggleSelect(${r.id}, this.checked)"></td>
+      <td style="padding:8px;"><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:.72rem;color:var(--text-muted);">${esc(r.employee_id_str)}</div></td>
+      <td style="padding:8px;">${fmtDateShort(r.date)}</td>
+      <td style="padding:8px;">${fmtTime(r.clock_in)}${origIn}</td>
+      <td style="padding:8px;">${fmtTime(r.clock_out)}${origOut}</td>
+      <td style="padding:8px;text-align:right;font-weight:600;">${r.total_hours != null ? r.total_hours.toFixed(2) : '—'}</td>
+      <td style="padding:8px;text-align:center;"><span class="${asBadge}">${r.approval_status}</span>${editedBadge} ${noteIcon}</td>
+      <td style="padding:8px;text-align:center;white-space:nowrap;">
+        <button class="act-btn" onclick="openEdit(${r.id})" title="Edit punch">✏️</button>
+        ${r.approval_status !== 'approved' ? `<button class="act-btn" onclick="quickApprove(${r.id})" title="Approve" style="color:#059669;">✓</button>` : ''}
+        ${r.approval_status !== 'flagged' ? `<button class="act-btn" onclick="quickFlag(${r.id})" title="Flag" style="color:#dc2626;">⚑</button>` : ''}
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+// Selection
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+}
+function toggleAll(checked) {
+  selectedIds.clear();
+  if (checked) punchRows.forEach(r => selectedIds.add(r.id));
+  updateBulkBar();
+  renderPunches();
+}
+function clearSelection() {
+  selectedIds.clear();
+  document.getElementById('selectAll').checked = false;
+  updateBulkBar();
+  renderPunches();
+}
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (selectedIds.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = selectedIds.size + ' selected';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// Quick actions
+async function quickApprove(id) {
+  await fetch(`/payroll/api/punch/${id}/approve`, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({approval_status:'approved'})
+  });
+  loadPunches();
+}
+async function quickFlag(id) {
+  await fetch(`/payroll/api/punch/${id}/approve`, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({approval_status:'flagged'})
+  });
+  loadPunches();
+}
+async function bulkApprove() {
+  if (!selectedIds.size) return;
+  await fetch('/payroll/api/punches/bulk-approve', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify({ids: Array.from(selectedIds)})
+  });
+  loadPunches();
+}
+
+// Edit modal
+function openEdit(id) {
+  const r = punchRows.find(p => p.id === id);
+  if (!r) return;
+  document.getElementById('editPunchId').value = r.id;
+  document.getElementById('editEmpName').textContent = r.employee_name;
+  document.getElementById('editDate').textContent = fmtDateShort(r.date);
+  document.getElementById('editClockIn').value = toLocalInput(r.clock_in);
+  document.getElementById('editClockOut').value = toLocalInput(r.clock_out);
+  document.getElementById('editOrigIn').textContent = r.original_clock_in ? 'Original: ' + fmtTime(r.original_clock_in) : '';
+  document.getElementById('editOrigOut').textContent = r.original_clock_out ? 'Original: ' + fmtTime(r.original_clock_out) : '';
+  document.getElementById('editNote').value = r.admin_note || '';
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+async function saveEdit() {
+  const id = document.getElementById('editPunchId').value;
+  const clockIn = document.getElementById('editClockIn').value;
+  const clockOut = document.getElementById('editClockOut').value;
+  const note = document.getElementById('editNote').value;
+
+  const body = {note};
+  if (clockIn) body.clock_in = new Date(clockIn).toISOString();
+  if (clockOut) body.clock_out = new Date(clockOut).toISOString();
+
+  const res = await fetch(`/payroll/api/punch/${id}/adjust`, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+    body:JSON.stringify(body)
+  });
+  const d = await res.json();
+  if (!d.success) { alert(d.error || 'Error saving'); return; }
+  closeEditModal();
+  loadPunches();
+}
+
+// Close modal on backdrop click
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+</script>
+{% endblock %}
