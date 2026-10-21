@@ -92,10 +92,10 @@ def payroll_summary():
     for s in schedules:
         eid = s.employee_id
         hrs = 0
-        if s.start_time and s.end_time:
+        if s.shift_start and s.shift_end:
             diff = (
-                datetime.combine(date.today(), s.end_time)
-                - datetime.combine(date.today(), s.start_time)
+                datetime.combine(date.today(), s.shift_end)
+                - datetime.combine(date.today(), s.shift_start)
             )
             hrs = diff.total_seconds() / 3600
             if hrs < 0:
