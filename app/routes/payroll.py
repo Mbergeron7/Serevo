@@ -190,6 +190,7 @@ def payroll_summary():
         regular = round(actual - overtime, 2)
 
         rows.append({
+            "id": emp.id,
             "employee_id": emp.employee_id,
             "name": emp.full_name,
             "department": (emp.planning_unit.name if emp.planning_unit else ""),

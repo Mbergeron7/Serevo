@@ -240,8 +240,6 @@ function renderTable() {
   rows.forEach(r => {
     const varColor = r.variance > 0 ? '#059669' : r.variance < 0 ? '#dc2626' : '';
     const otStyle = r.overtime_hours > 0 ? 'color:#d97706;font-weight:700;' : '';
-    const empObj = allEmployees.find(e => e.employee_id === r.employee_id);
-    const dbId = empObj ? empObj.id : '';
     html += `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px 12px;">${esc(r.employee_id)}</td>
       <td style="padding:8px 12px;font-weight:600;">${esc(r.name)}</td>
@@ -254,7 +252,7 @@ function renderTable() {
       <td style="padding:8px 12px;text-align:right;${varColor ? 'color:'+varColor+';font-weight:600;' : ''}">${r.variance > 0 ? '+' : ''}${r.variance}h</td>
       <td style="padding:8px 12px;text-align:right;">${r.pto_days || '—'}</td>
       <td style="padding:8px 12px;text-align:center;">
-        ${dbId ? `<button class="btn-xs" onclick="viewPunches(${dbId},'${esc(r.name).replace(/'/g,'&#39;')}')">View Punches</button>` : ''}
+        ${r.id ? `<button class="btn-xs" onclick="viewPunches(${r.id},'${esc(r.name).replace(/'/g,'&#39;')}')">View Punches</button>` : ''}
       </td>
     </tr>`;
   });
