@@ -140,7 +140,7 @@ def payroll_summary():
         rows.append({
             "employee_id": emp.employee_id,
             "name": emp.full_name,
-            "department": emp.department or "",
+            "department": (emp.planning_unit.name if emp.planning_unit else ""),
             "days_worked": len(d["days_worked"]),
             "total_hours": actual,
             "regular_hours": regular,
@@ -227,7 +227,7 @@ def export_csv():
         overtime = max(0, round(actual - 40, 2)) if actual > 40 else 0
         regular = round(actual - overtime, 2)
         writer.writerow([
-            emp.employee_id, emp.full_name, emp.department or "",
+            emp.employee_id, emp.full_name, (emp.planning_unit.name if emp.planning_unit else ""),
             len(d["days_worked"]), actual, regular, overtime,
         ])
 
