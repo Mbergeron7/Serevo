@@ -193,36 +193,35 @@ async function loadPlanningUnits() {
 }
 
 async function loadPayroll() {
-  const start_date = document.getElementById('startDate').value;
-  const end_date = document.getElementById('endDate').value;
-  if (!start_date || !end_date) return;
-
-  const body = {start_date, end_date};
-  const empFilter = document.getElementById('filterEmployee').value;
-  const puFilter = document.getElementById('filterPU').value;
-  if (empFilter) body.employee_id = empFilter;
-  if (puFilter) body.planning_unit_id = puFilter;
-
-  let res;
   try {
-    res = await fetch('/payroll/api/summary', {
+    const start_date = document.getElementById('startDate').value;
+    const end_date = document.getElementById('endDate').value;
+    if (!start_date || !end_date) return;
+
+    const body = {start_date, end_date};
+    const empFilter = document.getElementById('filterEmployee').value;
+    const puFilter = document.getElementById('filterPU').value;
+    if (empFilter) body.employee_id = empFilter;
+    if (puFilter) body.planning_unit_id = puFilter;
+
+    const res = await fetch('/payroll/api/summary', {
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
       body:JSON.stringify(body)
     });
     if (!res.ok) throw new Error(res.statusText);
-  } catch(err) { console.error(err); alert('Network error loading payroll'); return; }
-  const d = await res.json();
-  if (!d.success) { alert(d.error || 'Error loading'); return; }
+    const d = await res.json();
+    if (!d.success) { alert(d.error || 'Error loading'); return; }
 
-  payrollRows = d.rows;
-  const t = d.totals;
-  document.getElementById('sumEmployees').textContent = t.total_employees;
-  document.getElementById('sumHours').textContent = t.total_hours.toLocaleString(undefined, {maximumFractionDigits:1});
-  document.getElementById('sumRegular').textContent = t.total_regular.toLocaleString(undefined, {maximumFractionDigits:1});
-  document.getElementById('sumOT').textContent = t.total_overtime.toLocaleString(undefined, {maximumFractionDigits:1});
-  document.getElementById('sumPTO').textContent = t.total_pto_days;
-  renderTable();
-  closeDrawer();
+    payrollRows = d.rows;
+    const t = d.totals;
+    document.getElementById('sumEmployees').textContent = t.total_employees;
+    document.getElementById('sumHours').textContent = t.total_hours.toLocaleString(undefined, {maximumFractionDigits:1});
+    document.getElementById('sumRegular').textContent = t.total_regular.toLocaleString(undefined, {maximumFractionDigits:1});
+    document.getElementById('sumOT').textContent = t.total_overtime.toLocaleString(undefined, {maximumFractionDigits:1});
+    document.getElementById('sumPTO').textContent = t.total_pto_days;
+    renderTable();
+    closeDrawer();
+  } catch(err) { console.error('loadPayroll error:', err); }
 }
 
 function renderTable() {
@@ -255,7 +254,7 @@ function renderTable() {
       <td style="padding:8px 12px;text-align:right;${varColor ? 'color:'+varColor+';font-weight:600;' : ''}">${r.variance > 0 ? '+' : ''}${r.variance}h</td>
       <td style="padding:8px 12px;text-align:right;">${r.pto_days || '—'}</td>
       <td style="padding:8px 12px;text-align:center;">
-        ${dbId ? `<button class="btn-xs" onclick="viewPunches(${dbId},'${esc(r.name)}')">View Punches</button>` : ''}
+        ${dbId ? `<button class="btn-xs" onclick="viewPunches(${dbId},'${esc(r.name).replace(/'/g,'&#39;')}')">View Punches</button>` : ''}
       </td>
     </tr>`;
   });
