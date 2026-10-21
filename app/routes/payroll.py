@@ -24,6 +24,33 @@ def index():
     return render_template("payroll/index.html", user=user)
 
 
+@payroll_bp.route("/api/employees", methods=["GET"])
+@login_required
+def list_employees():
+    """Return employees for filter dropdowns."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+    return jsonify(employees=[
+        {"id": e.id, "name": e.full_name, "employee_id": e.employee_id,
+         "planning_unit": e.planning_unit.name if e.planning_unit else ""}
+        for e in emps
+    ])
+
+
+@payroll_bp.route("/api/planning-units", methods=["GET"])
+@login_required
+def list_planning_units():
+    """Return distinct planning units for filter dropdown."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+    from app.models import PlanningUnit
+    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    return jsonify(planning_units=[{"id": p.id, "name": p.name} for p in pus])
+
+
 @payroll_bp.route("/api/summary", methods=["POST"])
 @login_required
 def payroll_summary():
@@ -56,18 +83,31 @@ def payroll_summary():
     if (end - start).days > 90:
         return jsonify(success=False, error="Date range cannot exceed 90 days")
 
+    # Optional filters
+    filter_employee = data.get("employee_id")       # DB id
+    filter_pu = data.get("planning_unit_id")         # planning unit id
+
     # Get all completed time entries in range
-    entries = (
+    q = (
         TimeClock.query
         .filter(TimeClock.date >= start, TimeClock.date <= end)
         .filter(TimeClock.status.in_(["completed", "edited"]))
-        .all()
     )
+    if filter_employee:
+        q = q.filter(TimeClock.employee_id == int(filter_employee))
+    entries = q.all()
+
+    # If planning unit filter, restrict employee set
+    pu_emp_ids = None
+    if filter_pu:
+        pu_emp_ids = {e.id for e in Employee.query.filter_by(planning_unit_id=int(filter_pu)).all()}
 
     # Aggregate by employee
     emp_data = {}
     for tc in entries:
         eid = tc.employee_id
+        if pu_emp_ids is not None and eid not in pu_emp_ids:
+            continue
         if eid not in emp_data:
             emp_data[eid] = {
                 "total_hours": 0.0,

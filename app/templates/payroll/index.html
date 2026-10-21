@@ -8,15 +8,33 @@
     <p style="color:var(--text-muted);margin:4px 0 0;">Review and export timesheet data for payroll processing.</p>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <div style="display:flex;gap:6px;align-items:center;">
-      <label style="font-size:.82rem;color:var(--text-muted);">From:</label>
-      <input type="date" id="startDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
-      <label style="font-size:.82rem;color:var(--text-muted);">To:</label>
-      <input type="date" id="endDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;">
-    </div>
     <button class="btn btn-primary" onclick="loadPayroll()" style="font-size:.82rem;padding:6px 16px;">Load</button>
     <button class="btn btn-outline" onclick="exportCSV()" style="font-size:.82rem;padding:6px 16px;">⬇ Export CSV</button>
     <a href="/payroll/admin" class="btn btn-outline" style="font-size:.82rem;padding:6px 16px;text-decoration:none;">🔧 Punch Admin</a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+  <div style="display:flex;gap:6px;align-items:center;">
+    <label style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">From:</label>
+    <input type="date" id="startDate" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.82rem;">
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <label style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">To:</label>
+    <input type="date" id="endDate" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.82rem;">
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <label style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">Employee:</label>
+    <select id="filterEmployee" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.82rem;max-width:200px;">
+      <option value="">All Employees</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <label style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">Planning Unit:</label>
+    <select id="filterPU" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.82rem;max-width:200px;">
+      <option value="">All Units</option>
+    </select>
   </div>
 </div>
 
@@ -35,22 +53,73 @@
     <table id="payrollTable" style="width:100%;border-collapse:collapse;font-size:.82rem;">
       <thead>
         <tr style="background:var(--bg);">
-          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('employee_id')">ID ↕</th>
-          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('name')">Name ↕</th>
-          <th style="text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Dept</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Days</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;" onclick="sortTable('total_hours')">Total Hrs ↕</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Regular</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">OT</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Scheduled</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Variance</th>
-          <th style="text-align:right;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">PTO</th>
+          <th class="th-col" onclick="sortTable('employee_id')">ID ↕</th>
+          <th class="th-col" onclick="sortTable('name')">Name ↕</th>
+          <th class="th-col">Dept</th>
+          <th class="th-col" style="text-align:right;">Days</th>
+          <th class="th-col" style="text-align:right;" onclick="sortTable('total_hours')">Total Hrs ↕</th>
+          <th class="th-col" style="text-align:right;">Regular</th>
+          <th class="th-col" style="text-align:right;">OT</th>
+          <th class="th-col" style="text-align:right;">Scheduled</th>
+          <th class="th-col" style="text-align:right;">Variance</th>
+          <th class="th-col" style="text-align:right;">PTO</th>
+          <th class="th-col" style="text-align:center;">Actions</th>
         </tr>
       </thead>
       <tbody id="payrollBody">
-        <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text-muted);">Select a date range and click Load.</td></tr>
+        <tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">Select a date range and click Load.</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Punch Detail Drawer -->
+<div id="punchDrawer" style="display:none;margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg);">
+    <h3 style="margin:0;font-size:.92rem;" id="drawerTitle">Punch Details</h3>
+    <button onclick="closeDrawer()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead>
+        <tr style="background:var(--bg);">
+          <th class="th-col">Date</th>
+          <th class="th-col">Clock In</th>
+          <th class="th-col">Clock Out</th>
+          <th class="th-col" style="text-align:right;">Hours</th>
+          <th class="th-col">Status</th>
+          <th class="th-col">Approval</th>
+          <th class="th-col" style="text-align:center;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="punchBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit Punch Modal -->
+<div id="editModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:90%;max-width:460px;">
+    <h3 style="margin:0 0 16px;">Edit Punch</h3>
+    <input type="hidden" id="editPunchId">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Clock In</label>
+      <input type="datetime-local" id="editClockIn" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+      <div id="editOrigIn" style="font-size:.72rem;color:var(--text-muted);margin-top:2px;"></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Clock Out</label>
+      <input type="datetime-local" id="editClockOut" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+      <div id="editOrigOut" style="font-size:.72rem;color:var(--text-muted);margin-top:2px;"></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Admin Note</label>
+      <textarea id="editNote" rows="2" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeEditModal()" style="font-size:.82rem;padding:6px 16px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()" style="font-size:.82rem;padding:6px 16px;">Save</button>
+    </div>
   </div>
 </div>
 
@@ -58,35 +127,81 @@
 .s-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; text-align:center; }
 .s-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600; letter-spacing:.3px; margin-bottom:2px; }
 .s-val { font-size:1.5rem; font-weight:700; color:var(--text); }
+.th-col { text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);cursor:pointer;white-space:nowrap; }
+.badge { display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600; }
+.badge-pending { background:#fef3c7;color:#92400e; }
+.badge-approved { background:#d1fae5;color:#065f46; }
+.badge-flagged { background:#fee2e2;color:#991b1b; }
+.btn-xs { padding:3px 8px;font-size:.72rem;border-radius:5px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text); }
+.btn-xs:hover { background:var(--border); }
 </style>
 
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 let payrollRows = [];
 let sortKey = 'name', sortAsc = true;
+let allEmployees = [];
+let currentDrawerEmpId = null;
 
-// Default to last 14 days
-(function() {
+// Init
+(async function() {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 13);
   document.getElementById('startDate').value = start.toISOString().slice(0,10);
   document.getElementById('endDate').value = end.toISOString().slice(0,10);
+
+  await Promise.all([loadEmployees(), loadPlanningUnits()]);
   loadPayroll();
 })();
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+async function loadEmployees() {
+  try {
+    const r = await fetch('/payroll/api/employees', {headers:{'X-CSRFToken':csrf}});
+    const d = await r.json();
+    allEmployees = d.employees || [];
+    const sel = document.getElementById('filterEmployee');
+    allEmployees.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.id;
+      o.textContent = e.name + (e.employee_id ? ` (${e.employee_id})` : '');
+      sel.appendChild(o);
+    });
+  } catch(err) { console.error('Failed to load employees', err); }
+}
+
+async function loadPlanningUnits() {
+  try {
+    const r = await fetch('/payroll/api/planning-units', {headers:{'X-CSRFToken':csrf}});
+    const d = await r.json();
+    const sel = document.getElementById('filterPU');
+    (d.planning_units || []).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      sel.appendChild(o);
+    });
+  } catch(err) { console.error('Failed to load planning units', err); }
+}
 
 async function loadPayroll() {
   const start_date = document.getElementById('startDate').value;
   const end_date = document.getElementById('endDate').value;
   if (!start_date || !end_date) return;
 
+  const body = {start_date, end_date};
+  const empFilter = document.getElementById('filterEmployee').value;
+  const puFilter = document.getElementById('filterPU').value;
+  if (empFilter) body.employee_id = empFilter;
+  if (puFilter) body.planning_unit_id = puFilter;
+
   let res;
   try {
     res = await fetch('/payroll/api/summary', {
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
-      body:JSON.stringify({start_date, end_date})
+      body:JSON.stringify(body)
     });
     if (!res.ok) throw new Error(res.statusText);
   } catch(err) { console.error(err); alert('Network error loading payroll'); return; }
@@ -101,6 +216,7 @@ async function loadPayroll() {
   document.getElementById('sumOT').textContent = t.total_overtime.toLocaleString(undefined, {maximumFractionDigits:1});
   document.getElementById('sumPTO').textContent = t.total_pto_days;
   renderTable();
+  closeDrawer();
 }
 
 function renderTable() {
@@ -113,12 +229,14 @@ function renderTable() {
   });
 
   const tbody = document.getElementById('payrollBody');
-  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text-muted);">No timesheet data for this period.</td></tr>'; return; }
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text-muted);">No timesheet data for this period.</td></tr>'; return; }
 
   let html = '';
   rows.forEach(r => {
     const varColor = r.variance > 0 ? '#059669' : r.variance < 0 ? '#dc2626' : '';
     const otStyle = r.overtime_hours > 0 ? 'color:#d97706;font-weight:700;' : '';
+    const empObj = allEmployees.find(e => e.employee_id === r.employee_id);
+    const dbId = empObj ? empObj.id : '';
     html += `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px 12px;">${esc(r.employee_id)}</td>
       <td style="padding:8px 12px;font-weight:600;">${esc(r.name)}</td>
@@ -130,6 +248,9 @@ function renderTable() {
       <td style="padding:8px 12px;text-align:right;color:var(--text-muted);">${r.scheduled_hours}</td>
       <td style="padding:8px 12px;text-align:right;${varColor ? 'color:'+varColor+';font-weight:600;' : ''}">${r.variance > 0 ? '+' : ''}${r.variance}h</td>
       <td style="padding:8px 12px;text-align:right;">${r.pto_days || '—'}</td>
+      <td style="padding:8px 12px;text-align:center;">
+        ${dbId ? `<button class="btn-xs" onclick="viewPunches(${dbId},'${esc(r.name)}')">View Punches</button>` : ''}
+      </td>
     </tr>`;
   });
   tbody.innerHTML = html;
@@ -139,6 +260,135 @@ function sortTable(key) {
   if (sortKey === key) sortAsc = !sortAsc;
   else { sortKey = key; sortAsc = true; }
   renderTable();
+}
+
+// ── Punch Drawer ──
+
+async function viewPunches(empDbId, empName) {
+  currentDrawerEmpId = empDbId;
+  document.getElementById('drawerTitle').textContent = 'Punches \u2014 ' + empName;
+  document.getElementById('punchDrawer').style.display = 'block';
+  document.getElementById('punchBody').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted);">Loading\u2026</td></tr>';
+
+  const start_date = document.getElementById('startDate').value;
+  const end_date = document.getElementById('endDate').value;
+
+  try {
+    const res = await fetch('/payroll/api/punches', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({start_date, end_date, employee_id: empDbId})
+    });
+    const d = await res.json();
+    if (!d.success) { alert(d.error); return; }
+    renderPunches(d.rows);
+  } catch(err) { console.error(err); alert('Error loading punches'); }
+}
+
+function renderPunches(rows) {
+  const tbody = document.getElementById('punchBody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted);">No punches in this period.</td></tr>'; return; }
+
+  let html = '';
+  rows.forEach(r => {
+    const badgeCls = r.approval_status === 'approved' ? 'badge-approved' : r.approval_status === 'flagged' ? 'badge-flagged' : 'badge-pending';
+    const cin = r.clock_in ? new Date(r.clock_in).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '\u2014';
+    const cout = r.clock_out ? new Date(r.clock_out).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '\u2014';
+    const noteEsc = (r.admin_note||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 12px;">${r.date}</td>
+      <td style="padding:8px 12px;">${cin}</td>
+      <td style="padding:8px 12px;">${cout}</td>
+      <td style="padding:8px 12px;text-align:right;">${r.total_hours != null ? r.total_hours.toFixed(2) : '\u2014'}</td>
+      <td style="padding:8px 12px;">${r.status}</td>
+      <td style="padding:8px 12px;"><span class="badge ${badgeCls}">${r.approval_status}</span></td>
+      <td style="padding:8px 12px;text-align:center;white-space:nowrap;">
+        <button class="btn-xs" onclick="openEdit(${r.id},'${r.clock_in||''}','${r.clock_out||''}','${r.original_clock_in||''}','${r.original_clock_out||''}','${noteEsc}')">✏️</button>
+        ${r.approval_status !== 'approved' ? `<button class="btn-xs" style="color:#059669;" onclick="quickApprove(${r.id})">✓</button>` : ''}
+        ${r.approval_status !== 'flagged' ? `<button class="btn-xs" style="color:#dc2626;" onclick="quickFlag(${r.id})">⚑</button>` : ''}
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+function closeDrawer() {
+  document.getElementById('punchDrawer').style.display = 'none';
+  currentDrawerEmpId = null;
+}
+
+// ── Edit Modal ──
+
+function toLocalDT(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60000);
+  return local.toISOString().slice(0,16);
+}
+
+function openEdit(id, cin, cout, origIn, origOut, note) {
+  document.getElementById('editPunchId').value = id;
+  document.getElementById('editClockIn').value = toLocalDT(cin);
+  document.getElementById('editClockOut').value = toLocalDT(cout);
+  document.getElementById('editOrigIn').textContent = origIn ? 'Original: ' + new Date(origIn).toLocaleString() : '';
+  document.getElementById('editOrigOut').textContent = origOut ? 'Original: ' + new Date(origOut).toLocaleString() : '';
+  document.getElementById('editNote').value = note || '';
+  document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+async function saveEdit() {
+  const id = document.getElementById('editPunchId').value;
+  const cin = document.getElementById('editClockIn').value;
+  const cout = document.getElementById('editClockOut').value;
+  const note = document.getElementById('editNote').value;
+
+  const body = {note};
+  if (cin) body.clock_in = new Date(cin).toISOString();
+  if (cout) body.clock_out = new Date(cout).toISOString();
+
+  try {
+    const res = await fetch(`/payroll/api/punch/${id}/adjust`, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify(body)
+    });
+    const d = await res.json();
+    if (!d.success) { alert(d.error); return; }
+    closeEditModal();
+    if (currentDrawerEmpId) {
+      const empName = document.getElementById('drawerTitle').textContent.replace('Punches \u2014 ', '');
+      viewPunches(currentDrawerEmpId, empName);
+    }
+  } catch(err) { console.error(err); alert('Error saving'); }
+}
+
+async function quickApprove(id) {
+  try {
+    const res = await fetch(`/payroll/api/punch/${id}/approve`, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({approval_status:'approved'})
+    });
+    const d = await res.json();
+    if (d.success && currentDrawerEmpId) {
+      const empName = document.getElementById('drawerTitle').textContent.replace('Punches \u2014 ', '');
+      viewPunches(currentDrawerEmpId, empName);
+    }
+  } catch(err) { console.error(err); }
+}
+
+async function quickFlag(id) {
+  try {
+    const res = await fetch(`/payroll/api/punch/${id}/approve`, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf},
+      body:JSON.stringify({approval_status:'flagged'})
+    });
+    const d = await res.json();
+    if (d.success && currentDrawerEmpId) {
+      const empName = document.getElementById('drawerTitle').textContent.replace('Punches \u2014 ', '');
+      viewPunches(currentDrawerEmpId, empName);
+    }
+  } catch(err) { console.error(err); }
 }
 
 async function exportCSV() {
