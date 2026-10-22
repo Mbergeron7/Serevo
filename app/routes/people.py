@@ -288,32 +288,42 @@ def accommodations():
         accoms, err = get_accommodations(sheet)
         emp_names, _ = get_employee_names(sheet)
 
-    # Load all LOA records with employee names
-    loa_records = []
-    if not err:
-        all_loa = LeaveOfAbsence.query.order_by(LeaveOfAbsence.start_date.desc()).all()
-        for rec in all_loa:
-            d = rec.to_dict()
-            if rec.employee:
-                d["employee_name"] = rec.employee.full_name
-            else:
-                d["employee_name"] = "Unknown"
-            loa_records.append(d)
-
-    # Build employee id->name map for LOA modal
-    emp_list = []
-    if not err:
-        emps = Employee.query.filter(Employee.status != "Terminated").order_by(Employee.last_name).all()
-        emp_list = [{"id": e.id, "name": e.full_name} for e in emps]
-
     return render_template("people/accommodations.html",
         user=user,
         accommodations=accoms,
         employee_names=emp_names,
+        error=err,
+    )
+
+
+# ── Leave of Absence ─────────────────────────────────────────
+@people_bp.route("/loa")
+@login_required
+def loa():
+    user = get_current_user()
+
+    loa_records = []
+    try:
+        all_loa = LeaveOfAbsence.query.order_by(LeaveOfAbsence.start_date.desc()).all()
+        for rec in all_loa:
+            d = rec.to_dict()
+            d["employee_name"] = rec.employee.full_name if rec.employee else "Unknown"
+            loa_records.append(d)
+    except Exception:
+        db.session.rollback()
+
+    emp_list = []
+    try:
+        emps = Employee.query.filter(Employee.status != "Terminated").order_by(Employee.last_name).all()
+        emp_list = [{"id": e.id, "name": e.full_name} for e in emps]
+    except Exception:
+        pass
+
+    return render_template("people/loa.html",
+        user=user,
         loa_records=loa_records,
         leave_types=LEAVE_TYPES,
         emp_list=emp_list,
-        error=err,
     )
 
 

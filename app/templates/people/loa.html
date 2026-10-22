@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Leave of Absence — {{ brand_name }}{% endblock %}
+
+
+{% block head %}
+<style>
+  .accom-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .accom-card-header {
+    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    background: var(--brand-accent); color: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .accom-card-header button {
+    background: rgba(255,255,255,.2); color: #fff; border: none;
+    padding: 5px 14px; border-radius: 6px; font-size: .8rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .accom-card-header button:hover { background: rgba(255,255,255,.35); }
+
+  .accom-table-wrap { overflow-x: auto; }
+  .accom-table {
+    width: 100%; font-size: .82rem; border-collapse: collapse;
+  }
+  .accom-table th {
+    background: var(--bg); font-size: .72rem; text-align: left;
+    padding: 8px 12px; border-bottom: 2px solid var(--border);
+    color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; white-space: nowrap;
+  }
+  .accom-table td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .accom-table tr:hover td { background: var(--brand-accent-light); }
+
+  .day-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 4px;
+    font-size: .7rem; font-weight: 600; margin-right: 2px;
+  }
+  .day-fill { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
+  .day-off  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
+  .day-half { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+
+  .btn-edit, .btn-del {
+    border: none; padding: 4px 10px; border-radius: 5px;
+    font-size: .75rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-edit { background: var(--bg); color: var(--text); }
+  .btn-del  { background: color-mix(in srgb, #dc2626 12%, transparent); color: #dc2626; }
+
+  /* ── Modal ─────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 900;
+    justify-content: center; align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    width: 540px; max-width: 95vw; max-height: 90vh;
+    overflow-y: auto; padding: 24px;
+  }
+  .modal h2 { font-size: 1.1rem; margin-bottom: 16px; }
+
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .form-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+  .form-group label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .85rem; background: var(--bg); color: var(--text);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .btn-primary {
+    background: var(--brand-accent); color: #fff; border: none;
+    padding: 8px 20px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer;
+  }
+  .btn-secondary {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 20px; border-radius: 6px; font-weight: 600;
+    font-size: .85rem; cursor: pointer;
+  }
+
+  .no-data {
+    text-align: center; padding: 60px; color: var(--text-muted); font-size: .95rem;
+  }
+
+  @media (max-width: 600px) {
+    .modal { padding: 16px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="people-header">
+  <div>
+    <h1>People</h1>
+    <p class="subtitle">Employee roster, accommodations &amp; time off</p>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <a href="/people/">Roster</a>
+  <a href="/people/accommodations">Accommodations</a>
+  <a href="/people/loa" class="active">Leave of Absence</a>
+  <a href="/people/pto">Time Off</a>
+</div>
+
+<!-- ═══════════ Leave of Absence Section ═══════════ -->
+<div class="accom-card">
+  <div class="accom-card-header">
+    <span>Leave of Absence ({{ loa_records|length }})</span>
+    <button onclick="openLoaModal()">+ Add Leave</button>
+  </div>
+  {% if loa_records %}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);">
+    <input type="text" id="filterLoaName" placeholder="Search by name…" oninput="filterLoa()"
+           style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);min-width:200px;">
+    <select id="filterLoaStatus" onchange="filterLoa()"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="returned">Returned</option>
+      <option value="extended">Extended</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+  </div>
+  <div class="accom-table-wrap">
+    <table class="accom-table" id="loaTable">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Start Date</th>
+          <th>Expected Return</th>
+          <th>Actual Return</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loa in loa_records %}
+        <tr data-loa-id="{{ loa.id }}" data-name="{{ loa.employee_name|lower }}" data-status="{{ loa.status|lower }}">
+          <td style="font-weight:600">{{ loa.employee_name }}</td>
+          <td>{{ loa.leave_type }}</td>
+          <td>{{ loa.start_date }}</td>
+          <td>{{ loa.expected_return_date or '—' }}</td>
+          <td>{{ loa.actual_return_date or '—' }}</td>
+          <td>
+            <span class="day-badge {% if loa.status == 'Active' %}day-fill{% elif loa.status == 'Returned' %}day-off{% else %}day-half{% endif %}">
+              {{ loa.status }}
+            </span>
+          </td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">{{ loa.notes or '' }}</td>
+          <td>
+            <button class="btn-edit" onclick='editLoaRow({{ loa|tojson }})'>Edit</button>
+            <button class="btn-del" onclick="deleteLoaRow({{ loa.id }})">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="no-data">No leave of absence records. Click <strong>+ Add Leave</strong> to create one.</div>
+  {% endif %}
+</div>
+
+<!-- ── LOA Modal ──────────────────────────────────────────── -->
+<div class="modal-overlay" id="loaOverlay">
+  <div class="modal">
+    <h2 id="loaModalTitle">Add Leave of Absence</h2>
+    <input type="hidden" id="loaId" value="">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Employee</label>
+        <select id="loaEmployee">
+          <option value="">Select employee…</option>
+          {% for e in emp_list %}
+            <option value="{{ e.id }}">{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Leave Type</label>
+        <select id="loaType">
+          {% for lt in leave_types %}
+            <option value="{{ lt }}">{{ lt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="loaStart">
+      </div>
+      <div class="form-group">
+        <label>Expected Return</label>
+        <input type="date" id="loaExpReturn">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Actual Return</label>
+        <input type="date" id="loaActReturn">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="loaStatus">
+          <option value="Active">Active</option>
+          <option value="Returned">Returned</option>
+          <option value="Extended">Extended</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" style="min-width:100%">
+        <label>Notes</label>
+        <textarea id="loaNotes" placeholder="Additional details…"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeLoaModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveLoaRow()">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const loaOverlay = document.getElementById('loaOverlay');
+
+function openLoaModal() {
+  document.getElementById('loaId').value = '';
+  document.getElementById('loaEmployee').value = '';
+  document.getElementById('loaEmployee').disabled = false;
+  document.getElementById('loaType').value = 'Medical';
+  document.getElementById('loaStart').value = '';
+  document.getElementById('loaExpReturn').value = '';
+  document.getElementById('loaActReturn').value = '';
+  document.getElementById('loaStatus').value = 'Active';
+  document.getElementById('loaNotes').value = '';
+  document.getElementById('loaModalTitle').textContent = 'Add Leave of Absence';
+  loaOverlay.classList.add('open');
+}
+function closeLoaModal() { loaOverlay.classList.remove('open'); }
+
+function editLoaRow(loa) {
+  document.getElementById('loaId').value = loa.id;
+  document.getElementById('loaEmployee').value = loa.employee_id;
+  document.getElementById('loaEmployee').disabled = true;
+  document.getElementById('loaType').value = loa.leave_type || 'Medical';
+  document.getElementById('loaStart').value = loa.start_date || '';
+  document.getElementById('loaExpReturn').value = loa.expected_return_date || '';
+  document.getElementById('loaActReturn').value = loa.actual_return_date || '';
+  document.getElementById('loaStatus').value = loa.status || 'Active';
+  document.getElementById('loaNotes').value = loa.notes || '';
+  document.getElementById('loaModalTitle').textContent = 'Edit Leave of Absence';
+  loaOverlay.classList.add('open');
+}
+
+function saveLoaRow() {
+  const empId = document.getElementById('loaEmployee').value;
+  if (!empId) { showToast('Please select an employee.', 'warning'); return; }
+  const body = {
+    employee_id: empId,
+    leave_type: document.getElementById('loaType').value,
+    start_date: document.getElementById('loaStart').value,
+    expected_return_date: document.getElementById('loaExpReturn').value || null,
+    actual_return_date: document.getElementById('loaActReturn').value || null,
+    status: document.getElementById('loaStatus').value,
+    notes: document.getElementById('loaNotes').value,
+  };
+  const loaId = document.getElementById('loaId').value;
+  if (loaId) body.id = parseInt(loaId);
+  fetch('/people/api/loa/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  })
+  .catch(e => showToast('Save failed: ' + e, 'error'));
+}
+
+function deleteLoaRow(id) {
+  if (!confirm('Delete this leave of absence record?')) return;
+  fetch('/people/api/loa/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id}),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  })
+  .catch(e => showToast('Delete failed: ' + e, 'error'));
+}
+
+loaOverlay.addEventListener('click', e => { if (e.target === loaOverlay) closeLoaModal(); });
+
+function filterLoa() {
+  const q = (document.getElementById('filterLoaName').value || '').toLowerCase();
+  const st = (document.getElementById('filterLoaStatus').value || '').toLowerCase();
+  document.querySelectorAll('#loaTable tbody tr').forEach(row => {
+    const nameOk = !q || (row.dataset.name || '').includes(q);
+    const statusOk = !st || (row.dataset.status || '') === st;
+    row.style.display = (nameOk && statusOk) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}
