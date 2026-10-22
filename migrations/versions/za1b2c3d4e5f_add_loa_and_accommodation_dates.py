@@ -1,14 +1,14 @@
 """Add leave_of_absences table and date fields to accommodations
 
 Revision ID: za1b2c3d4e5f
-Revises: z9j0k1l2m3n4
+Revises: z12c3d4e5f6g7
 Create Date: 2026-10-22
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "za1b2c3d4e5f"
-down_revision = "z9j0k1l2m3n4"
+down_revision = "z12c3d4e5f6g7"
 branch_labels = None
 depends_on = None
 
