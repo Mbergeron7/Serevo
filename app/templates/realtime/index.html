@@ -991,6 +991,16 @@ function _absSelectNone(sectionId) {
 function _absApplyFilter(sectionId) {
   // Determine which base section this belongs to (strip _lob suffix)
   const base = sectionId.replace(/_lob$/, '');
+  // Summary table has LOB in col 0, no employee col
+  if (base === 'absSummary') {
+    const sel = _absFilter['absSummary'];
+    const tbl = document.getElementById('_absTbl_absSummary');
+    if (!tbl) return;
+    tbl.querySelectorAll('tbody tr:not(.total)').forEach(tr => {
+      const lob = tr.cells[0]?.textContent.trim();
+      tr.style.display = (!sel || sel.size === 0 || sel.has(lob)) ? '' : 'none';
+    });
+  } else {
   const nameSel = _absFilter[base];
   const lobSel = _absFilter[base+'_lob'];
   const tbl = document.getElementById('_absTbl_'+base);
@@ -1004,6 +1014,7 @@ function _absApplyFilter(sectionId) {
     const lobOk = !lobSel || lobSel.size === 0 || lobSel.has(lobName);
     tr.style.display = (nameOk && lobOk) ? '' : 'none';
   });
+  }
   // Update counts
   const cntEl = document.getElementById('_absCnt_'+sectionId);
   if (cntEl && _absFilter[sectionId]) {
@@ -1019,6 +1030,20 @@ document.addEventListener('click', function(e) {
   }
 });
 
+function _absSumToggle(cb, name) {
+  if (!_absFilter['absSummary']) _absFilter['absSummary'] = new Set();
+  if (cb.checked) _absFilter['absSummary'].add(name); else _absFilter['absSummary'].delete(name);
+  const tbl = document.getElementById('_absTbl_absSummary');
+  if (!tbl) return;
+  const sel = _absFilter['absSummary'];
+  tbl.querySelectorAll('tbody tr:not(.total)').forEach(tr => {
+    const lob = tr.cells[0]?.textContent.trim();
+    tr.style.display = (!sel || sel.size === 0 || sel.has(lob)) ? '' : 'none';
+  });
+  const cntEl = document.getElementById('_absCnt_absSummary');
+  if (cntEl) { const total = document.getElementById('_absDrop_absSummary')?.querySelectorAll('input[type=checkbox]').length || 0; cntEl.textContent = `(${sel.size}/${total})`; }
+}
+
 function renderAbsent(d) {
   const el = $('view-absent');
   if (!d || !d.success) return noData(el, 'Absenteeism unavailable', d && d.error);
@@ -1026,7 +1051,24 @@ function renderAbsent(d) {
   Object.keys(_absFilter).forEach(k => delete _absFilter[k]);
 
   const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.scheduled)}</td><td>${fmt(r.absent)}</td><td class="${r.absence_pct==null?'':(r.absence_pct<=5?'cell-good':(r.absence_pct<=10?'cell-warn':'cell-bad'))}">${pct(r.absence_pct)}</td><td>${fmt(r.late)}</td><td>${pct(r.late_pct)}</td><td>${fmt(r.early_leave)}</td><td>${pct(r.early_leave_pct)}</td></tr>`;
-  let h = `<div class="report-card"><h3>Absenteeism by LOB</h3><div class="wrap"><table class="rt sortable"><thead><tr><th>LOB</th><th>Scheduled</th><th>Absent</th><th>Absence %</th><th>Late</th><th>Late %</th><th>Early leave</th><th>Early leave %</th></tr></thead><tbody>${d.by_lob.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>`;
+  // Build LOB summary filter
+  const lobSummaryNames = d.by_lob.map(r => r.lob).sort();
+  if (!_absFilter['absSummary']) _absFilter['absSummary'] = new Set(lobSummaryNames);
+  const _lobSumSel = _absFilter['absSummary'];
+  const lobSumFilter = lobSummaryNames.length > 1 ? `<div class="filter-inline" style="flex-wrap:wrap;gap:6px;">
+    <span style="font-weight:600;font-size:.78rem;">Filter:</span>
+    <div class="la-filter-wrap">
+      <button class="la-filter-btn" onclick="_absToggleDrop('absSummary')" style="font-size:.78rem;padding:4px 10px;">🔽 LOBs <span id="_absCnt_absSummary">(${_lobSumSel.size}/${lobSummaryNames.length})</span></button>
+      <div class="la-filter-drop" id="_absDrop_absSummary" style="min-width:200px;">
+        <div class="la-filter-actions">
+          <button class="la-filter-action" onclick="_absSelectAll('absSummary')">All</button>
+          <button class="la-filter-action" onclick="_absSelectNone('absSummary')">None</button>
+        </div>
+        <div style="max-height:260px;overflow-y:auto;">${lobSummaryNames.map(n => `<label class="la-filter-item"><input type="checkbox" ${_lobSumSel.has(n)?'checked':''} onchange="_absSumToggle(this,'${esc(n).replace(/'/g,"\\'")}')"> ${esc(n)}</label>`).join('')}</div>
+      </div>
+    </div>
+  </div>` : '';
+  let h = `<div class="report-card"><h3>Absenteeism by LOB</h3>${lobSumFilter}<div class="wrap"><table class="rt sortable" id="_absTbl_absSummary"><thead><tr><th>LOB</th><th>Scheduled</th><th>Absent</th><th>Absence %</th><th>Late</th><th>Late %</th><th>Early leave</th><th>Early leave %</th></tr></thead><tbody>${d.by_lob.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>`;
   if (!d.has_events) h += `<div class="report-card"><div class="empty"><strong>No agent status events for this date</strong>${IMPORT_HINT}</div></div>`;
   h += `<div class="grid-2">`;
 
