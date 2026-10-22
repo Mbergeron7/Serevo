@@ -915,16 +915,145 @@ function renderSvl(d) {
 }
 
 /* ── Absenteeism ─────────────────────────────── */
+
+/* --- Multi-select picklist helper for absenteeism filters --- */
+const _absFilter = {};  // keyed by section id → Set of selected names
+
+function _absPicklistHtml(sectionId, items, field) {
+  // Gather unique names from items
+  const names = [...new Set(items.map(a => a[field]))].sort();
+  if (!_absFilter[sectionId]) _absFilter[sectionId] = new Set(names);
+  const sel = _absFilter[sectionId];
+  let h = `<div class="filter-inline" style="flex-wrap:wrap;gap:6px;">
+    <span style="font-weight:600;font-size:.78rem;">Filter:</span>
+    <div class="la-filter-wrap">
+      <button class="la-filter-btn" onclick="_absToggleDrop('${sectionId}')" style="font-size:.78rem;padding:4px 10px;">🔽 Names <span id="_absCnt_${sectionId}">(${sel.size}/${names.length})</span></button>
+      <div class="la-filter-drop" id="_absDrop_${sectionId}" style="min-width:200px;">
+        <div class="la-filter-actions">
+          <button class="la-filter-action" onclick="_absSelectAll('${sectionId}')">All</button>
+          <button class="la-filter-action" onclick="_absSelectNone('${sectionId}')">None</button>
+        </div>
+        <div style="max-height:260px;overflow-y:auto;">
+          ${names.map(n => `<label class="la-filter-item"><input type="checkbox" ${sel.has(n)?'checked':''} onchange="_absToggleName('${sectionId}',this,'${esc(n).replace(/'/g,"\\'")}')"> ${esc(n)}</label>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="la-filter-wrap">
+      <button class="la-filter-btn" onclick="_absToggleDrop('${sectionId}_lob')" style="font-size:.78rem;padding:4px 10px;">🔽 LOBs <span id="_absCnt_${sectionId}_lob"></span></button>
+      <div class="la-filter-drop" id="_absDrop_${sectionId}_lob" style="min-width:200px;">
+        <div class="la-filter-actions">
+          <button class="la-filter-action" onclick="_absSelectAll('${sectionId}_lob')">All</button>
+          <button class="la-filter-action" onclick="_absSelectNone('${sectionId}_lob')">None</button>
+        </div>
+        <div style="max-height:260px;overflow-y:auto;" id="_absLobList_${sectionId}_lob"></div>
+      </div>
+    </div>
+  </div>`;
+  // Build LOB list after render
+  setTimeout(() => {
+    const lobs = [...new Set(items.map(a => a.lob))].sort();
+    if (!_absFilter[sectionId+'_lob']) _absFilter[sectionId+'_lob'] = new Set(lobs);
+    const lobSel = _absFilter[sectionId+'_lob'];
+    const lobList = document.getElementById('_absLobList_'+sectionId+'_lob');
+    if (lobList) {
+      lobList.innerHTML = lobs.map(l => `<label class="la-filter-item"><input type="checkbox" ${lobSel.has(l)?'checked':''} onchange="_absToggleName('${sectionId}_lob',this,'${esc(l).replace(/'/g,"\\'")}')"> ${esc(l)}</label>`).join('');
+    }
+    const cntEl = document.getElementById('_absCnt_'+sectionId+'_lob');
+    if (cntEl) cntEl.textContent = `(${lobSel.size}/${lobs.length})`;
+  }, 0);
+  return h;
+}
+
+function _absToggleDrop(id) {
+  const drop = document.getElementById('_absDrop_'+id);
+  if (drop) drop.classList.toggle('open');
+  // Close others
+  document.querySelectorAll('.la-filter-drop.open').forEach(d => { if (d.id !== '_absDrop_'+id) d.classList.remove('open'); });
+}
+function _absToggleName(sectionId, cb, name) {
+  if (!_absFilter[sectionId]) _absFilter[sectionId] = new Set();
+  if (cb.checked) _absFilter[sectionId].add(name); else _absFilter[sectionId].delete(name);
+  _absApplyFilter(sectionId);
+}
+function _absSelectAll(sectionId) {
+  const drop = document.getElementById('_absDrop_'+sectionId);
+  if (!drop) return;
+  drop.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = true; if (_absFilter[sectionId]) _absFilter[sectionId].add(cb.parentElement.textContent.trim()); });
+  _absApplyFilter(sectionId);
+}
+function _absSelectNone(sectionId) {
+  const drop = document.getElementById('_absDrop_'+sectionId);
+  if (!drop) return;
+  drop.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  if (_absFilter[sectionId]) _absFilter[sectionId].clear();
+  _absApplyFilter(sectionId);
+}
+function _absApplyFilter(sectionId) {
+  // Determine which base section this belongs to (strip _lob suffix)
+  const base = sectionId.replace(/_lob$/, '');
+  const nameSel = _absFilter[base];
+  const lobSel = _absFilter[base+'_lob'];
+  const tbl = document.getElementById('_absTbl_'+base);
+  if (!tbl) return;
+  tbl.querySelectorAll('tbody tr').forEach(tr => {
+    const empCell = tr.cells[0]; const lobCell = tr.cells[1];
+    if (!empCell || !lobCell) return;
+    const empName = empCell.textContent.trim();
+    const lobName = lobCell.textContent.trim();
+    const nameOk = !nameSel || nameSel.size === 0 || nameSel.has(empName);
+    const lobOk = !lobSel || lobSel.size === 0 || lobSel.has(lobName);
+    tr.style.display = (nameOk && lobOk) ? '' : 'none';
+  });
+  // Update counts
+  const cntEl = document.getElementById('_absCnt_'+sectionId);
+  if (cntEl && _absFilter[sectionId]) {
+    const total = document.getElementById('_absDrop_'+sectionId)?.querySelectorAll('input[type=checkbox]').length || 0;
+    cntEl.textContent = `(${_absFilter[sectionId].size}/${total})`;
+  }
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.la-filter-wrap')) {
+    document.querySelectorAll('.la-filter-drop.open').forEach(d => d.classList.remove('open'));
+  }
+});
+
 function renderAbsent(d) {
   const el = $('view-absent');
   if (!d || !d.success) return noData(el, 'Absenteeism unavailable', d && d.error);
+  // Reset filters so they rebuild from fresh data
+  Object.keys(_absFilter).forEach(k => delete _absFilter[k]);
+
   const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.scheduled)}</td><td>${fmt(r.absent)}</td><td class="${r.absence_pct==null?'':(r.absence_pct<=5?'cell-good':(r.absence_pct<=10?'cell-warn':'cell-bad'))}">${pct(r.absence_pct)}</td><td>${fmt(r.late)}</td><td>${pct(r.late_pct)}</td><td>${fmt(r.early_leave)}</td><td>${pct(r.early_leave_pct)}</td></tr>`;
   let h = `<div class="report-card"><h3>Absenteeism by LOB</h3><div class="wrap"><table class="rt sortable"><thead><tr><th>LOB</th><th>Scheduled</th><th>Absent</th><th>Absence %</th><th>Late</th><th>Late %</th><th>Early leave</th><th>Early leave %</th></tr></thead><tbody>${d.by_lob.map(row).join('')}<tr class="total">${row(d.total).slice(4)}</tbody></table></div></div>`;
   if (!d.has_events) h += `<div class="report-card"><div class="empty"><strong>No agent status events for this date</strong>${IMPORT_HINT}</div></div>`;
   h += `<div class="grid-2">`;
-  h += `<div class="report-card"><h3>Absent / not logged in</h3>` + (d.absent.length ? `<div class="wrap"><table class="rt sortable"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>From</th><th>To</th><th style="text-align:left">Status</th></tr></thead><tbody>${d.absent.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.scheduled_to}</td><td style="text-align:left" class="bad">${esc(a.status)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
-  h += `<div class="report-card"><h3>Late starts</h3>` + (d.late.length ? `<div class="wrap"><table class="rt sortable"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled</th><th>Actual start</th><th>Min late</th><th style="text-align:left">Recent status</th></tr></thead><tbody>${d.late.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.actual_start}</td><td class="warn">${a.minutes_late}</td><td style="text-align:left">${esc(a.recent_status)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
-  h += `<div class="report-card"><h3>Early leaves</h3>` + (d.early_leave.length ? `<div class="wrap"><table class="rt sortable"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled to</th><th>Last offline</th><th>Min early</th></tr></thead><tbody>${d.early_leave.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_to}</td><td>${a.last_offline}</td><td class="warn">${a.minutes_early}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">None.</div>`) + `</div>`;
+
+  // Absent / not logged in
+  h += `<div class="report-card"><h3>Absent / not logged in</h3>`;
+  if (d.absent.length) {
+    h += _absPicklistHtml('absNotLogged', d.absent, 'employee');
+    h += `<div class="wrap"><table class="rt sortable" id="_absTbl_absNotLogged"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>From</th><th>To</th><th style="text-align:left">Status</th></tr></thead><tbody>${d.absent.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.scheduled_to}</td><td style="text-align:left" class="bad">${esc(a.status)}</td></tr>`).join('')}</tbody></table></div>`;
+  } else { h += `<div class="empty">None.</div>`; }
+  h += `</div>`;
+
+  // Late starts
+  h += `<div class="report-card"><h3>Late starts</h3>`;
+  if (d.late.length) {
+    h += _absPicklistHtml('absLate', d.late, 'employee');
+    h += `<div class="wrap"><table class="rt sortable" id="_absTbl_absLate"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled</th><th>Actual start</th><th>Min late</th><th style="text-align:left">Recent status</th></tr></thead><tbody>${d.late.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_from}</td><td>${a.actual_start}</td><td class="warn">${a.minutes_late}</td><td style="text-align:left">${esc(a.recent_status)}</td></tr>`).join('')}</tbody></table></div>`;
+  } else { h += `<div class="empty">None.</div>`; }
+  h += `</div>`;
+
+  // Early leaves
+  h += `<div class="report-card"><h3>Early leaves</h3>`;
+  if (d.early_leave.length) {
+    h += _absPicklistHtml('absEarly', d.early_leave, 'employee');
+    h += `<div class="wrap"><table class="rt sortable" id="_absTbl_absEarly"><thead><tr><th>Employee</th><th style="text-align:left">LOB</th><th>Scheduled to</th><th>Last offline</th><th>Min early</th></tr></thead><tbody>${d.early_leave.map(a => `<tr><td>${esc(a.employee)}</td><td style="text-align:left">${esc(a.lob)}</td><td>${a.scheduled_to}</td><td>${a.last_offline}</td><td class="warn">${a.minutes_early}</td></tr>`).join('')}</tbody></table></div>`;
+  } else { h += `<div class="empty">None.</div>`; }
+  h += `</div>`;
+
   h += `</div>`;
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
