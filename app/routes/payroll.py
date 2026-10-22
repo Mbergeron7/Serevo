@@ -59,8 +59,8 @@ def list_planning_units():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
     if user.get("is_demo"):
-        from app.demo_data import get_demo_planning_units
-        return jsonify(planning_units=get_demo_planning_units())
+        from app.demo_data import get_demo_payroll_planning_units
+        return jsonify(planning_units=get_demo_payroll_planning_units())
     try:
         from app.models import PlanningUnit
         pus = PlanningUnit.query.order_by(PlanningUnit.name).all()

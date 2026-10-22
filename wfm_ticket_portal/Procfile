@@ -1,1 +1,0 @@
-web: gunicorn wfm_ticket_portal:app

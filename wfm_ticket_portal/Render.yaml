@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: wfm-ticket-portal
-    env: python
-    buildCommand: ""
-    startCommand: gunicorn wfm_ticket_portal:app

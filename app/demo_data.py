@@ -2454,7 +2454,7 @@ def get_demo_payroll_employees():
     return results
 
 
-def get_demo_planning_units():
+def get_demo_payroll_planning_units():
     """Return demo planning units for payroll filter dropdown."""
     return [
         {"id": 1, "name": "Sales Support"},
