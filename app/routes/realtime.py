@@ -1787,6 +1787,10 @@ def api_live_agents():
                 mins_past_shift = (now_est - shift_end_dt).total_seconds() / 60
                 if mins_past_shift >= STALE_AFTER_SHIFT_MINS and ag["minutes_in_status"] >= STALE_AFTER_SHIFT_MINS:
                     continue  # no activity since well past shift end — treat as gone
+            # 3) Offline + not scheduled + stale (30+ min) → gone
+            #    Agents with no schedule who logged out long ago shouldn't linger
+            if is_offline and not_scheduled and ag["minutes_in_status"] >= STALE_AFTER_SHIFT_MINS:
+                continue
 
             agent = {
                 "name": emp.full_name,
