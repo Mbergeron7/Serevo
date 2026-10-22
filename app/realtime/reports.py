@@ -103,7 +103,13 @@ def _employees_for_lob(lob, sheet=None):
 
 
 def _shifts(lob, date_obj, user, sheet=None):
-    """Scheduled shifts for LOB/day: saved schedules first, else generated."""
+    """Scheduled shifts for LOB/day from saved schedules (DB or demo).
+
+    The old generate_shifts fallback was removed — it could run the full
+    scheduling engine inside a report request and kill the Gunicorn worker
+    with a SIGKILL timeout, returning an opaque HTTP 502/500 to the client.
+    Reports should only reflect *saved* schedules.
+    """
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_schedules, DEMO_EMPLOYEES
         ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
@@ -118,12 +124,7 @@ def _shifts(lob, date_obj, user, sheet=None):
                 return [r.to_dict() for r in rows if r.shift_start and r.status == "scheduled"]
     except Exception:
         pass
-    try:
-        from app.scheduling.engine import generate_shifts
-        shifts, _, _ = generate_shifts(lob, date_obj, sheet=sheet)
-        return shifts
-    except Exception:
-        return []
+    return []
 
 
 def _up_to_now_cutoff(date_obj, now):
