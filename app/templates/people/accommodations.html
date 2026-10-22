@@ -138,6 +138,68 @@
 </div>
 {% else %}
 
+<!-- ═══════════ Leave of Absence Section ═══════════ -->
+<div class="accom-card">
+  <div class="accom-card-header">
+    <span>Leave of Absence ({{ loa_records|length }})</span>
+    <button onclick="openLoaModal()">+ Add Leave</button>
+  </div>
+  {% if loa_records %}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);">
+    <input type="text" id="filterLoaName" placeholder="Search by name…" oninput="filterLoa()"
+           style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);min-width:200px;">
+    <select id="filterLoaStatus" onchange="filterLoa()"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="returned">Returned</option>
+      <option value="extended">Extended</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+  </div>
+  <div class="accom-table-wrap">
+    <table class="accom-table" id="loaTable">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Start Date</th>
+          <th>Expected Return</th>
+          <th>Actual Return</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loa in loa_records %}
+        <tr data-loa-id="{{ loa.id }}" data-name="{{ loa.employee_name|lower }}" data-status="{{ loa.status|lower }}">
+          <td style="font-weight:600">{{ loa.employee_name }}</td>
+          <td>{{ loa.leave_type }}</td>
+          <td>{{ loa.start_date }}</td>
+          <td>{{ loa.expected_return_date or '—' }}</td>
+          <td>{{ loa.actual_return_date or '—' }}</td>
+          <td>
+            <span class="day-badge {% if loa.status == 'Active' %}day-fill{% elif loa.status == 'Returned' %}day-off{% else %}day-half{% endif %}">
+              {{ loa.status }}
+            </span>
+          </td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">{{ loa.notes or '' }}</td>
+          <td>
+            <button class="btn-edit" onclick='editLoaRow({{ loa|tojson }})'>Edit</button>
+            <button class="btn-del" onclick="deleteLoaRow({{ loa.id }})">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="no-data">No leave of absence records. Click <strong>+ Add Leave</strong> to create one.</div>
+  {% endif %}
+</div>
+
+<!-- ═══════════ Accommodations Section ═══════════ -->
 <div class="accom-card">
   <div class="accom-card-header">
     <span>Accommodations ({{ accommodations|length }})</span>
@@ -208,7 +270,74 @@
 
 {% endif %}
 
-<!-- ── Modal ───────────────────────────────────────────────── -->
+<!-- ── LOA Modal ──────────────────────────────────────────── -->
+<div class="modal-overlay" id="loaOverlay">
+  <div class="modal">
+    <h2 id="loaModalTitle">Add Leave of Absence</h2>
+    <input type="hidden" id="loaId" value="">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Employee</label>
+        <select id="loaEmployee">
+          <option value="">Select employee…</option>
+          {% for e in emp_list %}
+            <option value="{{ e.id }}">{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Leave Type</label>
+        <select id="loaType">
+          {% for lt in leave_types %}
+            <option value="{{ lt }}">{{ lt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="loaStart">
+      </div>
+      <div class="form-group">
+        <label>Expected Return</label>
+        <input type="date" id="loaExpReturn">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Actual Return</label>
+        <input type="date" id="loaActReturn">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="loaStatus">
+          <option value="Active">Active</option>
+          <option value="Returned">Returned</option>
+          <option value="Extended">Extended</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" style="min-width:100%">
+        <label>Notes</label>
+        <textarea id="loaNotes" placeholder="Additional details…"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeLoaModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveLoaRow()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Accommodation Modal ────────────────────────────────── -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <h2 id="modalTitle">Add Accommodation</h2>
@@ -357,6 +486,92 @@ function deleteAccom(name) {
 }
 
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+/* ── LOA Functions ─────────────────────────────── */
+const loaOverlay = document.getElementById('loaOverlay');
+
+function openLoaModal() {
+  document.getElementById('loaId').value = '';
+  document.getElementById('loaEmployee').value = '';
+  document.getElementById('loaEmployee').disabled = false;
+  document.getElementById('loaType').value = 'Medical';
+  document.getElementById('loaStart').value = '';
+  document.getElementById('loaExpReturn').value = '';
+  document.getElementById('loaActReturn').value = '';
+  document.getElementById('loaStatus').value = 'Active';
+  document.getElementById('loaNotes').value = '';
+  document.getElementById('loaModalTitle').textContent = 'Add Leave of Absence';
+  loaOverlay.classList.add('open');
+}
+function closeLoaModal() { loaOverlay.classList.remove('open'); }
+
+function editLoaRow(loa) {
+  document.getElementById('loaId').value = loa.id;
+  document.getElementById('loaEmployee').value = loa.employee_id;
+  document.getElementById('loaEmployee').disabled = true;
+  document.getElementById('loaType').value = loa.leave_type || 'Medical';
+  document.getElementById('loaStart').value = loa.start_date || '';
+  document.getElementById('loaExpReturn').value = loa.expected_return_date || '';
+  document.getElementById('loaActReturn').value = loa.actual_return_date || '';
+  document.getElementById('loaStatus').value = loa.status || 'Active';
+  document.getElementById('loaNotes').value = loa.notes || '';
+  document.getElementById('loaModalTitle').textContent = 'Edit Leave of Absence';
+  loaOverlay.classList.add('open');
+}
+
+function saveLoaRow() {
+  const empId = document.getElementById('loaEmployee').value;
+  if (!empId) { showToast('Please select an employee.', 'warning'); return; }
+  const body = {
+    employee_id: empId,
+    leave_type: document.getElementById('loaType').value,
+    start_date: document.getElementById('loaStart').value,
+    expected_return_date: document.getElementById('loaExpReturn').value || null,
+    actual_return_date: document.getElementById('loaActReturn').value || null,
+    status: document.getElementById('loaStatus').value,
+    notes: document.getElementById('loaNotes').value,
+  };
+  const loaId = document.getElementById('loaId').value;
+  if (loaId) body.id = parseInt(loaId);
+  fetch('/people/api/loa/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  })
+  .catch(e => showToast('Save failed: ' + e, 'error'));
+}
+
+function deleteLoaRow(id) {
+  if (!confirm('Delete this leave of absence record?')) return;
+  fetch('/people/api/loa/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id}),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  })
+  .catch(e => showToast('Delete failed: ' + e, 'error'));
+}
+
+loaOverlay.addEventListener('click', e => { if (e.target === loaOverlay) closeLoaModal(); });
+
+function filterLoa() {
+  const q = (document.getElementById('filterLoaName').value || '').toLowerCase();
+  const st = (document.getElementById('filterLoaStatus').value || '').toLowerCase();
+  document.querySelectorAll('#loaTable tbody tr').forEach(row => {
+    const nameOk = !q || (row.dataset.name || '').includes(q);
+    const statusOk = !st || (row.dataset.status || '') === st;
+    row.style.display = (nameOk && statusOk) ? '' : 'none';
+  });
+}
 
 /* ── Filters ─────────────────────────────── */
 (function initFilters() {

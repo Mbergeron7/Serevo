@@ -288,10 +288,31 @@ def accommodations():
         accoms, err = get_accommodations(sheet)
         emp_names, _ = get_employee_names(sheet)
 
+    # Load all LOA records with employee names
+    loa_records = []
+    if not err:
+        all_loa = LeaveOfAbsence.query.order_by(LeaveOfAbsence.start_date.desc()).all()
+        for rec in all_loa:
+            d = rec.to_dict()
+            if rec.employee:
+                d["employee_name"] = rec.employee.full_name
+            else:
+                d["employee_name"] = "Unknown"
+            loa_records.append(d)
+
+    # Build employee id->name map for LOA modal
+    emp_list = []
+    if not err:
+        emps = Employee.query.filter(Employee.status != "Terminated").order_by(Employee.last_name).all()
+        emp_list = [{"id": e.id, "name": e.full_name} for e in emps]
+
     return render_template("people/accommodations.html",
         user=user,
         accommodations=accoms,
         employee_names=emp_names,
+        loa_records=loa_records,
+        leave_types=LEAVE_TYPES,
+        emp_list=emp_list,
         error=err,
     )
 
@@ -450,9 +471,6 @@ def employee_profile(emp_id):
             quartile_history=[],
             quartile_entities=[],
             avail_map={},
-            leaves_of_absence=[],
-            accommodation=None,
-            leave_types=LEAVE_TYPES,
         )
 
     # emp_id may be a numeric DB id or a string employee_id like "E1001"
@@ -521,20 +539,6 @@ def employee_profile(emp_id):
     except Exception:
         quartile_entities = []
 
-    # Load LOA records
-    try:
-        loa_records = LeaveOfAbsence.query.filter_by(employee_id=emp.id).order_by(LeaveOfAbsence.start_date.desc()).all()
-    except Exception:
-        db.session.rollback()
-        loa_records = []
-
-    # Load accommodation for this employee
-    try:
-        accom = Accommodation.query.filter_by(employee_id=emp.id).first()
-    except Exception:
-        db.session.rollback()
-        accom = None
-
     return render_template("people/profile.html",
         user=user,
         emp=emp,
@@ -552,9 +556,6 @@ def employee_profile(emp_id):
         quartile_history=quartile_history,
         quartile_entities=quartile_entities,
         avail_map=avail_map,
-        leaves_of_absence=[l.to_dict() for l in loa_records],
-        accommodation=accom.to_dict() if accom else None,
-        leave_types=LEAVE_TYPES,
     )
 
 
