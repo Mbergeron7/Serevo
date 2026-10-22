@@ -409,8 +409,10 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
                 late_rows.append({**base, "actual_start": first.strftime("%H:%M"),
                                   "minutes_late": int(delta), "recent_status": current})
 
+            # Only flag early leave if agent is actually offline now —
+            # skip if their most recent status is still a logged-in one
             if last_end and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins):
-                if not is_today or now > last_end + datetime.timedelta(minutes=15):
+                if not (current and is_logged_in(current)) and (not is_today or now > last_end + datetime.timedelta(minutes=15)):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
                                        "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
