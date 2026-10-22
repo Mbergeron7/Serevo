@@ -19,7 +19,8 @@ import logging
 from collections import defaultdict
 
 from app.realtime.actuals import (get_interval_actuals, get_agent_events,
-                                  is_productive, is_logged_in)
+                                  is_productive, is_logged_in,
+                                  LOGGED_IN_STATUSES)
 
 log = logging.getLogger("serevo.reports")
 
@@ -351,21 +352,45 @@ def service_level_report(lobs, date_obj, user=None, sheet=None):
 # 4. ABSENTEEISM
 # ═════════════════════════════════════════════════════════════
 
+def _is_present(status):
+    """True if the agent is present at work — logged-in OR off-queue.
+    Off-queue agents are still at work, just not taking contacts."""
+    s = str(status or "").strip().lower()
+    return s in LOGGED_IN_STATUSES or s == "off queue"
+
+
 def _first_last_login(events):
-    """(first_login_dt, last_offline_dt, current_status) from an agent's events."""
+    """(first_login_dt, last_offline_dt, current_status) from an agent's events.
+
+    Tracks the latest end-time of any *present* event (logged-in or off-queue)
+    to determine when the agent was last seen.  If the most recent present event
+    has no end time the agent is still active, so last_end is None (= no early leave).
+
+    An offline event that has an end time means the agent came back — that gap is
+    a transient disconnect, not an early departure.
+    """
     first = None
     last_end = None
     current = None
     for e in sorted(events, key=lambda x: x["start"]):
         st = _parse_dt(e["start"])
         en = _parse_dt(e["end"]) if e.get("end") else None
-        if is_logged_in(e["status"]):
+        if _is_present(e["status"]):
             if first is None or (st and st < first):
                 first = st
             if en and (last_end is None or en > last_end):
                 last_end = en
             if not en:
-                last_end = None  # still logged in
+                last_end = None  # still present — no early leave
+        else:
+            # Non-present event (offline/logged out).
+            # If it has an end time, the agent came back — don't count this
+            # as a departure.  If it has NO end time, the agent is currently
+            # offline, so keep last_end from the previous present event.
+            if en and last_end is not None:
+                # Agent returned after this offline gap — clear last_end only
+                # if a subsequent present event resets it (handled above).
+                pass
         current = e["status"]
     return first, last_end, current
 
@@ -410,9 +435,9 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
                                   "minutes_late": int(delta), "recent_status": current})
 
             # Only flag early leave if agent is actually offline now —
-            # skip if their most recent status is still a logged-in one
+            # skip if their most recent status is still a present one (logged-in or off-queue)
             if last_end and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins):
-                if not (current and is_logged_in(current)) and (not is_today or now > last_end + datetime.timedelta(minutes=15)):
+                if not (current and _is_present(current)) and (not is_today or now > last_end + datetime.timedelta(minutes=15)):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
                                        "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
