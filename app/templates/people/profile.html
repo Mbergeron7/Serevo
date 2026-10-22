@@ -193,6 +193,7 @@
   <button onclick="switchTab('planning', this)">Planning</button>
   <button onclick="switchTab('availability', this)">Availability</button>
   <button onclick="switchTab('coaching', this)">Coaching</button>
+  <button onclick="switchTab('leave', this)">Leave &amp; Accommodations</button>
   <button onclick="switchTab('attendance', this)">Attendance</button>
 </div>
 
@@ -684,6 +685,172 @@
     </div>
     <div class="section-card-body" id="coachingBody">
       <p style="color:var(--text-muted); font-size:.85rem;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: Leave & Accommodations                                      -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-leave">
+
+  <!-- ── Leave of Absence Section ── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      Leave of Absence
+      <button class="btn-add" onclick="openLoaModal()">+ Add Leave</button>
+    </div>
+    <div class="section-card-body" id="loaBody">
+      {% if leaves_of_absence %}
+      <table class="roster-table" style="font-size:.82rem;">
+        <thead>
+          <tr>
+            <th>Type</th><th>Start Date</th><th>Expected Return</th>
+            <th>Actual Return</th><th>Status</th><th>Notes</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="loaTableBody">
+          {% for loa in leaves_of_absence %}
+          <tr data-loa-id="{{ loa.id }}">
+            <td>{{ loa.leave_type }}</td>
+            <td>{{ loa.start_date }}</td>
+            <td>{{ loa.expected_return_date or '—' }}</td>
+            <td>{{ loa.actual_return_date or '—' }}</td>
+            <td>
+              <span class="badge {% if loa.status == 'Active' %}badge-active{% elif loa.status == 'Returned' %}badge-inactive{% else %}badge-loa{% endif %}" style="font-size:.72rem;">
+                {{ loa.status }}
+              </span>
+            </td>
+            <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ loa.notes or '' }}</td>
+            <td>
+              <button class="btn btn-outline btn-sm" style="font-size:.7rem; padding:2px 8px;" onclick="editLoa({{ loa|tojson }})">Edit</button>
+              <button class="btn btn-outline btn-sm" style="font-size:.7rem; padding:2px 8px; color:var(--danger);" onclick="deleteLoa({{ loa.id }})">×</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No leave of absence records.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Accommodation Section ── -->
+  <div class="section-card" style="margin-top:20px;">
+    <div class="section-card-header">
+      Accommodation Details
+      <button class="btn-add" onclick="openAccomDatesModal()">Edit Dates</button>
+    </div>
+    <div class="section-card-body" id="accomDatesBody">
+      {% if accommodation %}
+      <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:.85rem;">
+        <div>
+          <span style="color:var(--text-muted);">Start Date:</span>
+          <strong>{{ accommodation.start_date or 'Not set' }}</strong>
+        </div>
+        <div>
+          <span style="color:var(--text-muted);">End Date:</span>
+          <strong>{{ accommodation.end_date or 'Not set' }}</strong>
+        </div>
+        <div>
+          <span style="color:var(--text-muted);">Shift:</span>
+          <strong>{{ accommodation.shift_start or '—' }} – {{ accommodation.shift_end or '—' }}</strong>
+        </div>
+        <div>
+          <span style="color:var(--text-muted);">Notes:</span>
+          {{ accommodation.notes or '—' }}
+        </div>
+      </div>
+      {% else %}
+      <p style="color:var(--text-muted); font-size:.85rem;">No accommodation record for this employee.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Expiry Warnings ── -->
+  <div class="section-card" style="margin-top:20px;" id="expiryWarningsCard" hidden>
+    <div class="section-card-header" style="color:var(--warning);">⚠ Upcoming Expiries</div>
+    <div class="section-card-body" id="expiryWarningsBody"></div>
+  </div>
+</div>
+
+<!-- ── LOA Modal ── -->
+<div class="modal-overlay" id="loaModal" hidden>
+  <div class="modal-card" style="max-width:520px;">
+    <div class="modal-header">
+      <span id="loaModalTitle">Add Leave of Absence</span>
+      <button class="modal-close" onclick="closeLoaModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="loaId" value="">
+      <div class="form-group">
+        <label>Leave Type</label>
+        <select id="loaType" class="form-control">
+          {% for lt in leave_types %}
+          <option value="{{ lt }}">{{ lt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div class="form-group" style="flex:1;">
+          <label>Start Date</label>
+          <input type="date" id="loaStart" class="form-control">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Expected Return</label>
+          <input type="date" id="loaExpReturn" class="form-control">
+        </div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div class="form-group" style="flex:1;">
+          <label>Actual Return</label>
+          <input type="date" id="loaActReturn" class="form-control">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Status</label>
+          <select id="loaStatus" class="form-control">
+            <option value="Active">Active</option>
+            <option value="Returned">Returned</option>
+            <option value="Extended">Extended</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="loaNotes" class="form-control" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeLoaModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveLoa()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Accommodation Dates Modal ── -->
+<div class="modal-overlay" id="accomDatesModal" hidden>
+  <div class="modal-card" style="max-width:400px;">
+    <div class="modal-header">
+      <span>Accommodation Dates</span>
+      <button class="modal-close" onclick="closeAccomDatesModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; gap:12px;">
+        <div class="form-group" style="flex:1;">
+          <label>Start Date</label>
+          <input type="date" id="accomStartDate" class="form-control" value="{{ accommodation.start_date if accommodation else '' }}">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>End Date</label>
+          <input type="date" id="accomEndDate" class="form-control" value="{{ accommodation.end_date if accommodation else '' }}">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeAccomDatesModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveAccomDates()">Save</button>
     </div>
   </div>
 </div>
@@ -1733,12 +1900,124 @@ function deleteProfileEvent(id) {
   });
 }
 
-// Hook coaching and attendance tab load into switchTab
+// ── LOA Functions ──
+function openLoaModal(data) {
+  document.getElementById('loaId').value = '';
+  document.getElementById('loaType').value = 'Medical';
+  document.getElementById('loaStart').value = '';
+  document.getElementById('loaExpReturn').value = '';
+  document.getElementById('loaActReturn').value = '';
+  document.getElementById('loaStatus').value = 'Active';
+  document.getElementById('loaNotes').value = '';
+  document.getElementById('loaModalTitle').textContent = 'Add Leave of Absence';
+  document.getElementById('loaModal').hidden = false;
+}
+function closeLoaModal() { document.getElementById('loaModal').hidden = true; }
+
+function editLoa(loa) {
+  document.getElementById('loaId').value = loa.id;
+  document.getElementById('loaType').value = loa.leave_type;
+  document.getElementById('loaStart').value = loa.start_date || '';
+  document.getElementById('loaExpReturn').value = loa.expected_return_date || '';
+  document.getElementById('loaActReturn').value = loa.actual_return_date || '';
+  document.getElementById('loaStatus').value = loa.status || 'Active';
+  document.getElementById('loaNotes').value = loa.notes || '';
+  document.getElementById('loaModalTitle').textContent = 'Edit Leave of Absence';
+  document.getElementById('loaModal').hidden = false;
+}
+
+async function saveLoa() {
+  const payload = {
+    employee_id: EMP_ID,
+    id: document.getElementById('loaId').value || undefined,
+    leave_type: document.getElementById('loaType').value,
+    start_date: document.getElementById('loaStart').value,
+    expected_return_date: document.getElementById('loaExpReturn').value || null,
+    actual_return_date: document.getElementById('loaActReturn').value || null,
+    status: document.getElementById('loaStatus').value,
+    notes: document.getElementById('loaNotes').value,
+  };
+  try {
+    const r = await fetch('/people/api/loa/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.success) { closeLoaModal(); showToast('Leave record saved.', 'success'); location.reload(); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  } catch(e) { showToast('Error saving LOA', 'error'); }
+}
+
+async function deleteLoa(id) {
+  if (!confirm('Delete this leave record?')) return;
+  try {
+    const r = await fetch('/people/api/loa/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    const d = await r.json();
+    if (d.success) { showToast('Leave record deleted.', 'success'); location.reload(); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  } catch(e) { showToast('Error deleting LOA', 'error'); }
+}
+
+// ── Accommodation Dates ──
+function openAccomDatesModal() { document.getElementById('accomDatesModal').hidden = false; }
+function closeAccomDatesModal() { document.getElementById('accomDatesModal').hidden = true; }
+
+async function saveAccomDates() {
+  const payload = {
+    employee: '{{ emp.full_name }}',
+    start_date: document.getElementById('accomStartDate').value || null,
+    end_date: document.getElementById('accomEndDate').value || null,
+  };
+  try {
+    const r = await fetch('/people/accommodations/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.success) { closeAccomDatesModal(); showToast('Accommodation dates saved.', 'success'); location.reload(); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  } catch(e) { showToast('Error saving dates', 'error'); }
+}
+
+// ── Expiry Warnings ──
+let _expiryLoaded = false;
+async function loadExpiryWarnings() {
+  if (_expiryLoaded) return;
+  _expiryLoaded = true;
+  try {
+    const r = await fetch('/people/api/expiry-warnings');
+    const d = await r.json();
+    if (!d.success || !d.warnings.length) return;
+    // Filter to this employee only
+    const mine = d.warnings.filter(w => w.employee_id == EMP_ID);
+    if (!mine.length) return;
+    const card = document.getElementById('expiryWarningsCard');
+    const body = document.getElementById('expiryWarningsBody');
+    body.innerHTML = mine.map(w =>
+      `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+        <div>
+          <span style="font-weight:600; color:${w.days_left <= 3 ? 'var(--danger)' : 'var(--warning)'};">
+            ${w.days_left === 0 ? 'Today' : w.days_left + ' day' + (w.days_left !== 1 ? 's' : '') + ' left'}
+          </span>
+          <span style="color:var(--text-muted); margin-left:8px; font-size:.82rem;">${w.detail}</span>
+        </div>
+        <span class="badge ${w.type === 'loa' ? 'badge-loa' : 'badge-training'}" style="font-size:.7rem;">${w.type === 'loa' ? 'LOA' : 'Accommodation'}</span>
+      </div>`
+    ).join('');
+    card.hidden = false;
+  } catch(e) { /* silent */ }
+}
+
+// Hook coaching, attendance, and leave tab load into switchTab
 const _origSwitchTab = switchTab;
 switchTab = function(tabId, btn) {
   _origSwitchTab(tabId, btn);
   if (tabId === 'coaching') loadCoachingSessions();
   if (tabId === 'attendance' && !_attLoaded) loadAttendance();
+  if (tabId === 'leave') loadExpiryWarnings();
 };
 
 // Restore active tab from URL hash on page load

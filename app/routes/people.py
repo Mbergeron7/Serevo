@@ -20,7 +20,8 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         TimeClock, EmployeeWorkTimePattern, WorkTimePatternModel,
                         EmployeeQuartile, WeekTimePattern,
                         AttendanceEvent, AdherenceException,
-                        PTOEntry, TimeOffType)
+                        PTOEntry, TimeOffType,
+                        LeaveOfAbsence, LEAVE_TYPES, Accommodation)
 
 log = logging.getLogger("serevo.people")
 
@@ -449,6 +450,9 @@ def employee_profile(emp_id):
             quartile_history=[],
             quartile_entities=[],
             avail_map={},
+            leaves_of_absence=[],
+            accommodation=None,
+            leave_types=LEAVE_TYPES,
         )
 
     # emp_id may be a numeric DB id or a string employee_id like "E1001"
@@ -517,6 +521,20 @@ def employee_profile(emp_id):
     except Exception:
         quartile_entities = []
 
+    # Load LOA records
+    try:
+        loa_records = LeaveOfAbsence.query.filter_by(employee_id=emp.id).order_by(LeaveOfAbsence.start_date.desc()).all()
+    except Exception:
+        db.session.rollback()
+        loa_records = []
+
+    # Load accommodation for this employee
+    try:
+        accom = Accommodation.query.filter_by(employee_id=emp.id).first()
+    except Exception:
+        db.session.rollback()
+        accom = None
+
     return render_template("people/profile.html",
         user=user,
         emp=emp,
@@ -534,6 +552,9 @@ def employee_profile(emp_id):
         quartile_history=quartile_history,
         quartile_entities=quartile_entities,
         avail_map=avail_map,
+        leaves_of_absence=[l.to_dict() for l in loa_records],
+        accommodation=accom.to_dict() if accom else None,
+        leave_types=LEAVE_TYPES,
     )
 
 
@@ -1016,6 +1037,126 @@ def coaching_delete():
     db.session.delete(cs)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ── Leave of Absence CRUD ─────────────────────────────────────────
+
+@people_bp.route("/api/loa/list", methods=["POST"])
+@login_required
+def loa_list():
+    data = request.get_json(silent=True) or {}
+    emp_id = data.get("employee_id")
+    if not emp_id:
+        return jsonify({"success": False, "error": "Missing employee_id"})
+    records = LeaveOfAbsence.query.filter_by(employee_id=int(emp_id)).order_by(
+        LeaveOfAbsence.start_date.desc()).all()
+    return jsonify({"success": True, "items": [r.to_dict() for r in records]})
+
+
+@people_bp.route("/api/loa/save", methods=["POST"])
+@login_required
+@admin_required
+def loa_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    loa_id = data.get("id")
+
+    if loa_id:
+        rec = LeaveOfAbsence.query.get(int(loa_id))
+        if not rec:
+            return jsonify({"success": False, "error": "Record not found"})
+    else:
+        rec = LeaveOfAbsence(employee_id=int(data["employee_id"]))
+        db.session.add(rec)
+
+    rec.leave_type = data.get("leave_type", "Medical")
+    sd = data.get("start_date")
+    rec.start_date = _dt.date.fromisoformat(sd) if sd else _dt.date.today()
+    erd = data.get("expected_return_date")
+    rec.expected_return_date = _dt.date.fromisoformat(erd) if erd else None
+    ard = data.get("actual_return_date")
+    rec.actual_return_date = _dt.date.fromisoformat(ard) if ard else None
+    rec.status = data.get("status", "Active")
+    rec.notes = data.get("notes", "")
+
+    db.session.commit()
+    return jsonify({"success": True, "item": rec.to_dict()})
+
+
+@people_bp.route("/api/loa/delete", methods=["POST"])
+@login_required
+@admin_required
+def loa_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    data = request.get_json(silent=True) or {}
+    loa_id = data.get("id")
+    rec = LeaveOfAbsence.query.get(int(loa_id))
+    if not rec:
+        return jsonify({"success": False, "error": "Record not found"})
+    db.session.delete(rec)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# ── Expiry Warnings (LOA + Accommodations) ────────────────────────
+
+@people_bp.route("/api/expiry-warnings")
+@login_required
+def expiry_warnings():
+    """Return LOA and accommodation records expiring within 14 days."""
+    today = _dt.date.today()
+    horizon = today + _dt.timedelta(days=14)
+    warnings = []
+
+    # LOA records with expected_return_date approaching
+    try:
+        loas = LeaveOfAbsence.query.filter(
+            LeaveOfAbsence.status == "Active",
+            LeaveOfAbsence.expected_return_date.isnot(None),
+            LeaveOfAbsence.expected_return_date <= horizon,
+            LeaveOfAbsence.expected_return_date >= today,
+        ).all()
+        for loa in loas:
+            emp = Employee.query.get(loa.employee_id)
+            days_left = (loa.expected_return_date - today).days
+            warnings.append({
+                "type": "loa",
+                "employee": emp.full_name if emp else f"ID {loa.employee_id}",
+                "employee_id": loa.employee_id,
+                "detail": f"{loa.leave_type} leave — expected return {loa.expected_return_date.isoformat()}",
+                "days_left": days_left,
+                "record_id": loa.id,
+            })
+    except Exception:
+        db.session.rollback()
+
+    # Accommodation records with end_date approaching
+    try:
+        accoms = Accommodation.query.filter(
+            Accommodation.end_date.isnot(None),
+            Accommodation.end_date <= horizon,
+            Accommodation.end_date >= today,
+        ).all()
+        for acc in accoms:
+            emp = Employee.query.get(acc.employee_id)
+            days_left = (acc.end_date - today).days
+            warnings.append({
+                "type": "accommodation",
+                "employee": emp.full_name if emp else f"ID {acc.employee_id}",
+                "employee_id": acc.employee_id,
+                "detail": f"Accommodation ending {acc.end_date.isoformat()}",
+                "days_left": days_left,
+                "record_id": acc.id,
+            })
+    except Exception:
+        db.session.rollback()
+
+    warnings.sort(key=lambda w: w["days_left"])
+    return jsonify({"success": True, "warnings": warnings})
 
 
 # ── Attendance history for profile ───────────────────────────────

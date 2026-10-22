@@ -328,6 +328,8 @@ class Accommodation(db.Model):
     shift_start = db.Column(db.String(10), default="")
     shift_end   = db.Column(db.String(10), default="")
     notes       = db.Column(db.Text, default="")
+    start_date  = db.Column(db.Date, nullable=True)
+    end_date    = db.Column(db.Date, nullable=True)
     updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def to_legacy_dict(self):
@@ -343,6 +345,61 @@ class Accommodation(db.Model):
             "Shift End": self.shift_end,
             "Notes": self.notes,
             "Updated": self.updated_at.strftime("%Y-%m-%d %H:%M") if self.updated_at else "",
+        }
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "mon": self.mon, "tue": self.tue, "wed": self.wed,
+            "thu": self.thu, "fri": self.fri, "sat": self.sat, "sun": self.sun,
+            "shift_start": self.shift_start or "",
+            "shift_end": self.shift_end or "",
+            "notes": self.notes or "",
+            "start_date": self.start_date.isoformat() if self.start_date else "",
+            "end_date": self.end_date.isoformat() if self.end_date else "",
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M") if self.updated_at else "",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# LEAVE OF ABSENCE
+# ═══════════════════════════════════════════════════════════════
+
+LEAVE_TYPES = [
+    "Medical", "Maternity", "Paternity", "Parental",
+    "Personal", "Bereavement", "Military", "Disability",
+    "Workers' Compensation", "Unpaid", "Other",
+]
+
+class LeaveOfAbsence(db.Model):
+    __tablename__ = "leave_of_absences"
+
+    id                   = db.Column(db.Integer, primary_key=True)
+    employee_id          = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    leave_type           = db.Column(db.String(50), nullable=False)
+    start_date           = db.Column(db.Date, nullable=False)
+    expected_return_date = db.Column(db.Date, nullable=True)
+    actual_return_date   = db.Column(db.Date, nullable=True)
+    status               = db.Column(db.String(20), default="Active")   # Active, Returned, Extended, Cancelled
+    notes                = db.Column(db.Text, default="")
+    created_at           = db.Column(db.DateTime, default=_utcnow)
+    updated_at           = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    employee = db.relationship("Employee", backref=db.backref("leaves_of_absence", lazy="dynamic"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "employee_id": self.employee_id,
+            "leave_type": self.leave_type,
+            "start_date": self.start_date.isoformat() if self.start_date else "",
+            "expected_return_date": self.expected_return_date.isoformat() if self.expected_return_date else "",
+            "actual_return_date": self.actual_return_date.isoformat() if self.actual_return_date else "",
+            "status": self.status,
+            "notes": self.notes or "",
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M") if self.created_at else "",
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M") if self.updated_at else "",
         }
 
 
