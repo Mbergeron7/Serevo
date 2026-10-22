@@ -1901,7 +1901,13 @@ function deleteProfileEvent(id) {
 }
 
 // ── LOA Functions ──
+function closeAllProfileModals() {
+  document.getElementById('loaModal').hidden = true;
+  document.getElementById('accomDatesModal').hidden = true;
+}
+
 function openLoaModal(data) {
+  closeAllProfileModals();
   document.getElementById('loaId').value = '';
   document.getElementById('loaType').value = 'Medical';
   document.getElementById('loaStart').value = '';
@@ -1915,6 +1921,7 @@ function openLoaModal(data) {
 function closeLoaModal() { document.getElementById('loaModal').hidden = true; }
 
 function editLoa(loa) {
+  closeAllProfileModals();
   document.getElementById('loaId').value = loa.id;
   document.getElementById('loaType').value = loa.leave_type;
   document.getElementById('loaStart').value = loa.start_date || '';
@@ -1962,7 +1969,7 @@ async function deleteLoa(id) {
 }
 
 // ── Accommodation Dates ──
-function openAccomDatesModal() { document.getElementById('accomDatesModal').hidden = false; }
+function openAccomDatesModal() { closeAllProfileModals(); document.getElementById('accomDatesModal').hidden = false; }
 function closeAccomDatesModal() { document.getElementById('accomDatesModal').hidden = true; }
 
 async function saveAccomDates() {
