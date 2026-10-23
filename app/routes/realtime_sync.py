@@ -1580,9 +1580,23 @@ def resync_feed(feed_id):
     db.session.commit()
     log.info(f"Resync: cleared {deleted} rows for feed '{feed.name}' (type={feed.feed_type})")
 
-    # Now re-sync
-    results = run_sync()
-    return jsonify({"cleared": deleted, "sync": results})
+    # Run re-sync in a background thread so the request doesn't time out
+    import threading
+
+    def _bg_sync(app):
+        with app.app_context():
+            try:
+                result = run_sync(app)
+                log.info(f"Background resync complete: {result}")
+            except Exception as e:
+                log.error(f"Background resync failed: {e}", exc_info=True)
+
+    from flask import current_app
+    app = current_app._get_current_object()
+    t = threading.Thread(target=_bg_sync, args=(app,), daemon=True)
+    t.start()
+
+    return jsonify({"cleared": deleted, "sync": "started in background — check feed status in ~60s"})
 
 
 @realtime_sync_bp.route("/realtime/debug-volume/<lob_name>", methods=["GET"])
