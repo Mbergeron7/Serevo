@@ -1157,6 +1157,28 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
 
         has_identifier = "route_id" in agg_col_map or "lob" in agg_col_map
         has_time = "date" in agg_col_map and "time" in agg_col_map
+
+        # Debug: dump all CallRoute mappings for PS Care FR
+        try:
+            from app.models import CallRoute, PlanningUnit
+            care_fr_pus = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name).like('%care%fr%')
+            ).all()
+            for pu in care_fr_pus:
+                routes = CallRoute.query.filter_by(planning_unit_id=pu.id, is_active=True).all()
+                route_ids = [r.route_id for r in routes]
+                log.info(f"[ROUTE-DEBUG] PU '{pu.name}' (id={pu.id}) has {len(routes)} active routes: {route_ids}")
+        except Exception as e:
+            log.info(f"[ROUTE-DEBUG] Could not query CallRoute: {e}")
+
+        # Debug: show unique route_ids in aggregated data
+        if "route_id" in agg_col_map:
+            unique_routes = set()
+            for row in aggregated[1:]:
+                rid = row[agg_col_map["route_id"]].strip()
+                if rid:
+                    unique_routes.add(rid)
+            log.info(f"[ROUTE-DEBUG] Unique route_ids in aggregated data: {sorted(unique_routes)}")
         if not has_identifier:
             return 0, 0, [f"Aggregation produced no queue/LOB column. Raw headers: {headers}"]
         if not has_time:
@@ -1186,6 +1208,15 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                 if not pus:
                     skipped += 1
                     continue
+
+                # Debug: log route→PU resolution for PS Care FR
+                for pu in pus:
+                    if "care" in pu.name.lower() and "fr" in pu.name.lower():
+                        offered_val = _safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0
+                        date_val = row[agg_col_map["date"]] if "date" in agg_col_map else "?"
+                        time_val = row[agg_col_map["time"]] if "time" in agg_col_map else "?"
+                        log.info(f"[ROUTE-DEBUG] PS Care FR match: route_id={rid if 'route_id' in agg_col_map else 'N/A'}, "
+                                 f"date={date_val}, time={time_val}, offered={offered_val}, pu={pu.name} (id={pu.id})")
 
                 ts = _parse_timestamp(
                     row[agg_col_map["date"]],
