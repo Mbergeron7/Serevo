@@ -3009,6 +3009,11 @@ class WfmTicket(db.Model):
     assigned_to  = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     affected_agents = db.Column(db.Text, nullable=True)  # comma-separated agent names or IDs
     affected_date   = db.Column(db.Date, nullable=True)   # date the request applies to
+    affected_date_end = db.Column(db.Date, nullable=True)  # end date for date ranges
+    lob          = db.Column(db.String(120), nullable=True)  # LOB / planning unit
+    shift_time   = db.Column(db.String(60), nullable=True)   # e.g. "9:00 AM - 5:00 PM"
+    overtime_hours = db.Column(db.Float, nullable=True)      # hours of OT requested
+    swap_with    = db.Column(db.String(200), nullable=True)   # agent to swap with
     resolution   = db.Column(db.Text, nullable=True)
     internal_note = db.Column(db.Text, nullable=True)     # WFM-only internal notes
     closed_at    = db.Column(db.DateTime, nullable=True)
@@ -3036,6 +3041,11 @@ class WfmTicket(db.Model):
             "assignee_name": self.assignee.display_name if self.assignee else None,
             "affected_agents": self.affected_agents,
             "affected_date": self.affected_date.isoformat() if self.affected_date else None,
+            "affected_date_end": self.affected_date_end.isoformat() if self.affected_date_end else None,
+            "lob": self.lob,
+            "shift_time": self.shift_time,
+            "overtime_hours": self.overtime_hours,
+            "swap_with": self.swap_with,
             "resolution": self.resolution,
             "internal_note": self.internal_note,
             "closed_at": self.closed_at.isoformat() if self.closed_at else None,

@@ -110,6 +110,19 @@
 
 /* Responsive table wrapper */
 .table-wrap{overflow-x:auto;}
+
+/* Agent multi-select dropdown */
+.agent-dropdown{position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.15);}
+.agent-dropdown .agent-option{padding:6px 12px;cursor:pointer;font-size:.85rem;display:flex;justify-content:space-between;align-items:center;}
+.agent-dropdown .agent-option:hover{background:var(--brand-accent)11;}
+.agent-dropdown .agent-option.selected{background:var(--brand-accent)15;font-weight:600;}
+.agent-dropdown .agent-option .ext-id{font-size:.72rem;color:var(--text-muted);}
+.agent-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--brand-accent)18;color:var(--brand-accent);border-radius:12px;font-size:.78rem;font-weight:600;}
+.agent-chip .remove{cursor:pointer;font-size:.9rem;line-height:1;opacity:.7;}
+.agent-chip .remove:hover{opacity:1;}
+
+/* Category hint card */
+.category-hint{padding:10px 14px;background:var(--brand-accent)08;border:1px solid var(--brand-accent)22;border-radius:8px;margin-bottom:12px;font-size:.82rem;color:var(--text-primary);}
 </style>
 {% endblock %}
 
@@ -275,53 +288,108 @@
 
 <!-- ════════════════ NEW TICKET MODAL ════════════════ -->
 <div class="modal-overlay" id="newTicketModal">
-  <div class="modal-box" style="max-width:600px;">
+  <div class="modal-box" style="max-width:640px;">
     <div class="modal-header">
       <h2>New WFM Request</h2>
       <button class="modal-close" onclick="closeModal('newTicketModal')">&times;</button>
     </div>
+
+    <!-- Step 1: Request Type -->
     <div class="form-group">
-      <label>Subject *</label>
-      <input id="ticketSubject" type="text" placeholder="e.g. Schedule change for John Smith — Oct 15">
+      <label>Request Type *</label>
+      <select id="ticketCategory" onchange="onCategoryChange()">
+        <option value="">— Select Request Type —</option>
+        <option value="schedule_change">📅 Schedule Change</option>
+        <option value="overtime">⏱️ Overtime Request</option>
+        <option value="time_off_exception">🏖️ Time Off Exception</option>
+        <option value="shift_swap">🔄 Shift Swap</option>
+        <option value="headcount">👥 Headcount Request</option>
+        <option value="forecast_adjustment">📊 Forecast Adjustment</option>
+        <option value="general">📝 General Request</option>
+      </select>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Category</label>
-        <select id="ticketCategory">
-          <option value="schedule_change">Schedule Change</option>
-          <option value="overtime">Overtime</option>
-          <option value="time_off_exception">Time Off Exception</option>
-          <option value="shift_swap">Shift Swap</option>
-          <option value="headcount">Headcount</option>
-          <option value="forecast_adjustment">Forecast Adjustment</option>
-          <option value="general">General</option>
+
+    <!-- Dynamic form fields (shown/hidden based on category) -->
+    <div id="dynamicFields" style="display:none;">
+
+      <!-- Priority + LOB row (all types) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="ticketPriority">
+            <option value="low">🟢 Low</option>
+            <option value="medium" selected>🟡 Medium</option>
+            <option value="high">🟠 High</option>
+            <option value="urgent">🔴 Urgent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>LOB / Department</label>
+          <select id="ticketLob">
+            <option value="">— Select LOB —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Affected Agent(s) — searchable dropdown -->
+      <div class="form-group" id="agentGroup">
+        <label>Affected Agent(s) *</label>
+        <div id="agentSelectWrap" style="position:relative;">
+          <input type="text" id="agentSearch" placeholder="Search agents…" autocomplete="off"
+                 oninput="filterAgents()" onfocus="showAgentDropdown()" style="width:100%;box-sizing:border-box;">
+          <div id="agentDropdown" class="agent-dropdown" style="display:none;"></div>
+          <div id="selectedAgents" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <!-- Swap With (shift_swap only) -->
+      <div class="form-group" id="swapGroup" style="display:none;">
+        <label>Swap With (Agent)</label>
+        <select id="ticketSwapWith">
+          <option value="">— Select Agent —</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Priority</label>
-        <select id="ticketPriority">
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
+
+      <!-- Date row -->
+      <div class="form-row" id="dateGroup">
+        <div class="form-group">
+          <label id="dateLabel">Effective Date *</label>
+          <input id="ticketDate" type="date">
+        </div>
+        <div class="form-group" id="dateEndGroup">
+          <label>End Date</label>
+          <input id="ticketDateEnd" type="date">
+        </div>
+      </div>
+
+      <!-- Shift / Time (schedule_change, shift_swap) -->
+      <div class="form-group" id="shiftGroup" style="display:none;">
+        <label>Shift / Time</label>
+        <select id="ticketShift">
+          <option value="">— Select Shift —</option>
         </select>
       </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Affected Agent(s)</label>
-        <input id="ticketAgents" type="text" placeholder="e.g. John Smith, Jane Doe">
+
+      <!-- OT Hours (overtime only) -->
+      <div class="form-group" id="otGroup" style="display:none;">
+        <label>Overtime Hours Requested</label>
+        <input id="ticketOtHours" type="number" min="0.5" max="24" step="0.5" placeholder="e.g. 2">
       </div>
+
+      <!-- Subject (auto-generated but editable) -->
       <div class="form-group">
-        <label>Affected Date</label>
-        <input id="ticketDate" type="date">
+        <label>Subject</label>
+        <input id="ticketSubject" type="text" placeholder="Auto-generated from your selections">
       </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label>Details / Reason *</label>
+        <textarea id="ticketDescription" rows="4" placeholder="Provide details about this request…"></textarea>
+      </div>
+
+      <button class="btn btn-primary" onclick="submitTicket()" id="submitBtn" style="width:100%;padding:10px;">Submit Request</button>
     </div>
-    <div class="form-group">
-      <label>Description *</label>
-      <textarea id="ticketDescription" rows="5" placeholder="Describe what you need from WFM…"></textarea>
-    </div>
-    <button class="btn btn-primary" onclick="submitTicket()" style="width:100%;padding:10px;">Submit Request</button>
   </div>
 </div>
 
@@ -542,24 +610,181 @@ async function permanentDelete(id){
   else showToast(data.error||'Failed','error');
 }
 
+/* ── Dropdown Data ── */
+let ddEmployees=[], ddLobs=[], ddShifts=[];
+let selectedAgentIds=[];
+let ddLoaded=false;
+
+async function loadDropdownData(){
+  if(ddLoaded)return;
+  try{
+    const resp=await fetch('/wfm-tickets/api/dropdown-data',{headers:{'X-CSRFToken':csrfToken}});
+    const data=await resp.json();
+    if(!data.success)return;
+    ddEmployees=data.employees||[];
+    ddLobs=data.lobs||[];
+    ddShifts=data.shift_templates||[];
+    ddLoaded=true;
+    // Populate LOB dropdown
+    const lobSel=document.getElementById('ticketLob');
+    lobSel.innerHTML='<option value="">— Select LOB —</option>'+ddLobs.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    // Populate shift dropdown
+    const shiftSel=document.getElementById('ticketShift');
+    shiftSel.innerHTML='<option value="">— Select Shift —</option>'+ddShifts.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    // Populate swap dropdown
+    const swapSel=document.getElementById('ticketSwapWith');
+    swapSel.innerHTML='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
+  }catch(e){console.error('Failed to load dropdown data',e);}
+}
+
+/* ── Category Change — show/hide fields ── */
+const categoryHints={
+  schedule_change:'Select the agent(s) whose schedule needs to change, the effective dates, and the new shift time.',
+  overtime:'Select which agent(s) need overtime, the date(s), and how many hours.',
+  time_off_exception:'Select the agent(s), the date range, and describe the exception needed.',
+  shift_swap:'Select both agents involved in the swap, the date, and the shifts being swapped.',
+  headcount:'Specify the LOB, effective dates, and headcount details needed.',
+  forecast_adjustment:'Specify the LOB and dates that need forecast adjustments.',
+  general:'Provide details about your WFM request.'
+};
+function onCategoryChange(){
+  const cat=document.getElementById('ticketCategory').value;
+  const dyn=document.getElementById('dynamicFields');
+  if(!cat){dyn.style.display='none';return;}
+  dyn.style.display='block';
+  loadDropdownData();
+
+  // Show/hide category-specific fields
+  const show=(id,vis)=>{const el=document.getElementById(id);if(el)el.style.display=vis?'':'none';};
+  show('agentGroup',['schedule_change','overtime','time_off_exception','shift_swap'].includes(cat));
+  show('swapGroup',cat==='shift_swap');
+  show('shiftGroup',['schedule_change','shift_swap'].includes(cat));
+  show('otGroup',cat==='overtime');
+  show('dateEndGroup',['schedule_change','time_off_exception','overtime'].includes(cat));
+
+  // Update date label
+  const dl=document.getElementById('dateLabel');
+  if(dl){
+    if(cat==='shift_swap')dl.textContent='Swap Date *';
+    else if(cat==='overtime')dl.textContent='Overtime Date *';
+    else dl.textContent='Effective Date *';
+  }
+}
+
+/* ── Agent Multi-Select ── */
+function filterAgents(){
+  const q=(document.getElementById('agentSearch').value||'').toLowerCase();
+  renderAgentDropdown(q);
+}
+function showAgentDropdown(){
+  renderAgentDropdown((document.getElementById('agentSearch').value||'').toLowerCase());
+  document.getElementById('agentDropdown').style.display='block';
+}
+function renderAgentDropdown(q){
+  const dd=document.getElementById('agentDropdown');
+  const filtered=ddEmployees.filter(e=>{
+    if(!q)return true;
+    return e.name.toLowerCase().includes(q)||(e.ext_id||'').toLowerCase().includes(q);
+  });
+  if(!filtered.length){dd.innerHTML='<div style="padding:8px 12px;color:var(--text-muted);font-size:.82rem;">No agents found</div>';dd.style.display='block';return;}
+  dd.innerHTML=filtered.slice(0,50).map(e=>{
+    const sel=selectedAgentIds.includes(e.id);
+    return `<div class="agent-option${sel?' selected':''}" onclick="toggleAgent(${e.id},'${esc(e.name).replace(/'/g,"\\'")}')">
+      <span>${esc(e.name)}</span>
+      <span class="ext-id">${sel?'✓ Selected':(e.ext_id||'')}</span>
+    </div>`;
+  }).join('');
+  dd.style.display='block';
+}
+function toggleAgent(id,name){
+  const idx=selectedAgentIds.indexOf(id);
+  if(idx>=0)selectedAgentIds.splice(idx,1);
+  else selectedAgentIds.push(id);
+  renderSelectedAgents();
+  filterAgents();
+  autoGenerateSubject();
+}
+function renderSelectedAgents(){
+  const wrap=document.getElementById('selectedAgents');
+  wrap.innerHTML=selectedAgentIds.map(id=>{
+    const emp=ddEmployees.find(e=>e.id===id);
+    const name=emp?emp.name:'Agent #'+id;
+    return `<span class="agent-chip">${esc(name)}<span class="remove" onclick="event.stopPropagation();toggleAgent(${id},'')">×</span></span>`;
+  }).join('');
+}
+// Close dropdown when clicking outside
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('agentSelectWrap');
+  if(wrap&&!wrap.contains(e.target)){document.getElementById('agentDropdown').style.display='none';}
+});
+
+/* ── Auto-generate subject ── */
+function autoGenerateSubject(){
+  const cat=document.getElementById('ticketCategory').value;
+  const subj=document.getElementById('ticketSubject');
+  if(subj.dataset.manual==='true')return; // user manually edited, don't overwrite
+  const catLabel=categoryLabels[cat]||'Request';
+  const agents=selectedAgentIds.map(id=>{const e=ddEmployees.find(x=>x.id===id);return e?e.name:'';}).filter(Boolean);
+  const dateVal=document.getElementById('ticketDate').value;
+  let parts=[catLabel];
+  if(agents.length)parts.push('for '+agents.slice(0,3).join(', ')+(agents.length>3?' +'+( agents.length-3)+' more':''));
+  if(dateVal)parts.push('— '+dateVal);
+  subj.value=parts.join(' ');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const subj=document.getElementById('ticketSubject');
+  if(subj)subj.addEventListener('input',()=>{subj.dataset.manual='true';});
+  const dt=document.getElementById('ticketDate');
+  if(dt)dt.addEventListener('change',autoGenerateSubject);
+});
+
 /* ── Submit ticket ── */
 async function submitTicket(){
-  const subject=document.getElementById('ticketSubject').value.trim();
-  const description=document.getElementById('ticketDescription').value.trim();
   const category=document.getElementById('ticketCategory').value;
+  if(!category){showToast('Please select a request type','error');return;}
+  const description=document.getElementById('ticketDescription').value.trim();
+  if(!description){showToast('Please provide details about your request','error');return;}
+
+  // Auto-generate subject if empty
+  let subject=document.getElementById('ticketSubject').value.trim();
+  if(!subject){
+    autoGenerateSubject();
+    subject=document.getElementById('ticketSubject').value.trim();
+  }
+  if(!subject)subject=categoryLabels[category]||'WFM Request';
+
   const priority=document.getElementById('ticketPriority').value;
-  const affected_agents=document.getElementById('ticketAgents').value.trim();
+  const lob=document.getElementById('ticketLob').value;
   const affected_date=document.getElementById('ticketDate').value;
-  if(!subject||!description){showToast('Subject and description are required','error');return;}
+  const affected_date_end=(document.getElementById('ticketDateEnd')||{}).value||'';
+  const shift_time=(document.getElementById('ticketShift')||{}).value||'';
+  const overtime_hours=parseFloat((document.getElementById('ticketOtHours')||{}).value)||null;
+  const swap_with=(document.getElementById('ticketSwapWith')||{}).value||'';
+
+  // Build affected_agents from selected chips
+  const agents=selectedAgentIds.map(id=>{const e=ddEmployees.find(x=>x.id===id);return e?e.name:'';}).filter(Boolean).join(', ');
+
   const body={subject,description,category,priority};
-  if(affected_agents)body.affected_agents=affected_agents;
+  if(agents)body.affected_agents=agents;
+  if(lob)body.lob=lob;
   if(affected_date)body.affected_date=affected_date;
+  if(affected_date_end)body.affected_date_end=affected_date_end;
+  if(shift_time)body.shift_time=shift_time;
+  if(overtime_hours)body.overtime_hours=overtime_hours;
+  if(swap_with)body.swap_with=swap_with;
+
   const resp=await fetch('/wfm-tickets/api/tickets/create',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
   const data=await resp.json();
   if(data.success){
     showToast('Request submitted','success');
     closeModal('newTicketModal');
-    ['ticketSubject','ticketDescription','ticketAgents','ticketDate'].forEach(id=>document.getElementById(id).value='');
+    // Reset form
+    document.getElementById('ticketCategory').value='';
+    document.getElementById('dynamicFields').style.display='none';
+    ['ticketSubject','ticketDescription','ticketDate','ticketDateEnd','ticketOtHours'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('ticketSubject').dataset.manual='';
+    selectedAgentIds=[];
+    renderSelectedAgents();
     loadTickets();
   }else showToast(data.error||'Failed','error');
 }
@@ -584,11 +809,21 @@ async function viewTicket(id){
     ${t.closed_at?' · Closed '+new Date(t.closed_at).toLocaleString():''}
   </div>`;
 
-  if(t.affected_agents||t.affected_date){
-    html+=`<div style="display:flex;gap:16px;margin-bottom:12px;font-size:.85rem;flex-wrap:wrap;">`;
-    if(t.affected_agents)html+=`<div><strong>Affected:</strong> ${esc(t.affected_agents)}</div>`;
-    if(t.affected_date)html+=`<div><strong>Date:</strong> ${t.affected_date}</div>`;
-    html+=`</div>`;
+  // Detail fields grid
+  {
+    const fields=[];
+    if(t.affected_agents)fields.push(['Affected Agent(s)',esc(t.affected_agents)]);
+    if(t.lob)fields.push(['LOB / Planning Unit',esc(t.lob)]);
+    if(t.affected_date)fields.push(['Start Date',t.affected_date]);
+    if(t.affected_date_end)fields.push(['End Date',t.affected_date_end]);
+    if(t.shift_time)fields.push(['Shift / Time',esc(t.shift_time)]);
+    if(t.overtime_hours)fields.push(['OT Hours',t.overtime_hours]);
+    if(t.swap_with)fields.push(['Swap With',esc(t.swap_with)]);
+    if(fields.length){
+      html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 16px;margin-bottom:12px;font-size:.85rem;">`;
+      fields.forEach(([k,v])=>html+=`<div><span style="color:var(--text-muted);">${k}:</span> <strong>${v}</strong></div>`);
+      html+=`</div>`;
+    }
   }
 
   html+=`<div style="padding:12px;background:var(--bg);border-radius:8px;font-size:.9rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;">${esc(t.description)}</div>`;

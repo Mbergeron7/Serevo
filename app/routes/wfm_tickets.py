@@ -168,13 +168,23 @@ def create_ticket():
         priority=priority,
         submitted_by=user["id"],
         affected_agents=data.get("affected_agents"),
+        lob=data.get("lob"),
+        shift_time=data.get("shift_time"),
+        overtime_hours=data.get("overtime_hours"),
+        swap_with=data.get("swap_with"),
     )
 
-    # Parse affected_date if provided
+    # Parse affected dates if provided
     affected_date = data.get("affected_date")
     if affected_date:
         try:
             ticket.affected_date = date.fromisoformat(affected_date)
+        except (ValueError, TypeError):
+            pass
+    affected_date_end = data.get("affected_date_end")
+    if affected_date_end:
+        try:
+            ticket.affected_date_end = date.fromisoformat(affected_date_end)
         except (ValueError, TypeError):
             pass
 
@@ -590,6 +600,7 @@ def download_csv():
     writer.writerow([
         "Ticket ID", "Subject", "Category", "Priority", "Status",
         "Submitted By", "Assigned To", "Affected Agents", "Affected Date",
+        "End Date", "LOB", "Shift/Time", "OT Hours", "Swap With",
         "Created At", "Closed At", "Closed By", "Duration (hrs)", "Archived"
     ])
 
@@ -603,6 +614,11 @@ def download_csv():
             t.assignee.display_name if t.assignee else "",
             t.affected_agents or "",
             t.affected_date.isoformat() if t.affected_date else "",
+            t.affected_date_end.isoformat() if t.affected_date_end else "",
+            t.lob or "",
+            t.shift_time or "",
+            t.overtime_hours or "",
+            t.swap_with or "",
             t.created_at.isoformat() if t.created_at else "",
             t.closed_at.isoformat() if t.closed_at else "",
             t.closer.display_name if t.closer else "",
@@ -684,6 +700,56 @@ def toggle_wfm_access():
 
     log.info(f"WFM access {'granted to' if grant else 'revoked from'} user {target.email} by {user.get('email')}")
     return jsonify(success=True, user_id=target.id, wfm_access=target.wfm_access)
+
+
+# ── API: dropdown data for new ticket form ──────────────────
+
+@wfm_tickets_bp.route("/api/dropdown-data", methods=["GET"])
+@login_required
+def dropdown_data():
+    """Return employees, LOBs, and shift templates for the new-ticket form dropdowns."""
+    user = get_current_user()
+    if not _has_wfm_access(user):
+        return jsonify(success=False, error="No WFM access"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True,
+                       employees=[{"id": i, "name": n} for i, n in enumerate([
+                           "Alex Morgan", "Jordan Rivera", "Casey Chen", "Sam Patel",
+                           "Taylor Kim", "Drew Nguyen", "Riley Brooks", "Priya Sharma"], 1)],
+                       lobs=["SS Sales", "SS Service", "PS Sales", "PS Service",
+                             "SS Case Management", "Collections"],
+                       shift_templates=["6:00 AM - 2:00 PM", "7:00 AM - 3:00 PM",
+                                        "8:00 AM - 4:00 PM", "9:00 AM - 5:00 PM",
+                                        "10:00 AM - 6:00 PM", "12:00 PM - 8:00 PM",
+                                        "1:00 PM - 9:00 PM", "2:00 PM - 10:00 PM"])
+
+    from app.models import Employee, PlanningUnit, ShiftTemplate
+
+    # Active employees
+    employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
+    emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id} for e in employees]
+
+    # Active LOBs
+    lobs = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+    lob_list = [u.name for u in lobs]
+
+    # Shift templates for time dropdown
+    try:
+        templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.start_time).all()
+        shift_list = list(dict.fromkeys(
+            f"{t.start_time.strftime('%-I:%M %p')} - {t.end_time.strftime('%-I:%M %p')}"
+            for t in templates if t.start_time and t.end_time
+        ))
+    except Exception:
+        shift_list = []
+
+    if not shift_list:
+        shift_list = ["6:00 AM - 2:00 PM", "7:00 AM - 3:00 PM", "8:00 AM - 4:00 PM",
+                      "9:00 AM - 5:00 PM", "10:00 AM - 6:00 PM", "12:00 PM - 8:00 PM",
+                      "1:00 PM - 9:00 PM", "2:00 PM - 10:00 PM"]
+
+    return jsonify(success=True, employees=emp_list, lobs=lob_list, shift_templates=shift_list)
 
 
 # ── API: list users with WFM access info (admin only) ────────
