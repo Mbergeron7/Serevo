@@ -121,15 +121,8 @@ def normalize_lob(name):
     name = (name or "").strip()
     if not name:
         return name
-    # 1. Try DB mapping (per-client configurable)
-    try:
-        from app.models import LobMapping
-        mapping = LobMapping.query.filter_by(source_name=name).first()
-        if mapping:
-            return mapping.planning_unit_name
-    except Exception:
-        pass  # DB not available or table doesn't exist yet
-    # 2. Fall back to hard-coded mapping
+    # Use the cached lob_to_planning_unit which already loads LobMapping
+    # table with a 60-second TTL cache — no per-call DB queries.
     try:
         from app.capacity.planning import lob_to_planning_unit
         return lob_to_planning_unit(name)

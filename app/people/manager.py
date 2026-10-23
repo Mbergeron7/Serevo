@@ -8,9 +8,15 @@ to the PostgreSQL database. All writes go to whichever backend is active.
 import os
 import logging
 import datetime
+import time as _time
 from collections import defaultdict
 
 log = logging.getLogger("serevo.people")
+
+# ── Employee list cache (avoid re-querying 460+ rows per LOB) ──
+_emp_cache = None
+_emp_cache_ts = 0
+_EMP_CACHE_TTL = 60  # seconds
 
 # ── Sheet tab names ──────────────────────────────────────────
 TAB_EMPLOYEES      = "EMPLOYEES"
@@ -97,7 +103,11 @@ def get_employees(sheet=None):
 
 
 def _get_employees_from_db():
-    """Read employees from the PostgreSQL database."""
+    """Read employees from the PostgreSQL database (cached for 60s)."""
+    global _emp_cache, _emp_cache_ts
+    now = _time.time()
+    if _emp_cache is not None and now - _emp_cache_ts < _EMP_CACHE_TTL:
+        return _emp_cache, None
     try:
         from app.models import Employee
         emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
@@ -112,7 +122,10 @@ def _get_employees_from_db():
                     emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
                 except Exception as bf_err:
                     log.warning(f"Backfill planning units failed (non-fatal): {bf_err}")
-        return [e.to_legacy_dict() for e in emps], None
+        result = [e.to_legacy_dict() for e in emps]
+        _emp_cache = result
+        _emp_cache_ts = now
+        return result, None
     except Exception as e:
         return [], str(e)
 
