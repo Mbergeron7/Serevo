@@ -1593,10 +1593,11 @@ function toggleHeatActivities(row) {
 
 // ── Auto-load on page ready ─────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  loadExistingData().then(() => {
-    // For daily view, also load interval data directly (works even without generated forecasts)
-    if (currentView === 'daily') loadIntervalData();
-  });
+  if (currentView === 'daily') {
+    loadIntervalData();
+  } else {
+    loadExistingData();
+  }
   const lobs = getSelectedLobs();
   if (lobs.length) loadScenarios(lobs[0]);
   startAutoRefresh();

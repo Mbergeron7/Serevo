@@ -130,8 +130,6 @@ def _operating_slots(lob_setting, target_date, planning_unit=None):
     if pu:
         try:
             bh_list = pu.business_hours
-            log.info("[BIZ-HOURS] planning_unit=%s, business_hours count=%d, has_lob_setting=%s",
-                     pu.name, len(bh_list) if bh_list else 0, bool(lob_setting))
             if bh_list:
                 day_name = day_names[dow]
                 for bh in bh_list:
@@ -143,18 +141,15 @@ def _operating_slots(lob_setting, target_date, planning_unit=None):
                             continue
                         start_str = bh.open_time
                         end_str = bh.close_time
-                        log.info("[BIZ-HOURS]   MATCHED %s: %s–%s", day_name, start_str, end_str)
                         break
         except Exception as e:
-            log.warning("[BIZ-HOURS] Could not check business hours: %s", e)
+            log.warning("Could not check business hours: %s", e)
 
     # Fall back to LOBSetting weekday/sat/sun columns
     if (not start_str or not end_str) and lob_setting:
         start_str, end_str = lob_setting.get_hours_for_day(dow)
-        log.info("[BIZ-HOURS] Fell back to LOBSetting: %s–%s for dow=%d", start_str, end_str, dow)
 
     if not start_str or not end_str:
-        log.info("[BIZ-HOURS] No operating hours found for dow=%d, returning None", dow)
         return None
 
     interval = (lob_setting.interval_minutes if lob_setting else None) or DEFAULT_INTERVAL_MINS

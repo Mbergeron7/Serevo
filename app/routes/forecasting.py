@@ -245,15 +245,17 @@ def generate():
                 today = datetime.date.today()
 
                 # Clear existing generated future forecasts for this unit
+                import datetime as _dt
+                today_start = _dt.datetime.combine(today, _dt.time.min)
                 ForecastInterval.query.filter(
                     ForecastInterval.planning_unit_id == unit.id,
-                    sa_func.date(ForecastInterval.timestamp) >= today,
+                    ForecastInterval.timestamp >= today_start,
                     ForecastInterval.source == "generated",
                 ).delete(synchronize_session=False)
 
                 RequirementInterval.query.filter(
                     RequirementInterval.planning_unit_id == unit.id,
-                    sa_func.date(RequirementInterval.timestamp) >= today,
+                    RequirementInterval.timestamp >= today_start,
                     RequirementInterval.source == "generated",
                 ).delete(synchronize_session=False)
 
@@ -582,24 +584,27 @@ def forecast_api_data():
         start = date(year, 1, 1)
         end = date(year, 12, 31)
         today = date.today()
+        import datetime as _dt
+        start_dt = _dt.datetime.combine(start, _dt.time.min)
+        end_dt = _dt.datetime.combine(end, _dt.time(23, 59, 59))
 
         # Get historical actuals (aggregated by day)
         hist_q = IntervalActual.query.filter(
             IntervalActual.planning_unit_id == actuals_pu_id,
-            sa_func.date(IntervalActual.timestamp) >= start,
-            sa_func.date(IntervalActual.timestamp) <= end,
+            IntervalActual.timestamp >= start_dt,
+            IntervalActual.timestamp <= end_dt,
         )
         if route_id_filter:
             hist_q = hist_q.filter(IntervalActual.route_id.in_(route_id_filter))
         hist_rows = (
             hist_q
             .with_entities(
-                sa_func.date(IntervalActual.timestamp).label("dt"),
+                sa_func.cast(IntervalActual.timestamp, db.Date).label("dt"),
                 sa_func.sum(IntervalActual.offered).label("offered"),
                 sa_func.sum(IntervalActual.offered * IntervalActual.aht_secs).label("aht_w"),
                 sa_func.count().label("cnt"),
             )
-            .group_by(sa_func.date(IntervalActual.timestamp))
+            .group_by(sa_func.cast(IntervalActual.timestamp, db.Date))
             .all()
         )
         hist_map = {}
@@ -618,16 +623,16 @@ def forecast_api_data():
             ForecastInterval.query
             .filter(
                 ForecastInterval.planning_unit_id == unit.id,
-                sa_func.date(ForecastInterval.timestamp) >= start,
-                sa_func.date(ForecastInterval.timestamp) <= end,
+                ForecastInterval.timestamp >= start_dt,
+                ForecastInterval.timestamp <= end_dt,
             )
             .with_entities(
-                sa_func.date(ForecastInterval.timestamp).label("dt"),
+                sa_func.cast(ForecastInterval.timestamp, db.Date).label("dt"),
                 sa_func.sum(ForecastInterval.offered).label("offered"),
                 sa_func.avg(ForecastInterval.aht).label("aht"),
                 sa_func.count().label("cnt"),
             )
-            .group_by(sa_func.date(ForecastInterval.timestamp))
+            .group_by(sa_func.cast(ForecastInterval.timestamp, db.Date))
             .all()
         )
         fc_map = {}
@@ -645,15 +650,15 @@ def forecast_api_data():
             RequirementInterval.query
             .filter(
                 RequirementInterval.planning_unit_id == unit.id,
-                sa_func.date(RequirementInterval.timestamp) >= start,
-                sa_func.date(RequirementInterval.timestamp) <= end,
+                RequirementInterval.timestamp >= start_dt,
+                RequirementInterval.timestamp <= end_dt,
             )
             .with_entities(
-                sa_func.date(RequirementInterval.timestamp).label("dt"),
+                sa_func.cast(RequirementInterval.timestamp, db.Date).label("dt"),
                 sa_func.avg(RequirementInterval.agents_required).label("avg_req"),
                 sa_func.max(RequirementInterval.agents_required).label("peak_req"),
             )
-            .group_by(sa_func.date(RequirementInterval.timestamp))
+            .group_by(sa_func.cast(RequirementInterval.timestamp, db.Date))
             .all()
         )
         req_map = {}
