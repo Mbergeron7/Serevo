@@ -507,22 +507,33 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
         return [["date", "time", "lob", "offered", "answered", "abandoned",
                  "rolled", "asa", "aht"]]  # just headers, no data
 
-    # Parse all events, dedup by call_id
+    # Parse all events: filter by queue_time first, then dedup by call_id
     events = []
     seen_calls = set()
+    filtered_out = 0
+    deduped_out = 0
     for row in rows[1:]:
         try:
             ts_str = row[col_map["timestamp"]].strip()
             if not ts_str:
                 continue
 
+            # ── Step 1: Filter by queue_time FIRST ──
+            # Each call generates ~3 log entries in the source data.
+            # Only entries with queue_time > 0 represent actual calls.
+            wait = _safe_float(row[col_map["wait_time"]]) if "wait_time" in col_map else None
+            if "wait_time" in col_map and (wait is None or wait <= 0):
+                filtered_out += 1
+                continue
+
             ts = _parse_datetime(ts_str, source_tz=source_timezone, target_tz=target_timezone)
 
-            # Dedup by call_id if available
+            # ── Step 2: Dedup by call_id (log_id) AFTER filtering ──
             call_id = None
             if "call_id" in col_map:
                 call_id = row[col_map["call_id"]].strip()
                 if call_id and call_id in seen_calls:
+                    deduped_out += 1
                     continue
                 if call_id:
                     seen_calls.add(call_id)
@@ -530,23 +541,7 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             queue = row[col_map["queue"]].strip() if "queue" in col_map else "default"
             is_abn = _safe_int(row[col_map["is_abandoned"]]) if "is_abandoned" in col_map else 0
             is_rolled = _safe_int(row[col_map["is_rolled"]]) if "is_rolled" in col_map else 0
-            wait = _safe_float(row[col_map["wait_time"]]) if "wait_time" in col_map else None
             dur = _safe_float(row[col_map["duration"]]) if "duration" in col_map else None
-
-            # Debug: log ALL raw rows for queue 374 (kept or filtered)
-            if str(queue) == "374":
-                raw_vals = {h: row[i] if i < len(row) else "" for h, i in col_map.items()}
-                log.info(f"[RAW-374] call_id={call_id}, wait={wait}, queue={queue}, ts={ts_str}, raw={raw_vals}")
-
-            # ── Filter: only count log entries that are actual calls ──
-            # Each call generates ~3 log IDs in the source data.
-            # Only the entry with queue time > 0 is the real call;
-            # the others are duplicate log entries for the same call.
-            if "wait_time" in col_map and (wait is None or wait <= 0):
-                log.debug(f"[EVENT-AGG] FILTERED OUT row: call_id={call_id}, wait={wait}")
-                continue
-
-            log.debug(f"[EVENT-AGG] KEPT row: call_id={call_id}, wait={wait}, queue={queue}")
             events.append({
                 "ts": ts, "queue": queue,
                 "is_abandoned": is_abn > 0,
@@ -556,14 +551,8 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
         except Exception:
             continue
 
-    log.info(f"[EVENT-AGG] Total rows processed: {len(rows)-1}, events kept: {len(events)}, deduped calls: {len(seen_calls)}")
-
-    # Debug: dump kept events for route 374 (PS Care FR) today
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
-    route_374_today = [e for e in events if str(e["queue"]) == "374" and e["ts"].strftime("%Y-%m-%d") == today_str]
-    log.info(f"[EVENT-AGG-374] Route 374 today ({today_str}): {len(route_374_today)} events kept")
-    for e in route_374_today[:20]:
-        log.info(f"[EVENT-AGG-374]   ts={e['ts']}, wait={e['wait_time']}, dur={e['duration']}, abn={e['is_abandoned']}")
+    log.info(f"[EVENT-AGG] Total rows: {len(rows)-1}, filtered_out(queue_time<=0): {filtered_out}, "
+             f"deduped_out: {deduped_out}, events kept: {len(events)}")
 
     if not events:
         return [["date", "time", "lob", "offered", "answered", "abandoned",
