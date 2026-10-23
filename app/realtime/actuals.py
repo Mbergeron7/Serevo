@@ -62,20 +62,16 @@ def is_logged_in(status):
 
 def get_interval_actuals(lob, date_obj, user=None, sheet=None):
     """Return list of interval actual dicts for one LOB + date (sorted)."""
-    log.info(f"[ACTUALS-DEBUG] get_interval_actuals called: lob={lob!r} date={date_obj} is_demo={user.get('is_demo') if user else None}")
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_interval_actuals
         return get_demo_interval_actuals(lob, date_obj)
 
     rows = _db_interval_actuals(lob, date_obj)
     if rows is None or not rows:
-        log.info(f"[ACTUALS-DEBUG] DB returned {rows!r}, falling through to sheet")
         sheet_rows = _sheet_interval_actuals(lob, date_obj, sheet)
         if sheet_rows:
             rows = sheet_rows
-            log.info(f"[ACTUALS-DEBUG] Sheet returned {len(sheet_rows)} rows")
     result = sorted(rows or [], key=lambda r: r["time"])
-    log.info(f"[ACTUALS-DEBUG] Returning {len(result)} actuals for {lob!r}")
     return result
 
 
@@ -84,7 +80,6 @@ def _db_interval_actuals(lob, date_obj):
         from app.models import db, IntervalActual, PlanningUnit
         pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if not pu:
-            log.info(f"[ACTUALS-DEBUG] No PlanningUnit for lob={lob!r}")
             return []
         start = datetime.datetime.combine(date_obj, datetime.time.min)
         end = start + datetime.timedelta(days=1)
@@ -93,17 +88,6 @@ def _db_interval_actuals(lob, date_obj):
             IntervalActual.timestamp >= start,
             IntervalActual.timestamp < end,
         ).order_by(IntervalActual.timestamp).all()
-        if not rows:
-            # Check if there's ANY data for this PU at all
-            total = IntervalActual.query.filter(
-                IntervalActual.planning_unit_id == pu.id
-            ).count()
-            log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: 0 rows (total in DB for this PU: {total})")
-        else:
-            log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: {len(rows)} rows")
-            if "care" in lob.lower() and "fr" in lob.lower():
-                for r in rows:
-                    log.info(f"[ACTUALS-DEBUG]   ts={r.timestamp}, offered={r.offered}, answered={r.answered}, route_id={r.route_id}, source={r.source}")
         return [r.to_dict() for r in rows]
     except Exception as e:
         try:

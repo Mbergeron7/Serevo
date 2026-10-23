@@ -718,10 +718,6 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
 
     headers = rows[0]
     col_map = _match_columns(headers, _VOLUME_COL_ALIASES, custom_mapping=custom_mapping)
-    log.info(f"[SYNC-DEBUG] Call volume headers: {headers}")
-    log.info(f"[SYNC-DEBUG] Mapped columns: {col_map}")
-    log.info(f"[SYNC-DEBUG] answered_within mapped: {'answered_within' in col_map}")
-
     # Need date + time + either route_id or lob
     has_identifier = "route_id" in col_map or "lob" in col_map
     has_time = "date" in col_map and "time" in col_map
@@ -1157,27 +1153,6 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
         has_identifier = "route_id" in agg_col_map or "lob" in agg_col_map
         has_time = "date" in agg_col_map and "time" in agg_col_map
 
-        # Debug: dump all CallRoute mappings for PS Care FR
-        try:
-            from app.models import CallRoute, PlanningUnit
-            care_fr_pus = PlanningUnit.query.filter(
-                db.func.lower(PlanningUnit.name).like('%care%fr%')
-            ).all()
-            for pu in care_fr_pus:
-                routes = CallRoute.query.filter_by(planning_unit_id=pu.id, is_active=True).all()
-                route_ids = [r.route_id for r in routes]
-                log.info(f"[ROUTE-DEBUG] PU '{pu.name}' (id={pu.id}) has {len(routes)} active routes: {route_ids}")
-        except Exception as e:
-            log.info(f"[ROUTE-DEBUG] Could not query CallRoute: {e}")
-
-        # Debug: show unique route_ids in aggregated data
-        if "route_id" in agg_col_map:
-            unique_routes = set()
-            for row in aggregated[1:]:
-                rid = row[agg_col_map["route_id"]].strip()
-                if rid:
-                    unique_routes.add(rid)
-            log.info(f"[ROUTE-DEBUG] Unique route_ids in aggregated data: {sorted(unique_routes)}")
         if not has_identifier:
             return 0, 0, [f"Aggregation produced no queue/LOB column. Raw headers: {headers}"]
         if not has_time:
@@ -1207,15 +1182,6 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                 if not pus:
                     skipped += 1
                     continue
-
-                # Debug: log route→PU resolution for PS Care FR
-                for pu in pus:
-                    if "care" in pu.name.lower() and "fr" in pu.name.lower():
-                        offered_val = _safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0
-                        date_val = row[agg_col_map["date"]] if "date" in agg_col_map else "?"
-                        time_val = row[agg_col_map["time"]] if "time" in agg_col_map else "?"
-                        log.info(f"[ROUTE-DEBUG] PS Care FR match: route_id={rid if 'route_id' in agg_col_map else 'N/A'}, "
-                                 f"date={date_val}, time={time_val}, offered={offered_val}, pu={pu.name} (id={pu.id})")
 
                 ts = _parse_timestamp(
                     row[agg_col_map["date"]],
@@ -1631,133 +1597,6 @@ def resync_feed(feed_id):
     t.start()
 
     return jsonify({"cleared": deleted, "sync": "started in background — check feed status in ~60s"})
-
-
-@realtime_sync_bp.route("/realtime/debug-volume", methods=["GET"])
-@realtime_sync_bp.route("/realtime/debug-volume/<path:lob_name>", methods=["GET"])
-@login_required
-def debug_volume(lob_name=None):
-    if lob_name is None:
-        lob_name = request.args.get("lob", "")
-    if not lob_name:
-        return jsonify({"error": "Provide ?lob=PS Care FR"})
-    """Temporary diagnostic: show interval_actuals + call_routes for a LOB."""
-    auth_err = _require_admin()
-    if auth_err:
-        return auth_err
-    from app.data_source import normalize_lob
-    normalized = normalize_lob(lob_name)
-    pu = PlanningUnit.query.filter(
-        db.func.lower(PlanningUnit.name) == normalized.lower()
-    ).first()
-    if not pu:
-        return jsonify({"error": f"No PU for '{lob_name}' (normalized: '{normalized}')",
-                        "all_pus": [p.name for p in PlanningUnit.query.all()]})
-
-    routes = CallRoute.query.filter_by(planning_unit_id=pu.id).all()
-    from sqlalchemy import desc, func as sa_func
-    rows = IntervalActual.query.filter_by(planning_unit_id=pu.id)\
-        .order_by(desc(IntervalActual.timestamp)).limit(100).all()
-
-    # Daily totals
-    daily = {}
-    for r in rows:
-        d = r.timestamp.strftime("%Y-%m-%d")
-        daily[d] = daily.get(d, 0) + (r.offered or 0)
-
-    return jsonify({
-        "planning_unit": {"id": pu.id, "name": pu.name},
-        "call_routes": [{"route_id": r.route_id, "name": r.name, "active": r.is_active} for r in routes],
-        "daily_totals": {k: daily[k] for k in sorted(daily.keys(), reverse=True)},
-        "intervals": [{
-            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M"),
-            "offered": r.offered, "answered": r.answered,
-            "answered_within": r.answered_within,
-            "abandoned": r.abandoned, "aht": r.aht_secs,
-            "source": r.source,
-        } for r in rows],
-    })
-
-
-@realtime_sync_bp.route("/realtime/debug/volume-summary", methods=["GET"])
-@login_required
-def debug_volume_summary():
-    """Diagnostic: show interval_actuals row counts by source and date range per LOB."""
-    auth_err = _require_admin()
-    if auth_err:
-        return auth_err
-    from sqlalchemy import func as sa_func
-    rows = (
-        db.session.query(
-            PlanningUnit.id,
-            PlanningUnit.name,
-            IntervalActual.source,
-            sa_func.count().label("count"),
-            sa_func.min(IntervalActual.timestamp).label("earliest"),
-            sa_func.max(IntervalActual.timestamp).label("latest"),
-        )
-        .join(PlanningUnit, PlanningUnit.id == IntervalActual.planning_unit_id)
-        .group_by(PlanningUnit.id, PlanningUnit.name, IntervalActual.source)
-        .order_by(PlanningUnit.name, IntervalActual.source)
-        .all()
-    )
-    summary = []
-    for r in rows:
-        summary.append({
-            "planning_unit_id": r.id,
-            "planning_unit": r.name,
-            "source": r.source,
-            "rows": r.count,
-            "earliest": r.earliest.strftime("%Y-%m-%d %H:%M") if r.earliest else None,
-            "latest": r.latest.strftime("%Y-%m-%d %H:%M") if r.latest else None,
-        })
-    total = IntervalActual.query.count()
-    return jsonify({"total_rows": total, "by_lob_source": summary})
-
-
-@realtime_sync_bp.route("/realtime/debug/actuals-test", methods=["GET"])
-@login_required
-def debug_actuals_test():
-    """Test the exact query path used by _db_interval_actuals for all LOBs."""
-    auth_err = _require_admin()
-    if auth_err:
-        return auth_err
-    import datetime as _dt
-    date_str = request.args.get("date", _dt.date.today().isoformat())
-    date_obj = _dt.datetime.strptime(date_str, "%Y-%m-%d").date()
-    start = _dt.datetime.combine(date_obj, _dt.time.min)
-    end = start + _dt.timedelta(days=1)
-
-    # Get all PUs
-    pus = PlanningUnit.query.all()
-    results = []
-    for pu in pus:
-        count = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == pu.id,
-            IntervalActual.timestamp >= start,
-            IntervalActual.timestamp < end,
-        ).count()
-        total = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == pu.id,
-        ).count()
-        # Also get a sample row to show stored timestamp format
-        sample = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == pu.id,
-        ).order_by(IntervalActual.timestamp.desc()).first()
-        results.append({
-            "pu_id": pu.id,
-            "pu_name": pu.name,
-            "is_active": pu.is_active,
-            "rows_for_date": count,
-            "total_rows": total,
-            "latest_timestamp": sample.timestamp.isoformat() if sample else None,
-            "latest_timestamp_date": sample.timestamp.strftime("%Y-%m-%d") if sample else None,
-        })
-    return jsonify({
-        "query_date": date_str,
-        "query_range": f"{start.isoformat()} to {end.isoformat()}",
-        "planning_units": results,
-    })
 
 
 @realtime_sync_bp.route("/realtime/status", methods=["GET"])
