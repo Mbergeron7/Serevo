@@ -1636,7 +1636,7 @@ def resync_feed(feed_id):
     return jsonify({"cleared": deleted, "sync": "started in background — check feed status in ~60s"})
 
 
-@realtime_sync_bp.route("/realtime/debug-volume/<lob_name>", methods=["GET"])
+@realtime_sync_bp.route("/realtime/debug-volume/<path:lob_name>", methods=["GET"])
 @login_required
 def debug_volume(lob_name):
     """Temporary diagnostic: show interval_actuals + call_routes for a LOB."""
