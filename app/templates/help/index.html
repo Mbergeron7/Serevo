@@ -984,23 +984,48 @@
   <!-- ============================================================ -->
   <!-- WFM TICKETS -->
   <!-- ============================================================ -->
-  <div class="help-section" id="wfm-tickets" data-keywords="wfm tickets support request schedule change availability shift preference inquiry open progress resolved closed priority assign track">
+  <div class="help-section" id="wfm-tickets" data-keywords="wfm tickets support request schedule change overtime time off shift swap headcount forecast lob agent roster priority assign track dashboard analytics csv export">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>WFM Tickets</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>What Are WFM Tickets?</h3>
-      <p>WFM Tickets are internal workforce management requests — schedule change requests, availability updates, shift preference submissions, accommodation requests, and other WFM-related inquiries. They provide a structured way for agents to communicate needs and for managers to track and resolve them.</p>
+      <p>WFM Tickets are structured workforce management requests — schedule changes, overtime approvals, time-off exceptions, shift swaps, headcount requests, and forecast adjustments. They replace free-text submissions with a portal-style form that uses dropdowns and date fields so every request contains the information WFM needs to act on it.</p>
 
-      <h3>Creating a Ticket</h3>
+      <h3>Creating a Request</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Go to <strong>WFM Tickets</strong> from the navigation menu (or from the agent portal).</li>
-        <li>Click <strong>+ New Ticket</strong>.</li>
-        <li>Enter the subject and a detailed description of the request.</li>
-        <li>Select a category (schedule change, availability, shift preference, accommodation, other).</li>
-        <li>Set a priority level (low, medium, high, urgent).</li>
-        <li>Click <strong>Submit</strong>.</li>
+        <li>Go to <strong>WFM Tickets</strong> from the navigation menu.</li>
+        <li>Click <strong>+ New Request</strong>.</li>
+        <li>Select a <strong>Request Type</strong> — the form fields update automatically based on the type you choose (see Request Types below).</li>
+        <li>Set <strong>Priority</strong> (Low, Medium, High, or Urgent).</li>
+        <li>Select the <strong>LOB / Department</strong> — this filters the agent list to employees rostered under that planning unit.</li>
+        <li>Choose the <strong>Affected Agent(s)</strong> — a searchable multi-select dropdown showing only agents from the selected LOB. You can select multiple agents.</li>
+        <li>Set the <strong>Effective Date</strong> and, if applicable, the <strong>End Date</strong>.</li>
+        <li>Fill in any additional fields that appear for your request type (shift/time, overtime hours, swap partner).</li>
+        <li>The <strong>Subject</strong> line is auto-generated from your selections but can be edited.</li>
+        <li>Add <strong>Details / Reason</strong> with any context or justification.</li>
+        <li>Click <strong>Submit Request</strong>.</li>
       </ol>
+
+      <h3>Request Types</h3>
+      <p>Each request type shows only the fields relevant to that type:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Schedule Change</strong> — change an agent's scheduled shift. Fields: affected agents, effective date, end date, shift/time.</li>
+        <li><strong>Overtime</strong> — request overtime hours for one or more agents. Fields: affected agents, date, end date, overtime hours.</li>
+        <li><strong>Time Off Exception</strong> — request an exception to standard time-off rules. Fields: affected agents, date range.</li>
+        <li><strong>Shift Swap</strong> — swap shifts between two agents in the same LOB. Fields: affected agents, swap date, shift/time, swap-with agent.</li>
+        <li><strong>Headcount</strong> — request additional headcount or report changes for a LOB. Fields: LOB, effective dates.</li>
+        <li><strong>Forecast Adjustment</strong> — flag a forecast that needs correction. Fields: LOB, dates.</li>
+        <li><strong>General</strong> — any other WFM request that doesn't fit the above categories.</li>
+      </ul>
+
+      <h3>Dashboard &amp; Analytics</h3>
+      <p>The WFM Tickets page has three tabs:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Dashboard</strong> — shows ticket counts by status (open, in progress, resolved) and recent activity.</li>
+        <li><strong>Analytics</strong> — charts showing ticket trends, resolution times, and breakdowns by category and priority.</li>
+        <li><strong>All Tickets</strong> — the full ticket list with search, filters (status, category, priority), and CSV export.</li>
+      </ul>
 
       <h3>Tracking &amp; Resolving Tickets</h3>
       <p>Admins and supervisors can view all tickets. Filter by status:</p>
@@ -1010,7 +1035,7 @@
         <li><strong>Resolved</strong> — completed with a resolution</li>
         <li><strong>Closed</strong> — finalized and archived</li>
       </ul>
-      <p>Click a ticket to view details, add notes or responses, reassign to another manager, or change the status. The submitting agent can see status updates and any responses in their portal.</p>
+      <p>Click a ticket to view its full details in a grid layout showing all submitted fields. From the detail view, admins can assign the ticket to a team member, add internal notes, update the status, or resolve and close the request. The submitting agent can see status updates and any responses in their portal.</p>
     </div>
   </div>
 
