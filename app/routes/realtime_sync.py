@@ -531,6 +531,13 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             wait = _safe_float(row[col_map["wait_time"]]) if "wait_time" in col_map else None
             dur = _safe_float(row[col_map["duration"]]) if "duration" in col_map else None
 
+            # ── Filter: only count log entries that are actual calls ──
+            # Each call generates ~3 log IDs in the source data.
+            # Only the entry with queue time > 0 is the real call;
+            # the others are duplicate log entries for the same call.
+            if "wait_time" in col_map and (wait is None or wait <= 0):
+                continue
+
             events.append({
                 "ts": ts, "queue": queue,
                 "is_abandoned": is_abn > 0,
