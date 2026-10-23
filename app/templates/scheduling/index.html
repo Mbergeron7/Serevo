@@ -4,42 +4,61 @@
 
 {% block head %}
 <style>
-  .page-header { margin-bottom: 14px; }
-  .page-header h1 { font-size: 1.25rem; margin-bottom: 2px; }
-  .page-header .subtitle { color: var(--text-muted); font-size: .9rem; }
+  /* ══ VIEWPORT LAYOUT — fixed dashboard, no page scroll ═══════ */
+  /* Break out of base.html <main> constraints */
+  main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+  footer { display: none !important; }
+  /* Full viewport flex column */
+  .sched-viewport {
+    display: flex; flex-direction: column; height: calc(100vh - 56px); /* minus nav */
+    overflow: hidden;
+  }
+
+  /* ── Top toolbar zone (fixed, never scrolls) ──────────── */
+  .sched-toolbar {
+    flex-shrink: 0; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+  }
+  .toolbar-main-row {
+    display: flex; gap: 6px; align-items: center; flex-wrap: nowrap;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .toolbar-main-row::-webkit-scrollbar { display: none; }
+  .toolbar-secondary {
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    margin-top: 4px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  }
+  .toolbar-secondary:empty { display: none; margin: 0; padding: 0; border: 0; }
+
+  /* Inputs links — inline compact */
   .inputs-bar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
-    padding: 6px 12px; margin-bottom: 10px; border-radius: 6px;
-    background: var(--surface); border: 1px solid var(--border); font-size: .75rem;
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 10px;
+    font-size: .7rem; white-space: nowrap; margin-right: auto;
   }
   .inputs-bar .inputs-label {
-    font-size: .72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-muted); margin-right: 4px;
+    font-size: .62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-right: 2px;
   }
   .inputs-bar a { color: var(--brand-accent); font-weight: 600; text-decoration: none; }
   .inputs-bar a:hover { text-decoration: underline; }
 
-  /* ── Config panel (toolbar style) ────────────── */
-  .config-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 10px 14px; margin-bottom: 12px;
-  }
-  .config-row {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;
-  }
-  .config-group { display: flex; flex-direction: column; }
+  /* ── Config controls ────────────────────────────── */
+  .config-group { display: flex; flex-direction: column; flex-shrink: 0; }
   .config-group label {
-    font-size: .62rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px;
+    font-size: .58rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin-bottom: 1px;
+    line-height: 1;
   }
   .config-group select, .config-group input {
-    padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
-    font-size: .78rem; background: var(--bg); color: var(--text);
+    padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px;
+    font-size: .75rem; background: var(--bg); color: var(--text);
+    height: 26px;
   }
   .btn-action {
-    border: none; padding: 5px 12px; border-radius: 5px; font-weight: 700;
-    font-size: .72rem; cursor: pointer; white-space: nowrap;
+    border: none; padding: 3px 10px; border-radius: 4px; font-weight: 700;
+    font-size: .68rem; cursor: pointer; white-space: nowrap; height: 26px;
+    display: inline-flex; align-items: center;
   }
   .btn-generate { background: var(--brand-accent); color: #fff; }
   .btn-save { background: #059669; color: #fff; }
@@ -49,48 +68,86 @@
   /* Toolbar button groups */
   .toolbar-group {
     display: inline-flex; gap: 0; border: 1px solid var(--border);
-    border-radius: 5px; overflow: hidden; margin-left: 4px;
+    border-radius: 4px; overflow: hidden; flex-shrink: 0;
   }
   .toolbar-group .btn-action {
     border-radius: 0; border: none; border-right: 1px solid rgba(255,255,255,.2);
-    padding: 5px 10px; font-size: .7rem;
+    padding: 3px 8px; font-size: .65rem;
   }
   .toolbar-group .btn-action:last-child { border-right: none; }
 
-  /* ── View tabs ─────────────────────────────────── */
+  /* ── Middle bar: view tabs + stats inline ─────── */
+  .sched-middle-bar {
+    flex-shrink: 0; display: none;
+    align-items: center; gap: 8px; padding: 4px 16px;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    font-size: .75rem;
+  }
+  .sched-middle-bar.visible { display: flex; }
+
   .view-tabs {
-    display: flex; gap: 2px; margin-bottom: 8px;
-    background: var(--bg); border-radius: 6px; padding: 2px;
-    width: fit-content;
+    display: flex; gap: 1px; background: var(--border); border-radius: 5px;
+    padding: 0; overflow: hidden; flex-shrink: 0;
   }
   .view-tab {
-    padding: 4px 14px; border-radius: 5px; border: none;
-    font-size: .72rem; font-weight: 600; cursor: pointer;
-    background: transparent; color: var(--text-muted);
+    padding: 4px 12px; border: none;
+    font-size: .68rem; font-weight: 600; cursor: pointer;
+    background: var(--surface); color: var(--text-muted);
   }
   .view-tab.active { background: var(--brand-accent); color: #fff; }
 
-  /* ── Stats bar (slim inline) ───────────────────── */
+  /* Inline stats */
   .stat-row {
-    display: flex; gap: 0; flex-wrap: wrap; margin-bottom: 10px;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); overflow: hidden; font-size: .78rem;
+    display: flex; gap: 0; flex-shrink: 0; margin-left: 8px;
+    border: 1px solid var(--border); border-radius: 5px; overflow: hidden;
   }
   .stat-card {
-    padding: 6px 16px; display: flex; align-items: center; gap: 6px;
-    border-right: 1px solid var(--border);
+    padding: 2px 10px; display: flex; align-items: center; gap: 4px;
+    border-right: 1px solid var(--border); background: var(--surface);
   }
   .stat-card:last-child { border-right: none; }
   .stat-card .stat-num {
-    font-size: .95rem; font-weight: 800; color: var(--brand-accent);
+    font-size: .82rem; font-weight: 800; color: var(--brand-accent);
   }
   .stat-card .stat-label {
-    font-size: .68rem; font-weight: 600; text-transform: uppercase;
+    font-size: .6rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: .04em; color: var(--text-muted);
   }
   .stat-num.warn { color: #d97706; }
   .stat-num.danger { color: #dc2626; }
   .stat-num.good { color: #059669; }
+
+  /* Approvals & warnings — compact inline in middle bar */
+  .inline-approvals {
+    display: none; align-items: center; gap: 6px; margin-left: auto;
+    font-size: .72rem; white-space: nowrap;
+  }
+  .inline-approvals.visible { display: flex; }
+  .inline-approvals a { color: var(--brand-accent); font-weight: 600; text-decoration: none; font-size: .68rem; }
+  .inline-warnings {
+    display: none; align-items: center; gap: 4px;
+    font-size: .72rem; color: #d97706; white-space: nowrap;
+  }
+  .inline-warnings.visible { display: flex; }
+
+  /* ── Heat map band (always visible, collapsible) ─ */
+  .demand-heatmap-zone {
+    flex-shrink: 0; display: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface); max-height: 240px; overflow: hidden;
+    transition: max-height .3s ease;
+  }
+  .demand-heatmap-zone.visible { display: block; }
+  .demand-heatmap-zone.collapsed { max-height: 32px; }
+  .demand-heatmap-zone.collapsed .demand-heatmap-body,
+  .demand-heatmap-zone.collapsed .demand-heatmap-tabs { display: none; }
+
+  /* ── Schedule grid (fills remaining viewport) ──── */
+  .sched-grid-zone {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    min-height: 0; /* flex child scroll fix */
+    padding: 0;
+  }
 
   /* ── Schedule card ─────────────────────────────── */
   .sched-card {
@@ -338,7 +395,7 @@
   .coverage-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
-    overflow: hidden; margin-bottom: 20px;
+    overflow: hidden; margin-bottom: 8px;
   }
   .coverage-card-header {
     padding: 12px 20px; font-weight: 700; font-size: .9rem;
@@ -356,12 +413,9 @@
   .cov-crit  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
   .cov-zero  { background: var(--bg); color: var(--text-muted); }
 
-  /* ── Forecast demand heat map — sticky band ─────── */
+  /* ── Forecast demand heat map ────────────────────── */
   .demand-heatmap {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    overflow: hidden; margin-bottom: 12px;
-    position: sticky; top: 0; z-index: 20;
+    background: var(--surface); overflow: hidden;
   }
   .demand-heatmap-header {
     padding: 8px 16px; font-weight: 700; font-size: .82rem;
@@ -536,8 +590,9 @@
   }
 
   @media (max-width: 600px) {
-    .config-row { flex-direction: column; }
-    .stat-row { flex-direction: column; }
+    .sched-viewport { height: calc(100vh - 48px); }
+    .toolbar-main-row { flex-wrap: wrap; }
+    .stat-row { flex-wrap: wrap; }
     .view-tabs { width: 100%; }
     .view-tab { flex: 1; text-align: center; }
     .tl-name-col, .tl-emp-name { width: 120px; min-width: 120px; }
@@ -548,13 +603,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Scheduling</h1>
-  <p class="subtitle">Generate shift assignments, edit schedules &amp; analyze coverage</p>
-</div>
-
 {% if not lobs %}
-<div class="card" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+<div style="padding:2.5rem; text-align:center; color:var(--text-muted);">
   <div style="font-size:2rem; margin-bottom:.5rem;">📅</div>
   <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No planning units or employees yet</p>
   <p style="font-size:.85rem; margin-bottom:1rem;">Set up planning units and add employees before generating schedules.</p>
@@ -564,198 +614,210 @@
   </div>
 </div>
 {% else %}
-<!-- ── Scheduling inputs ──────────────────────────────────── -->
-<div class="inputs-bar">
-  <span class="inputs-label">Inputs the generator uses</span>
-  <a href="/people/accommodations">Accommodations</a>
-  <a href="/people/loa">Leave of Absence</a>
-  <a href="/people/pto">PTO</a>
-  <a href="/settings/customization#shifts">Shift templates</a>
-  <a href="/settings/customization#segments">Breaks &amp; lunch rules</a>
-  <a href="/scheduling/rosters" style="margin-left:auto; font-weight:600; color:var(--brand-accent);">Specialty Schedules →</a>
-</div>
+<!-- ══ VIEWPORT DASHBOARD LAYOUT ══════════════════════════════ -->
+<div class="sched-viewport">
 
-<!-- ── Config ──────────────────────────────────────────────── -->
-<div class="config-card">
-  <div class="config-row">
-    <div class="config-group">
-      <label>LOB / Skill</label>
-      <select id="cfgLOB">
-        <option value="">All LOBs</option>
-        {% for lob in lobs %}
-          <option value="{{ lob }}">{{ lob }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="config-group">
-      <label>Start Date</label>
-      <input type="date" id="cfgStart">
-    </div>
-    <div class="config-group">
-      <label>End Date</label>
-      <input type="date" id="cfgEnd">
-    </div>
-    <div class="config-group">
-      <label>Shift Length (hrs)</label>
-      <input type="number" id="cfgShiftHrs" value="8.5" min="2" max="12" step="0.5" style="width:80px">
-    </div>
-    <div class="config-group">
-      <label>Saved schedules</label>
-      <select id="cfgMode" title="What to do with schedules already saved for this LOB and date range">
-        <option value="overwrite">Regenerate all (replace on Save)</option>
-        <option value="fill">Keep saved, fill gaps only</option>
-      </select>
-    </div>
-    <!-- Primary actions -->
-    <button class="btn-action btn-generate" id="btnGenerate" onclick="generateSchedule()">Generate</button>
-    <button class="btn-action btn-load" onclick="loadSchedule()">Load Saved</button>
-    <button class="btn-action" id="btnImportPW" onclick="importFromWFM()" title="Pull published schedules from the connected WFM system"
-      style="background:var(--surface); color:var(--text); border:1px solid var(--border);">Import API</button>
+  <!-- ── TOOLBAR (pinned top, never scrolls) ────────────────── -->
+  <div class="sched-toolbar">
+    <!-- Row 1: LOB, dates, primary actions, tool groups -->
+    <div class="toolbar-main-row">
+      <div class="config-group">
+        <label>LOB</label>
+        <select id="cfgLOB" style="min-width:120px">
+          <option value="">All LOBs</option>
+          {% for lob in lobs %}
+            <option value="{{ lob }}">{{ lob }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="config-group">
+        <label>Start</label>
+        <input type="date" id="cfgStart">
+      </div>
+      <div class="config-group">
+        <label>End</label>
+        <input type="date" id="cfgEnd">
+      </div>
+      <div class="config-group">
+        <label>Hrs</label>
+        <input type="number" id="cfgShiftHrs" value="8.5" min="2" max="12" step="0.5" style="width:56px">
+      </div>
+      <div class="config-group">
+        <label>Mode</label>
+        <select id="cfgMode" title="What to do with schedules already saved for this LOB and date range" style="max-width:160px">
+          <option value="overwrite">Regenerate all</option>
+          <option value="fill">Fill gaps only</option>
+        </select>
+      </div>
 
-    <!-- Save / Export group (shown after generate) -->
-    <span class="toolbar-group" id="toolbarSaveExport" style="display:none">
-      <button class="btn-action btn-save" id="btnSave" onclick="saveSchedule()">Save</button>
-      <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()">CSV</button>
-      <button class="btn-action btn-export" id="btnExportXlsx" onclick="exportScheduleXlsx()">Excel</button>
-      <button class="btn-action" id="btnPublish" onclick="publishSchedule()" style="background:#7c3aed; color:#fff;">Publish</button>
-    </span>
+      <!-- Primary actions -->
+      <button class="btn-action btn-generate" id="btnGenerate" onclick="generateSchedule()">Generate</button>
+      <button class="btn-action btn-load" onclick="loadSchedule()">Load</button>
+      <button class="btn-action" id="btnImportPW" onclick="importFromWFM()" title="Pull published schedules from the connected WFM system"
+        style="background:var(--surface); color:var(--text); border:1px solid var(--border);">Import</button>
 
-    <!-- Tools group -->
-    <span class="toolbar-group">
-      <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">Copy Week</button>
-      <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">Mass Update</button>
-      <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">Bulk Edit</button>
-      <button class="btn-action" id="btnOptimize" onclick="runQuickOptimize()" style="background:#0891b2; color:#fff;">Optimize</button>
-      <button class="btn-action" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff; padding:5px 6px;" title="Customize optimization">⚙</button>
-    </span>
+      <!-- Save / Export group (shown after generate) -->
+      <span class="toolbar-group" id="toolbarSaveExport" style="display:none">
+        <button class="btn-action btn-save" id="btnSave" onclick="saveSchedule()">Save</button>
+        <button class="btn-action btn-export" id="btnExport" onclick="exportSchedule()">CSV</button>
+        <button class="btn-action btn-export" id="btnExportXlsx" onclick="exportScheduleXlsx()">Excel</button>
+        <button class="btn-action" id="btnPublish" onclick="publishSchedule()" style="background:#7c3aed; color:#fff;">Publish</button>
+      </span>
 
-    <a href="/team-calendar/" class="btn-action" style="background:#0ea5e9; color:#fff; text-decoration:none; font-size:.7rem;">📅 Calendar</a>
-    <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">Clear</button>
-  </div>
-  <!-- Filter row -->
-  <div class="config-row" style="margin-top:12px; align-items:flex-end; flex-wrap:wrap;">
-    <div class="config-group">
-      <label>Selection</label>
-      <select id="cfgSelection" onchange="applyFilters()">
-        <option value="">All</option>
-        {% for s in selections %}
-          <option value="{{ s.id }}">{{ s.name }}</option>
-        {% endfor %}
-      </select>
+      <!-- Tools group -->
+      <span class="toolbar-group">
+        <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">Copy Wk</button>
+        <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">Mass</button>
+        <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">Bulk</button>
+        <button class="btn-action" id="btnOptimize" onclick="runQuickOptimize()" style="background:#0891b2; color:#fff;">Optimize</button>
+        <button class="btn-action" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff; padding:3px 5px;" title="Customize optimization">⚙</button>
+      </span>
+
+      <a href="/team-calendar/" class="btn-action" style="background:#0ea5e9; color:#fff; text-decoration:none;">📅</a>
+      <button class="btn-action" id="btnClear" onclick="clearSchedule()" style="display:none; background:#dc2626; color:#fff;">Clear</button>
     </div>
-    <div class="config-group">
-      <label>Skill</label>
-      <select id="cfgSkill" onchange="applyFilters()">
-        <option value="">All</option>
-        {% for sk in skills %}
-          <option value="{{ sk.id }}">{{ sk.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="config-group">
-      <label>Shift Sequence</label>
-      <select id="cfgShiftSeq" onchange="applyFilters()">
-        <option value="">All</option>
-        {% for sq in shift_sequences %}
-          <option value="{{ sq.id }}">{{ sq.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <!-- Employee filter row -->
-  <div class="config-row" style="margin-top:12px; align-items:flex-start;">
-    <div class="config-group" style="flex:1; min-width:200px;">
-      <label>Employees <span id="empCountBadge" style="font-weight:400; text-transform:none; letter-spacing:0;"></span></label>
-      <div id="empFilterWrap" style="position:relative;">
-        <div id="empFilterPicker" style="display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px;
-             border:1px solid var(--border); border-radius:6px; background:var(--bg);
-             min-height:34px; cursor:pointer; max-height:120px; overflow-y:auto;"
-             onclick="document.getElementById('empDropdown').style.display =
-               document.getElementById('empDropdown').style.display==='none'?'block':'none'">
-          <span id="empPlaceholder" style="color:var(--text-muted); font-size:.82rem;">All employees (select LOB first)</span>
-        </div>
-        <div id="empDropdown" style="display:none; position:absolute; left:0; right:0; top:100%;
-             z-index:50; background:var(--surface); border:1px solid var(--border);
-             border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.15); max-height:220px;
-             overflow-y:auto; margin-top:2px;">
-          <div style="padding:6px 8px; border-bottom:1px solid var(--border); display:flex; gap:6px;">
-            <button type="button" onclick="empSelectAll()" style="font-size:.72rem; padding:2px 8px;
-              border:1px solid var(--border); border-radius:4px; background:var(--bg);
-              cursor:pointer; color:var(--text);">Select All</button>
-            <button type="button" onclick="empDeselectAll()" style="font-size:.72rem; padding:2px 8px;
-              border:1px solid var(--border); border-radius:4px; background:var(--bg);
-              cursor:pointer; color:var(--text);">Clear</button>
+
+    <!-- Row 2: Filters + employee picker + input links -->
+    <div class="toolbar-secondary" id="toolbarFilters">
+      <div class="config-group">
+        <label>Selection</label>
+        <select id="cfgSelection" onchange="applyFilters()">
+          <option value="">All</option>
+          {% for s in selections %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="config-group">
+        <label>Skill</label>
+        <select id="cfgSkill" onchange="applyFilters()">
+          <option value="">All</option>
+          {% for sk in skills %}
+            <option value="{{ sk.id }}">{{ sk.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="config-group">
+        <label>Shift Seq</label>
+        <select id="cfgShiftSeq" onchange="applyFilters()">
+          <option value="">All</option>
+          {% for sq in shift_sequences %}
+            <option value="{{ sq.id }}">{{ sq.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="config-group" style="flex:1; min-width:140px; max-width:320px;">
+        <label>Employees <span id="empCountBadge" style="font-weight:400; text-transform:none; letter-spacing:0;"></span></label>
+        <div id="empFilterWrap" style="position:relative;">
+          <div id="empFilterPicker" style="display:flex; flex-wrap:wrap; gap:3px; padding:3px 6px;
+               border:1px solid var(--border); border-radius:4px; background:var(--bg);
+               min-height:26px; cursor:pointer; max-height:52px; overflow-y:auto; font-size:.72rem;"
+               onclick="document.getElementById('empDropdown').style.display =
+                 document.getElementById('empDropdown').style.display==='none'?'block':'none'">
+            <span id="empPlaceholder" style="color:var(--text-muted); font-size:.72rem;">All employees</span>
           </div>
-          <div id="empOptionsList"></div>
+          <div id="empDropdown" style="display:none; position:absolute; left:0; right:0; top:100%;
+               z-index:50; background:var(--surface); border:1px solid var(--border);
+               border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.15); max-height:220px;
+               overflow-y:auto; margin-top:2px;">
+            <div style="padding:4px 6px; border-bottom:1px solid var(--border); display:flex; gap:4px;">
+              <button type="button" onclick="empSelectAll()" style="font-size:.68rem; padding:2px 6px;
+                border:1px solid var(--border); border-radius:4px; background:var(--bg);
+                cursor:pointer; color:var(--text);">All</button>
+              <button type="button" onclick="empDeselectAll()" style="font-size:.68rem; padding:2px 6px;
+                border:1px solid var(--border); border-radius:4px; background:var(--bg);
+                cursor:pointer; color:var(--text);">Clear</button>
+            </div>
+            <div id="empOptionsList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input links -->
+      <div class="inputs-bar" style="margin-left:auto;">
+        <span class="inputs-label">Inputs</span>
+        <a href="/people/accommodations">Accom.</a>
+        <a href="/people/loa">LOA</a>
+        <a href="/people/pto">PTO</a>
+        <a href="/settings/customization#shifts">Shifts</a>
+        <a href="/settings/customization#segments">Breaks</a>
+        <a href="/scheduling/rosters" style="font-weight:600;">Rosters →</a>
+      </div>
+    </div>
+  </div><!-- /sched-toolbar -->
+
+  <!-- ── MIDDLE BAR: view tabs + stats + approvals (inline) ── -->
+  <div class="sched-middle-bar" id="schedMiddleBar">
+    <!-- View tabs -->
+    <div class="view-tabs" id="viewTabs">
+      <button class="view-tab active" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+      <button class="view-tab" data-view="day" onclick="switchView('day')">Day List</button>
+      <button class="view-tab" data-view="week" onclick="switchView('week')">Week</button>
+      <button class="view-tab" data-view="month" onclick="switchView('month')">Month</button>
+    </div>
+
+    <!-- Inline stats -->
+    <div class="stat-row" id="statsRow">
+      <div class="stat-card">
+        <div class="stat-num" id="statShifts">0</div>
+        <div class="stat-label">Shifts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statHours">0</div>
+        <div class="stat-label">Hours</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statCoverage">0%</div>
+        <div class="stat-label">Coverage</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statDays">0</div>
+        <div class="stat-label">Days</div>
+      </div>
+    </div>
+
+    <!-- Inline approvals -->
+    <div class="inline-approvals" id="approvalsBanner">
+      <span id="approvalsPto" style="display:none">🗓 <b id="approvalsPtoN">0</b> PTO</span>
+      <span id="approvalsBids" style="display:none">📋 <b id="approvalsBidsN">0</b> Bids</span>
+      <span id="approvalsSwaps" style="display:none">🔄 <b id="approvalsSwapsN">0</b> Swaps</span>
+      <a href="/approvals/">Review →</a>
+    </div>
+
+    <!-- Inline warnings -->
+    <div class="inline-warnings" id="globalWarnings"></div>
+  </div><!-- /sched-middle-bar -->
+
+  <!-- ── HEAT MAP BAND (always visible, collapsible) ─────── -->
+  <div class="demand-heatmap-zone" id="demandHeatmapZone">
+    <div id="demandHeatmap" class="demand-heatmap">
+      <div class="demand-heatmap-header">
+        <span>📊 Forecast Demand</span>
+        <span class="demand-subtitle" id="demandSubtitle"></span>
+        <button onclick="toggleDemandCollapse()" style="background:none; border:none; color:#fff; cursor:pointer; font-size:.82rem; padding:2px 6px;" title="Collapse/expand heat map" id="demandCollapseBtn">▼</button>
+      </div>
+      <div class="demand-heatmap-tabs">
+        <button class="demand-tab active" data-dtab="demand" onclick="switchDemandTab('demand')">Demand</button>
+        <button class="demand-tab" data-dtab="coverage" onclick="switchDemandTab('coverage')">Coverage</button>
+        <button class="demand-tab" data-dtab="staffing" onclick="switchDemandTab('staffing')">Staffing</button>
+      </div>
+      <div class="demand-heatmap-body" id="demandHeatmapBody">
+        <div class="demand-scroll">
+          <table class="demand-table">
+            <thead id="demandHead"></thead>
+            <tbody id="demandBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
-  </div>
-</div>
+  </div><!-- /demand-heatmap-zone -->
 
-<!-- ── View tabs ───────────────────────────────────────────── -->
-<div class="view-tabs" id="viewTabs" style="display:none">
-  <button class="view-tab active" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
-  <button class="view-tab" data-view="day" onclick="switchView('day')">Day List</button>
-  <button class="view-tab" data-view="week" onclick="switchView('week')">Week</button>
-  <button class="view-tab" data-view="month" onclick="switchView('month')">Month</button>
-</div>
+  <!-- ── SCHEDULE GRID (fills remaining viewport, scrolls internally) ── -->
+  <div class="sched-grid-zone" id="schedGridZone">
+    <div id="resultsContainer" style="padding:8px 16px;"></div>
+  </div><!-- /sched-grid-zone -->
 
-<!-- ── Stats ───────────────────────────────────────────────── -->
-<div class="stat-row" id="statsRow" style="display:none">
-  <div class="stat-card">
-    <div class="stat-num" id="statShifts">0</div>
-    <div class="stat-label">Total Shifts</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" id="statHours">0</div>
-    <div class="stat-label">Total Hours</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" id="statCoverage">0%</div>
-    <div class="stat-label">Avg Coverage</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" id="statDays">0</div>
-    <div class="stat-label">Days</div>
-  </div>
-</div>
-
-<!-- ── Pending approvals banner ────────────────────────────── -->
-<div id="approvalsBanner" style="display:none;margin-bottom:12px;padding:10px 16px;background:color-mix(in srgb, var(--brand-accent) 10%, transparent);border:1px solid color-mix(in srgb, var(--brand-accent) 30%, transparent);border-radius:var(--radius);font-size:.85rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-  <span style="font-weight:600;">Pending Approvals:</span>
-  <span id="approvalsPto" style="display:none">🗓 <b id="approvalsPtoN">0</b> PTO</span>
-  <span id="approvalsBids" style="display:none">📋 <b id="approvalsBidsN">0</b> Shift Bids</span>
-  <span id="approvalsSwaps" style="display:none">🔄 <b id="approvalsSwapsN">0</b> Shift Swaps</span>
-  <a href="/approvals/" style="margin-left:auto;font-weight:600;color:var(--brand-accent);text-decoration:none;">Review All →</a>
-</div>
-
-<!-- ── Global warnings ────────────────────────────────────── -->
-<div id="globalWarnings" class="warning-list" style="display:none;margin-bottom:12px;padding:12px 16px;background:color-mix(in srgb, #d97706 10%, transparent);border-radius:var(--radius);font-size:.85rem;"></div>
-
-<!-- ── Forecast demand heat map (sticky band) ────────────── -->
-<div id="demandHeatmap" class="demand-heatmap" style="display:none">
-  <div class="demand-heatmap-header">
-    <span>📊 Forecast Demand</span>
-    <span class="demand-subtitle" id="demandSubtitle"></span>
-  </div>
-  <div class="demand-heatmap-tabs">
-    <button class="demand-tab active" data-dtab="demand" onclick="switchDemandTab('demand')">Demand</button>
-    <button class="demand-tab" data-dtab="coverage" onclick="switchDemandTab('coverage')">Coverage</button>
-    <button class="demand-tab" data-dtab="staffing" onclick="switchDemandTab('staffing')">Staffing</button>
-  </div>
-  <div class="demand-heatmap-body" id="demandHeatmapBody">
-    <div class="demand-scroll">
-      <table class="demand-table">
-        <thead id="demandHead"></thead>
-        <tbody id="demandBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ── Results container ──────────────────────────────────── -->
-<div id="resultsContainer"></div>
+</div><!-- /sched-viewport -->
 
 <!-- ── Add Shift Modal ───────────────────────────────────── -->
 <div class="modal-overlay" id="addModal">
@@ -1698,12 +1760,10 @@ function clearSchedule() {
     hideLoading();
     if (!r.success) { showToast(r.error || 'Clear failed', 'error'); return; }
     scheduleData = null;
-    document.getElementById('viewTabs').style.display = 'none';
-    document.getElementById('statsRow').style.display = 'none';
-    document.getElementById('btnSave').style.display = 'none';
-    document.getElementById('btnExport').style.display = 'none';
-    document.getElementById('btnExportXlsx').style.display = 'none';
-    document.getElementById('btnPublish').style.display = 'none';
+    document.getElementById('schedMiddleBar').classList.remove('visible');
+    document.getElementById('demandHeatmapZone').classList.remove('visible');
+    const tse2 = document.getElementById('toolbarSaveExport');
+    if (tse2) tse2.style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
     document.getElementById('resultsContainer').innerHTML = '';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
@@ -1827,8 +1887,8 @@ function publishSchedule() {
 // ═══════════════════════════════════════════════════════════
 function showResults() {
   updateStats();
-  document.getElementById('viewTabs').style.display = 'flex';
-  document.getElementById('statsRow').style.display = 'flex';
+  // Show middle bar (view tabs + stats + approvals)
+  document.getElementById('schedMiddleBar').classList.add('visible');
   const tse = document.getElementById('toolbarSaveExport');
   if (tse) tse.style.display = '';
   document.getElementById('btnClear').style.display = '';
@@ -1845,6 +1905,13 @@ function showResults() {
   switchView(currentView);
   // Refresh demand heat map when schedule results are shown
   if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
+}
+
+function toggleDemandCollapse() {
+  const zone = document.getElementById('demandHeatmapZone');
+  const btn = document.getElementById('demandCollapseBtn');
+  zone.classList.toggle('collapsed');
+  btn.textContent = zone.classList.contains('collapsed') ? '▶' : '▼';
 }
 
 function updateStats() {
@@ -4385,10 +4452,10 @@ function loadDemandHeatmap() {
   const lob = document.getElementById('cfgLOB').value;
   const startStr = document.getElementById('cfgStart').value;
   const endStr = document.getElementById('cfgEnd').value;
-  const container = document.getElementById('demandHeatmap');
+  const zone = document.getElementById('demandHeatmapZone');
 
   if (!lob || !startStr || !endStr) {
-    container.style.display = 'none';
+    zone.classList.remove('visible');
     return;
   }
 
@@ -4400,14 +4467,14 @@ function loadDemandHeatmap() {
   .then(r => r.json())
   .then(data => {
     if (!data.success || !data.units || !data.units.length) {
-      container.style.display = 'none';
+      zone.classList.remove('visible');
       return;
     }
     demandData = data.units;
     renderDemandHeatmap();
-    container.style.display = '';
+    zone.classList.add('visible');
   })
-  .catch(() => { container.style.display = 'none'; });
+  .catch(() => { zone.classList.remove('visible'); });
 }
 
 function renderDemandHeatmap() {
