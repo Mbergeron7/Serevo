@@ -533,6 +533,11 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             wait = _safe_float(row[col_map["wait_time"]]) if "wait_time" in col_map else None
             dur = _safe_float(row[col_map["duration"]]) if "duration" in col_map else None
 
+            # Debug: log ALL raw rows for queue 374 (kept or filtered)
+            if str(queue) == "374":
+                raw_vals = {h: row[i] if i < len(row) else "" for h, i in col_map.items()}
+                log.info(f"[RAW-374] call_id={call_id}, wait={wait}, queue={queue}, ts={ts_str}, raw={raw_vals}")
+
             # ── Filter: only count log entries that are actual calls ──
             # Each call generates ~3 log IDs in the source data.
             # Only the entry with queue time > 0 is the real call;
@@ -552,6 +557,13 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             continue
 
     log.info(f"[EVENT-AGG] Total rows processed: {len(rows)-1}, events kept: {len(events)}, deduped calls: {len(seen_calls)}")
+
+    # Debug: dump kept events for route 374 (PS Care FR) today
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    route_374_today = [e for e in events if str(e["queue"]) == "374" and e["ts"].strftime("%Y-%m-%d") == today_str]
+    log.info(f"[EVENT-AGG-374] Route 374 today ({today_str}): {len(route_374_today)} events kept")
+    for e in route_374_today[:20]:
+        log.info(f"[EVENT-AGG-374]   ts={e['ts']}, wait={e['wait_time']}, dur={e['duration']}, abn={e['is_abandoned']}")
 
     if not events:
         return [["date", "time", "lob", "offered", "answered", "abandoned",
