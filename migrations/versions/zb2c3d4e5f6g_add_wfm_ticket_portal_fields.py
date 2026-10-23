@@ -13,19 +13,46 @@ branch_labels = None
 depends_on = None
 
 
+def _has_column(table, column):
+    """Check if a column exists in a table."""
+    from sqlalchemy import inspect
+    bind = op.get_bind()
+    insp = inspect(bind)
+    try:
+        cols = [c['name'] for c in insp.get_columns(table)]
+        return column in cols
+    except Exception:
+        return False
+
+
+def _has_table(table):
+    """Check if a table exists."""
+    from sqlalchemy import inspect
+    bind = op.get_bind()
+    insp = inspect(bind)
+    return table in insp.get_table_names()
+
+
 def upgrade():
-    with op.batch_alter_table('wfm_ticket', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('affected_date_end', sa.Date(), nullable=True))
-        batch_op.add_column(sa.Column('lob', sa.String(length=120), nullable=True))
-        batch_op.add_column(sa.Column('shift_time', sa.String(length=60), nullable=True))
-        batch_op.add_column(sa.Column('overtime_hours', sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column('swap_with', sa.String(length=200), nullable=True))
+    if not _has_table('wfm_ticket'):
+        # Table will be created by db.create_all() with all columns
+        return
+
+    new_cols = [
+        ('affected_date_end', sa.Date(), True),
+        ('lob', sa.String(length=120), True),
+        ('shift_time', sa.String(length=60), True),
+        ('overtime_hours', sa.Float(), True),
+        ('swap_with', sa.String(length=200), True),
+    ]
+    for col_name, col_type, nullable in new_cols:
+        if not _has_column('wfm_ticket', col_name):
+            op.add_column('wfm_ticket', sa.Column(col_name, col_type, nullable=nullable))
 
 
 def downgrade():
-    with op.batch_alter_table('wfm_ticket', schema=None) as batch_op:
-        batch_op.drop_column('swap_with')
-        batch_op.drop_column('overtime_hours')
-        batch_op.drop_column('shift_time')
-        batch_op.drop_column('lob')
-        batch_op.drop_column('affected_date_end')
+    if not _has_table('wfm_ticket'):
+        return
+    for col_name in ('swap_with', 'overtime_hours', 'shift_time', 'lob', 'affected_date_end'):
+        if _has_column('wfm_ticket', col_name):
+            op.drop_column('wfm_ticket', col_name)
