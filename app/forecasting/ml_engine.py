@@ -52,9 +52,10 @@ def _load_actuals(lob, historical_days):
         from app.data_source import normalize_lob
         from sqlalchemy import func as sa_func
 
-        unit = PlanningUnit.query.filter_by(
-            name=normalize_lob(str(lob).strip())
-        ).first()
+        lob_stripped = str(lob).strip()
+        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        if not unit:
+            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
         if not unit:
             log.info(f"ML: No planning unit found for '{lob}'")
             return pd.DataFrame()
@@ -311,9 +312,10 @@ def compute_accuracy_vs_actuals(lob, start_date, end_date):
         from app.data_source import normalize_lob
         from sqlalchemy import func as sa_func
 
-        unit = PlanningUnit.query.filter_by(
-            name=normalize_lob(str(lob).strip())
-        ).first()
+        lob_stripped = str(lob).strip()
+        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        if not unit:
+            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
         if not unit:
             return {
                 "intervals": [],

@@ -33,8 +33,10 @@ def _get_lob_setting(lob):
     try:
         from app.models import PlanningUnit, LOBSetting
         from app.data_source import normalize_lob
-        lob_norm = normalize_lob(str(lob).strip())
-        pu = PlanningUnit.query.filter_by(name=lob_norm).first()
+        lob_stripped = str(lob).strip()
+        pu = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        if not pu:
+            pu = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
         if pu:
             return pu.lob_setting, pu
     except Exception as e:
@@ -257,8 +259,12 @@ def get_forecast_data(lob, start_date, end_date, sheet=None):
             from app.data_source import normalize_lob
             from app.models import ForecastInterval, PlanningUnit
             from sqlalchemy import func as sa_func
-            normalized = normalize_lob(str(lob).strip())
-            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            lob_stripped = str(lob).strip()
+            # Exact match first — so "PS Care FR" finds that PU, not the parent
+            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            if not unit:
+                normalized = normalize_lob(lob_stripped)
+                unit = PlanningUnit.query.filter_by(name=normalized).first()
             if not unit:
                 return [], f"No planning unit found for '{lob}'"
             start_str = start_date.strftime("%Y-%m-%d")
@@ -339,8 +345,11 @@ def get_requirements_data(lob, start_date, end_date, sheet=None):
             from app.data_source import normalize_lob
             from app.models import RequirementInterval, PlanningUnit
             from sqlalchemy import func as sa_func
-            normalized = normalize_lob(str(lob).strip())
-            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            lob_stripped = str(lob).strip()
+            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            if not unit:
+                normalized = normalize_lob(lob_stripped)
+                unit = PlanningUnit.query.filter_by(name=normalized).first()
             if not unit:
                 return [], None  # No requirements yet, not an error
             start_str = start_date.strftime("%Y-%m-%d")
@@ -416,8 +425,11 @@ def get_historical_actuals(lob, start_date, end_date):
         from app.data_source import normalize_lob
         from app.models import IntervalActual, PlanningUnit
         from sqlalchemy import func as sa_func
-        normalized = normalize_lob(str(lob).strip())
-        unit = PlanningUnit.query.filter_by(name=normalized).first()
+        lob_stripped = str(lob).strip()
+        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        if not unit:
+            normalized = normalize_lob(lob_stripped)
+            unit = PlanningUnit.query.filter_by(name=normalized).first()
         if not unit:
             return [], f"No planning unit found for '{lob}'"
         start_str = start_date.strftime("%Y-%m-%d")
@@ -1423,7 +1435,10 @@ def _get_db_historical(lob, historical_days):
         from sqlalchemy import func as sa_func
 
         from app.data_source import normalize_lob
-        unit = PlanningUnit.query.filter_by(name=normalize_lob(str(lob).strip())).first()
+        lob_stripped = str(lob).strip()
+        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        if not unit:
+            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
         if unit:
             rows = ForecastInterval.query.filter(
                 ForecastInterval.planning_unit_id == unit.id,
@@ -1604,11 +1619,13 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
     from app.data_source import normalize_lob
 
-    # Normalize LOB name to planning unit name
-    lob_normalized = normalize_lob(str(lob).strip())
-
-    # Find or create the planning unit
-    unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+    # Exact match first, then normalize — so sub-activities like "PS Care FR"
+    # resolve to their own PU rather than the parent "PS Care"
+    lob_stripped = str(lob).strip()
+    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    if not unit:
+        lob_normalized = normalize_lob(lob_stripped)
+        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
     if not unit:
         unit = PlanningUnit(name=lob_normalized)
         db.session.add(unit)
@@ -1722,8 +1739,10 @@ def generate_retrospective_forecast(lob, start_date, end_date,
     from app.data_source import normalize_lob
     from sqlalchemy import func as sa_func
 
-    lob_normalized = normalize_lob(str(lob).strip())
-    unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+    lob_stripped = str(lob).strip()
+    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    if not unit:
+        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
     if not unit:
         return {"ok": False, "error": f"No planning unit '{lob}'"}
 

@@ -35,8 +35,10 @@ def _get_today_data(lob, today=None):
     if today is None:
         today = datetime.date.today()
 
-    lob_name = normalize_lob(str(lob).strip())
-    unit = PlanningUnit.query.filter_by(name=lob_name).first()
+    lob_stripped = str(lob).strip()
+    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    if not unit:
+        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
     if not unit:
         return {}, {}, None, None
 
