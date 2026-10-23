@@ -1984,6 +1984,12 @@ def planning_units_save():
         item.description = (d.get("description") or "").strip() or None
         item.timezone = (d.get("timezone") or "America/New_York").strip()
         item.is_active = bool(d.get("is_active", True))
+        item.is_multi_activity = bool(d.get("is_multi_activity", False))
+        parent_id = d.get("parent_id")
+        item.parent_id = int(parent_id) if parent_id else None
+        # If this is a multi-activity parent, clear its own parent
+        if item.is_multi_activity:
+            item.parent_id = None
         db.session.flush()
 
         # Sync business hours (replace all)

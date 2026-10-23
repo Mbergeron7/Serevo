@@ -57,6 +57,12 @@ class PlanningUnit(db.Model):
     description  = db.Column(db.String(255), nullable=True)
     timezone     = db.Column(db.String(60), default="America/New_York")
 
+    # Multi-activity: a parent PU (e.g. "SS Sales") with child PUs
+    # (e.g. "SS Sales EN", "SS Sales FR") that represent skill/language splits.
+    is_multi_activity = db.Column(db.Boolean, default=False)
+    parent_id         = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+
+    children     = db.relationship("PlanningUnit", backref=db.backref("parent", remote_side="PlanningUnit.id"), lazy="select")
     employees    = db.relationship("Employee", backref="planning_unit", lazy="dynamic")
     requirements = db.relationship("RequirementInterval", backref="planning_unit", lazy="dynamic")
     forecasts    = db.relationship("ForecastInterval", backref="planning_unit", lazy="dynamic")
@@ -69,6 +75,9 @@ class PlanningUnit(db.Model):
             "id": self.id, "name": self.name, "is_active": self.is_active,
             "description": self.description or "",
             "timezone": self.timezone or "America/New_York",
+            "is_multi_activity": self.is_multi_activity or False,
+            "parent_id": self.parent_id,
+            "parent_name": self.parent.name if self.parent_id and self.parent else None,
             "business_hours": [bh.to_dict() for bh in self.business_hours],
             "assigned_activities": [pa.to_dict() for pa in self.assigned_activities],
             "parameters": [p.to_dict() for p in self.unit_parameters],
