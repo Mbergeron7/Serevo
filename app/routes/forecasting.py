@@ -834,7 +834,22 @@ def forecast_api_intervals():
             }
             intervals.append(entry)
 
-        return jsonify({"success": True, "intervals": intervals})
+        # Temporary debug: include raw actuals count and sample
+        debug_info = {
+            "pu_name": unit.name,
+            "pu_id": unit.id,
+            "target_date": str(target_date),
+            "today": str(today),
+            "actual_rows_count": len(rows) if target_date <= today else 0,
+            "actual_map_keys": sorted(actual_map.keys())[:10],
+            "fc_map_keys_count": len(fc_map),
+            "intervals_count": len(intervals),
+            "sample_actuals": [
+                {"ts": str(r.timestamp), "offered": r.offered, "route_id": r.route_id, "source": r.source}
+                for r in (rows[:15] if target_date <= today else [])
+            ],
+        }
+        return jsonify({"success": True, "intervals": intervals, "_debug": debug_info})
 
     except Exception as e:
         log.exception("Forecast intervals API error")
