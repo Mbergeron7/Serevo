@@ -792,31 +792,42 @@ def agents_by_lob():
     from app.models import Employee, RosterGroup, RosterMember
 
     emp_list = []
-    try:
-        # Find roster groups for this planning unit, then their members
-        query = RosterGroup.query.filter_by(active=True)
-        if lob_id and str(lob_id).isdigit():
-            query = query.filter_by(planning_unit_id=int(lob_id))
-        groups = query.all()
+    pu_id = int(lob_id) if lob_id and str(lob_id).isdigit() else None
 
-        seen = set()
-        for g in groups:
-            for m in g.members:
-                if m.active and m.employee and m.employee.is_active and m.employee_id not in seen:
-                    seen.add(m.employee_id)
-                    e = m.employee
-                    emp_list.append({"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""})
-        emp_list.sort(key=lambda x: x["name"])
-    except Exception:
-        pass
+    # 1) Direct: employees assigned to this planning unit
+    if pu_id:
+        try:
+            employees = Employee.query.filter_by(
+                planning_unit_id=pu_id, is_active=True
+            ).order_by(Employee.last_name, Employee.first_name).all()
+            emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
+        except Exception:
+            pass
 
-    # Fallback: if no roster data, show all active employees or users
+    # 2) If no direct matches, try roster groups for this planning unit
+    if not emp_list and pu_id:
+        try:
+            groups = RosterGroup.query.filter_by(planning_unit_id=pu_id, active=True).all()
+            seen = set()
+            for g in groups:
+                for m in g.members:
+                    if m.active and m.employee and m.employee.is_active and m.employee_id not in seen:
+                        seen.add(m.employee_id)
+                        e = m.employee
+                        emp_list.append({"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""})
+            emp_list.sort(key=lambda x: x["name"])
+        except Exception:
+            pass
+
+    # 3) Fallback: all active employees
     if not emp_list:
         try:
             employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
             emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
         except Exception:
             pass
+
+    # 4) Last resort: user accounts
     if not emp_list:
         try:
             users = User.query.filter_by(is_active=True).order_by(User.display_name).all()
