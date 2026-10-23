@@ -167,6 +167,37 @@ def create_app():
             ("segment_codes", "window_start_mins", "INTEGER"),
             ("segment_codes", "window_end_mins", "INTEGER"),
             ("employees", "start_date", "DATE"),
+            # ── roster_members columns ──
+            ("roster_members", "max_openings_per_week", "INTEGER"),
+            ("roster_members", "max_mids_per_week", "INTEGER"),
+            ("roster_members", "is_fill_in", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "weekend_primary_days", "TEXT"),
+            ("roster_members", "excluded_closing_days", "TEXT"),
+            ("roster_members", "static_days_json", "TEXT"),
+            ("roster_members", "accommodation_start", "TIME"),
+            ("roster_members", "accommodation_end", "TIME"),
+            ("roster_members", "accommodation_no_close", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "work_days", "TEXT"),
+            ("roster_members", "contracted_days", "INTEGER DEFAULT 5"),
+            ("roster_members", "contracted_hours", "FLOAT"),
+            ("roster_members", "dedicated_closer", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "dedicated_opener", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "exclude_from_weekends", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "exclude_from_saturday", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "exclude_from_sunday", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "exclude_from_opening", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "exclude_from_closing", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "excluded_opening_days", "TEXT"),
+            ("roster_members", "allow_split_shift", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "split_shift_min_gap", "FLOAT"),
+            ("roster_members", "consistent_start", "BOOLEAN DEFAULT FALSE"),
+            ("roster_members", "max_consecutive_days", "INTEGER"),
+            ("roster_members", "preferred_days_off", "TEXT"),
+            ("roster_members", "min_hours_per_week", "FLOAT"),
+            ("roster_members", "max_hours_per_week", "FLOAT"),
+            ("roster_members", "pair_with_member_id", "INTEGER"),
+            ("roster_members", "avoid_member_id", "INTEGER"),
+            ("roster_members", "rotation_order", "INTEGER DEFAULT 0"),
         ]
         dialect = db.engine.dialect.name
         for tbl, col, col_type in _ensure_columns:
@@ -345,8 +376,15 @@ def create_app():
 
     @app.errorhandler(500)
     def server_error(e):
+        import traceback
+        detail = str(e)
+        try:
+            detail = traceback.format_exc()
+        except Exception:
+            pass
+        log.error(f"500 error: {detail}")
         if _wants_json():
-            return jsonify({"success": False, "error": "Internal server error"}), 500
+            return jsonify({"success": False, "error": f"Internal server error: {e}"}), 500
         from flask import render_template
         return render_template("500.html"), 500
 
