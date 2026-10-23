@@ -49,15 +49,21 @@ def _get_pu_route_ids(planning_unit_id):
 
 def _build_actuals_query(unit, start_str, end_str):
     """Build an IntervalActual query filtered by the PU's assigned routes.
-    Falls back to planning_unit_id when no routes are assigned or when
-    existing data has no route_id populated (backward compat)."""
+    Falls back to planning_unit_id when no routes are assigned.
+
+    For PUs WITH routes assigned:
+      - Rows with a matching route_id are always included
+      - Rows with NULL route_id are EXCLUDED (legacy data from before
+        route_id was tracked — these may contain combined data from
+        multiple routes and need to be re-synced to get route tagging)
+    """
     from app.models import IntervalActual
     from sqlalchemy import func as sa_func
 
     route_ids = _get_pu_route_ids(unit.id)
 
     if route_ids:
-        # Route-based: only grab data from routes assigned to this PU
+        # Route-based: only data from routes assigned to this PU
         return IntervalActual.query.filter(
             IntervalActual.planning_unit_id == unit.id,
             IntervalActual.route_id.in_(route_ids),
