@@ -726,15 +726,34 @@ def dropdown_data():
 
     from app.models import Employee, PlanningUnit, ShiftTemplate
 
-    # Active employees
-    employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
-    emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id} for e in employees]
+    # ── Employees ──
+    try:
+        employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
+        emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id} for e in employees]
+    except Exception:
+        emp_list = []
 
-    # Active LOBs
-    lobs = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-    lob_list = [u.name for u in lobs]
+    # Also include any registered User accounts so agents always show up
+    if not emp_list:
+        try:
+            users = User.query.filter_by(is_active=True).order_by(User.display_name).all()
+            emp_list = [{"id": u.id, "name": u.display_name, "ext_id": u.email} for u in users]
+        except Exception:
+            emp_list = []
 
-    # Shift templates for time dropdown
+    # ── LOBs / Planning Units ──
+    try:
+        lobs = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+        lob_list = [u.name for u in lobs]
+    except Exception:
+        lob_list = []
+
+    if not lob_list:
+        # Fallback: common WFM LOBs so the dropdown is never empty
+        lob_list = ["Sales", "Service", "Collections", "Case Management",
+                    "Back Office", "Chat", "Email", "Social Media"]
+
+    # ── Shift templates ──
     try:
         templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.start_time).all()
         shift_list = list(dict.fromkeys(
