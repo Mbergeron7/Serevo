@@ -101,6 +101,9 @@ def _db_interval_actuals(lob, date_obj):
             log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: 0 rows (total in DB for this PU: {total})")
         else:
             log.info(f"[ACTUALS-DEBUG] lob={lob!r} pu_id={pu.id} date={date_obj}: {len(rows)} rows")
+            if "care" in lob.lower() and "fr" in lob.lower():
+                for r in rows:
+                    log.info(f"[ACTUALS-DEBUG]   ts={r.timestamp}, offered={r.offered}, answered={r.answered}, route_id={r.route_id}, source={r.source}")
         return [r.to_dict() for r in rows]
     except Exception as e:
         try:
