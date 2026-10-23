@@ -1762,6 +1762,7 @@ class IntervalActual(db.Model):
     __table_args__ = (
         db.UniqueConstraint("planning_unit_id", "route_id", "timestamp", name="uq_actual_unit_route_ts"),
         db.Index("ix_actual_route_ts", "route_id", "timestamp"),
+        db.Index("ix_actual_pu_ts", "planning_unit_id", "timestamp"),
     )
 
     def to_dict(self):
