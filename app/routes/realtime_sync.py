@@ -254,11 +254,21 @@ def _match_columns(headers, alias_map, custom_mapping=None):
 
 
 def _resolve_route_to_pu(route_id):
-    """Resolve a route ID to a PlanningUnit via the call_routes table."""
+    """Resolve a route ID to a PlanningUnit via the call_routes table.
+    Returns the first match (legacy single-PU path)."""
     cr = CallRoute.query.filter_by(route_id=str(route_id).strip(), is_active=True).first()
     if cr:
         return cr.planning_unit
     return None
+
+
+def _resolve_route_to_all_pus(route_id):
+    """Resolve a route ID to ALL PlanningUnits that have it assigned.
+    Supports combined + split PU setups (e.g. SS Sales has all routes,
+    SS Sales EN has only English routes — the same route_id appears under
+    both PUs and data should be counted under each)."""
+    crs = CallRoute.query.filter_by(route_id=str(route_id).strip(), is_active=True).all()
+    return [cr.planning_unit for cr in crs]
 
 
 def _resolve_lob_to_pu(lob_name):
@@ -718,19 +728,23 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
 
     for i, row in enumerate(rows[1:], start=2):
         try:
-            # Resolve to planning unit: try route_id first, then LOB name
-            pu = None
+            # Resolve to planning unit(s): try route_id first, then LOB name
+            # A single route_id can be assigned to multiple PUs (e.g.
+            # combined "SS Sales" AND split "SS Sales EN"), so resolve to ALL.
+            pus = []
             if "route_id" in col_map:
                 rid = row[col_map["route_id"]].strip()
                 if rid:
-                    pu = _resolve_route_to_pu(rid)
+                    pus = _resolve_route_to_all_pus(rid)
 
-            if not pu and "lob" in col_map:
+            if not pus and "lob" in col_map:
                 lob_name = row[col_map["lob"]].strip()
                 if lob_name:
-                    pu = _resolve_lob_to_pu(lob_name)
+                    single_pu = _resolve_lob_to_pu(lob_name)
+                    if single_pu:
+                        pus = [single_pu]
 
-            if not pu:
+            if not pus:
                 skipped += 1
                 if skipped <= 5:
                     rid_info = row[col_map["route_id"]].strip() if "route_id" in col_map else ""
@@ -752,32 +766,34 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
             aht = _safe_float(row[col_map["aht"]]) if "aht" in col_map else None
             max_q = _safe_int(row[col_map["max_queued"]]) if "max_queued" in col_map else None
 
-            key = (pu.id, ts)
-            prev = aggregated.get(key)
-            if prev is None:
-                aggregated[key] = dict(
-                    offered=offered, answered=answered,
-                    answered_within=answered_within, abandoned=abandoned,
-                    rolled=rolled, max_queued=max_q,
-                    _asa_sum=((asa or 0) * answered) if asa is not None else 0,
-                    _aht_sum=((aht or 0) * answered) if aht is not None else 0,
-                    _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
-                    source="sheet",
-                )
-            else:
-                prev["offered"] += offered
-                prev["answered"] += answered
-                prev["answered_within"] += answered_within
-                prev["abandoned"] += abandoned
-                prev["rolled"] += rolled
-                if max_q is not None:
-                    prev["max_queued"] = max(prev["max_queued"] or 0, max_q)
-                if asa is not None:
-                    prev["_asa_sum"] += (asa * answered)
-                if aht is not None:
-                    prev["_aht_sum"] += (aht * answered)
-                if asa is not None or aht is not None:
-                    prev["_ans_for_avg"] += answered
+            # Aggregate under EACH matched PU
+            for pu in pus:
+                key = (pu.id, ts)
+                prev = aggregated.get(key)
+                if prev is None:
+                    aggregated[key] = dict(
+                        offered=offered, answered=answered,
+                        answered_within=answered_within, abandoned=abandoned,
+                        rolled=rolled, max_queued=max_q,
+                        _asa_sum=((asa or 0) * answered) if asa is not None else 0,
+                        _aht_sum=((aht or 0) * answered) if aht is not None else 0,
+                        _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
+                        source="sheet",
+                    )
+                else:
+                    prev["offered"] += offered
+                    prev["answered"] += answered
+                    prev["answered_within"] += answered_within
+                    prev["abandoned"] += abandoned
+                    prev["rolled"] += rolled
+                    if max_q is not None:
+                        prev["max_queued"] = max(prev["max_queued"] or 0, max_q)
+                    if asa is not None:
+                        prev["_asa_sum"] += (asa * answered)
+                    if aht is not None:
+                        prev["_aht_sum"] += (aht * answered)
+                    if asa is not None or aht is not None:
+                        prev["_ans_for_avg"] += answered
 
         except Exception as e:
             errors.append(f"Row {i}: {e}")
@@ -1136,18 +1152,20 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
         evt_aggregated = {}
         for i, row in enumerate(aggregated[1:], start=2):
             try:
-                pu = None
+                pus = []
                 if "route_id" in agg_col_map:
                     rid = row[agg_col_map["route_id"]].strip()
                     if rid:
-                        pu = _resolve_route_to_pu(rid)
+                        pus = _resolve_route_to_all_pus(rid)
 
-                if not pu and "lob" in agg_col_map:
+                if not pus and "lob" in agg_col_map:
                     lob_name = row[agg_col_map["lob"]].strip()
                     if lob_name:
-                        pu = _resolve_lob_to_pu(lob_name)
+                        single_pu = _resolve_lob_to_pu(lob_name)
+                        if single_pu:
+                            pus = [single_pu]
 
-                if not pu:
+                if not pus:
                     skipped += 1
                     continue
 
@@ -1163,28 +1181,29 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                 asa = _safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None
                 aht = _safe_float(row[agg_col_map["aht"]]) if "aht" in agg_col_map else None
 
-                key = (pu.id, ts)
-                prev = evt_aggregated.get(key)
-                if prev is None:
-                    evt_aggregated[key] = dict(
-                        offered=offered, answered=answered,
-                        abandoned=abandoned, rolled=rolled,
-                        _asa_sum=((asa or 0) * answered) if asa is not None else 0,
-                        _aht_sum=((aht or 0) * answered) if aht is not None else 0,
-                        _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
-                        source="sheet",
-                    )
-                else:
-                    prev["offered"] += offered
-                    prev["answered"] += answered
-                    prev["abandoned"] += abandoned
-                    prev["rolled"] += rolled
-                    if asa is not None:
-                        prev["_asa_sum"] += (asa * answered)
-                    if aht is not None:
-                        prev["_aht_sum"] += (aht * answered)
-                    if asa is not None or aht is not None:
-                        prev["_ans_for_avg"] += answered
+                for pu in pus:
+                    key = (pu.id, ts)
+                    prev = evt_aggregated.get(key)
+                    if prev is None:
+                        evt_aggregated[key] = dict(
+                            offered=offered, answered=answered,
+                            abandoned=abandoned, rolled=rolled,
+                            _asa_sum=((asa or 0) * answered) if asa is not None else 0,
+                            _aht_sum=((aht or 0) * answered) if aht is not None else 0,
+                            _ans_for_avg=answered if (asa is not None or aht is not None) else 0,
+                            source="sheet",
+                        )
+                    else:
+                        prev["offered"] += offered
+                        prev["answered"] += answered
+                        prev["abandoned"] += abandoned
+                        prev["rolled"] += rolled
+                        if asa is not None:
+                            prev["_asa_sum"] += (asa * answered)
+                        if aht is not None:
+                            prev["_aht_sum"] += (aht * answered)
+                        if asa is not None or aht is not None:
+                            prev["_ans_for_avg"] += answered
 
             except Exception as e:
                 errors.append(f"Aggregated row {i}: {e}")
