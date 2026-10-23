@@ -48,23 +48,17 @@ def _load_actuals(lob, historical_days):
     hist_start = today - datetime.timedelta(days=historical_days)
 
     try:
-        from app.models import IntervalActual, PlanningUnit
-        from app.data_source import normalize_lob
-        from sqlalchemy import func as sa_func
+        from app.forecasting.engine import _resolve_pu_by_name, _build_actuals_query
 
-        lob_stripped = str(lob).strip()
-        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
-        if not unit:
-            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+        unit = _resolve_pu_by_name(lob)
         if not unit:
             log.info(f"ML: No planning unit found for '{lob}'")
             return pd.DataFrame()
 
-        rows = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == unit.id,
-            sa_func.date(IntervalActual.timestamp) >= hist_start,
-            sa_func.date(IntervalActual.timestamp) < today,
-        ).order_by(IntervalActual.timestamp).all()
+        rows = _build_actuals_query(
+            unit, hist_start.strftime("%Y-%m-%d"),
+            (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
+        ).all()
 
         if not rows:
             log.info(f"ML: No actuals found for '{lob}' in last {historical_days} days")
@@ -308,14 +302,11 @@ def compute_accuracy_vs_actuals(lob, start_date, end_date):
     }
     """
     try:
-        from app.models import ForecastInterval, IntervalActual, PlanningUnit
-        from app.data_source import normalize_lob
+        from app.models import ForecastInterval
+        from app.forecasting.engine import _resolve_pu_by_name, _build_actuals_query
         from sqlalchemy import func as sa_func
 
-        lob_stripped = str(lob).strip()
-        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
-        if not unit:
-            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+        unit = _resolve_pu_by_name(lob)
         if not unit:
             return {
                 "intervals": [],
@@ -334,12 +325,8 @@ def compute_accuracy_vs_actuals(lob, start_date, end_date):
             sa_func.date(ForecastInterval.timestamp) <= end_str,
         ).all()
 
-        # Load actuals
-        actual_rows = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == unit.id,
-            sa_func.date(IntervalActual.timestamp) >= start_str,
-            sa_func.date(IntervalActual.timestamp) <= end_str,
-        ).all()
+        # Load actuals — route-based filtering
+        actual_rows = _build_actuals_query(unit, start_str, end_str).all()
 
         # Build actuals lookup
         actual_map = {}

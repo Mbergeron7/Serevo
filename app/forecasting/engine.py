@@ -24,6 +24,56 @@ DEFAULT_SHRINKAGE = 0.30
 
 
 # ═══════════════════════════════════════════════════════════════
+# ROUTE-BASED PU RESOLUTION
+# ═══════════════════════════════════════════════════════════════
+
+def _resolve_pu_by_name(lob):
+    """Resolve a LOB/PU name to a PlanningUnit, exact match first."""
+    from app.models import PlanningUnit
+    from app.data_source import normalize_lob
+    lob_stripped = str(lob).strip()
+    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    if not unit:
+        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+    return unit
+
+
+def _get_pu_route_ids(planning_unit_id):
+    """Get the list of active route_id strings assigned to a planning unit."""
+    from app.models import CallRoute
+    routes = CallRoute.query.filter_by(
+        planning_unit_id=planning_unit_id, is_active=True
+    ).all()
+    return [r.route_id for r in routes]
+
+
+def _build_actuals_query(unit, start_str, end_str):
+    """Build an IntervalActual query filtered by the PU's assigned routes.
+    Falls back to planning_unit_id when no routes are assigned or when
+    existing data has no route_id populated (backward compat)."""
+    from app.models import IntervalActual
+    from sqlalchemy import func as sa_func
+
+    route_ids = _get_pu_route_ids(unit.id)
+
+    if route_ids:
+        # Route-based: only grab data from routes assigned to this PU
+        return IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == unit.id,
+            IntervalActual.route_id.in_(route_ids),
+            sa_func.date(IntervalActual.timestamp) >= start_str,
+            sa_func.date(IntervalActual.timestamp) <= end_str,
+        ).order_by(IntervalActual.timestamp)
+    else:
+        # No routes assigned — fall back to planning_unit_id (legacy/CSV data)
+        return IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == unit.id,
+            sa_func.date(IntervalActual.timestamp) >= start_str,
+            sa_func.date(IntervalActual.timestamp) <= end_str,
+        ).order_by(IntervalActual.timestamp)
+
+
+# ═══════════════════════════════════════════════════════════════
 # LOB OPERATING-HOURS HELPERS
 # ═══════════════════════════════════════════════════════════════
 
@@ -415,30 +465,18 @@ def get_historical_actuals(lob, start_date, end_date):
     """
     Retrieve actual call volume from IntervalActual for a LOB across a date range.
     Returns list of {date, time, offered, aht} sorted by timestamp.
-    Used for: displaying actuals on the forecasting page AND as historical
-    input when generating forecasts.
+    Uses route-based filtering: only pulls data from routes assigned to the PU.
     """
     import os
     if os.environ.get("DATA_SOURCE", "").strip().lower() != "postgres":
         return [], None
     try:
-        from app.data_source import normalize_lob
-        from app.models import IntervalActual, PlanningUnit
-        from sqlalchemy import func as sa_func
-        lob_stripped = str(lob).strip()
-        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
-        if not unit:
-            normalized = normalize_lob(lob_stripped)
-            unit = PlanningUnit.query.filter_by(name=normalized).first()
+        unit = _resolve_pu_by_name(lob)
         if not unit:
             return [], f"No planning unit found for '{lob}'"
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = end_date.strftime("%Y-%m-%d")
-        rows = IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == unit.id,
-            sa_func.date(IntervalActual.timestamp) >= start_str,
-            sa_func.date(IntervalActual.timestamp) <= end_str,
-        ).order_by(IntervalActual.timestamp).all()
+        rows = _build_actuals_query(unit, start_str, end_str).all()
         results = []
         for r in rows:
             ts = r.timestamp
@@ -1431,14 +1469,10 @@ def _get_db_historical(lob, historical_days):
 
     # --- Fall back to ForecastInterval ---
     try:
-        from app.models import ForecastInterval, PlanningUnit
+        from app.models import ForecastInterval
         from sqlalchemy import func as sa_func
 
-        from app.data_source import normalize_lob
-        lob_stripped = str(lob).strip()
-        unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
-        if not unit:
-            unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+        unit = _resolve_pu_by_name(lob)
         if unit:
             rows = ForecastInterval.query.filter(
                 ForecastInterval.planning_unit_id == unit.id,

@@ -27,18 +27,14 @@ def _get_today_data(lob, today=None):
     Returns (forecast_by_slot, actuals_by_slot, planning_unit, lob_setting)
     where each dict maps "HH:MM" → {offered, aht}.
     """
-    from app.models import (ForecastInterval, IntervalActual,
-                            PlanningUnit, LOBSetting)
-    from app.data_source import normalize_lob
+    from app.models import ForecastInterval, LOBSetting
+    from app.forecasting.engine import _resolve_pu_by_name, _build_actuals_query
     from sqlalchemy import func as sa_func
 
     if today is None:
         today = datetime.date.today()
 
-    lob_stripped = str(lob).strip()
-    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
-    if not unit:
-        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+    unit = _resolve_pu_by_name(lob)
     if not unit:
         return {}, {}, None, None
 
@@ -62,11 +58,8 @@ def _get_today_data(lob, today=None):
             "aht": float(r.aht or 0),
         }
 
-    # Actuals received so far today
-    act_rows = IntervalActual.query.filter(
-        IntervalActual.planning_unit_id == unit.id,
-        sa_func.date(IntervalActual.timestamp) == today_str,
-    ).all()
+    # Actuals received so far today — route-based filtering
+    act_rows = _build_actuals_query(unit, today_str, today_str).all()
 
     actuals_by_slot = {}
     for r in act_rows:

@@ -766,9 +766,11 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
             aht = _safe_float(row[col_map["aht"]]) if "aht" in col_map else None
             max_q = _safe_int(row[col_map["max_queued"]]) if "max_queued" in col_map else None
 
-            # Aggregate under EACH matched PU
+            # Aggregate under EACH matched PU, keyed by route_id so
+            # each route's data stays separate per planning unit.
+            row_rid = rid if ("route_id" in col_map and rid) else None
             for pu in pus:
-                key = (pu.id, ts)
+                key = (pu.id, row_rid, ts)
                 prev = aggregated.get(key)
                 if prev is None:
                     aggregated[key] = dict(
@@ -802,7 +804,7 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
                 break
 
     # Finalize weighted averages and upsert
-    for (pu_id, ts), vals in aggregated.items():
+    for (pu_id, rid_key, ts), vals in aggregated.items():
         ans = vals.pop("_ans_for_avg", 0)
         asa_sum = vals.pop("_asa_sum", 0)
         aht_sum = vals.pop("_aht_sum", 0)
@@ -816,11 +818,14 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
             if existing:
                 for k, v in vals.items():
                     setattr(existing, k, v)
+                if rid_key:
+                    existing.route_id = rid_key
                 existing.uploaded_at = datetime.utcnow()
             else:
                 rec = IntervalActual(
                     planning_unit_id=pu_id,
                     timestamp=ts,
+                    route_id=rid_key,
                     **vals,
                 )
                 db.session.add(rec)
@@ -1181,8 +1186,9 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                 asa = _safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None
                 aht = _safe_float(row[agg_col_map["aht"]]) if "aht" in agg_col_map else None
 
+                evt_rid = rid if ("route_id" in agg_col_map and rid) else None
                 for pu in pus:
-                    key = (pu.id, ts)
+                    key = (pu.id, evt_rid, ts)
                     prev = evt_aggregated.get(key)
                     if prev is None:
                         evt_aggregated[key] = dict(
@@ -1212,7 +1218,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     break
 
         # Finalize and upsert
-        for (pu_id, ts), vals in evt_aggregated.items():
+        for (pu_id, rid_key, ts), vals in evt_aggregated.items():
             ans = vals.pop("_ans_for_avg", 0)
             asa_sum = vals.pop("_asa_sum", 0)
             aht_sum = vals.pop("_aht_sum", 0)
@@ -1226,10 +1232,13 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                 if existing:
                     for k, v in vals.items():
                         setattr(existing, k, v)
+                    if rid_key:
+                        existing.route_id = rid_key
                     existing.uploaded_at = datetime.utcnow()
                 else:
                     rec = IntervalActual(
-                        planning_unit_id=pu_id, timestamp=ts, **vals,
+                        planning_unit_id=pu_id, timestamp=ts,
+                        route_id=rid_key, **vals,
                     )
                     db.session.add(rec)
                 upserted += 1

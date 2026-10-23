@@ -1751,6 +1751,7 @@ class IntervalActual(db.Model):
     asa_secs         = db.Column(db.Float, nullable=True) # average speed of answer
     aht_secs         = db.Column(db.Float, nullable=True) # actual average handle time
     max_queued       = db.Column(db.Integer, nullable=True)
+    route_id         = db.Column(db.String(50), nullable=True, index=True)  # phone-system route that produced this data
     source           = db.Column(db.String(30), default="upload")  # upload | sheet | api | demo
     data_source_id   = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=True, index=True)
     uploaded_at      = db.Column(db.DateTime, default=_utcnow)
@@ -1760,6 +1761,7 @@ class IntervalActual(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("planning_unit_id", "timestamp", name="uq_actual_unit_ts"),
+        db.Index("ix_actual_route_ts", "route_id", "timestamp"),
     )
 
     def to_dict(self):

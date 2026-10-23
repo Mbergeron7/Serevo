@@ -2165,6 +2165,9 @@ def _import_actuals(rows):
             skipped += 1
             continue
 
+        # Capture route_id from CSV if available
+        csv_route_id = _get_val(row, "Route ID") or _get_val(row, "Route") or None
+
         offered = int(_num(_get_val(row, "Offered")))
         answered = int(_num(_get_val(row, "Answered")))
         aw = _get_val(row, "Answered Within")
@@ -2176,11 +2179,12 @@ def _import_actuals(rows):
         aht = _num(aht_raw) if aht_raw not in (None, "") else None
         max_q = int(_num(mq)) if mq not in (None, "") else None
 
-        key = (unit_id, ts)
+        key = (unit_id, csv_route_id, ts)
         prev = batch_dedup.get(key)
         if prev is None:
             batch_dedup[key] = {
                 "planning_unit_id": unit_id, "timestamp": ts,
+                "route_id": csv_route_id,
                 "offered": offered, "answered": answered,
                 "answered_within": answered_within, "abandoned": abandoned,
                 "rolled": rolled, "max_queued": max_q,
