@@ -555,23 +555,44 @@ def forecast_api_data():
                 }
             })
 
-        lob_normalized = normalize_lob(lob)
-        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        from app.models import CallRoute
+
+        # First try exact name match (finds sub-PUs like "PS Care FR")
+        unit = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if not unit:
+            lob_normalized = normalize_lob(lob)
+            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
         if not unit:
             return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
+
+        # Sub-PU route filtering: data lives under parent pu_id
+        actuals_pu_id = unit.id
+        route_id_filter = None
+        if unit.parent_id:
+            actuals_pu_id = unit.parent_id
+            route_ids = [
+                cr.route_id for cr in
+                CallRoute.query.filter_by(planning_unit_id=unit.id, is_active=True).all()
+            ]
+            if route_ids:
+                route_id_filter = route_ids
 
         start = date(year, 1, 1)
         end = date(year, 12, 31)
         today = date.today()
 
         # Get historical actuals (aggregated by day)
+        hist_q = IntervalActual.query.filter(
+            IntervalActual.planning_unit_id == actuals_pu_id,
+            sa_func.date(IntervalActual.timestamp) >= start,
+            sa_func.date(IntervalActual.timestamp) <= end,
+        )
+        if route_id_filter:
+            hist_q = hist_q.filter(IntervalActual.route_id.in_(route_id_filter))
         hist_rows = (
-            IntervalActual.query
-            .filter(
-                IntervalActual.planning_unit_id == unit.id,
-                sa_func.date(IntervalActual.timestamp) >= start,
-                sa_func.date(IntervalActual.timestamp) <= end,
-            )
+            hist_q
             .with_entities(
                 sa_func.date(IntervalActual.timestamp).label("dt"),
                 sa_func.sum(IntervalActual.offered).label("offered"),
@@ -740,10 +761,35 @@ def forecast_api_intervals():
                 })
             return jsonify({"success": True, "intervals": intervals})
 
-        lob_normalized = normalize_lob(lob)
-        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        from app.models import CallRoute
+
+        # First try exact name match (finds sub-PUs like "PS Care FR")
+        unit = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+
+        # Fall back to normalized name if no exact match
+        if not unit:
+            lob_normalized = normalize_lob(lob)
+            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+
         if not unit:
             return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
+
+        # If this is a sub-PU (has a parent), data lives under the parent's
+        # pu_id.  Filter by this sub-PU's assigned route_ids so we only
+        # return its own call volume, not the whole parent's.
+        actuals_pu_id = unit.id
+        route_id_filter = None
+        if unit.parent_id:
+            actuals_pu_id = unit.parent_id
+            route_ids = [
+                cr.route_id for cr in
+                CallRoute.query.filter_by(planning_unit_id=unit.id, is_active=True).all()
+            ]
+            if route_ids:
+                route_id_filter = route_ids
+            log.info(f"[FC-ACTUALS] sub-PU {lob!r} (id={unit.id}) → parent pu_id={actuals_pu_id}, route_filter={route_ids}")
 
         today = date.today()
         day_start = datetime.datetime.combine(target_date, datetime.time.min)
@@ -752,17 +798,16 @@ def forecast_api_intervals():
         # Build actuals map for historical dates
         actual_map = {}
         if target_date <= today:
-            rows = (
-                IntervalActual.query
-                .filter(
-                    IntervalActual.planning_unit_id == unit.id,
-                    IntervalActual.timestamp >= day_start,
-                    IntervalActual.timestamp <= day_end,
-                )
-                .order_by(IntervalActual.timestamp)
-                .all()
+            q = IntervalActual.query.filter(
+                IntervalActual.planning_unit_id == actuals_pu_id,
+                IntervalActual.timestamp >= day_start,
+                IntervalActual.timestamp <= day_end,
             )
-            log.info(f"[FC-ACTUALS] lob={lob!r} pu_id={unit.id} date={target_date}: {len(rows)} IntervalActual rows")
+            if route_id_filter:
+                q = q.filter(IntervalActual.route_id.in_(route_id_filter))
+            rows = q.order_by(IntervalActual.timestamp).all()
+
+            log.info(f"[FC-ACTUALS] lob={lob!r} pu_id={unit.id} actuals_pu_id={actuals_pu_id} route_filter={route_id_filter} date={target_date}: {len(rows)} IntervalActual rows")
             for row in rows:
                 t = row.timestamp.strftime("%H:%M")
                 actual_map[t] = {
