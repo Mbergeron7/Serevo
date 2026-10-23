@@ -482,6 +482,7 @@ def employee_profile(emp_id):
             skill_mappings=[],
             skill_history=[],
             contract_assignments=[],
+            contract_history=[],
             selection_memberships=[],
             selection_history=[],
             pu_assignments=[],
@@ -509,19 +510,43 @@ def employee_profile(emp_id):
     if emp is None:
         abort(404)
 
+    # Skills — split active (no valid_to) vs history (has valid_to)
     skill_mappings = SkillMapping.query.filter_by(
         employee_id=emp.id
-    ).order_by(SkillMapping.valid_from.desc().nullslast()).all()
-    skill_history = []
-    contract_assignments = EmployeeContract.query.filter_by(employee_id=emp.id).all()
+    ).filter(SkillMapping.valid_to.is_(None)).order_by(
+        SkillMapping.valid_from.desc().nullslast()).all()
+    skill_history = SkillMapping.query.filter_by(
+        employee_id=emp.id
+    ).filter(SkillMapping.valid_to.isnot(None)).order_by(
+        SkillMapping.valid_to.desc()).all()
+
+    # Contracts — split active vs history
+    contract_assignments = EmployeeContract.query.filter_by(
+        employee_id=emp.id
+    ).filter(EmployeeContract.valid_to.is_(None)).all()
+    contract_history = EmployeeContract.query.filter_by(
+        employee_id=emp.id
+    ).filter(EmployeeContract.valid_to.isnot(None)).order_by(
+        EmployeeContract.valid_to.desc()).all()
+
+    # Selections — split active vs history
     selection_memberships = SelectionMember.query.filter_by(
         employee_id=emp.id
-    ).all()
-    selection_history = []
+    ).filter(SelectionMember.valid_to.is_(None)).all()
+    selection_history = SelectionMember.query.filter_by(
+        employee_id=emp.id
+    ).filter(SelectionMember.valid_to.isnot(None)).order_by(
+        SelectionMember.valid_to.desc()).all()
+
+    # Planning Units — split active vs history
     pu_assignments = EmployeePlanningUnit.query.filter_by(
         employee_id=emp.id
-    ).order_by(EmployeePlanningUnit.priority).all()
-    pu_history = []
+    ).filter(EmployeePlanningUnit.valid_to.is_(None)).order_by(
+        EmployeePlanningUnit.priority).all()
+    pu_history = EmployeePlanningUnit.query.filter_by(
+        employee_id=emp.id
+    ).filter(EmployeePlanningUnit.valid_to.isnot(None)).order_by(
+        EmployeePlanningUnit.valid_to.desc()).all()
     try:
         ss_assignments = EmployeeShiftSequence.query.filter_by(
             employee_id=emp.id
@@ -567,6 +592,7 @@ def employee_profile(emp_id):
         skill_mappings=skill_mappings,
         skill_history=skill_history,
         contract_assignments=contract_assignments,
+        contract_history=contract_history,
         selection_memberships=selection_memberships,
         selection_history=selection_history,
         pu_assignments=pu_assignments,

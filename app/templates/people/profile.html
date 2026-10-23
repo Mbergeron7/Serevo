@@ -370,6 +370,33 @@
       {% else %}
       <p style="color:var(--text-muted); font-size:.85rem;">No contract assigned.</p>
       {% endif %}
+      {% if contract_history %}
+      <details style="margin-top:.75rem;">
+        <summary style="cursor:pointer; font-size:.82rem; color:var(--text-muted); user-select:none;">
+          <span style="font-weight:600;">History</span> ({{ contract_history|length }} previous)
+        </summary>
+        <div style="overflow-x:auto; margin-top:.5rem;">
+        <table class="assign-table" style="opacity:.7; font-size:.85rem;">
+          <thead><tr><th>Contract</th><th>Type</th><th>Weekly Hours</th><th>From</th><th>To</th><th></th></tr></thead>
+          <tbody>
+          {% for ca in contract_history %}
+          <tr>
+            <td>{{ ca.contract.name }}</td>
+            <td>{{ ca.contract.contract_type }}</td>
+            <td>{{ ca.contract.weekly_hours }}h</td>
+            <td>{{ ca.valid_from or '—' }}</td>
+            <td>{{ ca.valid_to or '—' }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-outline-sm" onclick="openAssignModal('contract', {id:{{ ca.id }}, item_id:{{ ca.contract_id }}, valid_from:'{{ ca.valid_from or '' }}', valid_to:'{{ ca.valid_to or '' }}'})">Edit</button>
+              <button class="btn-danger-sm" onclick="deleteAssignment('contract', {{ ca.id }})">Delete</button>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </details>
+      {% endif %}
     </div>
   </div>
 
