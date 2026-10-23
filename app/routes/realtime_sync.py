@@ -1636,9 +1636,14 @@ def resync_feed(feed_id):
     return jsonify({"cleared": deleted, "sync": "started in background — check feed status in ~60s"})
 
 
+@realtime_sync_bp.route("/realtime/debug-volume", methods=["GET"])
 @realtime_sync_bp.route("/realtime/debug-volume/<path:lob_name>", methods=["GET"])
 @login_required
-def debug_volume(lob_name):
+def debug_volume(lob_name=None):
+    if lob_name is None:
+        lob_name = request.args.get("lob", "")
+    if not lob_name:
+        return jsonify({"error": "Provide ?lob=PS Care FR"})
     """Temporary diagnostic: show interval_actuals + call_routes for a LOB."""
     auth_err = _require_admin()
     if auth_err:
