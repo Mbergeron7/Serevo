@@ -559,7 +559,7 @@ def forecast_api_data():
 
         # First try exact name match (finds sub-PUs like "PS Care FR")
         unit = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
+            sa_func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not unit:
             lob_normalized = normalize_lob(lob)
@@ -733,6 +733,7 @@ def forecast_api_intervals():
     from app.models import (ForecastInterval, RequirementInterval,
                             PlanningUnit, IntervalActual)
     from app.data_source import normalize_lob
+    from sqlalchemy import func as sa_func
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -765,7 +766,7 @@ def forecast_api_intervals():
 
         # First try exact name match (finds sub-PUs like "PS Care FR")
         unit = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
+            sa_func.lower(PlanningUnit.name) == lob.lower()
         ).first()
 
         # Fall back to normalized name if no exact match
