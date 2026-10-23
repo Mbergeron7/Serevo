@@ -325,7 +325,7 @@
         </div>
         <div class="form-group">
           <label>LOB / Department</label>
-          <select id="ticketLob">
+          <select id="ticketLob" onchange="loadAgentsByLob()">
             <option value="">— Select LOB —</option>
           </select>
         </div>
@@ -625,16 +625,42 @@ async function loadDropdownData(){
     ddLobs=data.lobs||[];
     ddShifts=data.shift_templates||[];
     ddLoaded=true;
-    // Populate LOB dropdown
+    // Populate LOB dropdown (lobs now have id & name)
     const lobSel=document.getElementById('ticketLob');
-    lobSel.innerHTML='<option value="">— Select LOB —</option>'+ddLobs.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    lobSel.innerHTML='<option value="">— Select LOB —</option>'+ddLobs.map(l=>`<option value="${esc(l.name)}" data-lob-id="${esc(String(l.id))}">${esc(l.name)}</option>`).join('');
     // Populate shift dropdown
     const shiftSel=document.getElementById('ticketShift');
     shiftSel.innerHTML='<option value="">— Select Shift —</option>'+ddShifts.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
-    // Populate swap dropdown
-    const swapSel=document.getElementById('ticketSwapWith');
-    swapSel.innerHTML='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
   }catch(e){console.error('Failed to load dropdown data',e);}
+}
+
+/* ── Load agents by LOB ── */
+async function loadAgentsByLob(){
+  const lobSel=document.getElementById('ticketLob');
+  const opt=lobSel.options[lobSel.selectedIndex];
+  const lobId=opt?opt.getAttribute('data-lob-id'):'';
+  const lobName=lobSel.value||'';
+  // Clear current agents
+  selectedAgentIds=[];
+  ddEmployees=[];
+  renderSelectedAgents();
+  if(!lobName){updateSwapDropdown();return;}
+  try{
+    const resp=await fetch(`/wfm-tickets/api/agents-by-lob?lob_id=${encodeURIComponent(lobId)}&lob_name=${encodeURIComponent(lobName)}`,{headers:{'X-CSRFToken':csrfToken}});
+    const data=await resp.json();
+    if(data.success){
+      ddEmployees=data.employees||[];
+    }
+  }catch(e){console.error('Failed to load agents by LOB',e);}
+  updateSwapDropdown();
+  filterAgents();
+}
+
+function updateSwapDropdown(){
+  const swapSel=document.getElementById('ticketSwapWith');
+  if(swapSel){
+    swapSel.innerHTML='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
+  }
 }
 
 /* ── Category Change — show/hide fields ── */

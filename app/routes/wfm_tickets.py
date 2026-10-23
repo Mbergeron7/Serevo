@@ -713,12 +713,17 @@ def dropdown_data():
         return jsonify(success=False, error="No WFM access"), 403
 
     if user.get("is_demo"):
+        demo_lobs = [
+            {"id": "SS Sales", "name": "SS Sales"},
+            {"id": "SS Service", "name": "SS Service"},
+            {"id": "PS Sales", "name": "PS Sales"},
+            {"id": "PS Service", "name": "PS Service"},
+            {"id": "SS Case Management", "name": "SS Case Management"},
+            {"id": "Collections", "name": "Collections"},
+        ]
         return jsonify(success=True,
-                       employees=[{"id": i, "name": n} for i, n in enumerate([
-                           "Alex Morgan", "Jordan Rivera", "Casey Chen", "Sam Patel",
-                           "Taylor Kim", "Drew Nguyen", "Riley Brooks", "Priya Sharma"], 1)],
-                       lobs=["SS Sales", "SS Service", "PS Sales", "PS Service",
-                             "SS Case Management", "Collections"],
+                       employees=[],
+                       lobs=demo_lobs,
                        shift_templates=["6:00 AM - 2:00 PM", "7:00 AM - 3:00 PM",
                                         "8:00 AM - 4:00 PM", "9:00 AM - 5:00 PM",
                                         "10:00 AM - 6:00 PM", "12:00 PM - 8:00 PM",
@@ -726,32 +731,17 @@ def dropdown_data():
 
     from app.models import Employee, PlanningUnit, ShiftTemplate
 
-    # ── Employees ──
-    try:
-        employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
-        emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id} for e in employees]
-    except Exception:
-        emp_list = []
-
-    # Also include any registered User accounts so agents always show up
-    if not emp_list:
-        try:
-            users = User.query.filter_by(is_active=True).order_by(User.display_name).all()
-            emp_list = [{"id": u.id, "name": u.display_name, "ext_id": u.email} for u in users]
-        except Exception:
-            emp_list = []
-
-    # ── LOBs / Planning Units ──
+    # ── LOBs / Planning Units (with id so we can filter agents) ──
     try:
         lobs = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-        lob_list = [u.name for u in lobs]
+        lob_list = [{"id": u.id, "name": u.name} for u in lobs]
     except Exception:
         lob_list = []
 
     if not lob_list:
-        # Fallback: common WFM LOBs so the dropdown is never empty
-        lob_list = ["Sales", "Service", "Collections", "Case Management",
-                    "Back Office", "Chat", "Email", "Social Media"]
+        lob_list = [{"id": n, "name": n} for n in
+                    ["Sales", "Service", "Collections", "Case Management",
+                     "Back Office", "Chat", "Email", "Social Media"]]
 
     # ── Shift templates ──
     try:
@@ -768,7 +758,73 @@ def dropdown_data():
                       "9:00 AM - 5:00 PM", "10:00 AM - 6:00 PM", "12:00 PM - 8:00 PM",
                       "1:00 PM - 9:00 PM", "2:00 PM - 10:00 PM"]
 
-    return jsonify(success=True, employees=emp_list, lobs=lob_list, shift_templates=shift_list)
+    return jsonify(success=True, employees=[], lobs=lob_list, shift_templates=shift_list)
+
+
+# ── API: agents by LOB (for ticket form) ─────────────────────
+
+@wfm_tickets_bp.route("/api/agents-by-lob", methods=["GET"])
+@login_required
+def agents_by_lob():
+    """Return employees rostered under a given LOB / planning unit."""
+    user = get_current_user()
+    if not _has_wfm_access(user):
+        return jsonify(success=False, error="No WFM access"), 403
+
+    lob_id = request.args.get("lob_id", "").strip()
+    lob_name = request.args.get("lob_name", "").strip()
+
+    if user.get("is_demo"):
+        # Return demo agents for the selected LOB
+        demo_agents = {
+            "SS Sales": ["Alex Morgan", "Jordan Rivera", "Casey Chen"],
+            "SS Service": ["Sam Patel", "Taylor Kim"],
+            "PS Sales": ["Drew Nguyen", "Riley Brooks"],
+            "PS Service": ["Priya Sharma", "Alex Morgan"],
+            "SS Case Management": ["Jordan Rivera", "Casey Chen", "Sam Patel"],
+            "Collections": ["Taylor Kim", "Drew Nguyen", "Riley Brooks"],
+        }
+        agents = demo_agents.get(lob_name, list(demo_agents.values())[0] if demo_agents else [])
+        return jsonify(success=True, employees=[
+            {"id": i, "name": n, "ext_id": ""} for i, n in enumerate(agents, 1)
+        ])
+
+    from app.models import Employee, RosterGroup, RosterMember
+
+    emp_list = []
+    try:
+        # Find roster groups for this planning unit, then their members
+        query = RosterGroup.query.filter_by(active=True)
+        if lob_id and str(lob_id).isdigit():
+            query = query.filter_by(planning_unit_id=int(lob_id))
+        groups = query.all()
+
+        seen = set()
+        for g in groups:
+            for m in g.members:
+                if m.active and m.employee and m.employee.is_active and m.employee_id not in seen:
+                    seen.add(m.employee_id)
+                    e = m.employee
+                    emp_list.append({"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""})
+        emp_list.sort(key=lambda x: x["name"])
+    except Exception:
+        pass
+
+    # Fallback: if no roster data, show all active employees or users
+    if not emp_list:
+        try:
+            employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
+            emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
+        except Exception:
+            pass
+    if not emp_list:
+        try:
+            users = User.query.filter_by(is_active=True).order_by(User.display_name).all()
+            emp_list = [{"id": u.id, "name": u.display_name, "ext_id": u.email} for u in users]
+        except Exception:
+            pass
+
+    return jsonify(success=True, employees=emp_list)
 
 
 # ── API: list users with WFM access info (admin only) ────────
