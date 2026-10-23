@@ -500,6 +500,8 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
     Returns a list of header + data rows in the format sync_call_volume expects.
     """
     col_map = _match_columns(headers, _EVENT_CALL_COL_ALIASES, custom_mapping=custom_mapping)
+    log.info(f"[EVENT-AGG] col_map keys: {list(col_map.keys())}, custom_mapping: {custom_mapping}")
+    log.info(f"[EVENT-AGG] 'wait_time' in col_map: {'wait_time' in col_map}, headers: {headers}")
 
     if "timestamp" not in col_map:
         return [["date", "time", "lob", "offered", "answered", "abandoned",
@@ -536,8 +538,10 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             # Only the entry with queue time > 0 is the real call;
             # the others are duplicate log entries for the same call.
             if "wait_time" in col_map and (wait is None or wait <= 0):
+                log.debug(f"[EVENT-AGG] FILTERED OUT row: call_id={call_id}, wait={wait}")
                 continue
 
+            log.debug(f"[EVENT-AGG] KEPT row: call_id={call_id}, wait={wait}, queue={queue}")
             events.append({
                 "ts": ts, "queue": queue,
                 "is_abandoned": is_abn > 0,
@@ -546,6 +550,8 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             })
         except Exception:
             continue
+
+    log.info(f"[EVENT-AGG] Total rows processed: {len(rows)-1}, events kept: {len(events)}, deduped calls: {len(seen_calls)}")
 
     if not events:
         return [["date", "time", "lob", "offered", "answered", "abandoned",
