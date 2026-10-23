@@ -826,14 +826,12 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
         vals["aht_secs"] = round(aht_sum / ans, 1) if ans > 0 and aht_sum else None
         try:
             existing = IntervalActual.query.filter_by(
-                planning_unit_id=pu_id, timestamp=ts
+                planning_unit_id=pu_id, route_id=rid_key, timestamp=ts
             ).first()
 
             if existing:
                 for k, v in vals.items():
                     setattr(existing, k, v)
-                if rid_key:
-                    existing.route_id = rid_key
                 existing.uploaded_at = datetime.utcnow()
             else:
                 rec = IntervalActual(
@@ -1272,13 +1270,11 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
 
             try:
                 existing = IntervalActual.query.filter_by(
-                    planning_unit_id=pu_id, timestamp=ts
+                    planning_unit_id=pu_id, route_id=rid_key, timestamp=ts
                 ).first()
                 if existing:
                     for k, v in vals.items():
                         setattr(existing, k, v)
-                    if rid_key:
-                        existing.route_id = rid_key
                     existing.uploaded_at = datetime.utcnow()
                 else:
                     rec = IntervalActual(

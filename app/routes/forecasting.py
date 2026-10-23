@@ -596,7 +596,7 @@ def forecast_api_data():
             .with_entities(
                 sa_func.date(IntervalActual.timestamp).label("dt"),
                 sa_func.sum(IntervalActual.offered).label("offered"),
-                sa_func.avg(IntervalActual.aht_secs).label("aht"),
+                sa_func.sum(IntervalActual.offered * IntervalActual.aht_secs).label("aht_w"),
                 sa_func.count().label("cnt"),
             )
             .group_by(sa_func.date(IntervalActual.timestamp))
@@ -606,9 +606,10 @@ def forecast_api_data():
         for row in hist_rows:
             d_str = str(row.dt) if row.dt else None
             if d_str:
+                total_off = int(row.offered or 0)
                 hist_map[d_str] = {
-                    "offered": int(row.offered or 0),
-                    "aht": round(float(row.aht or 0)),
+                    "offered": total_off,
+                    "aht": round(float(row.aht_w or 0) / total_off) if total_off > 0 else 0,
                     "intervals": int(row.cnt or 0),
                 }
 
@@ -811,12 +812,19 @@ def forecast_api_intervals():
             log.info(f"[FC-ACTUALS] lob={lob!r} pu_id={unit.id} actuals_pu_id={actuals_pu_id} route_filter={route_id_filter} date={target_date}: {len(rows)} IntervalActual rows")
             for row in rows:
                 t = row.timestamp.strftime("%H:%M")
-                actual_map[t] = {
-                    "offered": round(float(row.offered or 0), 1),
-                    "aht": round(float(row.aht_secs or 0), 1),
-                }
-                if "care" in lob.lower():
-                    log.info(f"[FC-ACTUALS]   ts={row.timestamp}, offered={row.offered}, route_id={row.route_id}, source={row.source}")
+                off = float(row.offered or 0)
+                aht = float(row.aht_secs or 0)
+                if t in actual_map:
+                    # Aggregate across routes: sum offered, weighted-avg AHT
+                    prev = actual_map[t]
+                    new_off = prev["offered"] + off
+                    if new_off > 0:
+                        new_aht = (prev["offered"] * prev["aht"] + off * aht) / new_off
+                    else:
+                        new_aht = 0
+                    actual_map[t] = {"offered": round(new_off, 1), "aht": round(new_aht, 1)}
+                else:
+                    actual_map[t] = {"offered": round(off, 1), "aht": round(aht, 1)}
 
         # Load forecast intervals
         fc_rows = (

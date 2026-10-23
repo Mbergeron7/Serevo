@@ -1760,7 +1760,7 @@ class IntervalActual(db.Model):
     data_source   = db.relationship("DataSource", backref="actuals")
 
     __table_args__ = (
-        db.UniqueConstraint("planning_unit_id", "timestamp", name="uq_actual_unit_ts"),
+        db.UniqueConstraint("planning_unit_id", "route_id", "timestamp", name="uq_actual_unit_route_ts"),
         db.Index("ix_actual_route_ts", "route_id", "timestamp"),
     )
 
