@@ -63,9 +63,10 @@ def _build_actuals_query(unit, start_str, end_str):
     route_ids = _get_pu_route_ids(unit.id)
 
     if route_ids:
-        # Route-based: only data from routes assigned to this PU
+        # Route-based: query ONLY by route_id — the route IS the filter.
+        # No planning_unit_id constraint so it finds the data regardless
+        # of which PU it was originally written under.
         return IntervalActual.query.filter(
-            IntervalActual.planning_unit_id == unit.id,
             IntervalActual.route_id.in_(route_ids),
             sa_func.date(IntervalActual.timestamp) >= start_str,
             sa_func.date(IntervalActual.timestamp) <= end_str,
