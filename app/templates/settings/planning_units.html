@@ -44,6 +44,7 @@
     <div id="tabBar" class="tab-strip" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
       <button class="tab-btn active" onclick="switchTab('general')" data-tab="general">General</button>
       <button class="tab-btn" onclick="switchTab('hours')" data-tab="hours">Business Hours</button>
+      <button class="tab-btn" onclick="switchTab('multiactivity')" data-tab="multiactivity">Multi-Activity</button>
       <button class="tab-btn" onclick="switchTab('activities')" data-tab="activities">Activities</button>
       <button class="tab-btn" onclick="switchTab('routes')" data-tab="routes">Call Routes</button>
       <button class="tab-btn" onclick="switchTab('parameters')" data-tab="parameters">Parameters</button>
@@ -88,6 +89,34 @@
             <label style="display:flex;align-items:end;gap:6px;padding-bottom:8px;">
               <input id="f_is_active" type="checkbox" checked> Active
             </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Multi-Activity ── -->
+      <div class="tab-panel" data-panel="multiactivity">
+        <div class="info-box">
+          <strong>Multi-Activity</strong> lets you group skill/language splits under a parent LOB.
+          For example, "SS Sales" is the parent with "SS Sales EN" and "SS Sales FR" as children.
+          The parent aggregates data from all children's call routes plus its own.
+        </div>
+        <div style="display:grid;gap:14px;">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input id="f_is_multi_activity" type="checkbox" onchange="toggleMultiActivity()">
+            <strong>This is a Multi-Activity (parent)</strong>
+          </label>
+          <div id="multiParentSection">
+            <label>Parent Planning Unit
+              <select id="f_parent_id" class="form-input">
+                <option value="">— None (top-level) —</option>
+              </select>
+            </label>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Select a parent to make this a sub-activity (child) of another planning unit.</p>
+          </div>
+          <div id="multiChildrenSection" style="display:none;">
+            <p style="font-size:0.85rem;font-weight:600;margin:0 0 6px;">Children (sub-activities):</p>
+            <div id="childrenContainer" style="font-size:0.85rem;"></div>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:8px 0 0;">To add children, edit another planning unit and set its Parent to this one.</p>
           </div>
         </div>
       </div>
@@ -158,31 +187,74 @@ function switchTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
 }
 
-/* ── Table render ── */
+/* ── Table render — show parent/child hierarchy ── */
 function render() {
   tbody.innerHTML = '';
+  // Build children map
+  const childrenMap = {};
+  DATA.forEach(r => { if (r.parent_id) { (childrenMap[r.parent_id] = childrenMap[r.parent_id] || []).push(r); } });
+  const rendered = new Set();
+
+  // First pass: render multi-activity parents with their children
   DATA.forEach(r => {
-    const tr = document.createElement('tr');
-    const bhCount = (r.business_hours || []).length;
-    const actCount = (r.assigned_activities || []).length;
-    const routeCount = (r.call_routes || []).length;
-    tr.innerHTML = `
-      <td style="font-weight:600;">${esc(r.name)}</td>
-      <td style="color:var(--text-muted);font-size:.85rem;">${esc(r.description || '—')}</td>
-      <td style="font-size:.82rem;font-family:monospace;">${esc(r.timezone || 'America/New_York')}</td>
-      <td>${r.employee_count}</td>
-      <td>${bhCount ? '<span class="badge-count">'+bhCount+'</span>' : '—'}</td>
-      <td>${actCount ? '<span class="badge-count">'+actCount+'</span>' : '—'}</td>
-      <td>${routeCount ? '<span class="badge-count">'+routeCount+'</span>' : '—'}</td>
-      <td>${r.is_active ? '✓' : '—'}</td>
-      <td><button class="btn btn-sm" onclick='editItem(${r.id})'>Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
-    tbody.appendChild(tr);
+    if (r.is_multi_activity && !rendered.has(r.id)) {
+      rendered.add(r.id);
+      appendPuRow(r, false, true);
+      (childrenMap[r.id] || []).forEach(c => { rendered.add(c.id); appendPuRow(c, true, false); });
+    }
   });
+  // Second pass: everything else
+  DATA.forEach(r => { if (!rendered.has(r.id)) { rendered.add(r.id); appendPuRow(r, false, false); } });
+
   if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
 }
 
+function appendPuRow(r, isChild, isParent) {
+  const tr = document.createElement('tr');
+  if (isChild) tr.style.background = 'var(--surface-raised, rgba(0,0,0,0.02))';
+  const indent = isChild ? '<span style="color:var(--text-muted);margin-right:4px;">└</span>' : '';
+  const multiBadge = isParent ? ' <span style="font-size:0.68rem;background:var(--accent);color:#fff;padding:1px 5px;border-radius:10px;">Multi</span>' : isChild ? ' <span style="font-size:0.68rem;background:var(--border);color:var(--text-muted);padding:1px 5px;border-radius:10px;">Sub</span>' : '';
+  const bhCount = (r.business_hours || []).length;
+  const actCount = (r.assigned_activities || []).length;
+  const routeCount = (r.call_routes || []).length;
+  tr.innerHTML = `
+    <td style="font-weight:600;">${indent}${esc(r.name)}${multiBadge}</td>
+    <td style="color:var(--text-muted);font-size:.85rem;">${esc(r.description || '—')}</td>
+    <td style="font-size:.82rem;font-family:monospace;">${esc(r.timezone || 'America/New_York')}</td>
+    <td>${r.employee_count}</td>
+    <td>${bhCount ? '<span class="badge-count">'+bhCount+'</span>' : '—'}</td>
+    <td>${actCount ? '<span class="badge-count">'+actCount+'</span>' : '—'}</td>
+    <td>${routeCount ? '<span class="badge-count">'+routeCount+'</span>' : '—'}</td>
+    <td>${r.is_active ? '✓' : '—'}</td>
+    <td><button class="btn btn-sm" onclick='editItem(${r.id})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteItem(${r.id})">Delete</button></td>`;
+  tbody.appendChild(tr);
+}
+
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ── Multi-Activity helpers ── */
+function toggleMultiActivity() {
+  const isMulti = document.getElementById('f_is_multi_activity').checked;
+  document.getElementById('multiParentSection').style.display = isMulti ? 'none' : 'block';
+  document.getElementById('multiChildrenSection').style.display = isMulti ? 'block' : 'none';
+  if (isMulti) document.getElementById('f_parent_id').value = '';
+}
+
+function populateParentPuDropdown(currentId) {
+  const sel = document.getElementById('f_parent_id');
+  sel.innerHTML = '<option value="">— None (top-level) —</option>';
+  DATA.filter(r => r.is_multi_activity && r.id !== currentId).forEach(r => {
+    sel.innerHTML += `<option value="${r.id}">${esc(r.name)}</option>`;
+  });
+}
+
+function renderChildren(parentId) {
+  const el = document.getElementById('childrenContainer');
+  const kids = DATA.filter(r => r.parent_id === parentId);
+  if (!kids.length) { el.innerHTML = '<em style="color:var(--text-muted);">No children assigned yet.</em>'; return; }
+  el.innerHTML = kids.map(k => `<span style="display:inline-block;background:var(--surface-raised,#f0f0f0);padding:2px 10px;border-radius:12px;margin:2px 4px;">${esc(k.name)}</span>`).join('');
+}
 
 /* ── Modal open ── */
 function openModal(item) {
@@ -192,6 +264,15 @@ function openModal(item) {
   document.getElementById('f_description').value = item ? (item.description || '') : '';
   document.getElementById('f_timezone').value = item ? (item.timezone || 'America/New_York') : 'America/New_York';
   document.getElementById('f_is_active').checked = item ? item.is_active : true;
+
+  /* Multi-activity fields */
+  const isMulti = item ? (item.is_multi_activity || false) : false;
+  document.getElementById('f_is_multi_activity').checked = isMulti;
+  populateParentPuDropdown(item ? item.id : null);
+  document.getElementById('f_parent_id').value = item ? (item.parent_id || '') : '';
+  document.getElementById('multiParentSection').style.display = isMulti ? 'none' : 'block';
+  document.getElementById('multiChildrenSection').style.display = isMulti ? 'block' : 'none';
+  if (isMulti && item) renderChildren(item.id);
 
   bizHours = item ? JSON.parse(JSON.stringify(item.business_hours || [])) : [];
   puActivities = item ? JSON.parse(JSON.stringify(item.assigned_activities || [])) : [];
@@ -367,6 +448,8 @@ async function saveItem() {
     description: document.getElementById('f_description').value,
     timezone: document.getElementById('f_timezone').value,
     is_active: document.getElementById('f_is_active').checked,
+    is_multi_activity: document.getElementById('f_is_multi_activity').checked,
+    parent_id: document.getElementById('f_parent_id').value || null,
     business_hours: bizHours,
     assigned_activities: puActivities,
     call_routes: callRoutes,

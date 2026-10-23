@@ -1522,6 +1522,12 @@ def get_demo_planning_units_config():
     return [
         {"id": 1, "name": "Sales Support", "description": "Inbound sales and upsell queue",
          "timezone": "America/Toronto", "is_active": True, "employee_count": 7,
+         "is_multi_activity": True, "parent_id": None, "parent_name": None,
+         "call_routes": [
+             {"id": 1, "route_id": "SS_SALES_EN", "name": "SS Sales EN"},
+             {"id": 2, "route_id": "SS_SALES_FR", "name": "SS Sales FR"},
+             {"id": 3, "route_id": "SS_SALES_COMBINED", "name": "SS Sales Combined"},
+         ],
          "business_hours": [
              {"day": "Monday", "open": "08:00", "close": "20:00"},
              {"day": "Tuesday", "open": "08:00", "close": "20:00"},
@@ -1541,8 +1547,38 @@ def get_demo_planning_units_config():
              {"name": "Target service level", "value": "80/20"},
              {"name": "Shrinkage %", "value": "25"},
          ]},
+        {"id": 4, "name": "Sales Support EN", "description": "English sales queue — child of Sales Support",
+         "timezone": "America/Toronto", "is_active": True, "employee_count": 4,
+         "is_multi_activity": False, "parent_id": 1, "parent_name": "Sales Support",
+         "call_routes": [
+             {"id": 4, "route_id": "SS_SALES_EN", "name": "SS Sales EN"},
+         ],
+         "business_hours": [],
+         "assigned_activities": [
+             {"id": 1, "name": "Calls – Sales", "color": "#2563eb"},
+             {"id": 5, "name": "Break", "color": "#f59e0b"},
+             {"id": 6, "name": "Lunch", "color": "#ef4444"},
+         ],
+         "parameters": []},
+        {"id": 5, "name": "Sales Support FR", "description": "French sales queue — child of Sales Support",
+         "timezone": "America/Toronto", "is_active": True, "employee_count": 3,
+         "is_multi_activity": False, "parent_id": 1, "parent_name": "Sales Support",
+         "call_routes": [
+             {"id": 5, "route_id": "SS_SALES_FR", "name": "SS Sales FR"},
+         ],
+         "business_hours": [],
+         "assigned_activities": [
+             {"id": 1, "name": "Calls – Sales", "color": "#2563eb"},
+             {"id": 5, "name": "Break", "color": "#f59e0b"},
+             {"id": 6, "name": "Lunch", "color": "#ef4444"},
+         ],
+         "parameters": []},
         {"id": 2, "name": "Tech Help Desk", "description": "Technical support and troubleshooting",
          "timezone": "America/Toronto", "is_active": True, "employee_count": 7,
+         "is_multi_activity": False, "parent_id": None, "parent_name": None,
+         "call_routes": [
+             {"id": 6, "route_id": "Tech_Support_L2", "name": "Tech Support L2"},
+         ],
          "business_hours": [
              {"day": "Monday", "open": "07:00", "close": "22:00"},
              {"day": "Tuesday", "open": "07:00", "close": "22:00"},
@@ -1566,6 +1602,10 @@ def get_demo_planning_units_config():
          ]},
         {"id": 3, "name": "Billing", "description": "Billing inquiries and payment processing",
          "timezone": "America/Toronto", "is_active": True, "employee_count": 6,
+         "is_multi_activity": False, "parent_id": None, "parent_name": None,
+         "call_routes": [
+             {"id": 7, "route_id": "Billing-Collections", "name": "Billing Collections"},
+         ],
          "business_hours": [
              {"day": "Monday", "open": "08:00", "close": "18:00"},
              {"day": "Tuesday", "open": "08:00", "close": "18:00"},
