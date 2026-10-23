@@ -183,6 +183,58 @@ def get_demo_accommodations():
     return list(DEMO_ACCOMMODATIONS), None
 
 
+def get_demo_loa():
+    """Return demo Leave of Absence records."""
+    import datetime as _dt
+    today = _dt.date.today()
+    return [
+        {
+            "id": 9001,
+            "employee_id": 1003,
+            "employee_name": "Casey Chen",
+            "leave_type": "Medical",
+            "start_date": (today - _dt.timedelta(days=45)).isoformat(),
+            "expected_return_date": (today + _dt.timedelta(days=15)).isoformat(),
+            "actual_return_date": "",
+            "status": "Active",
+            "notes": "Scheduled surgery — reduced schedule accommodation already in place",
+        },
+        {
+            "id": 9002,
+            "employee_id": 2003,
+            "employee_name": "Drew Campbell",
+            "leave_type": "Parental",
+            "start_date": (today - _dt.timedelta(days=90)).isoformat(),
+            "expected_return_date": (today - _dt.timedelta(days=10)).isoformat(),
+            "actual_return_date": (today - _dt.timedelta(days=10)).isoformat(),
+            "status": "Returned",
+            "notes": "Parental leave — returned on schedule",
+        },
+        {
+            "id": 9003,
+            "employee_id": 3001,
+            "employee_name": "Harper Wilson",
+            "leave_type": "Personal",
+            "start_date": (today + _dt.timedelta(days=5)).isoformat(),
+            "expected_return_date": (today + _dt.timedelta(days=19)).isoformat(),
+            "actual_return_date": "",
+            "status": "Active",
+            "notes": "Personal leave — two weeks",
+        },
+        {
+            "id": 9004,
+            "employee_id": 2006,
+            "employee_name": "Dakota Singh",
+            "leave_type": "Workers' Compensation",
+            "start_date": (today - _dt.timedelta(days=30)).isoformat(),
+            "expected_return_date": "",
+            "actual_return_date": "",
+            "status": "Extended",
+            "notes": "Workplace injury — return date TBD pending medical clearance",
+        },
+    ]
+
+
 def get_demo_pto():
     """Return (pto_list, None)."""
     return _demo_pto(), None

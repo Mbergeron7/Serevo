@@ -302,6 +302,18 @@ def accommodations():
 def loa():
     user = get_current_user()
 
+    if user and user.get("is_demo"):
+        from app.demo_data import get_demo_loa, get_demo_employees
+        loa_records = get_demo_loa()
+        demo_emps, _ = get_demo_employees()
+        emp_list = [{"id": i + 1, "name": f'{e["First Name"]} {e["Last Name"]}'} for i, e in enumerate(demo_emps) if e.get("Status") == "Active"]
+        return render_template("people/loa.html",
+            user=user,
+            loa_records=loa_records,
+            leave_types=LEAVE_TYPES,
+            emp_list=emp_list,
+        )
+
     loa_records = []
     try:
         all_loa = LeaveOfAbsence.query.order_by(LeaveOfAbsence.start_date.desc()).all()
