@@ -500,8 +500,8 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
     Returns a list of header + data rows in the format sync_call_volume expects.
     """
     col_map = _match_columns(headers, _EVENT_CALL_COL_ALIASES, custom_mapping=custom_mapping)
-    log.info(f"[EVENT-AGG] col_map keys: {list(col_map.keys())}, custom_mapping: {custom_mapping}")
-    log.info(f"[EVENT-AGG] 'wait_time' in col_map: {'wait_time' in col_map}, headers: {headers}")
+    log.info(f"[EVENT-AGG] ALL SOURCE HEADERS: {headers}")
+    log.info(f"[EVENT-AGG] col_map: {col_map}, custom_mapping: {custom_mapping}")
 
     if "timestamp" not in col_map:
         return [["date", "time", "lob", "offered", "answered", "abandoned",
