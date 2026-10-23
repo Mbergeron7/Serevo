@@ -798,7 +798,7 @@ def agents_by_lob():
     if pu_id:
         try:
             employees = Employee.query.filter_by(
-                planning_unit_id=pu_id, is_active=True
+                planning_unit_id=pu_id, status="Active"
             ).order_by(Employee.last_name, Employee.first_name).all()
             emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
         except Exception:
@@ -811,7 +811,7 @@ def agents_by_lob():
             seen = set()
             for g in groups:
                 for m in g.members:
-                    if m.active and m.employee and m.employee.is_active and m.employee_id not in seen:
+                    if m.active and m.employee and m.employee.status == "Active" and m.employee_id not in seen:
                         seen.add(m.employee_id)
                         e = m.employee
                         emp_list.append({"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""})
@@ -822,7 +822,7 @@ def agents_by_lob():
     # 3) Fallback: all active employees
     if not emp_list:
         try:
-            employees = Employee.query.filter_by(is_active=True).order_by(Employee.last_name, Employee.first_name).all()
+            employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
             emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
         except Exception:
             pass
