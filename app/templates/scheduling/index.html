@@ -344,46 +344,63 @@
   .cov-crit  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
   .cov-zero  { background: var(--bg); color: var(--text-muted); }
 
-  /* ── Forecast demand heat map ────────────────────── */
+  /* ── Forecast demand heat map — sticky band ─────── */
   .demand-heatmap {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
-    overflow: hidden; margin-bottom: 20px;
+    overflow: hidden; margin-bottom: 12px;
+    position: sticky; top: 0; z-index: 20;
   }
   .demand-heatmap-header {
-    padding: 12px 20px; font-weight: 700; font-size: .9rem;
+    padding: 8px 16px; font-weight: 700; font-size: .82rem;
     border-bottom: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center;
-    cursor: pointer; user-select: none;
+    background: var(--brand-accent); color: #fff;
+    user-select: none;
   }
-  .demand-heatmap-header:hover { background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
+  .demand-heatmap-header .demand-subtitle { font-weight: 400; font-size: .72rem; opacity: .85; }
+  .demand-heatmap-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--bg); font-size: .72rem;
+  }
+  .demand-tab {
+    padding: 6px 16px; border: none; background: transparent;
+    font-size: .72rem; font-weight: 600; cursor: pointer;
+    color: var(--text-muted); border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .demand-tab:hover { color: var(--text); background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
+  .demand-tab.active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); }
   .demand-heatmap-body { padding: 0; }
-  .demand-heatmap-body.collapsed { display: none; }
   .demand-table {
-    width: 100%; border-collapse: collapse; font-size: .78rem;
+    width: 100%; border-collapse: collapse; font-size: .72rem;
   }
   .demand-table th {
-    padding: 6px 4px; text-align: center; font-size: .68rem;
+    padding: 4px 3px; text-align: center; font-size: .62rem;
     font-weight: 700; color: var(--text-muted); text-transform: uppercase;
-    letter-spacing: .03em; border-bottom: 2px solid var(--border);
-    position: sticky; top: 0; background: var(--surface); z-index: 1;
+    letter-spacing: .03em; border-bottom: 1px solid var(--border);
+    background: var(--surface); white-space: nowrap;
   }
-  .demand-table th:first-child { text-align: left; padding-left: 16px; }
-  .demand-table td { padding: 5px 4px; text-align: center; }
+  .demand-table th:first-child { text-align: left; padding-left: 12px; min-width: 120px; }
+  .demand-table td { padding: 3px 3px; text-align: center; }
   .demand-table td:first-child {
-    text-align: left; padding-left: 16px; font-weight: 600;
+    text-align: left; padding-left: 12px; font-weight: 600;
     white-space: nowrap; position: sticky; left: 0;
     background: var(--surface); z-index: 1;
   }
   .demand-table .pu-parent td:first-child { font-weight: 800; }
-  .demand-table .pu-child td:first-child { padding-left: 28px; font-weight: 500; font-size: .75rem; }
+  .demand-table .pu-child td:first-child { padding-left: 24px; font-weight: 500; font-size: .68rem; }
   .demand-table .pu-total td { font-weight: 800; border-top: 2px solid var(--text); }
-  .demand-cell { border-radius: 3px; min-width: 36px; }
+  .demand-cell { border-radius: 2px; min-width: 28px; }
   .demand-low  { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
   .demand-med  { background: color-mix(in srgb, #d97706 18%, transparent); color: #d97706; }
   .demand-high { background: color-mix(in srgb, #dc2626 18%, transparent); color: #dc2626; }
   .demand-zero { color: var(--text-muted); }
-  .demand-scroll { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+  .demand-scroll { overflow-x: auto; max-height: 220px; overflow-y: auto; }
+  /* Coverage dock rows in heat map */
+  .demand-table .cov-row td { border-top: 1px dashed var(--border); font-style: italic; }
+  .demand-table .cov-surplus { color: #059669; font-weight: 700; }
+  .demand-table .cov-deficit { color: #dc2626; font-weight: 700; }
 
   /* ── Summary tables ────────────────────────────── */
   .summary-table {
@@ -721,11 +738,16 @@
 <!-- ── Global warnings ────────────────────────────────────── -->
 <div id="globalWarnings" class="warning-list" style="display:none;margin-bottom:12px;padding:12px 16px;background:color-mix(in srgb, #d97706 10%, transparent);border-radius:var(--radius);font-size:.85rem;"></div>
 
-<!-- ── Forecast demand heat map ───────────────────────────── -->
+<!-- ── Forecast demand heat map (sticky band) ────────────── -->
 <div id="demandHeatmap" class="demand-heatmap" style="display:none">
-  <div class="demand-heatmap-header" onclick="toggleDemandHeatmap()">
-    <span><span id="demandToggleIcon">▼</span> Forecast Demand</span>
-    <span id="demandSubtitle" style="font-weight:400;font-size:.78rem;color:var(--text-muted)"></span>
+  <div class="demand-heatmap-header">
+    <span>📊 Forecast Demand</span>
+    <span class="demand-subtitle" id="demandSubtitle"></span>
+  </div>
+  <div class="demand-heatmap-tabs">
+    <button class="demand-tab active" data-dtab="demand" onclick="switchDemandTab('demand')">Demand</button>
+    <button class="demand-tab" data-dtab="coverage" onclick="switchDemandTab('coverage')">Coverage</button>
+    <button class="demand-tab" data-dtab="staffing" onclick="switchDemandTab('staffing')">Staffing</button>
   </div>
   <div class="demand-heatmap-body" id="demandHeatmapBody">
     <div class="demand-scroll">
@@ -4356,12 +4378,12 @@ function submitCopyWeek() {
 // FORECAST DEMAND HEAT MAP
 // ═══════════════════════════════════════════════════════════
 let demandData = null;
-let demandCollapsed = false;
+let currentDemandTab = 'demand';
 
-function toggleDemandHeatmap() {
-  demandCollapsed = !demandCollapsed;
-  document.getElementById('demandHeatmapBody').classList.toggle('collapsed', demandCollapsed);
-  document.getElementById('demandToggleIcon').textContent = demandCollapsed ? '▶' : '▼';
+function switchDemandTab(tab) {
+  currentDemandTab = tab;
+  document.querySelectorAll('.demand-tab').forEach(t => t.classList.toggle('active', t.dataset.dtab === tab));
+  renderDemandHeatmap();
 }
 
 function loadDemandHeatmap() {
@@ -4396,7 +4418,6 @@ function loadDemandHeatmap() {
 function renderDemandHeatmap() {
   if (!demandData || !demandData.length) return;
 
-  // Collect all unique time slots across all units/days
   const allTimes = new Set();
   for (const unit of demandData) {
     for (const day of unit.days) {
@@ -4406,7 +4427,6 @@ function renderDemandHeatmap() {
   const times = Array.from(allTimes).sort();
   if (!times.length) return;
 
-  // Build header: PU name | time slots
   const thead = document.getElementById('demandHead');
   const startStr = document.getElementById('cfgStart').value;
   const endStr = document.getElementById('cfgEnd').value;
@@ -4414,23 +4434,27 @@ function renderDemandHeatmap() {
   const showDaily = numDays <= 1;
 
   const subtitle = document.getElementById('demandSubtitle');
+  const tabLabel = currentDemandTab === 'coverage' ? 'Coverage (Scheduled − Required)' :
+                   currentDemandTab === 'staffing' ? 'Scheduled agents' : 'Agents required';
 
-  if (showDaily) {
-    // Single day: columns are time intervals
-    subtitle.textContent = `${startStr} — Agents required per interval`;
-    thead.innerHTML = '<tr><th>Planning Unit</th>' +
-      times.map(t => `<th>${t}</th>`).join('') +
-      '<th>Peak</th><th>Avg</th></tr>';
-  } else {
-    // Multi-day: columns are dates, cells show peak requirement
-    const dates = [];
+  // Collect dates for multi-day
+  let dates = [];
+  if (!showDaily) {
     for (const unit of demandData) {
       for (const day of unit.days) {
         if (!dates.includes(day.date)) dates.push(day.date);
       }
     }
     dates.sort();
-    subtitle.textContent = `${startStr} to ${endStr} — Peak agents required per day`;
+  }
+
+  if (showDaily) {
+    subtitle.textContent = `${startStr} — ${tabLabel} per interval`;
+    thead.innerHTML = '<tr><th>Planning Unit</th>' +
+      times.map(t => `<th>${t}</th>`).join('') +
+      '<th>Peak</th><th>Avg</th></tr>';
+  } else {
+    subtitle.textContent = `${startStr} to ${endStr} — ${tabLabel} per day`;
     const dayLabels = dates.map(d => {
       const dt = new Date(d + 'T12:00:00');
       return dt.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
@@ -4440,7 +4464,7 @@ function renderDemandHeatmap() {
       '<th>Peak</th><th>Avg</th></tr>';
   }
 
-  // Find global max for color scaling
+  // Find global max for color scaling (always from demand data)
   let globalMax = 0;
   for (const unit of demandData) {
     for (const day of unit.days) {
@@ -4452,8 +4476,6 @@ function renderDemandHeatmap() {
 
   const tbody = document.getElementById('demandBody');
   let html = '';
-
-  // Totals accumulators
   const totalsByCol = {};
 
   for (const unit of demandData) {
@@ -4462,47 +4484,93 @@ function renderDemandHeatmap() {
     let peak = 0, sum = 0, cnt = 0;
 
     if (showDaily && unit.days.length) {
-      // Single day: one cell per time interval
       const ivMap = {};
       for (const iv of unit.days[0].intervals) ivMap[iv.time] = iv;
       for (const t of times) {
         const iv = ivMap[t];
-        const val = iv ? iv.agents_required : 0;
-        if (val > peak) peak = val;
-        sum += val; cnt++;
+        let val, tooltip, cls;
+
+        if (currentDemandTab === 'demand') {
+          val = iv ? iv.agents_required : 0;
+          tooltip = `${t}: ${val} required`;
+          cls = demandCellClass(val, globalMax);
+        } else if (currentDemandTab === 'staffing') {
+          // Staffing: how many agents are scheduled for this interval
+          val = iv ? (iv.scheduled || 0) : 0;
+          tooltip = `${t}: ${val} scheduled`;
+          cls = val > 0 ? 'demand-low' : 'demand-zero';
+        } else {
+          // Coverage: scheduled - required
+          const req = iv ? iv.agents_required : 0;
+          const sched = iv ? (iv.scheduled || 0) : 0;
+          val = sched - req;
+          tooltip = `${t}: ${sched} scheduled / ${req} required (${val >= 0 ? '+' : ''}${val})`;
+          cls = val >= 0 ? 'cov-surplus' : 'cov-deficit';
+        }
+
+        if (currentDemandTab !== 'coverage') {
+          if (val > peak) peak = val;
+          sum += val; cnt++;
+        } else {
+          if (Math.abs(val) > Math.abs(peak)) peak = val;
+          sum += val; cnt++;
+        }
         totalsByCol[t] = (totalsByCol[t] || 0) + val;
-        const cls = demandCellClass(val, globalMax);
-        cells += `<td class="demand-cell ${cls}" title="${t}: ${val} required${iv ? ', ' + iv.offered + ' offered' : ''}">${val || ''}</td>`;
-      }
-    } else {
-      // Multi-day: one cell per date showing peak requirement
-      const dates = [];
-      for (const u of demandData) {
-        for (const day of u.days) {
-          if (!dates.includes(day.date)) dates.push(day.date);
+
+        if (currentDemandTab === 'coverage') {
+          const dispVal = val === 0 ? '0' : (val > 0 ? '+' + val : String(val));
+          cells += `<td class="demand-cell ${cls}" title="${tooltip}">${dispVal}</td>`;
+        } else {
+          cells += `<td class="demand-cell ${cls}" title="${tooltip}">${val || ''}</td>`;
         }
       }
-      dates.sort();
+    } else {
       const dayMap = {};
       for (const day of unit.days) dayMap[day.date] = day;
       for (const d of dates) {
         const day = dayMap[d];
-        let dayPeak = 0;
-        if (day) {
-          for (const iv of day.intervals) {
-            if (iv.agents_required > dayPeak) dayPeak = iv.agents_required;
-          }
+        let val, cls;
+
+        if (currentDemandTab === 'demand') {
+          let dayPeak = 0;
+          if (day) { for (const iv of day.intervals) { if (iv.agents_required > dayPeak) dayPeak = iv.agents_required; } }
+          val = dayPeak;
+          cls = demandCellClass(val, globalMax);
+        } else if (currentDemandTab === 'staffing') {
+          let dayMax = 0;
+          if (day) { for (const iv of day.intervals) { const s = iv.scheduled || 0; if (s > dayMax) dayMax = s; } }
+          val = dayMax;
+          cls = val > 0 ? 'demand-low' : 'demand-zero';
+        } else {
+          // Coverage: worst gap of the day
+          let worstGap = 0;
+          if (day) { for (const iv of day.intervals) { const gap = (iv.scheduled || 0) - iv.agents_required; if (Math.abs(gap) > Math.abs(worstGap)) worstGap = gap; } }
+          val = worstGap;
+          cls = val >= 0 ? 'cov-surplus' : 'cov-deficit';
         }
-        if (dayPeak > peak) peak = dayPeak;
-        sum += dayPeak; cnt++;
-        totalsByCol[d] = (totalsByCol[d] || 0) + dayPeak;
-        const cls = demandCellClass(dayPeak, globalMax);
-        cells += `<td class="demand-cell ${cls}">${dayPeak || ''}</td>`;
+
+        if (currentDemandTab !== 'coverage') {
+          if (val > peak) peak = val;
+        } else {
+          if (Math.abs(val) > Math.abs(peak)) peak = val;
+        }
+        sum += val; cnt++;
+        totalsByCol[d] = (totalsByCol[d] || 0) + val;
+
+        if (currentDemandTab === 'coverage') {
+          const dispVal = val === 0 ? '0' : (val > 0 ? '+' + val : String(val));
+          cells += `<td class="demand-cell ${cls}">${dispVal}</td>`;
+        } else {
+          cls = demandCellClass(val, globalMax);
+          cells += `<td class="demand-cell ${cls}">${val || ''}</td>`;
+        }
       }
     }
 
     const avg = cnt > 0 ? Math.round(sum / cnt * 10) / 10 : 0;
-    html += `<tr class="${rowClass}"><td>${unit.name}</td>${cells}<td style="font-weight:700">${peak}</td><td>${avg}</td></tr>`;
+    const peakDisp = currentDemandTab === 'coverage' ? (peak >= 0 ? '+' + peak : String(peak)) : peak;
+    const avgDisp = currentDemandTab === 'coverage' ? (avg >= 0 ? '+' + avg : String(avg)) : avg;
+    html += `<tr class="${rowClass}"><td>${unit.name}</td>${cells}<td style="font-weight:700">${peakDisp}</td><td>${avgDisp}</td></tr>`;
   }
 
   // Total row (if multiple units)
@@ -4512,13 +4580,24 @@ function renderDemandHeatmap() {
     const colKeys = showDaily ? times : Object.keys(totalsByCol).sort();
     for (const k of colKeys) {
       const val = totalsByCol[k] || 0;
-      if (val > totalPeak) totalPeak = val;
+      if (currentDemandTab !== 'coverage') {
+        if (val > totalPeak) totalPeak = val;
+      } else {
+        if (Math.abs(val) > Math.abs(totalPeak)) totalPeak = val;
+      }
       totalSum += val; totalCnt++;
-      const cls = demandCellClass(val, globalMax * demandData.length);
-      totalCells += `<td class="demand-cell" style="font-weight:800">${val || ''}</td>`;
+      if (currentDemandTab === 'coverage') {
+        const d = val === 0 ? '0' : (val > 0 ? '+' + val : String(val));
+        const cls = val >= 0 ? 'cov-surplus' : 'cov-deficit';
+        totalCells += `<td class="demand-cell ${cls}" style="font-weight:800">${d}</td>`;
+      } else {
+        totalCells += `<td class="demand-cell" style="font-weight:800">${val || ''}</td>`;
+      }
     }
     const totalAvg = totalCnt > 0 ? Math.round(totalSum / totalCnt * 10) / 10 : 0;
-    html += `<tr class="pu-total"><td>TOTAL</td>${totalCells}<td style="font-weight:800">${totalPeak}</td><td style="font-weight:800">${totalAvg}</td></tr>`;
+    const tpDisp = currentDemandTab === 'coverage' ? (totalPeak >= 0 ? '+' + totalPeak : String(totalPeak)) : totalPeak;
+    const taDisp = currentDemandTab === 'coverage' ? (totalAvg >= 0 ? '+' + totalAvg : String(totalAvg)) : totalAvg;
+    html += `<tr class="pu-total"><td>TOTAL</td>${totalCells}<td style="font-weight:800">${tpDisp}</td><td style="font-weight:800">${taDisp}</td></tr>`;
   }
 
   tbody.innerHTML = html;

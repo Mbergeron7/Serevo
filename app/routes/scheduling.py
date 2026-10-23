@@ -434,6 +434,65 @@ def coverage():
         return jsonify({"success": False, "error": str(e)})
 
 
+def _demo_forecast_demand(lob, start_date, end_date):
+    """Generate realistic demo forecast-demand data with parent + child PUs."""
+    import datetime as _dt, math, random
+    random.seed(42)
+
+    # Map LOB to PU names
+    pu_map = {
+        "SS Sales": ["SS Sales Combined", "SS Sales FR", "SS Sales EN"],
+        "SS Service": ["SS Service Combined", "SS Service FR", "SS Service EN"],
+    }
+    children = pu_map.get(lob, [f"{lob} Combined", f"{lob} FR", f"{lob} EN"])
+
+    def _make_intervals(date_obj, base_peak, split_ratio):
+        """Generate 15-min intervals 8:00-20:00 with realistic call curve."""
+        intervals = []
+        for h in range(8, 20):
+            for m in (0, 15, 30, 45):
+                t_frac = (h - 8) / 12.0
+                # Bell curve peaking at 10:30 and 14:00
+                curve = (math.exp(-((t_frac - 0.21) ** 2) / 0.03) +
+                         0.7 * math.exp(-((t_frac - 0.5) ** 2) / 0.04))
+                # Day-of-week factor (Mon heavy, Fri/Sat light)
+                dow = date_obj.weekday()
+                dow_factor = [1.15, 1.05, 1.0, 0.95, 0.85, 0.5, 0.3][dow]
+                agents = max(1, round(base_peak * curve * dow_factor * split_ratio *
+                                      (1 + random.uniform(-0.08, 0.08))))
+                intervals.append({
+                    "time": f"{h:02d}:{m:02d}",
+                    "offered": round(agents * 4.2 + random.uniform(-2, 2), 1),
+                    "aht": round(280 + random.uniform(-20, 20), 1),
+                    "agents_required": agents,
+                    "scheduled": max(0, agents + random.randint(-2, 3)),
+                })
+        return intervals
+
+    units = []
+    current = start_date
+    # Pre-build days for each unit
+    combined_days, fr_days, en_days = [], [], []
+    while current <= end_date:
+        combined_days.append({"date": current.strftime("%Y-%m-%d"),
+                              "intervals": _make_intervals(current, 18, 1.0)})
+        fr_days.append({"date": current.strftime("%Y-%m-%d"),
+                        "intervals": _make_intervals(current, 18, 0.35)})
+        en_days.append({"date": current.strftime("%Y-%m-%d"),
+                        "intervals": _make_intervals(current, 18, 0.65)})
+        current += _dt.timedelta(days=1)
+
+    units.append({"name": lob, "is_parent": True, "days": combined_days})
+    if len(children) >= 1:
+        units.append({"name": children[0], "is_parent": False, "days": combined_days})
+    if len(children) >= 2:
+        units.append({"name": children[1], "is_parent": False, "days": fr_days})
+    if len(children) >= 3:
+        units.append({"name": children[2], "is_parent": False, "days": en_days})
+
+    return jsonify({"success": True, "units": units})
+
+
 # ── Forecast demand heat map (API) ────────────────────────────
 @scheduling_bp.route("/forecast-demand", methods=["POST"])
 @login_required
@@ -462,7 +521,7 @@ def forecast_demand():
 
         user = get_current_user()
         if user and user.get("is_demo"):
-            return jsonify({"success": True, "units": []})
+            return _demo_forecast_demand(lob, start_date, end_date)
 
         # Find the planning unit
         unit = PlanningUnit.query.filter(

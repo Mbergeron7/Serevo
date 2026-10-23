@@ -356,6 +356,17 @@
       </ul>
       <p>Hover over any bar to see the exact numbers and gap for that interval.</p>
 
+      <h3>Forecast Demand Heat Map</h3>
+      <p>A sticky heat-map band sits at the top of the scheduling page, showing forecast demand across all planning units. When you select a parent LOB (e.g., SS Sales), the heat map automatically displays the parent and its child planning units (e.g., SS Sales Combined, SS Sales FR, SS Sales EN) so you can see all demand simultaneously.</p>
+      <p>The heat map has three tabs:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Demand</strong> — agents required per interval (single day) or peak agents required per day (multi-day). Cells are color-coded from green (low) through yellow to red (high demand).</li>
+        <li><strong>Coverage</strong> — the difference between scheduled agents and required agents. <span style="color:#059669;font-weight:600;">Green positive values</span> mean surplus; <span style="color:#dc2626;font-weight:600;">red negative values</span> mean deficit.</li>
+        <li><strong>Staffing</strong> — how many agents are actually scheduled per interval or day, regardless of demand.</li>
+      </ul>
+      <p>Each tab shows Peak and Average summary columns on the right. When multiple planning units are displayed, a TOTAL row aggregates values across all units.</p>
+      <p>The heat map updates automatically whenever you change the LOB or date range in the configuration panel.</p>
+
       <h3>Importing Schedules from a Connected WFM System</h3>
       <p>If you have an external WFM system connected via <strong>Settings &rarr; API Connections</strong>, you can pull published schedules directly:</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
