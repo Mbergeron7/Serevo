@@ -24,7 +24,7 @@ def upgrade():
     single_route_pus = conn.execute(sa.text("""
         SELECT planning_unit_id, MIN(route_id) AS route_id
         FROM call_routes
-        WHERE is_active = 1 OR is_active = true
+        WHERE is_active = true
         GROUP BY planning_unit_id
         HAVING COUNT(*) = 1
     """)).fetchall()
