@@ -164,14 +164,30 @@ def _parse_duration_mins(dur_str):
 
 
 # ── LOB → Planning Unit mapping ─────────────────────────────────
+import time as _time
+
+_lob_pu_cache = {}       # cached mappings dict
+_pu_names_cache = set()  # cached PU names
+_lob_cache_ts = 0        # timestamp of last cache load
+_LOB_CACHE_TTL = 60      # seconds
+
 def _load_lob_to_pu():
-    """Load LOB→PlanningUnit mappings from the database LobMapping table."""
+    """Load LOB→PlanningUnit mappings from the database LobMapping table.
+    Cached for 60 seconds to avoid repeated queries."""
+    global _lob_pu_cache, _pu_names_cache, _lob_cache_ts
+    now = _time.time()
+    if now - _lob_cache_ts < _LOB_CACHE_TTL and _lob_pu_cache is not None:
+        return _lob_pu_cache, _pu_names_cache
     try:
-        from app.models import LobMapping
-        return {m.source_name: m.planning_unit_name
-                for m in LobMapping.query.all()}
+        from app.models import LobMapping, PlanningUnit
+        _lob_pu_cache = {m.source_name: m.planning_unit_name
+                         for m in LobMapping.query.all()}
+        _pu_names_cache = {pu.name for pu in PlanningUnit.query.all()}
+        _lob_cache_ts = now
     except Exception:
-        return {}
+        _lob_pu_cache = {}
+        _pu_names_cache = set()
+    return _lob_pu_cache, _pu_names_cache
 
 
 def lob_to_planning_unit(lob_name):
@@ -184,16 +200,9 @@ def lob_to_planning_unit(lob_name):
          combined LOBs resolve automatically without manual mappings.
       3. Fall back to the original LOB name (identity mapping).
     """
-    mappings = _load_lob_to_pu()
+    mappings, pu_names = _load_lob_to_pu()
     if lob_name in mappings:
         return mappings[lob_name]
-
-    # Auto-strip suffixes and check against real PU names
-    from app.models import PlanningUnit
-    try:
-        pu_names = {pu.name for pu in PlanningUnit.query.all()}
-    except Exception:
-        return lob_name
 
     for suffix in (" EN", " FR", " Combined"):
         if lob_name.endswith(suffix):
