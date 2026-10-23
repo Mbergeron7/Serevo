@@ -762,12 +762,15 @@ def forecast_api_intervals():
                 .order_by(IntervalActual.timestamp)
                 .all()
             )
+            log.info(f"[FC-ACTUALS] lob={lob!r} pu_id={unit.id} date={target_date}: {len(rows)} IntervalActual rows")
             for row in rows:
                 t = row.timestamp.strftime("%H:%M")
                 actual_map[t] = {
                     "offered": round(float(row.offered or 0), 1),
                     "aht": round(float(row.aht_secs or 0), 1),
                 }
+                if "care" in lob.lower():
+                    log.info(f"[FC-ACTUALS]   ts={row.timestamp}, offered={row.offered}, route_id={row.route_id}, source={row.source}")
 
         # Load forecast intervals
         fc_rows = (
