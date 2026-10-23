@@ -434,6 +434,150 @@ def coverage():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ── Forecast demand heat map (API) ────────────────────────────
+@scheduling_bp.route("/forecast-demand", methods=["POST"])
+@login_required
+def forecast_demand():
+    """Return interval-level forecast demand for a PU and its children over a date range.
+
+    POST JSON: {lob, start_date, end_date}
+    Returns: {success, units: [{name, days: [{date, intervals: [{time, offered, aht, agents_required}]}]}]}
+    """
+    from app.models import PlanningUnit, ForecastInterval, RequirementInterval, CallRoute, IntervalActual
+    from app.data_source import normalize_lob
+    from sqlalchemy import func as sa_func
+    import datetime as _dt
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = payload.get("lob", "").strip()
+        start_str = payload.get("start_date", "")
+        end_str = payload.get("end_date", "")
+
+        if not lob or not start_str or not end_str:
+            return jsonify({"success": False, "error": "lob, start_date, and end_date are required"})
+
+        start_date = datetime.datetime.strptime(start_str[:10], "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_str[:10], "%Y-%m-%d").date()
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            return jsonify({"success": True, "units": []})
+
+        # Find the planning unit
+        unit = PlanningUnit.query.filter(
+            sa_func.lower(PlanningUnit.name) == lob.lower()
+        ).first()
+        if not unit:
+            lob_normalized = normalize_lob(lob)
+            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        if not unit:
+            return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
+
+        # Build list of units to display: the selected PU + children if it's a parent
+        units_to_fetch = [unit]
+        if unit.children:
+            units_to_fetch.extend([c for c in unit.children if c.is_active])
+
+        today = datetime.date.today() if hasattr(datetime, 'date') else _dt.date.today()
+        results = []
+
+        for pu in units_to_fetch:
+            # Determine where actuals/forecasts live
+            actuals_pu_id = pu.id
+            route_id_filter = None
+            fc_pu_id = pu.id
+
+            if pu.parent_id:
+                actuals_pu_id = pu.parent_id
+                route_ids = [
+                    cr.route_id for cr in
+                    CallRoute.query.filter_by(planning_unit_id=pu.id, is_active=True).all()
+                ]
+                if route_ids:
+                    route_id_filter = route_ids
+
+            unit_days = []
+            current = start_date
+            while current <= end_date:
+                day_start = _dt.datetime.combine(current, _dt.time.min)
+                day_end = _dt.datetime.combine(current, _dt.time.max)
+
+                # Get requirements
+                reqs = RequirementInterval.query.filter(
+                    RequirementInterval.planning_unit_id == pu.id,
+                    RequirementInterval.timestamp >= day_start,
+                    RequirementInterval.timestamp <= day_end,
+                ).all()
+                req_map = {}
+                for r in reqs:
+                    t = r.timestamp.strftime("%H:%M")
+                    req_map[t] = r.agents_required
+
+                # Get forecast or actuals
+                intervals = []
+                if current <= today:
+                    # Use actuals
+                    q = IntervalActual.query.filter(
+                        IntervalActual.planning_unit_id == actuals_pu_id,
+                        IntervalActual.timestamp >= day_start,
+                        IntervalActual.timestamp <= day_end,
+                    )
+                    if route_id_filter:
+                        q = q.filter(IntervalActual.route_id.in_(route_id_filter))
+
+                    rows = q.all()
+                    # Aggregate by time slot
+                    slot_data = defaultdict(lambda: {"offered": 0, "aht_sum": 0, "aht_cnt": 0})
+                    for row in rows:
+                        t = row.timestamp.strftime("%H:%M")
+                        slot_data[t]["offered"] += row.offered or 0
+                        if row.aht and row.aht > 0:
+                            slot_data[t]["aht_sum"] += row.aht * (row.offered or 1)
+                            slot_data[t]["aht_cnt"] += row.offered or 1
+
+                    for t in sorted(slot_data.keys()):
+                        d = slot_data[t]
+                        aht = round(d["aht_sum"] / d["aht_cnt"], 1) if d["aht_cnt"] > 0 else 0
+                        intervals.append({
+                            "time": t,
+                            "offered": round(d["offered"], 1),
+                            "aht": aht,
+                            "agents_required": req_map.get(t, 0),
+                        })
+                else:
+                    # Use forecasts
+                    fcs = ForecastInterval.query.filter(
+                        ForecastInterval.planning_unit_id == pu.id,
+                        ForecastInterval.timestamp >= day_start,
+                        ForecastInterval.timestamp <= day_end,
+                    ).all()
+                    for fc in sorted(fcs, key=lambda f: f.timestamp):
+                        t = fc.timestamp.strftime("%H:%M")
+                        intervals.append({
+                            "time": t,
+                            "offered": round(fc.offered or 0, 1),
+                            "aht": round(fc.aht or 0, 1),
+                            "agents_required": req_map.get(t, 0),
+                        })
+
+                if intervals:
+                    unit_days.append({"date": current.strftime("%Y-%m-%d"), "intervals": intervals})
+                current += _dt.timedelta(days=1)
+
+            results.append({
+                "name": pu.name,
+                "is_parent": pu.parent_id is None and len(list(pu.children)) > 0,
+                "days": unit_days,
+            })
+
+        return jsonify({"success": True, "units": results})
+
+    except Exception as e:
+        log.exception("forecast-demand error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ═════════════════════════════════════════════════════════════
 # SCHEDULE CRUD — Persistent DB operations
 # ═════════════════════════════════════════════════════════════
