@@ -2058,17 +2058,16 @@ def get_available_lobs(sheet=None):
             lob = (emp.get("Latest Skill Name") or "").strip()
             if lob:
                 lobs.add(lob)
-        # Fallback 1: pull directly from PlanningUnit table
-        if not lobs:
-            try:
-                from app.models import PlanningUnit
-                units = PlanningUnit.query.filter_by(is_active=True).all()
-                for u in units:
-                    name = (u.name or "").strip()
-                    if name:
-                        lobs.add(name)
-            except Exception:
-                pass
+        # Always merge in PlanningUnit table (not just as fallback)
+        try:
+            from app.models import PlanningUnit
+            units = PlanningUnit.query.filter_by(is_active=True).all()
+            for u in units:
+                name = (u.name or "").strip()
+                if name:
+                    lobs.add(name)
+        except Exception:
+            pass
         # Fallback 2: try the Google Sheet directly if still no LOBs
         if not lobs and sheet is None:
             try:
