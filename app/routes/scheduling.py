@@ -531,8 +531,7 @@ def forecast_demand():
             lob_normalized = normalize_lob(lob)
             unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
         if not unit:
-            # No real PU in DB — fall back to demo forecast data
-            return _demo_forecast_demand(lob, start_date, end_date)
+            return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
 
         # Build list of units to display: the selected PU + children if it's a parent
         units_to_fetch = [unit]

@@ -4468,7 +4468,7 @@ function loadDemandHeatmap() {
   })
   .then(r => r.json())
   .then(data => {
-    console.log('[HeatMap] response:', data.success, 'units:', (data.units||[]).length);
+    console.log('[HeatMap] response:', JSON.stringify(data).substring(0, 300));
     if (!data.success || !data.units || !data.units.length) {
       zone.classList.remove('visible');
       return;
