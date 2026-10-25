@@ -274,12 +274,20 @@ def _get_live_agents_from_sheet():
         first = events[0]
         last = events[-1]
         mins = round((now_est - last["dt"]).total_seconds() / 60, 1)
+        # Check if agent ever had a productive (logged-in) status today
+        _PRODUCTIVE = {"ready", "on-call", "on call", "oncall", "available",
+                       "inbound", "outbound", "acw", "after call work",
+                       "wrap", "wrap-up", "wrapup", "wrap up"}
+        had_productive = any(
+            e["status"].strip().lower() in _PRODUCTIVE for e in events
+        )
         agent_now[uid] = {
             "status": last["status"],
             "current_since": last["dt"].strftime("%H:%M"),
             "minutes_in_status": max(0, mins),
             "first_seen": first["dt"],  # for late detection
             "event_count": len(events),  # number of status events today
+            "had_productive": had_productive,  # ever Ready/On-call today
         }
 
     return agent_now, now_est
@@ -1805,11 +1813,11 @@ def api_live_agents():
                 # 4b) Only activity is from yesterday
                 if first_seen and first_seen.date() < today:
                     continue
-                # 4c) Very few events (≤2) → phantom feed data
-                #     A real logged-in agent generates many status events;
-                #     phantom agents from stale feed data have only 1-2.
-                MIN_EVENTS_UNSCHED = 3
-                if event_count < MIN_EVENTS_UNSCHED:
+                # 4c) Never had a productive status (Ready, On-call, etc.)
+                #     Phantom feed data shows agents in auxiliary statuses
+                #     (Lunch, Break) without ever being in a logged-in state.
+                had_productive = ag.get("had_productive", False)
+                if not had_productive:
                     continue
 
             agent = {
