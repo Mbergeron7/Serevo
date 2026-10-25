@@ -1806,6 +1806,15 @@ def api_live_agents():
             if not_scheduled:
                 first_seen = ag.get("first_seen")
                 event_count = ag.get("event_count", 0)
+                had_productive = ag.get("had_productive", False)
+                import logging as _log
+                _log.getLogger("serevo.realtime").warning(
+                    "Unscheduled agent debug: %s (uid=%s) status=%s "
+                    "first_seen=%s event_count=%d had_productive=%s mins_in_status=%.1f",
+                    emp.full_name, uid, ag["status"],
+                    first_seen, event_count, had_productive,
+                    ag["minutes_in_status"],
+                )
                 # 4a) Any status stuck for 8+ hours → stale
                 STALE_UNSCHED_HOURS = 8
                 if first_seen and (now_est - first_seen).total_seconds() / 3600 >= STALE_UNSCHED_HOURS:
@@ -1816,7 +1825,6 @@ def api_live_agents():
                 # 4c) Never had a productive status (Ready, On-call, etc.)
                 #     Phantom feed data shows agents in auxiliary statuses
                 #     (Lunch, Break) without ever being in a logged-in state.
-                had_productive = ag.get("had_productive", False)
                 if not had_productive:
                     continue
 
