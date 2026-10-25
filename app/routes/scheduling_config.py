@@ -459,7 +459,7 @@ def supporting_data():
         )
     try:
         pus = [{"id": pu.id, "name": pu.name}
-               for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
+               for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
     except Exception as e:
         import traceback; traceback.print_exc()
         pus = []

@@ -9,7 +9,7 @@ import datetime as _dt
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration
+from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration, PlanningUnit
 
 log = logging.getLogger("serevo.quality")
 
@@ -21,7 +21,8 @@ quality_bp = Blueprint("quality", __name__, url_prefix="/quality",
 @login_required
 def index():
     user = get_current_user()
-    return render_template("quality/index.html", user=user)
+    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    return render_template("quality/index.html", user=user, lobs=lobs)
 
 
 # ── API: list evaluations ──────────────────────────────────────

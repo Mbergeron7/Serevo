@@ -67,9 +67,7 @@
   <div class="q-filters">
     <select id="qLob" onchange="loadQuality()">
       <option value="All">All LOBs</option>
-      <option value="Sales Support">Sales Support</option>
-      <option value="Tech Help Desk">Tech Help Desk</option>
-      <option value="Billing">Billing</option>
+      {% for lob in lobs %}<option value="{{ lob }}">{{ lob }}</option>{% endfor %}
     </select>
     <button class="btn btn-primary" style="font-size:.82rem;" onclick="openEvalModal()">+ New Evaluation</button>
   </div>

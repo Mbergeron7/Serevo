@@ -4456,11 +4456,9 @@ function loadDemandHeatmap() {
 
   if (!lob || !startStr || !endStr) {
     zone.classList.remove('visible');
-    console.log('[HeatMap] skipped — missing lob/start/end', {lob, startStr, endStr});
     return;
   }
 
-  console.log('[HeatMap] fetching forecast-demand for', lob, startStr, endStr);
   fetch('/scheduling/forecast-demand', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -4468,7 +4466,6 @@ function loadDemandHeatmap() {
   })
   .then(r => r.json())
   .then(data => {
-    console.log('[HeatMap] response:', JSON.stringify(data).substring(0, 300));
     if (!data.success || !data.units || !data.units.length) {
       zone.classList.remove('visible');
       return;
@@ -4476,7 +4473,6 @@ function loadDemandHeatmap() {
     demandData = data.units;
     renderDemandHeatmap();
     zone.classList.add('visible');
-    console.log('[HeatMap] visible — zone classes:', zone.className);
   })
   .catch(err => { zone.classList.remove('visible'); console.error('[HeatMap] error:', err); });
 }

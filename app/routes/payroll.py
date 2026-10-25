@@ -63,7 +63,7 @@ def list_planning_units():
         return jsonify(planning_units=get_demo_payroll_planning_units())
     try:
         from app.models import PlanningUnit
-        pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+        pus = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
         return jsonify(planning_units=[{"id": p.id, "name": p.name} for p in pus])
     except Exception as exc:
         log.exception("list_planning_units failed")
