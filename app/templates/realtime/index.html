@@ -380,6 +380,8 @@
     .la-ps-time { font-size:.7rem; color:var(--text-muted); flex:0 0 50px; text-align:right; }
     .la-badge-nys { font-size:.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#1565c0; color:#fff; white-space:nowrap; }
     .la-badge-abs { font-size:.68rem; font-weight:600; border-radius:10px; padding:2px 8px; background:#c62828; color:#fff; white-space:nowrap; }
+    .la-dismiss-btn { background:none; border:1px solid rgba(255,255,255,.3); color:#ff6b6b; cursor:pointer; font-size:.65rem; padding:0 4px; border-radius:4px; margin-right:4px; line-height:1.2; vertical-align:middle; }
+    .la-dismiss-btn:hover { background:rgba(255,107,107,.2); border-color:#ff6b6b; }
     .la-adh-badge { font-size:.58rem; border-radius:8px; padding:0px 4px; margin-left:2px; font-weight:600; vertical-align:middle; }
     .la-adh-due { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
     .la-adh-unsch { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
@@ -1525,7 +1527,7 @@ function laBuildCard(lob, agents, showLobTag) {
     const icon=laOverIcon(a);
     let adh;
     if(isOff){adh=a.attendance==="left_early"?'<span class="la-adh-badge" style="background:#c62828;color:#fff">🚪 Left Early</span>':laShiftBadge(a);}
-    else if(isUn){adh=laAdherenceBadge(a)||laShiftBadge(a);}
+    else if(isUn){adh=`<button class="la-dismiss-btn" title="Dismiss for today" onclick="event.stopPropagation();laDismissUnsched('${a.user_id}',this)">✕</button>`+(laAdherenceBadge(a)||laShiftBadge(a));}
     else{adh=laAdherenceBadge(a);}
     const lobTag=showLobTag&&a.lob?`<span class="la-lob-tag">${a.lob}</span>`:"";
     rows+=`<div class="la-row${rc?' '+rc:''}">
@@ -1755,6 +1757,13 @@ function laManualRefresh(){
 }
 
 // Agent detail panel
+function laDismissUnsched(uid,btn){
+  const row=btn.closest('.la-row');
+  if(row)row.style.opacity='0.3';
+  fetch('/realtime/api/dismiss-unsched',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})})
+  .then(r=>r.json()).then(()=>{if(row)row.remove();})
+  .catch(()=>{if(row)row.style.opacity='1';});
+}
 function laOpenPanel(el){
   const uid=el.dataset.uid,name=el.dataset.aname,lob=el.dataset.alob;
   document.getElementById("laPanelName").textContent=name;

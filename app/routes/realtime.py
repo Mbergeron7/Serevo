@@ -16,6 +16,28 @@ log = logging.getLogger("serevo.realtime")
 
 realtime_bp = Blueprint("realtime", __name__, url_prefix="/realtime")
 
+# ── Dismissed unscheduled agents (in-memory, resets on restart/new day) ──
+_dismissed_unsched_lock = threading.Lock()
+_dismissed_unsched: dict[str, set] = {}  # {"YYYY-MM-DD": {uid1, uid2, ...}}
+
+
+def _get_dismissed_today() -> set:
+    """Return the set of UIDs dismissed for today."""
+    today_str = datetime.date.today().isoformat()
+    with _dismissed_unsched_lock:
+        # Clean old days
+        for k in list(_dismissed_unsched.keys()):
+            if k != today_str:
+                del _dismissed_unsched[k]
+        return _dismissed_unsched.get(today_str, set()).copy()
+
+
+def _dismiss_uid(uid: str):
+    """Add a UID to today's dismissed set."""
+    today_str = datetime.date.today().isoformat()
+    with _dismissed_unsched_lock:
+        _dismissed_unsched.setdefault(today_str, set()).add(uid)
+
 
 @realtime_bp.teardown_request
 def _rollback_on_error(exc):
@@ -1734,6 +1756,7 @@ def api_live_agents():
         matched = 0
         unmatched_uids = []
         logged_in_emp_ids = set()  # track who IS logged in
+        dismissed_uids = _get_dismissed_today()
 
         for uid, ag in agent_now.items():
             emp = ext_id_map.get(uid)
@@ -1804,27 +1827,19 @@ def api_live_agents():
             #    The real-time feed can report phantom status events for agents
             #    who haven't actually logged in today.
             if not_scheduled:
+                # 4a) Manually dismissed by user for today
+                if uid in dismissed_uids:
+                    continue
                 first_seen = ag.get("first_seen")
-                event_count = ag.get("event_count", 0)
-                had_productive = ag.get("had_productive", False)
-                import logging as _log
-                _log.getLogger("serevo.realtime").warning(
-                    "Unscheduled agent debug: %s (uid=%s) status=%s "
-                    "first_seen=%s event_count=%d had_productive=%s mins_in_status=%.1f",
-                    emp.full_name, uid, ag["status"],
-                    first_seen, event_count, had_productive,
-                    ag["minutes_in_status"],
-                )
-                # 4a) Any status stuck for 8+ hours → stale
+                # 4b) Any status stuck for 8+ hours → stale
                 STALE_UNSCHED_HOURS = 8
                 if first_seen and (now_est - first_seen).total_seconds() / 3600 >= STALE_UNSCHED_HOURS:
                     continue
-                # 4b) Only activity is from yesterday
+                # 4c) Only activity is from yesterday
                 if first_seen and first_seen.date() < today:
                     continue
-                # 4c) Never had a productive status (Ready, On-call, etc.)
-                #     Phantom feed data shows agents in auxiliary statuses
-                #     (Lunch, Break) without ever being in a logged-in state.
+                # 4d) Never had a productive status (Ready, On-call, etc.)
+                had_productive = ag.get("had_productive", False)
                 if not had_productive:
                     continue
 
@@ -1907,6 +1922,21 @@ def api_live_agents():
         except Exception:
             pass
         return jsonify(error="Failed to load live agent data. Please refresh."), 500
+
+
+@realtime_bp.route("/api/dismiss-unsched", methods=["POST"])
+@login_required
+def api_dismiss_unsched():
+    """Dismiss an unscheduled agent from the live view for today."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+    uid = (request.json or {}).get("uid", "").strip()
+    if not uid:
+        return jsonify(error="Missing uid"), 400
+    _dismiss_uid(uid)
+    log.info("Dismissed unscheduled agent uid=%s for today", uid)
+    return jsonify(success=True)
 
 
 @realtime_bp.route("/api/agent-detail", methods=["POST"])
