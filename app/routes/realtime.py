@@ -279,6 +279,7 @@ def _get_live_agents_from_sheet():
             "current_since": last["dt"].strftime("%H:%M"),
             "minutes_in_status": max(0, mins),
             "first_seen": first["dt"],  # for late detection
+            "event_count": len(events),  # number of status events today
         }
 
     return agent_now, now_est
@@ -1791,16 +1792,24 @@ def api_live_agents():
             #    Agents with no schedule who logged out long ago shouldn't linger
             if is_offline and not_scheduled and ag["minutes_in_status"] >= STALE_AFTER_SHIFT_MINS:
                 continue
-            # 4) Not scheduled + any status stuck for 8+ hours → stale feed data
+            # 4) Not scheduled + stale or phantom feed data
             #    The real-time feed can report phantom status events for agents
             #    who haven't actually logged in today.
-            STALE_UNSCHED_HOURS = 8
             if not_scheduled:
                 first_seen = ag.get("first_seen")
+                event_count = ag.get("event_count", 0)
+                # 4a) Any status stuck for 8+ hours → stale
+                STALE_UNSCHED_HOURS = 8
                 if first_seen and (now_est - first_seen).total_seconds() / 3600 >= STALE_UNSCHED_HOURS:
                     continue
-                # Also skip if their only activity is from yesterday
+                # 4b) Only activity is from yesterday
                 if first_seen and first_seen.date() < today:
+                    continue
+                # 4c) Very few events (≤2) → phantom feed data
+                #     A real logged-in agent generates many status events;
+                #     phantom agents from stale feed data have only 1-2.
+                MIN_EVENTS_UNSCHED = 3
+                if event_count < MIN_EVENTS_UNSCHED:
                     continue
 
             agent = {
