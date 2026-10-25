@@ -1791,6 +1791,17 @@ def api_live_agents():
             #    Agents with no schedule who logged out long ago shouldn't linger
             if is_offline and not_scheduled and ag["minutes_in_status"] >= STALE_AFTER_SHIFT_MINS:
                 continue
+            # 4) Not scheduled + any status stuck for 8+ hours → stale feed data
+            #    The real-time feed can report phantom status events for agents
+            #    who haven't actually logged in today.
+            STALE_UNSCHED_HOURS = 8
+            if not_scheduled:
+                first_seen = ag.get("first_seen")
+                if first_seen and (now_est - first_seen).total_seconds() / 3600 >= STALE_UNSCHED_HOURS:
+                    continue
+                # Also skip if their only activity is from yesterday
+                if first_seen and first_seen.date() < today:
+                    continue
 
             agent = {
                 "name": emp.full_name,
