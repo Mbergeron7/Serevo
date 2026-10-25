@@ -195,9 +195,8 @@
   <input type="text" id="filterName" placeholder="Search by name…" oninput="currentPage=1;filterTable()">
   <select id="filterLOB" onchange="currentPage=1;filterTable()">
     <option value="">All LOBs</option>
-    {% set lobs = employees | map(attribute='Latest Skill Name') | unique | sort %}
-    {% for lob in lobs %}
-      {% if lob %}<option value="{{ lob }}">{{ lob }}</option>{% endif %}
+    {% for lob in all_pu_names %}
+      <option value="{{ lob }}">{{ lob }}</option>
     {% endfor %}
   </select>
   <select id="filterStatus" onchange="currentPage=1;filterTable()">

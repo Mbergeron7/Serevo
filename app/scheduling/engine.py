@@ -176,7 +176,7 @@ def get_multi_skill_requirements(lob, date_obj, sheet=None):
 
     # Check if there are multiple skill groups with employees mapped to this LOB
     try:
-        from app.models import SkillGroup, SkillMapping, Employee, PlanningUnit, db
+        from app.models import SkillGroup, SkillMapping, Employee, PlanningUnit, EmployeePlanningUnit, db
         from app.data_source import normalize_lob
 
         lob_norm = normalize_lob(lob.strip()).lower()
@@ -189,10 +189,33 @@ def get_multi_skill_requirements(lob, date_obj, sheet=None):
         if not pu:
             return {lob: base_reqs}
 
-        # Get all employees in this LOB and their skill mappings
+        # Get all employees in this LOB (primary FK + EmployeePlanningUnit)
         emps = Employee.query.filter_by(planning_unit_id=pu.id).filter(
             db.func.lower(Employee.status).notin_(["inactive", "terminated", "deleted"])
         ).all()
+
+        # Also include employees assigned via EmployeePlanningUnit
+        seen_ids = {e.id for e in emps}
+        try:
+            import datetime as _dt
+            today = _dt.date.today()
+            epu_rows = EmployeePlanningUnit.query.filter_by(
+                planning_unit_id=pu.id
+            ).filter(
+                EmployeePlanningUnit.valid_from <= today,
+                db.or_(
+                    EmployeePlanningUnit.valid_to.is_(None),
+                    EmployeePlanningUnit.valid_to >= today,
+                ),
+            ).all()
+            for epu in epu_rows:
+                if epu.employee_id not in seen_ids:
+                    emp = Employee.query.get(epu.employee_id)
+                    if emp and str(emp.status or "").strip().lower() not in ("inactive", "terminated", "deleted"):
+                        emps.append(emp)
+                        seen_ids.add(emp.id)
+        except Exception:
+            pass
 
         if not emps:
             return {lob: base_reqs}
@@ -447,13 +470,15 @@ def _get_employees_for_lob(lob, sheet=None):
         if results:
             return results
 
-        # ── Path 2: DB join via PlanningUnit ──
+        # ── Path 2: DB join via PlanningUnit + EmployeePlanningUnit ──
         try:
-            from app.models import db, Employee, PlanningUnit
+            from app.models import db, Employee, PlanningUnit, EmployeePlanningUnit
             pu = PlanningUnit.query.filter(
                 db.func.lower(PlanningUnit.name) == lob_normalized
             ).first()
             if pu:
+                seen_ids = set()
+                # Primary: employees with planning_unit_id FK
                 db_emps = Employee.query.filter_by(
                     planning_unit_id=pu.id
                 ).filter(
@@ -462,14 +487,41 @@ def _get_employees_for_lob(lob, sheet=None):
                     )
                 ).all()
                 for e in db_emps:
+                    seen_ids.add(e.id)
                     results.append({
                         "name": e.full_name,
                         "employee_id": e.employee_id,
                         "lob": pu.name,
                         "team_lead": e.team_lead or "",
                     })
+                # Secondary: employees assigned via EmployeePlanningUnit
+                import datetime as _dt
+                today = _dt.date.today()
+                epu_rows = EmployeePlanningUnit.query.filter_by(
+                    planning_unit_id=pu.id
+                ).filter(
+                    EmployeePlanningUnit.valid_from <= today,
+                    db.or_(
+                        EmployeePlanningUnit.valid_to.is_(None),
+                        EmployeePlanningUnit.valid_to >= today,
+                    ),
+                ).all()
+                for epu in epu_rows:
+                    if epu.employee_id in seen_ids:
+                        continue
+                    emp = Employee.query.get(epu.employee_id)
+                    if not emp or str(emp.status or "").strip().lower() in ("inactive", "terminated", "deleted"):
+                        continue
+                    seen_ids.add(emp.id)
+                    results.append({
+                        "name": emp.full_name,
+                        "employee_id": emp.employee_id,
+                        "lob": pu.name,
+                        "team_lead": emp.team_lead or "",
+                        "_priority": epu.priority,
+                    })
                 if results:
-                    log.info(f"LOB '{lob}': found {len(results)} via DB join")
+                    log.info(f"LOB '{lob}': found {len(results)} via DB join ({len(epu_rows)} from multi-PU)")
                     return results
         except Exception as fb_err:
             log.warning(f"DB join fallback error: {fb_err}")

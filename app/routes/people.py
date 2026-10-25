@@ -161,6 +161,20 @@ def roster():
         if lob:
             lobs.add(lob)
 
+    # Build full list of active PU names for the LOB dropdown
+    # (includes PUs that may not have employees assigned yet)
+    all_pu_names = sorted(lobs)
+    if not (user and user.get("is_demo")):
+        try:
+            active_pus = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+            pu_names = {(pu.name or "").strip() for pu in active_pus if (pu.name or "").strip()}
+            # Merge: employee skill names + active PU names, minus inactive PUs
+            inactive_pus = PlanningUnit.query.filter_by(is_active=False).all()
+            inactive_names = {(pu.name or "").strip() for pu in inactive_pus}
+            all_pu_names = sorted((lobs | pu_names) - inactive_names)
+        except Exception:
+            pass
+
     rotation_map = {}  # placeholder — rotation feature not yet wired
 
     if user and user.get("is_demo"):
@@ -185,6 +199,7 @@ def roster():
         lob_count=len(lobs),
         accom_count=len(accoms),
         pto_count=len(pto_list),
+        all_pu_names=all_pu_names,
         contracts=contracts,
         rotation_map=rotation_map,
     )
