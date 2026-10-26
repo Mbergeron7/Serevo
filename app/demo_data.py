@@ -2285,11 +2285,11 @@ def get_demo_live_agents():
             current_since = shift_end
             since_h, since_m = eh, em
 
-        # Attendance flag: offline during shift = left early (only after 30+ min offline)
+        # Attendance flag: offline during shift = left early
         attendance = ""
         is_offline = status in ("Offline",)
         is_shift_done_flag = shift_done if not (is_offline and shift_done) else True
-        if is_offline and not shift_done and not (now_mins < shift_start_mins + 5 and now_mins >= shift_start_mins) and mins_in >= 30:
+        if is_offline and not shift_done and not (now_mins < shift_start_mins + 5 and now_mins >= shift_start_mins):
             attendance = "left_early"
 
         agent = {

@@ -434,11 +434,11 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
                 late_rows.append({**base, "actual_start": first.strftime("%H:%M"),
                                   "minutes_late": int(delta), "recent_status": current})
 
-            # Only flag early leave if agent has been offline for 30+ minutes —
-            # a brief disconnect or system refresh is not an early leave
-            EARLY_LEAVE_OFFLINE_MINS = 30
-            if last_end and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins):
-                if not (current and _is_present(current)) and (not is_today or now > last_end + datetime.timedelta(minutes=EARLY_LEAVE_OFFLINE_MINS)):
+            # Early leave: agent's last present status ended before shift end
+            # and they haven't come back (current status is not present).
+            # If a new status appears they're back and won't be flagged.
+            if last_end and last_end < sh_end:
+                if not (current and _is_present(current)):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
                                        "minutes_early": int((sh_end - last_end).total_seconds() / 60)})

@@ -867,18 +867,10 @@ def load_schedule():
                         is_pre_shift = now_time < sched_obj.shift_start
                         is_shift_done = now_time > sched_obj.shift_end
 
-                    EARLY_LEAVE_OFFLINE_MINS = 30
                     if ag:
                         # Agent has activity today
                         is_offline = ag["status"] in ("Offline", "offline")
-                        mins_off = ag.get("minutes_in_status", 0)
-                        went_offline_before_end = True
-                        if is_offline and sched_obj.shift_end:
-                            shift_end_dt = datetime.datetime.combine(today, sched_obj.shift_end)
-                            went_offline_dt = now_est - datetime.timedelta(minutes=mins_off)
-                            if went_offline_dt >= shift_end_dt:
-                                went_offline_before_end = False
-                        if is_offline and not is_shift_done and not is_pre_shift and mins_off >= EARLY_LEAVE_OFFLINE_MINS and went_offline_before_end:
+                        if is_offline and not is_shift_done and not is_pre_shift:
                             shift["attendance"] = "left_early"
                         elif not is_pre_shift:
                             first_seen = ag.get("first_seen")
