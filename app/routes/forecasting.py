@@ -1253,6 +1253,40 @@ def push_scenario():
                    scenario=scenario.to_dict())
 
 
+@forecasting_bp.route("/api/diag", methods=["GET"])
+@login_required
+def forecast_diag():
+    """Diagnostic: check data coverage for each planning unit."""
+    from app.models import db, PlanningUnit, IntervalActual
+    from sqlalchemy import func as sa_func
+    from app.forecasting.engine import _get_pu_route_ids
+
+    results = []
+    units = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    for pu in units:
+        route_ids = _get_pu_route_ids(pu.id)
+        if route_ids:
+            q = IntervalActual.query.filter(IntervalActual.route_id.in_(route_ids))
+        else:
+            q = IntervalActual.query.filter(IntervalActual.planning_unit_id == pu.id)
+        total = q.count()
+        min_ts = q.with_entities(sa_func.min(IntervalActual.timestamp)).scalar()
+        max_ts = q.with_entities(sa_func.max(IntervalActual.timestamp)).scalar()
+        distinct_days = q.with_entities(
+            sa_func.count(sa_func.distinct(sa_func.date(IntervalActual.timestamp)))
+        ).scalar()
+        results.append({
+            "lob": pu.name,
+            "pu_id": pu.id,
+            "routes": route_ids,
+            "total_intervals": total,
+            "distinct_days": distinct_days,
+            "min_date": str(min_ts)[:10] if min_ts else None,
+            "max_date": str(max_ts)[:10] if max_ts else None,
+        })
+    return jsonify(success=True, data=results)
+
+
 def _demo_scenarios():
     """Return demo scenario data."""
     return [
