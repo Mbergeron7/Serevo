@@ -47,7 +47,9 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
+main { overflow-x: hidden; }
 
 a { color: var(--brand-accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
