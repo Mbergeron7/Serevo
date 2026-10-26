@@ -353,13 +353,20 @@ def service_level_report(lobs, date_obj, user=None, sheet=None):
 # ═════════════════════════════════════════════════════════════
 
 def _is_present(status):
-    """True if the agent is present at work — anything that isn't an
-    explicit offline/logout status.  Activity codes like ooq_coaching,
-    ooq_client_account_work etc. are all 'at work' states."""
+    """True if the agent is present at work — logged-in OR off-queue.
+    Off-queue agents are still at work, just not taking contacts."""
+    s = str(status or "").strip().lower()
+    return s in LOGGED_IN_STATUSES or s == "off queue"
+
+
+def _is_offline(status):
+    """True only if the agent has explicitly logged out / gone offline.
+    Activity codes like ooq_coaching, ooq_client_account_work etc. are
+    NOT offline — the agent is still at work in a non-queue activity."""
     s = str(status or "").strip().lower()
     if not s:
-        return False
-    return s not in OFFLINE_STATUSES
+        return True  # no status = treat as offline
+    return s in OFFLINE_STATUSES
 
 
 def _first_last_login(events):
@@ -441,7 +448,7 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
             # and they haven't come back (current status is not present).
             # If a new status appears they're back and won't be flagged.
             if last_end and last_end < sh_end:
-                if not (current and _is_present(current)):
+                if _is_offline(current):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
                                        "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
