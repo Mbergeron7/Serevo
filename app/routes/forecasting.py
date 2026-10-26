@@ -513,7 +513,7 @@ def forecast_api_data():
     POST JSON: {lob, year, service_level?, target_asa?, shrinkage?}
     Returns: {success, daily: [{date, offered, aht, agents_required, is_historic}], totals: {...}}
     """
-    from app.models import (ForecastInterval, RequirementInterval,
+    from app.models import (db, ForecastInterval, RequirementInterval,
                             PlanningUnit, IntervalActual)
     from app.data_source import normalize_lob
     from sqlalchemy import func as sa_func
