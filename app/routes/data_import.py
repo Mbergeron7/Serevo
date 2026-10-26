@@ -30,29 +30,6 @@ log = logging.getLogger("serevo.data_import")
 data_import_bp = Blueprint("data_import", __name__, url_prefix="/data")
 
 
-@data_import_bp.route("/test_update/<emp_id>")
-@admin_required
-def test_update(emp_id):
-    """Bare-bones test: update one employee's start_date to prove DB writes work."""
-    from app.models import db, Employee
-    emp = Employee.query.filter_by(employee_id=str(emp_id)).first()
-    if not emp:
-        return jsonify({"error": f"Employee {emp_id} not found"})
-    old_start = str(emp.start_date)
-    old_status = emp.status
-    emp.start_date = date(2023, 2, 27)
-    emp.status = "Inactive"
-    is_dirty = db.session.is_modified(emp)
-    db.session.commit()
-    # Re-query to verify
-    emp2 = Employee.query.filter_by(employee_id=str(emp_id)).first()
-    return jsonify({
-        "before": {"start_date": old_start, "status": old_status},
-        "after": {"start_date": str(emp2.start_date), "status": emp2.status},
-        "was_dirty": is_dirty,
-    })
-
-
 # In-memory job store for background imports (safe with 1 worker)
 _import_jobs = {}  # job_id -> {"status": "running"|"complete"|"failed", "result": {...}}
 
@@ -2202,7 +2179,7 @@ def _upsert_actuals_batch(db, IntervalActual, batch):
     try:
         stmt = pg_insert(IntervalActual.__table__).values(batch)
         stmt = stmt.on_conflict_do_update(
-            constraint="uq_actual_unit_ts",
+            constraint="uq_actual_unit_route_ts",
             set_={
                 "offered": stmt.excluded.offered,
                 "answered": stmt.excluded.answered,

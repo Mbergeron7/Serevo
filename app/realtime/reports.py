@@ -447,7 +447,7 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
             # Early leave: agent's last present status ended before shift end
             # and they haven't come back (current status is not present).
             # If a new status appears they're back and won't be flagged.
-            if last_end and last_end < sh_end:
+            if last_end and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins):
                 if _is_offline(current):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),

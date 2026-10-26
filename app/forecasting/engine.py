@@ -1347,30 +1347,63 @@ def apply_what_if(forecast_intervals, volume_pct=0, aht_pct=0,
 
 def compute_accuracy(lob, start_date, end_date, sheet=None):
     """
-    Compare forecast data against requirements (actuals) for accuracy.
+    Compare forecast call volume against actual call volume for accuracy.
 
-    Matches intervals by date + time between FORECAST RAW and REQUIREMENTS RAW.
+    Matches intervals by date + time between FORECAST and ACTUALS (IntervalActual).
     Returns {
-        intervals: [{date, time, forecast_offered, actual_agents, variance_pct}],
+        intervals: [{date, time, forecast_offered, actual_offered, variance_pct}],
         summary: {mape, wmape, bias, total_intervals, matched_intervals}
     }
     """
     forecast, f_err = get_forecast_data(lob, start_date, end_date, sheet)
-    requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
 
-    if f_err or r_err:
+    if f_err:
         return {
             "intervals": [],
             "summary": {"mape": 0, "wmape": 0, "bias": 0,
                         "total_intervals": 0, "matched_intervals": 0},
-            "error": f_err or r_err,
+            "error": f_err,
         }
 
-    # Build requirements lookup
-    req_map = {}
-    for r in requirements:
-        key = (r["date"], r["time"])
-        req_map[key] = r["agents_required"]
+    # Get actual call volume from IntervalActual (same units as forecast: call count)
+    actual_map = {}
+    try:
+        import os
+        if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
+            from app.models import IntervalActual, PlanningUnit
+            from app.data_source import normalize_lob
+            from sqlalchemy import func as sa_func
+            lob_stripped = str(lob).strip()
+            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            if not unit:
+                normalized = normalize_lob(lob_stripped)
+                unit = PlanningUnit.query.filter_by(name=normalized).first()
+            if unit:
+                start_str = start_date.strftime("%Y-%m-%d")
+                end_str = end_date.strftime("%Y-%m-%d")
+                rows = IntervalActual.query.filter(
+                    IntervalActual.planning_unit_id == unit.id,
+                    sa_func.date(IntervalActual.timestamp) >= start_str,
+                    sa_func.date(IntervalActual.timestamp) <= end_str,
+                ).all()
+                for r in rows:
+                    ts = r.timestamp
+                    key = (ts.strftime("%Y-%m-%d"), ts.strftime("%H:%M"))
+                    # Aggregate across routes for the same interval
+                    if key in actual_map:
+                        actual_map[key] += (r.offered or 0)
+                    else:
+                        actual_map[key] = (r.offered or 0)
+    except Exception as e:
+        log.warning(f"Could not load actuals for accuracy: {e}")
+
+    # Fallback: if no actuals found in DB, try requirements (agents) with a warning
+    if not actual_map:
+        requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
+        if not r_err and requirements:
+            for r in requirements:
+                key = (r["date"], r["time"])
+                actual_map[key] = r["agents_required"]
 
     intervals = []
     abs_errors = []
@@ -1379,10 +1412,10 @@ def compute_accuracy(lob, start_date, end_date, sheet=None):
 
     for fc in forecast:
         key = (fc["date"], fc["time"])
-        if key not in req_map:
+        if key not in actual_map:
             continue
 
-        actual = req_map[key]
+        actual = actual_map[key]
         forecast_val = fc["offered"]
 
         if actual > 0:
@@ -1400,7 +1433,7 @@ def compute_accuracy(lob, start_date, end_date, sheet=None):
             "time": fc["time"],
             "forecast_offered": round(forecast_val, 1),
             "forecast_aht": round(fc["aht"], 1),
-            "actual_agents": round(actual, 1),
+            "actual_offered": round(actual, 1),
             "variance_pct": variance_pct,
         })
         abs_errors.append(abs_pct)
@@ -1409,8 +1442,8 @@ def compute_accuracy(lob, start_date, end_date, sheet=None):
 
     # Summary stats
     n = len(intervals)
-    total_actual = sum(req_map.get((fc["date"], fc["time"]), 0)
-                       for fc in forecast if (fc["date"], fc["time"]) in req_map)
+    total_actual = sum(actual_map.get((fc["date"], fc["time"]), 0)
+                       for fc in forecast if (fc["date"], fc["time"]) in actual_map)
 
     mape = round(sum(abs_errors) / n, 1) if n > 0 else 0
     wmape = round((sum(weighted_errors) / total_actual) * 100, 1) if total_actual > 0 else 0
@@ -1651,6 +1684,9 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             # Fill all operating-hour intervals
             day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
             forecast.extend(day_rows)
+
+    # Apply holiday adjustments to all methods (not just Holt-Winters)
+    forecast = apply_holiday_adjustments(forecast, historical)
 
     return {
         "method": method,

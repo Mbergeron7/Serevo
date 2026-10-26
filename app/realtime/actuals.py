@@ -29,7 +29,7 @@ PRODUCTIVE_STATUSES = {"on queue", "available", "interacting", "on call", "acw",
                        "after call work", "idle", "ready", "busy", "talking", "wrap up"}
 LOGGED_IN_STATUSES = PRODUCTIVE_STATUSES | {"break", "lunch", "meeting", "training",
                                             "coaching", "meal", "not responding", "away"}
-OFFLINE_STATUSES = {"offline", "logged out", "logout", "off queue"}
+OFFLINE_STATUSES = {"offline", "logged out", "logout"}
 
 
 def _parse_ts(v):

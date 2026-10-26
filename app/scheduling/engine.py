@@ -1925,9 +1925,18 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
         s_min = _time_to_minutes(shift["start"])
         e_min = _time_to_minutes(shift["end"])
         weight = shift.get("effectiveness", 1.0)
-        for m in range(s_min, e_min, DEFAULT_INTERVAL_MINS):
-            t = _minutes_to_time(m)
-            scheduled_map[t] += weight
+        if e_min <= s_min:
+            # Overnight shift: cover from start to midnight, then midnight to end
+            for m in range(s_min, 1440, DEFAULT_INTERVAL_MINS):
+                t = _minutes_to_time(m)
+                scheduled_map[t] += weight
+            for m in range(0, e_min, DEFAULT_INTERVAL_MINS):
+                t = _minutes_to_time(m)
+                scheduled_map[t] += weight
+        else:
+            for m in range(s_min, e_min, DEFAULT_INTERVAL_MINS):
+                t = _minutes_to_time(m)
+                scheduled_map[t] += weight
 
     coverage = []
     if requirements:
