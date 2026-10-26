@@ -53,7 +53,7 @@
         <button class="nav-dropdown-btn">People <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>Roster</a>
-          <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
+          <a href="/realtime/#absenteeism">Attendance</a>
           <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
           <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
         </div>
