@@ -1272,7 +1272,8 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
 
     # Determine which PUs have language splits (EN/FR LOBs in LobMapping)
     pus_with_lang = set()
-    for lob_key, pu_val in _load_lob_to_pu().items():
+    lob_map, _pu_set = _load_lob_to_pu()
+    for lob_key, pu_val in lob_map.items():
         if lob_key.lower().endswith(" en") or lob_key.lower().endswith(" fr"):
             pus_with_lang.add(pu_val)
 
