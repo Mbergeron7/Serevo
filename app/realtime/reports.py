@@ -436,14 +436,15 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
 
             # Early leave: agent's last present status ended before shift end
             # and they haven't come back (current status is not present).
-            # For today's report, only flag after the shift has ended —
-            # mid-shift agents on break/meeting/etc. can still return.
+            # For today's live report, only flag if the agent has been gone
+            # longer than the early-leave grace window (default 30 min) so
+            # that breaks, meetings, and brief offline blips don't trigger.
             if last_end and last_end < sh_end:
                 if not (current and _is_present(current)):
-                    # On a live day, wait until the shift window closes
-                    # (plus grace) before calling it an early leave.
                     if is_today and now < sh_end:
-                        continue  # shift still open — agent may return
+                        gone_mins = (now - last_end).total_seconds() / 60
+                        if gone_mins < (early_grace_mins or 30):
+                            continue  # likely on break — not gone long enough
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
                                        "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
