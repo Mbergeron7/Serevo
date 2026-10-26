@@ -151,6 +151,16 @@
   .legend-swatch.fc { background: rgba(59,130,246,.75); border: 2px dashed rgba(59,130,246,1); box-sizing: border-box; }
   .data-legend-banner .legend-divider { width: 1px; height: 18px; background: var(--border); }
 
+  /* ── Forecast stats bar ─────────────────── */
+  .forecast-stats-bar {
+    display: flex; align-items: center; gap: 0; padding: 12px 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .fstat { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 100px; padding: 4px 8px; }
+  .fstat-label { font-size: .7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+  .fstat-value { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+  .fstat-divider { width: 1px; height: 32px; background: var(--border); flex-shrink: 0; }
 
   /* ── Reforecast section ──────────────────── */
   .reforecast-section {
@@ -482,6 +492,39 @@
   <div class="legend-item"><div class="legend-swatch hist"></div> Historical (actual data)</div>
   <div class="legend-divider"></div>
   <div class="legend-item"><div class="legend-swatch fc"></div> Forecast (projected)</div>
+</div>
+
+<!-- ═══ Forecast Stats Bar ═══ -->
+<div class="forecast-stats-bar" id="forecastStatsBar" style="display:none;">
+  <div class="fstat">
+    <span class="fstat-label">Total Historical Volume</span>
+    <span class="fstat-value" id="statHistVol">—</span>
+  </div>
+  <div class="fstat-divider"></div>
+  <div class="fstat">
+    <span class="fstat-label">Total Forecasted Volume</span>
+    <span class="fstat-value" id="statFcVol">—</span>
+  </div>
+  <div class="fstat-divider"></div>
+  <div class="fstat">
+    <span class="fstat-label">Avg Daily Calls</span>
+    <span class="fstat-value" id="statAvgDaily">—</span>
+  </div>
+  <div class="fstat-divider"></div>
+  <div class="fstat">
+    <span class="fstat-label">Peak Day</span>
+    <span class="fstat-value" id="statPeakDay">—</span>
+  </div>
+  <div class="fstat-divider"></div>
+  <div class="fstat">
+    <span class="fstat-label">Avg AHT</span>
+    <span class="fstat-value" id="statAvgAht">—</span>
+  </div>
+  <div class="fstat-divider"></div>
+  <div class="fstat">
+    <span class="fstat-label">Total FTE Required</span>
+    <span class="fstat-value" id="statFte">—</span>
+  </div>
 </div>
 
 <!-- ═══ Offered Calls chart ═══ -->
@@ -1104,6 +1147,30 @@ function updateSummaryCards() {
 
   document.getElementById('slCard').textContent = document.getElementById('slTarget').value + '% / ' + document.getElementById('asaTarget').value + ' secs';
   document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
+
+  // ── Populate forecast stats bar above chart ──
+  const daily2 = getDailyData();
+  let histVol = 0, fcVol = 0, allVol = 0, ahtW2 = 0, req2 = 0, peak2 = 0, peakDt2 = '', daysCount = 0;
+  for (const d of daily2) {
+    allVol += d.offered;
+    ahtW2 += d.offered * d.aht;
+    req2 += d.req;
+    if (d.offered > peak2) { peak2 = d.offered; peakDt2 = d.date; }
+    if (d.fc_offered != null) { fcVol += d.fc_offered; }
+    // Historical = actual offered on days that have actuals
+    histVol += d.offered;
+    daysCount++;
+  }
+  const avgD2 = daysCount > 0 ? Math.round(histVol / daysCount) : 0;
+  const aht2 = allVol > 0 ? Math.round(ahtW2 / allVol) : 0;
+
+  document.getElementById('statHistVol').textContent = Math.round(histVol).toLocaleString();
+  document.getElementById('statFcVol').textContent = fcVol > 0 ? Math.round(fcVol).toLocaleString() : '—';
+  document.getElementById('statAvgDaily').textContent = avgD2.toLocaleString();
+  document.getElementById('statPeakDay').textContent = Math.round(peak2).toLocaleString() + (peakDt2 ? ' (' + peakDt2 + ')' : '');
+  document.getElementById('statAvgAht').textContent = aht2 + 's';
+  document.getElementById('statFte').textContent = Math.round(req2).toLocaleString();
+  document.getElementById('forecastStatsBar').style.display = 'flex';
 }
 
 // ── Build combined daily data ───────────────────
