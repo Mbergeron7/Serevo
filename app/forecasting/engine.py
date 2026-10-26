@@ -52,22 +52,28 @@ def _build_actuals_query(unit, start_str, end_str):
     Falls back to planning_unit_id when no routes are assigned.
 
     For PUs WITH routes assigned:
-      - Rows with a matching route_id are always included
-      - Rows with NULL route_id are EXCLUDED (legacy data from before
-        route_id was tracked — these may contain combined data from
-        multiple routes and need to be re-synced to get route tagging)
+      - Rows with a matching route_id are included
+      - Rows with NULL route_id AND the same planning_unit_id are also
+        included (legacy data from before route tagging existed)
     """
     from app.models import IntervalActual
-    from sqlalchemy import func as sa_func
+    from sqlalchemy import func as sa_func, or_, and_
 
     route_ids = _get_pu_route_ids(unit.id)
 
     if route_ids:
-        # Route-based: query ONLY by route_id — the route IS the filter.
-        # No planning_unit_id constraint so it finds the data regardless
-        # of which PU it was originally written under.
+        # Route-based: include rows that match assigned route_ids
+        # PLUS legacy rows (route_id IS NULL) stored under this PU's id.
+        # Legacy data was loaded before route tagging existed and is
+        # valid historical data for the planning unit.
         return IntervalActual.query.filter(
-            IntervalActual.route_id.in_(route_ids),
+            or_(
+                IntervalActual.route_id.in_(route_ids),
+                and_(
+                    IntervalActual.planning_unit_id == unit.id,
+                    IntervalActual.route_id.is_(None),
+                ),
+            ),
             sa_func.date(IntervalActual.timestamp) >= start_str,
             sa_func.date(IntervalActual.timestamp) <= end_str,
         ).order_by(IntervalActual.timestamp)
