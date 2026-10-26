@@ -20,7 +20,7 @@ from collections import defaultdict
 
 from app.realtime.actuals import (get_interval_actuals, get_agent_events,
                                   is_productive, is_logged_in,
-                                  LOGGED_IN_STATUSES)
+                                  LOGGED_IN_STATUSES, OFFLINE_STATUSES)
 
 log = logging.getLogger("serevo.reports")
 
@@ -353,10 +353,13 @@ def service_level_report(lobs, date_obj, user=None, sheet=None):
 # ═════════════════════════════════════════════════════════════
 
 def _is_present(status):
-    """True if the agent is present at work — logged-in OR off-queue.
-    Off-queue agents are still at work, just not taking contacts."""
+    """True if the agent is present at work — anything that isn't an
+    explicit offline/logout status.  Activity codes like ooq_coaching,
+    ooq_client_account_work etc. are all 'at work' states."""
     s = str(status or "").strip().lower()
-    return s in LOGGED_IN_STATUSES or s == "off queue"
+    if not s:
+        return False
+    return s not in OFFLINE_STATUSES
 
 
 def _first_last_login(events):
@@ -441,8 +444,7 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
                 if not (current and _is_present(current)):
                     early += 1
                     early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
-                                       "minutes_early": int((sh_end - last_end).total_seconds() / 60),
-                                       "current_status": current or ""})
+                                       "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
 
         by_lob.append({"lob": lob, "scheduled": sched, "absent": absent,
                        "absence_pct": _pct(absent, sched), "late": late,
