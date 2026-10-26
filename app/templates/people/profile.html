@@ -735,15 +735,15 @@
     </div>
     <div class="section-card-body">
       <div id="attSummaryCards" style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Total Hours</div>
           <div id="attTotalHours" style="font-size:1.6rem; font-weight:700;">—</div>
         </div>
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Shifts</div>
           <div id="attShiftCount" style="font-size:1.6rem; font-weight:700;">—</div>
         </div>
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Avg / Shift</div>
           <div id="attAvgHours" style="font-size:1.6rem; font-weight:700;">—</div>
         </div>
@@ -1612,15 +1612,15 @@ function loadAttendance() {
     // Append extra stat cards if not already there
     if (!document.getElementById('attAbsences')) {
       sc.insertAdjacentHTML('beforeend', `
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Absences</div>
           <div id="attAbsences" style="font-size:1.6rem; font-weight:700; color:#dc2626;">—</div>
         </div>
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Lates</div>
           <div id="attLates" style="font-size:1.6rem; font-weight:700; color:#d97706;">—</div>
         </div>
-        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); min-width:110px;">
+        <div style="text-align:center; padding:12px 20px; background:var(--bg); border-radius:8px; border:1px solid var(--border); flex:1 1 0%; min-width:0;">
           <div style="font-size:.72rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Time Off</div>
           <div id="attPTOCount" style="font-size:1.6rem; font-weight:700; color:#2563eb;">—</div>
         </div>

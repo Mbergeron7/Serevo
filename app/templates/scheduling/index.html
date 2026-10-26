@@ -706,7 +706,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="config-group" style="flex:1; min-width:140px; max-width:320px;">
+      <div class="config-group" style="flex:1; max-width:320px;">
         <label>Employees <span id="empCountBadge" style="font-weight:400; text-transform:none; letter-spacing:0;"></span></label>
         <div id="empFilterWrap" style="position:relative;">
           <div id="empFilterPicker" style="display:flex; flex-wrap:wrap; gap:3px; padding:3px 6px;
@@ -1214,21 +1214,21 @@
 
 <!-- ── Schedule Score Panel ─────────────────────────────── -->
 <div id="scorePanel" style="display:none; margin:12px 0;">
-  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;">
-    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
-      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Overall Score</div>
+  <div class="stat-row" style="margin-bottom:0;">
+    <div class="card">
+      <div class="stat-label">Overall Score</div>
       <div id="scoreOverall" style="font-size:1.8rem;font-weight:800;"></div>
     </div>
-    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
-      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Coverage</div>
+    <div class="card">
+      <div class="stat-label">Coverage</div>
       <div id="scoreCoverage" style="font-size:1.3rem;font-weight:700;"></div>
     </div>
-    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
-      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Efficiency</div>
+    <div class="card">
+      <div class="stat-label">Efficiency</div>
       <div id="scoreCost" style="font-size:1.3rem;font-weight:700;"></div>
     </div>
-    <div class="card" style="flex:1;min-width:120px;padding:12px;text-align:center;">
-      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;">Balance</div>
+    <div class="card">
+      <div class="stat-label">Balance</div>
       <div id="scoreBalance" style="font-size:1.3rem;font-weight:700;"></div>
     </div>
   </div>

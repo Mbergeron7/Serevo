@@ -187,6 +187,7 @@ main {
   max-width: 1100px;
   width: 100%;
   margin: 0 auto;
+  overflow-x: hidden;
 }
 
 /* ---------- footer ---------- */
@@ -438,9 +439,9 @@ footer {
   padding: 10px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
 }
 .data-table th {
+  white-space: nowrap;
   font-weight: 600;
   font-size: .8rem;
   text-transform: uppercase;
@@ -616,6 +617,21 @@ footer {
   .dashboard h1 { font-size: 1.2rem; }
 }
 
+/* ── Stat card value/label styling ────────────────────── */
+.stat-row .card .stat-val,
+.stat-row .stat-card .stat-val {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--brand-accent);
+  line-height: 1.2;
+}
+.stat-row .card .stat-label,
+.stat-row .stat-card .stat-label {
+  font-size: .78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ── Responsive form grids ─────────────── */
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
@@ -669,3 +685,89 @@ th[data-sort-dir] .sort-indicator { opacity: 0.7; }
 .filter-bar label { font-size: 0.82rem; font-weight: 600; display: flex; flex-direction: column; gap: 0.25rem; }
 .filter-bar input, .filter-bar select { padding: 0.4rem 0.6rem; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 0.85rem; }
 .filter-bar .filter-clear { align-self: flex-end; font-size: 0.8rem; color: var(--brand-accent); cursor: pointer; border: none; background: none; padding: 0.4rem 0; }
+
+/* ── Stat card rows — responsive, no side-scroll ────── */
+.stat-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.stat-row > .card,
+.stat-row > .stat-card,
+.stat-row > [class*="stat"] {
+  flex: 1 1 120px;
+  min-width: 0;
+  text-align: center;
+}
+@media (max-width: 600px) {
+  .stat-row { gap: .5rem; }
+  .stat-row > .card,
+  .stat-row > .stat-card,
+  .stat-row > [class*="stat"] { flex: 1 1 calc(50% - .5rem); padding: 14px 10px; }
+}
+
+/* ── Global anti-scroll: prevent any flex row from overflowing main ── */
+main { overflow-x: hidden; }
+main > *, main > * > * { max-width: 100%; }
+
+/* ── Stat cards used across pages — override inline min-width ── */
+.stat-card {
+  min-width: 0 !important;
+  flex: 1 1 0%;
+}
+
+/* ── Stats row pattern (attendance, etc.) ── */
+.stats-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.stats-row > .stat,
+.stats-row > [class*="stat"] {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .stats-row { gap: .5rem; }
+  .stats-row > .stat,
+  .stats-row > [class*="stat"] { flex: 1 1 calc(50% - .5rem); }
+}
+
+/* ── Score panels / metric rows — prevent overflow from inline min-width ── */
+.score-panel,
+.metric-row,
+.kpi-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.score-panel > *,
+.metric-row > *,
+.kpi-row > * {
+  flex: 1 1 0%;
+  min-width: 0 !important;
+}
+
+/* ── Section cards — full-width stacking, no overflow ── */
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+/* ── Tables that must scroll — contained within card ── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -24px;
+  padding: 0 24px;
+}
+@media (max-width: 768px) {
+  .table-scroll { margin: 0 -20px; padding: 0 20px; }
+}

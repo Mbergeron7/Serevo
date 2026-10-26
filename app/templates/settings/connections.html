@@ -59,7 +59,7 @@
     {% for f in feeds %}
     <div class="conn-card{{ ' disabled' if not f.is_active }}" id="feed-{{ f.id }}">
       <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:.5rem;">
-        <div style="flex:1;min-width:200px;">
+        <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
             <h3 style="margin:0;">{{ f.name }}</h3>
             <span class="feed-type-badge {{ f.feed_type }}">
@@ -137,7 +137,7 @@
     {% for c in api_conns %}
     <div class="conn-card{{ ' disabled' if not c.is_active }}" id="conn-{{ c.id }}">
       <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:.5rem;">
-        <div style="flex:1;min-width:200px;">
+        <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
             <h3 style="margin:0;">{{ c.name }}</h3>
             <span class="provider-badge">{{ providers[c.provider].label if c.provider in providers else c.provider }}</span>

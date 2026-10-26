@@ -25,7 +25,7 @@
   /* ── LOB picker (controls area) ────────────── */
   .lob-picker-box {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px; width: 220px; min-width: 200px; display: flex; flex-direction: column;
+    padding: 14px; width: 100%; max-width: 220px; display: flex; flex-direction: column;
   }
   .lob-picker-header { font-size: .75rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; }
@@ -48,7 +48,7 @@
   }
   .setting-group select, .setting-group input[type=number] {
     padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: .85rem; background: var(--bg); color: var(--text); min-width: 190px;
+    font-size: .85rem; background: var(--bg); color: var(--text); min-width: 0; width: 100%;
   }
   .btn-action {
     background: var(--brand-accent); color: #fff; border: none;
@@ -64,10 +64,10 @@
 
   /* ── Summary cards ─────────────────────────── */
   .summary-cards {
-    display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px;
   }
   .scard {
-    flex: 1; min-width: 160px; background: var(--surface);
+    background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius);
     padding: 14px 18px;
   }
@@ -182,13 +182,13 @@
     display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end;
   }
   .refc-controls .setting-group select,
-  .refc-controls .setting-group input { min-width: 150px; }
+  .refc-controls .setting-group input { min-width: 0; width: 100%; }
 
   .refc-summary-cards {
-    display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; margin-bottom: 20px;
   }
   .refc-scard {
-    flex: 1; min-width: 140px; background: var(--bg);
+    background: var(--bg);
     border: 1px solid var(--border); border-radius: var(--radius);
     padding: 12px 16px;
   }
@@ -236,7 +236,7 @@
 
   /* ── Scenario cards ─────────────────────── */
   .scenario-card {
-    flex: 1; min-width: 240px; max-width: 320px;
+    flex: 1 1 240px; max-width: 320px;
     background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 14px 16px; position: relative;
   }

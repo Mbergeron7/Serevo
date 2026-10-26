@@ -26,10 +26,10 @@
 <!-- ═══ Assignments Tab ═══ -->
 <div id="tab-assignments" style="display:none;">
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-    <select id="aFilterModule" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;min-width:160px;">
+    <select id="aFilterModule" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;flex:1;min-width:0;">
       <option value="">All Modules</option>
     </select>
-    <select id="aFilterEmployee" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;min-width:160px;">
+    <select id="aFilterEmployee" onchange="loadAssignments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.82rem;flex:1;min-width:0;">
       <option value="">All Employees</option>
       {% for e in employees %}
       <option value="{{ e.id }}">{{ e.last_name }}, {{ e.first_name }}</option>

@@ -101,7 +101,7 @@
   .stat-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 16px 20px; min-width: 130px; flex: 1;
+    padding: 16px 20px; min-width: 0; flex: 1 1 0%;
   }
   .stat-card .stat-num {
     font-size: 1.6rem; font-weight: 800; color: var(--brand-accent);
@@ -157,7 +157,7 @@
   .modal-overlay.show { display: flex; }
   .modal {
     background: var(--surface); border-radius: 12px; padding: 24px;
-    min-width: 420px; max-width: 600px; max-height: 80vh; overflow-y: auto;
+    width: 95vw; max-width: 600px; max-height: 80vh; overflow-y: auto;
     box-shadow: 0 8px 30px rgba(0,0,0,.2);
   }
   .modal h3 { margin: 0 0 16px; }
@@ -304,7 +304,9 @@
         <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; background:#fff3cd; color:#856404;">Draft</span>
       </div>
     </div>
-    <div id="cal-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; font-size:.78rem; padding:12px;"></div>
+    <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
+      <div id="cal-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; font-size:.78rem; padding:12px; min-width:500px;"></div>
+    </div>
   </div>
 </div>
 
@@ -638,7 +640,7 @@ function renderGroups() {
 }
 
 function renderMembersTable(g) {
-  return `<table class="tbl">
+  return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="tbl">
     <thead><tr>
       <th>Name</th><th>Role</th><th>Contract</th><th>Order</th><th>Max Close/Wk</th><th>Work Days</th><th>Constraints</th><th></th>
     </tr></thead>
@@ -681,7 +683,7 @@ function renderMembersTable(g) {
         </td>
       </tr>`).join('')}
     </tbody>
-  </table>`;
+  </table></div>`;
 }
 
 function openNewGroupModal() {
@@ -941,14 +943,14 @@ function renderSlotEditor(g) {
   let html = `<div style="margin-bottom:12px; display:flex; justify-content:flex-end;">
     <button class="btn btn-primary btn-sm" onclick="addSlotRow(${g.id})">+ Add Slot</button>
   </div>
-  <table class="tbl">
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="tbl">
     <thead><tr><th>Day Type</th><th>Role Key</th><th>Label</th><th>Start</th><th>End</th><th>Order</th><th></th></tr></thead><tbody id="slot-rows">`;
 
   for (const s of slots) {
     html += _slotRowHtml(s);
   }
 
-  html += `</tbody></table>
+  html += `</tbody></table></div>
     <div style="display:flex; justify-content:flex-end; margin-top:14px; gap:8px;">
       <button class="btn btn-primary" onclick="saveAllSlots(${g.id})">Save All Slots</button>
     </div>`;

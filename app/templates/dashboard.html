@@ -9,27 +9,12 @@
 
   {% set stats = demo_stats or live_stats %}
   {% if stats and stats.total_employees > 0 %}
-  <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
-    <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.total_employees }}</div>
-      <div style="font-size:.8rem; color:var(--text-muted);">Employees</div>
-    </div>
-    <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.on_today }}</div>
-      <div style="font-size:.8rem; color:var(--text-muted);">Scheduled Today</div>
-    </div>
-    <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.planning_units }}</div>
-      <div style="font-size:.8rem; color:var(--text-muted);">LOBs</div>
-    </div>
-    <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.pto_today }}</div>
-      <div style="font-size:.8rem; color:var(--text-muted);">On PTO Today</div>
-    </div>
-    <div class="card" style="flex:1; min-width:140px; text-align:center;">
-      <div style="font-size:2rem; font-weight:700; color:var(--brand-accent);">{{ stats.clocked_in or 0 }}</div>
-      <div style="font-size:.8rem; color:var(--text-muted);">Clocked In Now</div>
-    </div>
+  <div class="stat-row">
+    <div class="card"><div class="stat-val">{{ stats.total_employees }}</div><div class="stat-label">Employees</div></div>
+    <div class="card"><div class="stat-val">{{ stats.on_today }}</div><div class="stat-label">Scheduled Today</div></div>
+    <div class="card"><div class="stat-val">{{ stats.planning_units }}</div><div class="stat-label">LOBs</div></div>
+    <div class="card"><div class="stat-val">{{ stats.pto_today }}</div><div class="stat-label">On PTO Today</div></div>
+    <div class="card"><div class="stat-val">{{ stats.clocked_in or 0 }}</div><div class="stat-label">Clocked In Now</div></div>
   </div>
   {% else %}
   <div class="card" style="padding:2.5rem;">
