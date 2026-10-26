@@ -133,10 +133,12 @@ def _operating_slots(lob_setting, target_date, planning_unit=None):
             pass
 
     # Try per-day business hours from the planning unit first
+    pu_has_any_hours = False
     if pu:
         try:
             bh_list = pu.business_hours
             if bh_list:
+                pu_has_any_hours = len(bh_list) > 0
                 day_name = day_names[dow]
                 for bh in bh_list:
                     if bh.day_type.lower() == day_name:
@@ -151,7 +153,13 @@ def _operating_slots(lob_setting, target_date, planning_unit=None):
         except Exception as e:
             log.warning("Could not check business hours: %s", e)
 
-    # Fall back to LOBSetting weekday/sat/sun columns
+    # If the PU has business hours for some days but NOT this day,
+    # treat this day as closed (return empty list).
+    if pu_has_any_hours and not start_str:
+        return []
+
+    # Fall back to LOBSetting weekday/sat/sun columns only when
+    # the PU has NO business hours configured at all.
     if (not start_str or not end_str) and lob_setting:
         start_str, end_str = lob_setting.get_hours_for_day(dow)
 
@@ -191,8 +199,10 @@ def _fill_operating_hours(forecast_rows, lob_setting, fc_date, planning_unit=Non
     Returns the complete list of rows for that date.
     """
     slots = _operating_slots(lob_setting, fc_date, planning_unit=planning_unit)
-    if not slots:
+    if slots is None:
         return forecast_rows  # no LOB setting — return as-is
+    if len(slots) == 0:
+        return []  # PU is closed on this day — no forecast rows
 
     date_str = fc_date.strftime("%Y-%m-%d")
 
