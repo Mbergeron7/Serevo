@@ -1794,9 +1794,13 @@ def api_live_agents():
             is_offline = ("offline" in _status_lower or
                           _status_lower in ("logged out", "loggedout",
                                             "unavailable - logged out"))
+            EARLY_LEAVE_OFFLINE_MINS = 30  # must be offline this long before flagging
             if sched and sched.shift_start and sched.shift_end:
                 # Left Early: agent offline during their scheduled shift
-                if is_offline and not is_shift_done and not is_pre_shift:
+                # Only flag after sustained offline — a brief disconnect or
+                # system refresh is not an early leave
+                mins_off = ag.get("minutes_in_status", 0)
+                if is_offline and not is_shift_done and not is_pre_shift and mins_off >= EARLY_LEAVE_OFFLINE_MINS:
                     attendance = "left_early"
                 # Late detection: agent's first activity was after shift start + grace
                 if not is_pre_shift:
