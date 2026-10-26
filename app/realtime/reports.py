@@ -395,7 +395,7 @@ def _first_last_login(events):
     return first, last_end, current
 
 
-def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5, early_grace_mins=5):
+def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5, early_grace_mins=0):
     now = _now()
     is_today = date_obj == now.date()
     by_lob = []
