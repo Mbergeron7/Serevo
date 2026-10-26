@@ -1148,21 +1148,31 @@ function updateSummaryCards() {
   document.getElementById('slCard').textContent = document.getElementById('slTarget').value + '% / ' + document.getElementById('asaTarget').value + ' secs';
   document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
 
-  // ── Populate forecast stats bar above chart ──
-  const daily2 = getDailyData();
-  let histVol = 0, fcVol = 0, allVol = 0, ahtW2 = 0, req2 = 0, peak2 = 0, peakDt2 = '', daysCount = 0;
-  for (const d of daily2) {
-    allVol += d.offered;
-    ahtW2 += d.offered * d.aht;
-    req2 += d.req;
-    if (d.offered > peak2) { peak2 = d.offered; peakDt2 = d.date; }
-    if (d.fc_offered != null) { fcVol += d.fc_offered; }
-    // Historical = actual offered on days that have actuals
-    histVol += d.offered;
-    daysCount++;
+  // ── Populate forecast stats bar above chart (uses ALL daily data, not filtered by view) ──
+  const selected = getSelectedLobs();
+  const allLobs = activeLob ? [activeLob] : (selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData));
+  let histVol = 0, fcVol = 0, ahtW2 = 0, ahtOff2 = 0, req2 = 0, peak2 = 0, peakDt2 = '', histDays = 0, fcDays = 0;
+  for (const lob of allLobs) {
+    const d = forecastData[lob];
+    if (!d || !d.daily) continue;
+    for (const row of d.daily) {
+      if (row.is_historic) {
+        histVol += row.offered;
+        histDays++;
+      } else {
+        fcVol += row.offered;
+        fcDays++;
+      }
+      ahtW2 += row.offered * row.aht;
+      ahtOff2 += row.offered;
+      req2 += row.agents_required;
+      if (row.offered > peak2) { peak2 = row.offered; peakDt2 = row.date; }
+    }
   }
-  const avgD2 = daysCount > 0 ? Math.round(histVol / daysCount) : 0;
-  const aht2 = allVol > 0 ? Math.round(ahtW2 / allVol) : 0;
+  const totalVol = histVol + fcVol;
+  const totalDays = histDays + fcDays;
+  const avgD2 = totalDays > 0 ? Math.round(totalVol / totalDays) : 0;
+  const aht2 = ahtOff2 > 0 ? Math.round(ahtW2 / ahtOff2) : 0;
 
   document.getElementById('statHistVol').textContent = Math.round(histVol).toLocaleString();
   document.getElementById('statFcVol').textContent = fcVol > 0 ? Math.round(fcVol).toLocaleString() : '—';
