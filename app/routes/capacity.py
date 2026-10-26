@@ -552,7 +552,17 @@ def plan_view():
         answer_rate = float(request.args.get("answer_rate", 92)) / 100.0
         sel_lobs = [l for l in request.args.getlist("lobs") if l]
         plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
-        all_lobs = [p["lob"] for p in plan]
+        all_lobs = sorted(set(p["lob"] for p in plan))
+        # If no plan data for this year, still show all configured LOBs
+        if not all_lobs and not (user and user.get("is_demo")):
+            try:
+                from app.models import PlanningUnit
+                all_lobs = sorted(
+                    pu.name for pu in PlanningUnit.query
+                    .filter_by(is_active=True).order_by(PlanningUnit.name).all()
+                )
+            except Exception:
+                all_lobs = []
         if sel_lobs:
             plan = [p for p in plan if p["lob"] in sel_lobs]
         now_str = now.strftime("%Y-%m-%d %H:%M")
@@ -588,7 +598,17 @@ def summary_view():
         sel_lobs = [l for l in request.args.getlist("lobs") if l]
 
         plan = _build_plan(user, year, shrinkage, occupancy, answer_rate)
-        all_lobs = [p["lob"] for p in plan]
+        all_lobs = sorted(set(p["lob"] for p in plan))
+        # If no plan data for this year, still show all configured LOBs
+        if not all_lobs and not (user and user.get("is_demo")):
+            try:
+                from app.models import PlanningUnit
+                all_lobs = sorted(
+                    pu.name for pu in PlanningUnit.query
+                    .filter_by(is_active=True).order_by(PlanningUnit.name).all()
+                )
+            except Exception:
+                all_lobs = []
         if sel_lobs:
             plan = [p for p in plan if p["lob"] in sel_lobs]
         rows = _summary_rows(plan, sel_months or None)
