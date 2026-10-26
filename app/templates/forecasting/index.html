@@ -1148,35 +1148,50 @@ function updateSummaryCards() {
   document.getElementById('slCard').textContent = document.getElementById('slTarget').value + '% / ' + document.getElementById('asaTarget').value + ' secs';
   document.getElementById('shrinkCard').textContent = document.getElementById('shrinkage').value + '%';
 
-  // ── Populate forecast stats bar above chart (uses ALL daily data, not filtered by view) ──
-  const selected = getSelectedLobs();
-  const allLobs = activeLob ? [activeLob] : (selected.length ? selected.filter(l => forecastData[l]) : Object.keys(forecastData));
-  let histVol = 0, fcVol = 0, ahtW2 = 0, ahtOff2 = 0, req2 = 0, peak2 = 0, peakDt2 = '', histDays = 0, fcDays = 0;
-  for (const lob of allLobs) {
-    const d = forecastData[lob];
-    if (!d || !d.daily) continue;
-    for (const row of d.daily) {
-      if (row.is_historic) {
-        histVol += row.offered;
-        histDays++;
-      } else {
-        fcVol += row.offered;
-        fcDays++;
-      }
-      ahtW2 += row.offered * row.aht;
-      ahtOff2 += row.offered;
-      req2 += row.agents_required;
-      if (row.offered > peak2) { peak2 = row.offered; peakDt2 = row.date; }
+  // ── Populate forecast stats bar above chart ──
+  let histVol = 0, fcVol = 0, ahtW2 = 0, ahtOff2 = 0, req2 = 0, peak2 = 0, peakDt2 = '';
+  let countLabel = '';
+
+  if (currentView === 'daily' && intervalData && intervalData.length) {
+    // Daily/intraday view — compute from intervalData (forecastData may be empty)
+    for (const iv of intervalData) {
+      const hOff = iv.hist_offered || 0;
+      const fOff = iv.fc_offered || 0;
+      histVol += hOff;
+      fcVol += fOff;
+      ahtW2 += iv.offered * iv.aht;
+      ahtOff2 += iv.offered;
+      req2 += iv.agents_required;
+      if (iv.offered > peak2) { peak2 = iv.offered; peakDt2 = iv.time || ''; }
     }
+    countLabel = intervalData.length + ' intervals';
+  } else {
+    // Weekly/monthly/yearly — compute from forecastData across all days
+    const selected2 = getSelectedLobs();
+    const allLobs = activeLob ? [activeLob] : (selected2.length ? selected2.filter(l => forecastData[l]) : Object.keys(forecastData));
+    let totalDays = 0;
+    for (const lob of allLobs) {
+      const d = forecastData[lob];
+      if (!d || !d.daily) continue;
+      for (const row of d.daily) {
+        if (row.is_historic) { histVol += row.offered; }
+        else { fcVol += row.offered; }
+        ahtW2 += row.offered * row.aht;
+        ahtOff2 += row.offered;
+        req2 += row.agents_required;
+        totalDays++;
+        if (row.offered > peak2) { peak2 = row.offered; peakDt2 = row.date; }
+      }
+    }
+    countLabel = totalDays + ' days';
   }
+
   const totalVol = histVol + fcVol;
-  const totalDays = histDays + fcDays;
-  const avgD2 = totalDays > 0 ? Math.round(totalVol / totalDays) : 0;
   const aht2 = ahtOff2 > 0 ? Math.round(ahtW2 / ahtOff2) : 0;
 
   document.getElementById('statHistVol').textContent = Math.round(histVol).toLocaleString();
   document.getElementById('statFcVol').textContent = fcVol > 0 ? Math.round(fcVol).toLocaleString() : '—';
-  document.getElementById('statAvgDaily').textContent = avgD2.toLocaleString();
+  document.getElementById('statAvgDaily').textContent = countLabel;
   document.getElementById('statPeakDay').textContent = Math.round(peak2).toLocaleString() + (peakDt2 ? ' (' + peakDt2 + ')' : '');
   document.getElementById('statAvgAht').textContent = aht2 + 's';
   document.getElementById('statFte').textContent = Math.round(req2).toLocaleString();
