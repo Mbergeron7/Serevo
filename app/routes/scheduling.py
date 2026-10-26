@@ -104,6 +104,89 @@ def index():
 
 
 
+# ── Cascading filter options (API) ─────────────────────────
+@scheduling_bp.route("/filter-options", methods=["POST"])
+@login_required
+def filter_options():
+    """Return selections, skills, and shift sequences filtered by LOB.
+    When a LOB is selected, only return items linked to employees in that LOB.
+    When no LOB is selected, return all active items."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        lob = (payload.get("lob") or "").strip()
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            # Demo mode: return everything (no filtering)
+            from app.demo_data import get_demo_selections, get_demo_skills_config, get_demo_shift_sequences
+            return jsonify({
+                "success": True,
+                "selections": get_demo_selections(),
+                "skills": get_demo_skills_config(),
+                "shift_sequences": get_demo_shift_sequences().get("items", []),
+            })
+
+        from app.models import (PlanningUnit, Employee, Selection, SelectionMember,
+                                SkillGroup, SkillMapping, ShiftSequence, EmployeeShiftSequence)
+
+        if not lob:
+            # No LOB filter — return all active items
+            selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+            skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
+            shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
+        else:
+            # Find PU for selected LOB
+            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+            if not pu:
+                return jsonify({"success": True, "selections": [], "skills": [], "shift_sequences": []})
+
+            # Get employee IDs in this LOB (include children for multi-activity PUs)
+            pu_ids = [pu.id]
+            if pu.is_multi_activity:
+                pu_ids += [c.id for c in (pu.children or [])]
+            emp_ids = [e.id for e in Employee.query.filter(
+                Employee.planning_unit_id.in_(pu_ids),
+                Employee.status.notin_(["Inactive", "Terminated", "Deleted"]),
+            ).all()]
+
+            if not emp_ids:
+                return jsonify({"success": True, "selections": [], "skills": [], "shift_sequences": []})
+
+            # Selections that have at least one member in this LOB
+            sel_ids = db.session.query(SelectionMember.selection_id).filter(
+                SelectionMember.employee_id.in_(emp_ids)
+            ).distinct().all()
+            sel_ids = [r[0] for r in sel_ids]
+            selections = [{"id": s.id, "name": s.name} for s in
+                          Selection.query.filter(Selection.id.in_(sel_ids), Selection.is_active == True).order_by(Selection.name).all()] if sel_ids else []
+
+            # Skills that have at least one mapping to employees in this LOB
+            sk_ids = db.session.query(SkillMapping.skill_group_id).filter(
+                SkillMapping.employee_id.in_(emp_ids), SkillMapping.is_active == True
+            ).distinct().all()
+            sk_ids = [r[0] for r in sk_ids]
+            skills = [{"id": s.id, "name": s.name} for s in
+                      SkillGroup.query.filter(SkillGroup.id.in_(sk_ids), SkillGroup.is_active == True).order_by(SkillGroup.name).all()] if sk_ids else []
+
+            # Shift sequences assigned to employees in this LOB
+            ss_ids = db.session.query(EmployeeShiftSequence.shift_sequence_id).filter(
+                EmployeeShiftSequence.employee_id.in_(emp_ids)
+            ).distinct().all()
+            ss_ids = [r[0] for r in ss_ids]
+            shift_sequences = [{"id": s.id, "name": s.name} for s in
+                               ShiftSequence.query.filter(ShiftSequence.id.in_(ss_ids), ShiftSequence.is_active == True).order_by(ShiftSequence.name).all()] if ss_ids else []
+
+        return jsonify({
+            "success": True,
+            "selections": selections,
+            "skills": skills,
+            "shift_sequences": shift_sequences,
+        })
+    except Exception as e:
+        log.exception("filter-options error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 # ── Generate schedule (API) ─────────────────────────────────
 @scheduling_bp.route("/generate", methods=["POST"])
 @login_required

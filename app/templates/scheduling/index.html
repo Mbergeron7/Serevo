@@ -1339,8 +1339,48 @@ function hideLoading() {
 // EMPLOYEE PICKER
 // ═══════════════════════════════════════════════════════════
 document.getElementById('cfgLOB').addEventListener('change', function() {
+  updateFilterDropdowns(this.value);
   loadEmployeesForLOB(this.value);
 });
+
+function updateFilterDropdowns(lob) {
+  fetch('/scheduling/filter-options', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lob: lob}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) return;
+    // Rebuild Selection dropdown
+    const selEl = document.getElementById('cfgSelection');
+    const prevSel = selEl.value;
+    selEl.innerHTML = '<option value="">All</option>';
+    (data.selections || []).forEach(s => {
+      selEl.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+    });
+    if ([...selEl.options].some(o => o.value === prevSel)) selEl.value = prevSel;
+
+    // Rebuild Skill dropdown
+    const skEl = document.getElementById('cfgSkill');
+    const prevSk = skEl.value;
+    skEl.innerHTML = '<option value="">All</option>';
+    (data.skills || []).forEach(s => {
+      skEl.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+    });
+    if ([...skEl.options].some(o => o.value === prevSk)) skEl.value = prevSk;
+
+    // Rebuild Shift Seq dropdown
+    const sqEl = document.getElementById('cfgShiftSeq');
+    const prevSq = sqEl.value;
+    sqEl.innerHTML = '<option value="">All</option>';
+    (data.shift_sequences || []).forEach(s => {
+      sqEl.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+    });
+    if ([...sqEl.options].some(o => o.value === prevSq)) sqEl.value = prevSq;
+  })
+  .catch(() => {});
+}
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
   if (!document.getElementById('empFilterWrap').contains(e.target)) {
