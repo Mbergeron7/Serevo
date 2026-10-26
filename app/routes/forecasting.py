@@ -1323,12 +1323,14 @@ def forecast_diag_orphans():
     mapping_list = [{"source": m.source_name, "target": m.planning_unit_name} for m in mappings]
 
     # Show route assignments for all PUs
-    from app.models import PlanningUnitRoute
+    from app.models import CallRoute
     pu_routes = db.session.query(
-        PlanningUnitRoute.planning_unit_id,
+        CallRoute.planning_unit_id,
         PlanningUnit.name,
-        PlanningUnitRoute.route_id,
-    ).join(PlanningUnit, PlanningUnit.id == PlanningUnitRoute.planning_unit_id).all()
+        CallRoute.route_id,
+    ).join(PlanningUnit, PlanningUnit.id == CallRoute.planning_unit_id).filter(
+        CallRoute.is_active == True
+    ).all()
     assigned = [{"pu": r.name, "route_id": r.route_id} for r in pu_routes]
 
     return jsonify(success=True, orphan_routes=routes, mappings=mapping_list,
