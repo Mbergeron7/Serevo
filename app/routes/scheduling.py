@@ -149,32 +149,50 @@ def filter_options():
                 Employee.status.notin_(["Inactive", "Terminated", "Deleted"]),
             ).all()]
 
-            if not emp_ids:
-                return jsonify({"success": True, "selections": [], "skills": [], "shift_sequences": []})
+            # All active items (fallback when no employee relationships exist)
+            all_selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+            all_skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
+            all_shift_seqs = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
 
-            # Selections that have at least one member in this LOB
+            if not emp_ids:
+                return jsonify({"success": True, "selections": all_selections, "skills": all_skills, "shift_sequences": all_shift_seqs})
+
+            # Selections: filter by LOB employees, fall back to all if no memberships exist
             sel_ids = db.session.query(SelectionMember.selection_id).filter(
                 SelectionMember.employee_id.in_(emp_ids)
             ).distinct().all()
             sel_ids = [r[0] for r in sel_ids]
-            selections = [{"id": s.id, "name": s.name} for s in
-                          Selection.query.filter(Selection.id.in_(sel_ids), Selection.is_active == True).order_by(Selection.name).all()] if sel_ids else []
+            if sel_ids:
+                selections = [{"id": s.id, "name": s.name} for s in
+                              Selection.query.filter(Selection.id.in_(sel_ids), Selection.is_active == True).order_by(Selection.name).all()]
+            else:
+                # No membership records — check if ANY memberships exist at all
+                any_members = db.session.query(SelectionMember.id).limit(1).first()
+                selections = all_selections if not any_members else []
 
-            # Skills that have at least one mapping to employees in this LOB
+            # Skills: filter by LOB employees, fall back to all if no mappings exist
             sk_ids = db.session.query(SkillMapping.skill_group_id).filter(
                 SkillMapping.employee_id.in_(emp_ids), SkillMapping.is_active == True
             ).distinct().all()
             sk_ids = [r[0] for r in sk_ids]
-            skills = [{"id": s.id, "name": s.name} for s in
-                      SkillGroup.query.filter(SkillGroup.id.in_(sk_ids), SkillGroup.is_active == True).order_by(SkillGroup.name).all()] if sk_ids else []
+            if sk_ids:
+                skills = [{"id": s.id, "name": s.name} for s in
+                          SkillGroup.query.filter(SkillGroup.id.in_(sk_ids), SkillGroup.is_active == True).order_by(SkillGroup.name).all()]
+            else:
+                any_mappings = db.session.query(SkillMapping.id).limit(1).first()
+                skills = all_skills if not any_mappings else []
 
-            # Shift sequences assigned to employees in this LOB
+            # Shift sequences: filter by LOB employees, fall back to all if no assignments exist
             ss_ids = db.session.query(EmployeeShiftSequence.shift_sequence_id).filter(
                 EmployeeShiftSequence.employee_id.in_(emp_ids)
             ).distinct().all()
             ss_ids = [r[0] for r in ss_ids]
-            shift_sequences = [{"id": s.id, "name": s.name} for s in
-                               ShiftSequence.query.filter(ShiftSequence.id.in_(ss_ids), ShiftSequence.is_active == True).order_by(ShiftSequence.name).all()] if ss_ids else []
+            if ss_ids:
+                shift_sequences = [{"id": s.id, "name": s.name} for s in
+                                   ShiftSequence.query.filter(ShiftSequence.id.in_(ss_ids), ShiftSequence.is_active == True).order_by(ShiftSequence.name).all()]
+            else:
+                any_ss = db.session.query(EmployeeShiftSequence.id).limit(1).first()
+                shift_sequences = all_shift_seqs if not any_ss else []
 
         return jsonify({
             "success": True,
