@@ -1645,7 +1645,9 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
 
 
 def generate_and_save_forecast(lob, method="weighted", historical_days=90,
-                                forecast_days=90, window=7):
+                                forecast_days=90, window=7,
+                                service_level_target=None, target_asa=None,
+                                shrinkage=None):
     """
     Generate a forecast from DB historical data, run Erlang C to compute
     staffing requirements, and save both to the database.
@@ -1683,11 +1685,14 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     if not forecast:
         return {"ok": False, "error": f"No forecast generated for '{lob}'"}
 
-    # Use LOB-specific Erlang C parameters if available
+    # Use caller-provided Erlang C parameters, falling back to LOB settings
     lob_setting = unit.lob_setting if unit else None
-    sl_target = lob_setting.service_level_target if lob_setting else None
-    asa_target = lob_setting.target_asa if lob_setting else None
-    shrinkage_val = lob_setting.shrinkage_pct if lob_setting else None
+    sl_target = service_level_target if service_level_target is not None else (
+        lob_setting.service_level_target if lob_setting else None)
+    asa_target = target_asa if target_asa is not None else (
+        lob_setting.target_asa if lob_setting else None)
+    shrinkage_val = shrinkage if shrinkage is not None else (
+        lob_setting.shrinkage_pct if lob_setting else None)
 
     # Run Erlang C to compute requirements
     requirements = compute_requirements_from_forecast(

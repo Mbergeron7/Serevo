@@ -883,6 +883,7 @@ async function generateForecasts() {
           lob, method, historical_days: histDays,
           forecast_days: fcDays, window: 7,
           interval_minutes: parseInt(document.getElementById('intervalSelect').value),
+          service_level: sl, target_asa: asa, shrinkage: shrink,
         })
       });
       const data = await resp.json();

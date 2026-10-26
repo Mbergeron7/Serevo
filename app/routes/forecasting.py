@@ -474,6 +474,14 @@ def generate_from_history():
         fc_days = int(payload.get("forecast_days", 90))
         window = int(payload.get("window", 7))
 
+        # Erlang C overrides from UI
+        sl_raw = payload.get("service_level")
+        asa_raw = payload.get("target_asa")
+        shrink_raw = payload.get("shrinkage")
+        sl_val = float(sl_raw) if sl_raw is not None else None
+        asa_val = float(asa_raw) if asa_raw is not None else None
+        shrink_val = float(shrink_raw) if shrink_raw is not None else None
+
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
 
@@ -484,7 +492,10 @@ def generate_from_history():
                            "message": f"Generated forecasts for {ok_count} LOBs"})
         else:
             result = generate_and_save_forecast(lob, method, hist_days,
-                                                 fc_days, window)
+                                                 fc_days, window,
+                                                 service_level_target=sl_val,
+                                                 target_asa=asa_val,
+                                                 shrinkage=shrink_val)
             result["success"] = result.get("ok", False)
             return jsonify(result)
 
@@ -1216,13 +1227,16 @@ def push_scenario():
     if not unit:
         return jsonify(success=False, error="Planning unit not found")
 
-    # Re-generate forecast using scenario settings
+    # Re-generate forecast using scenario settings (including SL/ASA/shrinkage)
     from app.forecasting.engine import generate_and_save_forecast
     result = generate_and_save_forecast(
         unit.name,
         method=scenario.method,
         historical_days=scenario.historical_days,
         forecast_days=scenario.forecast_days,
+        service_level_target=scenario.service_level,
+        target_asa=scenario.target_asa,
+        shrinkage=scenario.shrinkage,
     )
 
     if not result.get("ok"):
