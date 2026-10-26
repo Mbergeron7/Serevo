@@ -1290,51 +1290,38 @@ def forecast_diag():
 @forecasting_bp.route("/api/diag/orphans", methods=["GET"])
 @login_required
 def forecast_diag_orphans():
-    """Check what route_ids and source_names exist in the 'Not in use' PU data."""
+    """Check what route_ids exist in the 'Not in use' PU data."""
     from app.models import db, PlanningUnit, IntervalActual
     from sqlalchemy import func as sa_func
 
-    niu = PlanningUnit.query.filter_by(name="Not in use").first()
-    if not niu:
-        return jsonify(success=False, error="No 'Not in use' PU found")
+    try:
+        niu = PlanningUnit.query.filter_by(name="Not in use").first()
+        if not niu:
+            return jsonify(success=False, error="No 'Not in use' PU found")
 
-    # Distinct route_ids in the orphaned data
-    route_ids = db.session.query(
-        IntervalActual.route_id,
-        sa_func.count(IntervalActual.id).label("cnt"),
-        sa_func.min(IntervalActual.timestamp).label("min_ts"),
-        sa_func.max(IntervalActual.timestamp).label("max_ts"),
-    ).filter(
-        IntervalActual.planning_unit_id == niu.id
-    ).group_by(IntervalActual.route_id).all()
+        # Distinct route_ids in the orphaned data
+        route_rows = db.session.query(
+            IntervalActual.route_id,
+            sa_func.count(IntervalActual.id).label("cnt"),
+            sa_func.min(IntervalActual.timestamp).label("min_ts"),
+            sa_func.max(IntervalActual.timestamp).label("max_ts"),
+        ).filter(
+            IntervalActual.planning_unit_id == niu.id
+        ).group_by(IntervalActual.route_id).all()
 
-    routes = []
-    for r in route_ids:
-        routes.append({
-            "route_id": r.route_id,
-            "count": r.cnt,
-            "min_date": str(r.min_ts)[:10] if r.min_ts else None,
-            "max_date": str(r.max_ts)[:10] if r.max_ts else None,
-        })
+        routes = []
+        for r in route_rows:
+            routes.append({
+                "route_id": r.route_id,
+                "count": r.cnt,
+                "min_date": str(r.min_ts)[:10] if r.min_ts else None,
+                "max_date": str(r.max_ts)[:10] if r.max_ts else None,
+            })
 
-    # Also show the LOB mapping table
-    from app.models import LobMapping
-    mappings = LobMapping.query.all()
-    mapping_list = [{"source": m.source_name, "target": m.planning_unit_name} for m in mappings]
-
-    # Show route assignments for all PUs
-    from app.models import CallRoute
-    pu_routes = db.session.query(
-        CallRoute.planning_unit_id,
-        PlanningUnit.name,
-        CallRoute.route_id,
-    ).join(PlanningUnit, PlanningUnit.id == CallRoute.planning_unit_id).filter(
-        CallRoute.is_active == True
-    ).all()
-    assigned = [{"pu": r.name, "route_id": r.route_id} for r in pu_routes]
-
-    return jsonify(success=True, orphan_routes=routes, mappings=mapping_list,
-                   assigned_routes=assigned, total_orphan_intervals=sum(r["count"] for r in routes))
+        return jsonify(success=True, orphan_routes=routes,
+                       total_orphan_intervals=sum(r["count"] for r in routes))
+    except Exception as e:
+        return jsonify(success=False, error=str(e))
 
 
 def _demo_scenarios():
