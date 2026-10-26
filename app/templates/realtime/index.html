@@ -1052,8 +1052,6 @@ function _absSumToggle(cb, name) {
 function renderAbsent(d) {
   const el = $('view-absent');
   if (!d || !d.success) return noData(el, 'Absenteeism unavailable', d && d.error);
-  // Reset filters so they rebuild from fresh data
-  Object.keys(_absFilter).forEach(k => delete _absFilter[k]);
 
   const row = r => `<tr><td>${esc(r.lob)}</td><td>${fmt(r.scheduled)}</td><td>${fmt(r.absent)}</td><td class="${r.absence_pct==null?'':(r.absence_pct<=5?'cell-good':(r.absence_pct<=10?'cell-warn':'cell-bad'))}">${pct(r.absence_pct)}</td><td>${fmt(r.late)}</td><td>${pct(r.late_pct)}</td><td>${fmt(r.early_leave)}</td><td>${pct(r.early_leave_pct)}</td></tr>`;
   // Build LOB summary filter
@@ -1104,6 +1102,10 @@ function renderAbsent(d) {
   h += `</div>`;
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+  // Re-apply saved filters after DOM rebuild
+  ['absSummary','absNotLogged','absNotLogged_lob','absLate','absLate_lob','absEarly','absEarly_lob'].forEach(id => {
+    if (_absFilter[id]) _absApplyFilter(id);
+  });
 }
 
 /* ── Agent Status ────────────────────────────── */
