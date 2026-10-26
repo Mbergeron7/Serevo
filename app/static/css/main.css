@@ -49,7 +49,6 @@ body {
   flex-direction: column;
   overflow-x: hidden;
 }
-main { overflow-x: hidden; }
 
 a { color: var(--brand-accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
