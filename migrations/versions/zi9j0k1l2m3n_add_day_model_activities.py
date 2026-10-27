@@ -15,20 +15,27 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        "day_model_activities",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("day_model_id", sa.Integer(), sa.ForeignKey("day_models.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("activity_id", sa.Integer(), sa.ForeignKey("activities.id"), nullable=True),
-        sa.Column("offset_mins", sa.Integer(), default=0),
-        sa.Column("duration_mins", sa.Integer(), default=30),
-        sa.Column("is_flexible", sa.Boolean(), default=False),
-        sa.Column("window_start", sa.Integer(), nullable=True),
-        sa.Column("window_end", sa.Integer(), nullable=True),
-        sa.Column("sort_order", sa.Integer(), default=0),
-    )
-    op.create_index("ix_day_model_activities_day_model_id", "day_model_activities", ["day_model_id"])
-    op.create_index("ix_day_model_activities_activity_id", "day_model_activities", ["activity_id"])
+    # Use IF NOT EXISTS to handle the case where the table was already created
+    conn = op.get_bind()
+    table_exists = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'day_model_activities')"
+    )).scalar()
+
+    if not table_exists:
+        op.create_table(
+            "day_model_activities",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("day_model_id", sa.Integer(), sa.ForeignKey("day_models.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("activity_id", sa.Integer(), sa.ForeignKey("activities.id"), nullable=True),
+            sa.Column("offset_mins", sa.Integer(), default=0),
+            sa.Column("duration_mins", sa.Integer(), default=30),
+            sa.Column("is_flexible", sa.Boolean(), default=False),
+            sa.Column("window_start", sa.Integer(), nullable=True),
+            sa.Column("window_end", sa.Integer(), nullable=True),
+            sa.Column("sort_order", sa.Integer(), default=0),
+        )
+        op.create_index("ix_day_model_activities_day_model_id", "day_model_activities", ["day_model_id"])
+        op.create_index("ix_day_model_activities_activity_id", "day_model_activities", ["activity_id"])
 
     # Backfill from activities_json
     conn = op.get_bind()
