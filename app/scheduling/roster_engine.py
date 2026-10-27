@@ -418,9 +418,13 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     def _consistent_start_ok(member, slot):
         """Hard check: does this slot match the member's established start time?
-        Returns True if member has no pref, no established time yet, or slot matches."""
+        Returns True if member has no pref, no established time yet, or slot matches.
+        Closer and opener slots are EXEMPT — consistent_start only governs day/mid
+        shifts; closings and openings are rotation duties everyone should share."""
         if not getattr(member, 'consistent_start', False):
             return True
+        if slot.role in ("closer", "opener"):
+            return True  # never block rotation duties
         established = consistent_start_times.get(member.id)
         if established is None:
             return True  # first assignment, no preference yet
@@ -434,9 +438,12 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     def _consistent_start_penalty(member, slot):
         """Soft tiebreaker for sorting — bonus for matching, penalty for mismatch.
-        The hard filter above does most of the work; this handles fallback cases."""
+        The hard filter above does most of the work; this handles fallback cases.
+        Closer/opener slots are exempt from consistent_start."""
         if not getattr(member, 'consistent_start', False):
             return 0
+        if slot.role in ("closer", "opener"):
+            return 0  # never penalise rotation duties
         established = consistent_start_times.get(member.id)
         if established is None:
             return 0
@@ -445,7 +452,10 @@ def _process_week(week_days, group, members, slots_by_day_type,
         return 50
 
     def _record_consistent_start(member_id, slot):
-        """Record the first shift_start for a consistent_start member."""
+        """Record the first non-closer/opener shift_start for a consistent_start member.
+        Closing and opening assignments don't set or lock the consistent start time."""
+        if slot.role in ("closer", "opener"):
+            return  # rotation duties don't define the member's "normal" start
         if member_id not in consistent_start_times:
             # Find the member object
             m_obj = next((m for m in members if m.id == member_id), None)
