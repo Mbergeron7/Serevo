@@ -33,10 +33,8 @@ def _pct(num, den, nd=1):
 
 def _now():
     try:
-        from zoneinfo import ZoneInfo
-        from config import cfg
-        tz = getattr(cfg, "TIMEZONE", None) or "America/Toronto"
-        return datetime.datetime.now(ZoneInfo(tz)).replace(tzinfo=None)
+        from app.utils.timezone import get_app_timezone
+        return datetime.datetime.now(get_app_timezone()).replace(tzinfo=None)
     except Exception:
         return datetime.datetime.now()
 

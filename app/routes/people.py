@@ -27,7 +27,6 @@ log = logging.getLogger("serevo.people")
 
 people_bp = Blueprint("people", __name__, url_prefix="/people")
 
-TIMEZONE = "America/Toronto"
 
 
 from app.routes._utils import get_sheet as _get_sheet
@@ -155,25 +154,8 @@ def roster():
     # Count stats
     active = [e for e in employees
               if str(e.get("Status", "")).strip().lower() in ("active", "")]
-    lobs = set()
-    for e in employees:
-        lob = (e.get("Latest Skill Name") or "").strip()
-        if lob:
-            lobs.add(lob)
-
-    # Build full list of active PU names for the LOB dropdown
-    # (includes PUs that may not have employees assigned yet)
-    all_pu_names = sorted(lobs)
-    if not (user and user.get("is_demo")):
-        try:
-            active_pus = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-            pu_names = {(pu.name or "").strip() for pu in active_pus if (pu.name or "").strip()}
-            # Merge: employee skill names + active PU names, minus inactive PUs
-            inactive_pus = PlanningUnit.query.filter_by(is_active=False).all()
-            inactive_names = {(pu.name or "").strip() for pu in inactive_pus}
-            all_pu_names = sorted((lobs | pu_names) - inactive_names)
-        except Exception:
-            pass
+    # LOB dropdown — single canonical source
+    all_pu_names = PlanningUnit.get_available_lob_names()
 
     rotation_map = {}  # placeholder — rotation feature not yet wired
 
@@ -478,7 +460,8 @@ def employee_profile(emp_id):
                 self.status = d.get("Status", "Active")
                 self.team_lead = d.get("Team Lead", "")
                 self.languages = d.get("Languages", "English")
-                self.timezone = d.get("Timezone", "America/Toronto")
+                from app.utils.timezone import get_app_timezone_name
+                self.timezone = d.get("Timezone", get_app_timezone_name())
                 self.skill_start = d.get("Latest Skill Start", "")
                 self.skill_end = d.get("Latest Skill End", "")
                 self.end_date = d.get("End Date", "")

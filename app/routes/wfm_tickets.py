@@ -714,11 +714,11 @@ def dropdown_data():
 
     if user.get("is_demo"):
         demo_lobs = [
-            {"id": "SS Sales", "name": "SS Sales"},
-            {"id": "SS Service", "name": "SS Service"},
+            {"id": "Sales Support", "name": "Sales Support"},
+            {"id": "Customer Service", "name": "Customer Service"},
             {"id": "PS Sales", "name": "PS Sales"},
             {"id": "PS Service", "name": "PS Service"},
-            {"id": "SS Case Management", "name": "SS Case Management"},
+            {"id": "Case Management", "name": "Case Management"},
             {"id": "Collections", "name": "Collections"},
         ]
         return jsonify(success=True,
@@ -777,11 +777,11 @@ def agents_by_lob():
     if user.get("is_demo"):
         # Return demo agents for the selected LOB
         demo_agents = {
-            "SS Sales": ["Alex Morgan", "Jordan Rivera", "Casey Chen"],
-            "SS Service": ["Sam Patel", "Taylor Kim"],
+            "Sales Support": ["Alex Morgan", "Jordan Rivera", "Casey Chen"],
+            "Customer Service": ["Sam Patel", "Taylor Kim"],
             "PS Sales": ["Drew Nguyen", "Riley Brooks"],
             "PS Service": ["Priya Sharma", "Alex Morgan"],
-            "SS Case Management": ["Jordan Rivera", "Casey Chen", "Sam Patel"],
+            "Case Management": ["Jordan Rivera", "Casey Chen", "Sam Patel"],
             "Collections": ["Taylor Kim", "Drew Nguyen", "Riley Brooks"],
         }
         agents = demo_agents.get(lob_name, list(demo_agents.values())[0] if demo_agents else [])

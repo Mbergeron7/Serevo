@@ -2109,47 +2109,14 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
 
 
 def get_available_lobs(sheet=None):
-    """Return sorted list of distinct LOB names from the employee roster."""
+    """Return sorted list of distinct LOB names.
+
+    Delegates to PlanningUnit.get_available_lob_names() — the single
+    canonical source.  The *sheet* parameter is kept for API compat
+    but is no longer used.
+    """
     try:
-        from app.people.manager import get_employees
-        employees, err = get_employees(sheet)
-        if err:
-            employees = []
-        lobs = set()
-        for emp in employees:
-            status = str(emp.get("Status", "")).strip().lower()
-            if status in ("inactive", "terminated", "deleted"):
-                continue
-            lob = (emp.get("Latest Skill Name") or "").strip()
-            if lob:
-                lobs.add(lob)
-        # Always merge in PlanningUnit table (not just as fallback)
-        try:
-            from app.models import PlanningUnit
-            units = PlanningUnit.query.filter_by(is_active=True).all()
-            for u in units:
-                name = (u.name or "").strip()
-                if name:
-                    lobs.add(name)
-        except Exception:
-            pass
-        # Fallback 2: try the Google Sheet directly if still no LOBs
-        if not lobs and sheet is None:
-            try:
-                from app.people.manager import _open_sheet
-                sh, sh_err = _open_sheet()
-                if sh and not sh_err:
-                    ws = sh.worksheet("EMPLOYEES")
-                    records = ws.get_all_records()
-                    for emp in records:
-                        status = str(emp.get("Status", "")).strip().lower()
-                        if status in ("inactive", "terminated", "deleted"):
-                            continue
-                        lob = (emp.get("Latest Skill Name") or "").strip()
-                        if lob:
-                            lobs.add(lob)
-            except Exception:
-                pass
-        return sorted(lobs)
+        from app.models import PlanningUnit
+        return PlanningUnit.get_available_lob_names()
     except Exception:
         return []

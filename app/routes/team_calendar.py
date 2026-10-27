@@ -9,6 +9,7 @@ from datetime import date, timedelta, datetime
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
+from app.constants import LOB_ALL_LABEL
 from app.models import (
     db, Employee, Schedule, PTOEntry, PlanningUnit, ShiftSegment,
 )
@@ -47,7 +48,7 @@ def api_data():
 
     payload = request.get_json(silent=True) or {}
     lob = payload.get("lob", "")
-    if lob == "All":
+    if lob == LOB_ALL_LABEL:
         lob = ""
     week_start_str = payload.get("week_start")
 

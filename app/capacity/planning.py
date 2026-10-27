@@ -28,7 +28,8 @@ API_LEGACY = os.environ.get("WFM_API_LEGACY", os.environ.get("WFM_API_LEGACY", "
 
 WFM_TOKEN      = os.environ.get("WFM_API_TOKEN", os.environ.get("PW_API_TOKEN", ""))
 WFM_UTC_OFFSET = int(os.environ.get("WFM_UTC_OFFSET", os.environ.get("PW_UTC_OFFSET", "-4")))
-TIMEZONE      = os.environ.get("WFM_TZ", "America/Toronto")
+from app.utils.timezone import get_app_timezone_name as _get_app_tz
+TIMEZONE      = os.environ.get("WFM_TZ", "") or _get_app_tz()
 
 # ── Business hours (local) ───────────────────────────────────────
 BIZ_OPEN_WD  = "08:00"
@@ -76,7 +77,7 @@ def _get_wfm_connection():
         import json as _json
         from app.models import APIConnection
         conn = (APIConnection.query
-                .filter(APIConnection.provider.in_(["wfm_legacy", "injixo"]),
+                .filter(APIConnection.provider.in_(["wfm_legacy"]),
                         APIConnection.is_active == True)
                 .order_by(APIConnection.updated_at.desc()).first())
         if conn:
@@ -1112,7 +1113,7 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
 
     If start_date and end_date are given, clears ALL existing schedules for
     matched employees across the entire date range first. This ensures that
-    employees whose schedules were removed in PeopleWare (e.g., day off)
+    employees whose schedules were removed in the source system (e.g., day off)
     don't keep stale shifts in Serevo.
 
     Returns (created, replaced, skipped_unknown_employee)."""
@@ -1148,8 +1149,8 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
         resolved.append((emp, s))
 
     # Bulk-clear ALL existing schedules in the date range before inserting.
-    # This ensures PeopleWare is the source of truth — any manually created
-    # or previously imported schedules are replaced entirely.
+    # This ensures the source system is the source of truth — any manually
+    # created or previously imported schedules are replaced entirely.
     if start_date and end_date:
         # Delete child segments first (bulk), then schedules
         old_sched_ids = db.session.query(Schedule.id).filter(

@@ -452,7 +452,7 @@ def supporting_data():
     user = get_current_user()
     if user and user.get("is_demo"):
         return jsonify(success=True,
-            planning_units=[{"id": 1, "name": "Self-Storage"}, {"id": 2, "name": "Portable Storage"}],
+            planning_units=[{"id": 1, "name": "Sales Support"}, {"id": 2, "name": "Customer Service"}],
             shift_templates=[],
             activities=[],
             employees=[],
@@ -490,37 +490,37 @@ def _demo_day_models():
     return [
         {"id": 1, "name": "FT 8.5hrs 8:00-16:30", "abbreviation": "FT8.5-8", "start_time": "08:00",
          "end_time": "16:30", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#059669", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#059669", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 0, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 2, "name": "FT 8.5hrs 8:30-17:00", "abbreviation": "FT8.5-830", "start_time": "08:30",
          "end_time": "17:00", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#2563eb", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#2563eb", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 1, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 3, "name": "FT 8.5hrs 9:00-17:30", "abbreviation": "FT8.5-9", "start_time": "09:00",
          "end_time": "17:30", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#7c3aed", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#7c3aed", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 2, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 4, "name": "FT 8.5hrs 9:30-18:00", "abbreviation": "FT8.5-930", "start_time": "09:30",
          "end_time": "18:00", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#dc2626", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#dc2626", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 3, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 5, "name": "FT 8.5hrs 10:00-18:30", "abbreviation": "FT8.5-10", "start_time": "10:00",
          "end_time": "18:30", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#ea580c", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#ea580c", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 4, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 6, "name": "FT 10.5hrs 11:30-22:00", "abbreviation": "FT10.5", "start_time": "11:30",
          "end_time": "22:00", "paid_hours": 10.0, "total_hours": 10.5, "model_type": "Fixed",
-         "color": "#be185d", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#be185d", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 5, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
         {"id": 7, "name": "FT 8.5hrs 13:30-22:00", "abbreviation": "FT8.5-1330", "start_time": "13:30",
          "end_time": "22:00", "paid_hours": 8.0, "total_hours": 8.5, "model_type": "Fixed",
-         "color": "#4338ca", "day_type": "any", "planning_unit": "Self-Storage", "is_active": True,
+         "color": "#4338ca", "day_type": "any", "planning_unit": "Sales Support", "is_active": True,
          "activities": [], "sort_order": 6, "shift_template_id": None, "shift_template": "",
          "planning_unit_id": 1},
     ]
@@ -528,8 +528,8 @@ def _demo_day_models():
 
 def _demo_week_time_patterns():
     return [
-        {"id": 1, "name": "Self-Storage Q1", "abbreviation": "SS Q1", "days": {},
-         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Self-Storage",
+        {"id": 1, "name": "Sales Support Q1", "abbreviation": "SP Q1", "days": {},
+         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Sales Support",
          "planning_unit_id": 1, "is_active": True,
          "assigned_day_models": [
              {"id": 1, "day_model_id": 1, "day_model_name": "FT 8.5hrs 8:00-16:30", "start_time": "08:00", "end_time": "16:30", "color": "#059669", "position": 0},
@@ -537,8 +537,8 @@ def _demo_week_time_patterns():
              {"id": 3, "day_model_id": 3, "day_model_name": "FT 8.5hrs 9:00-17:30", "start_time": "09:00", "end_time": "17:30", "color": "#7c3aed", "position": 2},
              {"id": 4, "day_model_id": 4, "day_model_name": "FT 8.5hrs 9:30-18:00", "start_time": "09:30", "end_time": "18:00", "color": "#dc2626", "position": 3},
          ]},
-        {"id": 2, "name": "Self-Storage Q2", "abbreviation": "SS Q2", "days": {},
-         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Self-Storage",
+        {"id": 2, "name": "Sales Support Q2", "abbreviation": "SP Q2", "days": {},
+         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Sales Support",
          "planning_unit_id": 1, "is_active": True,
          "assigned_day_models": [
              {"id": 5, "day_model_id": 1, "day_model_name": "FT 8.5hrs 8:00-16:30", "start_time": "08:00", "end_time": "16:30", "color": "#059669", "position": 0},
@@ -548,8 +548,8 @@ def _demo_week_time_patterns():
              {"id": 9, "day_model_id": 5, "day_model_name": "FT 8.5hrs 10:00-18:30", "start_time": "10:00", "end_time": "18:30", "color": "#ea580c", "position": 4},
              {"id": 10, "day_model_id": 6, "day_model_name": "FT 10.5hrs 11:30-22:00", "start_time": "11:30", "end_time": "22:00", "color": "#be185d", "position": 5},
          ]},
-        {"id": 3, "name": "Self-Storage Q3", "abbreviation": "SS Q3", "days": {},
-         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Self-Storage",
+        {"id": 3, "name": "Sales Support Q3", "abbreviation": "SP Q3", "days": {},
+         "total_hours": 42.5, "max_exception_days": 0, "planning_unit": "Sales Support",
          "planning_unit_id": 1, "is_active": True,
          "assigned_day_models": [
              {"id": 11, "day_model_id": 1, "day_model_name": "FT 8.5hrs 8:00-16:30", "start_time": "08:00", "end_time": "16:30", "color": "#059669", "position": 0},
@@ -565,14 +565,14 @@ def _demo_week_time_patterns():
 
 def _demo_work_time_pattern_models():
     return [
-        {"id": 1, "name": "Self-Storage Standard", "abbreviation": "SS", "model_type": "Fixed",
-         "description": "Standard Self-Storage scheduling with Q1-Q4 shift eligibility",
+        {"id": 1, "name": "Sales Standard", "abbreviation": "SP", "model_type": "Fixed",
+         "description": "Standard scheduling with Q1-Q4 shift eligibility",
          "patterns": [1, 2, 3], "exception_wtp_id": None, "exception_wtp_name": "",
-         "planning_unit_id": 1, "planning_unit": "Self-Storage", "is_active": True,
+         "planning_unit_id": 1, "planning_unit": "Sales Support", "is_active": True,
          "assigned_patterns": [
-             {"id": 1, "week_time_pattern_id": 1, "week_time_pattern_name": "Self-Storage Q1", "position": 0},
-             {"id": 2, "week_time_pattern_id": 2, "week_time_pattern_name": "Self-Storage Q2", "position": 1},
-             {"id": 3, "week_time_pattern_id": 3, "week_time_pattern_name": "Self-Storage Q3", "position": 2},
+             {"id": 1, "week_time_pattern_id": 1, "week_time_pattern_name": "Sales Support Q1", "position": 0},
+             {"id": 2, "week_time_pattern_id": 2, "week_time_pattern_name": "Sales Support Q2", "position": 1},
+             {"id": 3, "week_time_pattern_id": 3, "week_time_pattern_name": "Sales Support Q3", "position": 2},
          ]},
     ]
 
@@ -588,7 +588,7 @@ def _demo_quartiles():
             "employee_name": f"{e.get('First Name', '')} {e.get('Last Name', '')}".strip(),
             "employee_ext_id": str(e.get("Employee ID", "")),
             "planning_unit_id": 1,
-            "planning_unit": e.get("Latest Skill Name", "Self-Storage"),
+            "planning_unit": e.get("Latest Skill Name", "Sales Support"),
             "quartile": q,
             "effective_date": "2024-01-01",
             "notes": "",
@@ -598,15 +598,15 @@ def _demo_quartiles():
 
 def _demo_quartile_rules():
     return [
-        {"id": 1, "planning_unit_id": 1, "planning_unit_name": "SS Sales",
+        {"id": 1, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
          "quartile": 1, "day_model_id": 1, "day_model_name": "8h Day (08-16)",
          "day_model_abbr": "8D", "day_model_start": "08:00", "day_model_end": "16:00",
          "day_model_paid": 8.0, "priority": 0},
-        {"id": 2, "planning_unit_id": 1, "planning_unit_name": "SS Sales",
+        {"id": 2, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
          "quartile": 1, "day_model_id": 2, "day_model_name": "8h Mid (10-18)",
          "day_model_abbr": "8M", "day_model_start": "10:00", "day_model_end": "18:00",
          "day_model_paid": 8.0, "priority": 1},
-        {"id": 3, "planning_unit_id": 1, "planning_unit_name": "SS Sales",
+        {"id": 3, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
          "quartile": 4, "day_model_id": 3, "day_model_name": "10h Day (07-17)",
          "day_model_abbr": "10D", "day_model_start": "07:00", "day_model_end": "17:00",
          "day_model_paid": 10.0, "priority": 0},

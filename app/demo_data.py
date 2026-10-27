@@ -1271,9 +1271,9 @@ def get_demo_settings_data():
         "availability": availability,
         "current_year": cur_year,
         "lob_mappings": [
-            {"id": 1, "source_name": "SS Sales EN",          "planning_unit_name": "Sales Support"},
-            {"id": 2, "source_name": "SS Sales FR",          "planning_unit_name": "Sales Support"},
-            {"id": 3, "source_name": "SS Sales Combined",    "planning_unit_name": "Sales Support"},
+            {"id": 1, "source_name": "Sales EN",              "planning_unit_name": "Sales Support"},
+            {"id": 2, "source_name": "Sales FR",              "planning_unit_name": "Sales Support"},
+            {"id": 3, "source_name": "Sales Combined",        "planning_unit_name": "Sales Support"},
             {"id": 4, "source_name": "Tech_Support_L2",      "planning_unit_name": "Tech Help Desk"},
             {"id": 5, "source_name": "Billing-Collections",  "planning_unit_name": "Billing"},
         ],
@@ -1524,9 +1524,9 @@ def get_demo_planning_units_config():
          "timezone": "America/Toronto", "is_active": True, "employee_count": 7,
          "is_multi_activity": True, "parent_id": None, "parent_name": None,
          "call_routes": [
-             {"id": 1, "route_id": "SS_SALES_EN", "name": "SS Sales EN"},
-             {"id": 2, "route_id": "SS_SALES_FR", "name": "SS Sales FR"},
-             {"id": 3, "route_id": "SS_SALES_COMBINED", "name": "SS Sales Combined"},
+             {"id": 1, "route_id": "SALES_EN", "name": "Sales EN"},
+             {"id": 2, "route_id": "SALES_FR", "name": "Sales FR"},
+             {"id": 3, "route_id": "SALES_COMBINED", "name": "Sales Combined"},
          ],
          "business_hours": [
              {"day": "Monday", "open": "08:00", "close": "20:00"},
@@ -1551,7 +1551,7 @@ def get_demo_planning_units_config():
          "timezone": "America/Toronto", "is_active": True, "employee_count": 4,
          "is_multi_activity": False, "parent_id": 1, "parent_name": "Sales Support",
          "call_routes": [
-             {"id": 4, "route_id": "SS_SALES_EN", "name": "SS Sales EN"},
+             {"id": 4, "route_id": "SALES_EN", "name": "Sales EN"},
          ],
          "business_hours": [],
          "assigned_activities": [
@@ -1564,7 +1564,7 @@ def get_demo_planning_units_config():
          "timezone": "America/Toronto", "is_active": True, "employee_count": 3,
          "is_multi_activity": False, "parent_id": 1, "parent_name": "Sales Support",
          "call_routes": [
-             {"id": 5, "route_id": "SS_SALES_FR", "name": "SS Sales FR"},
+             {"id": 5, "route_id": "SALES_FR", "name": "Sales FR"},
          ],
          "business_hours": [],
          "assigned_activities": [
@@ -1879,12 +1879,12 @@ def get_demo_wfm_tickets():
     """Return list of demo WFM tickets."""
     today = datetime.date.today()
     return [
-        {"id": 1, "subject": "Schedule Change for Alex Morgan", "description": "Need to move from morning to afternoon shift on the 15th for a doctor's appointment.", "category": "schedule_change", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Alex Morgan", "affected_date": (today + datetime.timedelta(days=5)).isoformat(), "affected_date_end": None, "lob": "SS Sales", "shift_time": "1:00 PM - 9:00 PM", "overtime_hours": None, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
-        {"id": 2, "subject": "Time Off Exception for Sam Patel", "description": "Starting next month, I'm no longer available on Fridays due to school. Requesting an ongoing exception.", "category": "time_off_exception", "priority": "low", "status": "in_progress", "submitted_by": 4, "submitter_name": "Sam Patel", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "Sam Patel", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=40)).isoformat(), "lob": "SS Service", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Need to adjust rotation.", "created_at": (today - datetime.timedelta(days=4)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
-        {"id": 3, "subject": "Overtime for Jordan Rivera", "description": "Willing to pick up extra hours during peak week to help with volume.", "category": "overtime", "priority": "medium", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved for 10 extra hours.", "affected_agents": "Jordan Rivera", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=14)).isoformat(), "lob": "SS Sales", "shift_time": "8:00 AM - 4:00 PM", "overtime_hours": 10.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=8)).isoformat(), "updated_at": (today - datetime.timedelta(days=6)).isoformat()},
+        {"id": 1, "subject": "Schedule Change for Alex Morgan", "description": "Need to move from morning to afternoon shift on the 15th for a doctor's appointment.", "category": "schedule_change", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Alex Morgan", "affected_date": (today + datetime.timedelta(days=5)).isoformat(), "affected_date_end": None, "lob": "Sales Support", "shift_time": "1:00 PM - 9:00 PM", "overtime_hours": None, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
+        {"id": 2, "subject": "Time Off Exception for Sam Patel", "description": "Starting next month, I'm no longer available on Fridays due to school. Requesting an ongoing exception.", "category": "time_off_exception", "priority": "low", "status": "in_progress", "submitted_by": 4, "submitter_name": "Sam Patel", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "Sam Patel", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=40)).isoformat(), "lob": "Customer Service", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Need to adjust rotation.", "created_at": (today - datetime.timedelta(days=4)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
+        {"id": 3, "subject": "Overtime for Jordan Rivera", "description": "Willing to pick up extra hours during peak week to help with volume.", "category": "overtime", "priority": "medium", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved for 10 extra hours.", "affected_agents": "Jordan Rivera", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=14)).isoformat(), "lob": "Sales Support", "shift_time": "8:00 AM - 4:00 PM", "overtime_hours": 10.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=8)).isoformat(), "updated_at": (today - datetime.timedelta(days=6)).isoformat()},
         {"id": 4, "subject": "Shift Swap for Casey Chen, Drew Nguyen", "description": "Casey and Drew would like to swap shifts on the 20th. Casey takes the closer and Drew takes the opener.", "category": "shift_swap", "priority": "medium", "status": "open", "submitted_by": 3, "submitter_name": "Casey Chen", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Casey Chen, Drew Nguyen", "affected_date": (today + datetime.timedelta(days=8)).isoformat(), "affected_date_end": None, "lob": "PS Sales", "shift_time": "6:00 AM - 2:00 PM", "overtime_hours": None, "swap_with": "Drew Nguyen", "internal_note": None, "created_at": (today - datetime.timedelta(days=2)).isoformat(), "updated_at": (today - datetime.timedelta(days=2)).isoformat()},
         {"id": 5, "subject": "Headcount for PS Service", "description": "Requesting 2 additional FTEs for PS Service to handle Q4 volume increase based on forecast.", "category": "headcount", "priority": "high", "status": "in_progress", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "", "affected_date": (today + datetime.timedelta(days=14)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=90)).isoformat(), "lob": "PS Service", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Pending leadership approval.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
-        {"id": 6, "subject": "Overtime for Taylor Kim, Riley Brooks", "description": "Both agents approved for weekend overtime to cover increased call volume.", "category": "overtime", "priority": "high", "status": "resolved", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved — 8 hours each on Saturday.", "affected_agents": "Taylor Kim, Riley Brooks", "affected_date": (today + datetime.timedelta(days=3)).isoformat(), "affected_date_end": None, "lob": "SS Service", "shift_time": "9:00 AM - 5:00 PM", "overtime_hours": 8.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=6)).isoformat(), "updated_at": (today - datetime.timedelta(days=4)).isoformat()},
+        {"id": 6, "subject": "Overtime for Taylor Kim, Riley Brooks", "description": "Both agents approved for weekend overtime to cover increased call volume.", "category": "overtime", "priority": "high", "status": "resolved", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved — 8 hours each on Saturday.", "affected_agents": "Taylor Kim, Riley Brooks", "affected_date": (today + datetime.timedelta(days=3)).isoformat(), "affected_date_end": None, "lob": "Customer Service", "shift_time": "9:00 AM - 5:00 PM", "overtime_hours": 8.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=6)).isoformat(), "updated_at": (today - datetime.timedelta(days=4)).isoformat()},
     ]
 
 

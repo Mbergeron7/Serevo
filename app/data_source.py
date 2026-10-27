@@ -113,7 +113,7 @@ def _date_str(day):
 def normalize_lob(name):
     """
     Normalize a LOB / workload name to its planning-unit name.
-    E.g. "SS Sales Combined" → "SS Sales", "SS Sales EN" → "SS Sales".
+    E.g. "Sales Combined" → "Sales Support", "Sales EN" → "Sales Support".
     Checks the database LobMapping table first (per-client configurable),
     falls back to the hard-coded mapping in capacity/planning.py,
     and returns the name as-is if no mapping exists.
@@ -367,7 +367,7 @@ def get_source():
     global _INSTANCE
     if _INSTANCE is None:
         mode = os.environ.get("DATA_SOURCE", "generic").strip().lower()
-        if mode in ("api", "peopleware"):  # "peopleware" value kept for backwards compat with existing configs
+        if mode in ("api", "peopleware"):  # "peopleware" kept for backwards compat with existing configs
             _INSTANCE = APISource()
         elif mode == "postgres":
             _INSTANCE = PostgresSource()

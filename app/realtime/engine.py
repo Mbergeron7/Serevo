@@ -34,29 +34,17 @@ def _get_sheet():
 
 
 def get_available_lobs(sheet=None):
-    """Return sorted list of distinct LOB names from PlanningUnit table."""
+    """Return sorted list of distinct LOB names.
+
+    Delegates to PlanningUnit.get_available_lob_names() — the single
+    canonical source.
+    """
     try:
         from app.models import PlanningUnit
-        units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-        return [u.name for u in units]
+        return PlanningUnit.get_available_lob_names()
     except Exception:
-        log.warning("Failed to load LOBs from database, falling back to sheet", exc_info=True)
-        try:
-            from app.people.manager import get_employees
-            employees, err = get_employees(sheet)
-            if err:
-                return []
-            lobs = set()
-            for emp in employees:
-                status = str(emp.get("Status", "")).strip().lower()
-                if status in ("inactive", "terminated", "deleted"):
-                    continue
-                lob = (emp.get("Latest Skill Name") or "").strip()
-                if lob:
-                    lobs.add(lob)
-            return sorted(lobs)
-        except Exception:
-            return []
+        log.warning("Failed to load LOBs from database", exc_info=True)
+        return []
 
 
 def _time_to_minutes(time_str):

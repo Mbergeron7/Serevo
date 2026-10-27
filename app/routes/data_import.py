@@ -62,7 +62,7 @@ COLUMN_ALIASES = {
     "Contract Type":    ["contract type", "employment type", "work type",
                          "position type"],
     "External ID 1":    ["external id 1", "ext id 1", "external id", "ext id",
-                         "peopleware id", "external identifier", "system id",
+                         "external identifier", "system id",
                          "current id"],
     "External ID 2":    ["external id 2", "ext id 2", "secondary id",
                          "alt id", "alternate id", "personnel #",
@@ -1446,7 +1446,7 @@ def _import_employees(rows):
     imported, skipped = 0, 0
     errors = []
 
-    # Sentinel dates from PeopleWare to ignore (check both string and parsed)
+    # Sentinel dates from legacy WFM systems to ignore (check both string and parsed)
     SENTINEL_DATES_STR = {"4000-01-01", "1900-01-01", "0000-00-00", "1111-01-01"}
     SENTINEL_DATES_PARSED = {date(1900, 1, 1), date(4000, 1, 1), date(1111, 1, 1)}
 

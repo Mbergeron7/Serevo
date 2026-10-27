@@ -11,6 +11,8 @@ import threading
 
 from flask import (Blueprint, render_template, request, jsonify)
 from app.auth import login_required, get_current_user
+from app.constants import LOB_ALL_LABEL
+from app.utils.timezone import get_app_timezone
 
 log = logging.getLogger("serevo.realtime")
 
@@ -113,18 +115,19 @@ def _get_status_map():
         _status_map_cache["ts"] = now
     return _status_map_cache["map"]
 
-# Dialer timestamps are in America/Chicago (CST/CDT).
-# Compute offset to America/Toronto (EST/EDT) dynamically to handle DST.
+# Dialer timestamps arrive in the ACD feed timezone.
+# Compute offset to the app timezone dynamically to handle DST.
 def _cp_tz_offset_hours():
-    """Return hours to add to CST/CDT to get EST/EDT.  Handles DST correctly."""
+    """Return hours to add to ACD tz to get app tz.  Handles DST correctly."""
     try:
         from zoneinfo import ZoneInfo
+        from app.utils.timezone import get_acd_timezone_name, get_app_timezone_name
         now = datetime.datetime.now(datetime.timezone.utc)
-        cst_off = now.astimezone(ZoneInfo("America/Chicago")).utcoffset()
-        est_off = now.astimezone(ZoneInfo("America/Toronto")).utcoffset()
-        return (est_off - cst_off).total_seconds() / 3600
+        acd_off = now.astimezone(ZoneInfo(get_acd_timezone_name())).utcoffset()
+        app_off = now.astimezone(ZoneInfo(get_app_timezone_name())).utcoffset()
+        return (app_off - acd_off).total_seconds() / 3600
     except Exception:
-        return 1  # fallback: CST is 1h behind EST when both are standard or both daylight
+        return 1  # fallback
 
 
 def _parse_datetime_str(s):
@@ -209,7 +212,7 @@ def _read_agent_status_sheet():
                     # filtering by date as we go to keep memory low.
                     all_vals = ws.get_all_values()
                     from zoneinfo import ZoneInfo
-                    _now = datetime.datetime.now(ZoneInfo("America/Toronto"))
+                    _now = datetime.datetime.now(get_app_timezone())
                     today_pfx = _now.strftime("%Y-%m-%d")
                     yest_pfx = (_now.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -255,7 +258,7 @@ def _get_live_agents_from_sheet():
     Returns dict: { user_id: { status, current_since, minutes_in_status } }
     """
     from zoneinfo import ZoneInfo
-    tz = ZoneInfo("America/Toronto")
+    tz = get_app_timezone()
     now_est = datetime.datetime.now(tz).replace(tzinfo=None)
     today_str = now_est.strftime("%Y-%m-%d")
     yesterday_str = (now_est.date() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -509,10 +512,7 @@ def index():
     lobs = _all_lobs(user)
     # Use the configured timezone (not UTC) so the date picker matches the user's day
     try:
-        from zoneinfo import ZoneInfo
-        from config import cfg
-        tz = getattr(cfg, "TIMEZONE", None) or "America/Toronto"
-        local_today = datetime.datetime.now(ZoneInfo(tz)).date()
+        local_today = datetime.datetime.now(get_app_timezone()).date()
     except Exception:
         local_today = datetime.date.today()
     # Load selections for filter dropdown
@@ -540,7 +540,7 @@ def api_bundle():
                                       get_service_level_intraday)
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
@@ -552,7 +552,7 @@ def api_bundle():
         sheet = None if is_demo else _get_sheet()
 
         # Snapshot
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             snap = _aggregate_snapshots(user, date_obj)
         elif is_demo:
             from app.demo_data import get_demo_realtime_snapshot
@@ -562,7 +562,7 @@ def api_bundle():
         snap["success"] = True
 
         # Adherence (generate_shifts is cached from snapshot call)
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             adh = _aggregate_adherence(user, date_obj)
         elif is_demo:
             from app.demo_data import get_demo_adherence
@@ -611,7 +611,7 @@ def snapshot():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -622,7 +622,7 @@ def snapshot():
 
         user = get_current_user()
 
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             result = _aggregate_snapshots(user, date_obj)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_realtime_snapshot
@@ -650,7 +650,7 @@ def adherence():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -661,7 +661,7 @@ def adherence():
 
         user = get_current_user()
 
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             result = _aggregate_adherence(user, date_obj)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_adherence
@@ -687,7 +687,7 @@ def adherence_timeline():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
         employee_id = payload.get("employee_id", "").strip()
         employee_name = payload.get("employee", "").strip()
@@ -704,14 +704,14 @@ def adherence_timeline():
         # Get shifts for this day
         if is_demo:
             from app.demo_data import plan_demo_day
-            day_plan, _ = plan_demo_day(date_obj, lob if lob != "All" else None)
+            day_plan, _ = plan_demo_day(date_obj, lob if lob != LOB_ALL_LABEL else None)
             shifts = [s for s in day_plan if s.get("status") == "scheduled"]
         else:
             from app.scheduling.engine import generate_shifts
             sheet = _get_sheet()
             try:
                 shifts, _, _ = generate_shifts(
-                    lob if lob != "All" else None, date_obj, sheet=sheet
+                    lob if lob != LOB_ALL_LABEL else None, date_obj, sheet=sheet
                 )
             except Exception:
                 log.warning("Failed to generate shifts for adherence", exc_info=True)
@@ -952,7 +952,7 @@ def leaderboard():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -967,14 +967,14 @@ def leaderboard():
         # Get shifts with segments for adherence computation
         if is_demo:
             from app.demo_data import plan_demo_day
-            day_plan, _ = plan_demo_day(date_obj, lob if lob != "All" else None)
+            day_plan, _ = plan_demo_day(date_obj, lob if lob != LOB_ALL_LABEL else None)
             shifts = [s for s in day_plan if s.get("status") == "scheduled"]
         else:
             from app.scheduling.engine import generate_shifts
             sheet = _get_sheet()
             try:
                 shifts, _, _ = generate_shifts(
-                    lob if lob != "All" else None, date_obj, sheet=sheet
+                    lob if lob != LOB_ALL_LABEL else None, date_obj, sheet=sheet
                 )
             except Exception:
                 log.warning("Failed to generate shifts for leaderboard", exc_info=True)
@@ -1084,7 +1084,7 @@ def net_staffing():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1095,7 +1095,7 @@ def net_staffing():
 
         user = get_current_user()
 
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             lobs = _all_lobs(user)
         else:
             lobs = [lob]
@@ -1179,7 +1179,7 @@ def service_level():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1190,7 +1190,7 @@ def service_level():
 
         user = get_current_user()
 
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             result = _aggregate_service_level(user, date_obj)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_service_level
@@ -1221,7 +1221,7 @@ def optimize():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or "All"
+        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1233,7 +1233,7 @@ def optimize():
         user = get_current_user()
 
         # Get snapshot data (reuse existing infrastructure)
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             snap = _aggregate_snapshots(user, date_obj)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_realtime_snapshot
@@ -1390,7 +1390,7 @@ def _generate_optimization_recs(intervals, shifts, current_iv, lob, user):
     # ── 3. Skill reassignment for critical understaffing ──
     # Suggest pulling cross-trained agents from overstaffed LOBs
     is_demo = user and user.get("is_demo")
-    if lob != "All" and is_demo:
+    if lob != LOB_ALL_LABEL and is_demo:
         # In demo mode, simulate cross-skill agents
         from app.demo_data import DEMO_LOBS
         other_lobs = [l for l in DEMO_LOBS if l != lob]
@@ -1458,11 +1458,11 @@ def _report_args():
     payload = request.get_json(silent=True) or {}
     user = get_current_user()
     all_lobs = _all_lobs(user)
-    sel = payload.get("lobs") or payload.get("lob") or "All"
+    sel = payload.get("lobs") or payload.get("lob") or LOB_ALL_LABEL
     if isinstance(sel, str):
         sel = [sel]
     sel = [s.strip() for s in sel if s and s.strip()]
-    if not sel or "All" in sel:
+    if not sel or LOB_ALL_LABEL in sel:
         lobs = all_lobs
     else:
         lobs = [l for l in all_lobs if l in sel] or sel
@@ -1969,7 +1969,7 @@ def api_agent_detail():
     try:
         from app.models import db, Employee, Schedule
         from zoneinfo import ZoneInfo
-        tz = ZoneInfo("America/Toronto")
+        tz = get_app_timezone()
         now_est = datetime.datetime.now(tz).replace(tzinfo=None)
         today = now_est.date()
 

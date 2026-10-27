@@ -57,8 +57,8 @@ class PlanningUnit(db.Model):
     description  = db.Column(db.String(255), nullable=True)
     timezone     = db.Column(db.String(60), default="America/New_York")
 
-    # Multi-activity: a parent PU (e.g. "SS Sales") with child PUs
-    # (e.g. "SS Sales EN", "SS Sales FR") that represent skill/language splits.
+    # Multi-activity: a parent PU (e.g. "Sales Support") with child PUs
+    # (e.g. "Sales EN", "Sales FR") that represent skill/language splits.
     is_multi_activity = db.Column(db.Boolean, default=False)
     parent_id         = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
 
@@ -66,6 +66,23 @@ class PlanningUnit(db.Model):
     employees    = db.relationship("Employee", backref="planning_unit", lazy="dynamic")
     requirements = db.relationship("RequirementInterval", backref="planning_unit", lazy="dynamic")
     forecasts    = db.relationship("ForecastInterval", backref="planning_unit", lazy="dynamic")
+
+    # ── Canonical LOB helpers (single source of truth) ──────────
+    @classmethod
+    def get_all_active(cls, include_children=True):
+        """Return all active PlanningUnits, optionally excluding children.
+
+        This is the ONE canonical source for every LOB dropdown in the app.
+        """
+        q = cls.query.filter_by(is_active=True)
+        if not include_children:
+            q = q.filter(cls.parent_id.is_(None))
+        return q.order_by(cls.name).all()
+
+    @classmethod
+    def get_available_lob_names(cls, include_children=True):
+        """Return a sorted list of active LOB name strings."""
+        return [u.name for u in cls.get_all_active(include_children=include_children)]
 
     def __repr__(self):
         return f"<PlanningUnit {self.name}>"
@@ -87,14 +104,14 @@ class PlanningUnit(db.Model):
 
 class CallRoute(db.Model):
     """Maps a phone system call route/queue to a planning unit.
-    E.g. route_id='719' → name='SS Sales EN' → planning_unit 'Sales'.
+    E.g. route_id='719' → name='Sales EN' → planning_unit 'Sales Support'.
     Used to translate incoming real-time data (which only has route IDs)."""
     __tablename__ = "call_routes"
 
     id               = db.Column(db.Integer, primary_key=True)
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False)
     route_id         = db.Column(db.String(50), nullable=False, index=True)    # e.g. "719"
-    name             = db.Column(db.String(200), nullable=False)               # e.g. "SS Sales EN"
+    name             = db.Column(db.String(200), nullable=False)               # e.g. "Sales EN"
     is_active        = db.Column(db.Boolean, default=True)
     created_at       = db.Column(db.DateTime, default=_utcnow)
 
@@ -194,7 +211,7 @@ class Employee(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.String(30), unique=True, nullable=False, index=True)
     external_id_1    = db.Column(db.String(50), nullable=True, index=True)   # e.g. external system ID
-    external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # e.g. CallPotential ID
+    external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # secondary external system ID
     first_name       = db.Column(db.String(80), nullable=False)
     last_name        = db.Column(db.String(80), nullable=False)
     status           = db.Column(db.String(20), nullable=False, default="Active", index=True)
@@ -880,7 +897,7 @@ class SegmentCode(db.Model):
     is_default   = db.Column(db.Boolean, default=False)                   # system default (can't be deleted)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
-    # ── Activity type (PeopleWare categories) ────────────────
+    # ── Activity type ───────────────────────────────────────
     # Controls which features are available on this activity
     activity_type = db.Column(db.String(20), default="presence")          # presence | break | absence | meeting | vacation
     # ── Activity category ────────────────────────────────────
@@ -969,7 +986,7 @@ class SegmentCode(db.Model):
 
 class ActivitySkill(db.Model):
     """Skills linked to an activity with weighting.
-    E.g. 'SS Sales Combined' weight 100 on the SS Sales activity."""
+    E.g. 'Sales Combined' weight 100 on the Sales Support activity."""
     __tablename__ = "activity_skills"
 
     id              = db.Column(db.Integer, primary_key=True)
@@ -1799,7 +1816,7 @@ class IntervalActual(db.Model):
 
 class LobMapping(db.Model):
     """Maps a source LOB/workload name to a canonical planning-unit name.
-    E.g. 'SS Sales Combined' → 'SS Sales'.
+    E.g. 'Sales Combined' → 'Sales Support'.
     Replaces the hard-coded _LOB_TO_PU dict for generic client support."""
     __tablename__ = "lob_mappings"
 
@@ -1913,7 +1930,7 @@ class Contract(db.Model):
     """Contract templates defining work hours, break rules, and scheduling
     constraints. Employees reference a contract instead of having hours
     scattered across their profile. Maps to WFM platform 'Contracts'.
-    Enhanced to match PeopleWare contract depth: General, Work Time, Scheduling."""
+    Comprehensive contract depth: General, Work Time, Scheduling."""
     __tablename__ = "contracts"
 
     id                  = db.Column(db.Integer, primary_key=True)
@@ -1954,7 +1971,7 @@ class Contract(db.Model):
     weeks_max_1_sat           = db.Column(db.Integer, nullable=True)
     min_rest_hours            = db.Column(db.Float, default=10.0)        # between shifts
 
-    # ── Scheduling Parameters (numbered rules from PeopleWare) ─
+    # ── Scheduling Parameters ───────────────────────────────────
     max_saturdays_per_month   = db.Column(db.Integer, nullable=True)
     max_sundays_per_month     = db.Column(db.Integer, nullable=True)     # (kept for legacy)
     min_net_work_hours_day    = db.Column(db.String(5), nullable=True)   # HH:MM
@@ -2273,8 +2290,8 @@ class EmployeeQuartile(db.Model):
 
 class QuartileScheduleRule(db.Model):
     """Maps a (planning_unit, quartile) pair to eligible day models.
-    E.g. SS Sales Q1 can be scheduled with 'FT 10.5h' and 'FT 8h' day models,
-    while PS Sales Q1 only gets 'FT 8h' due to different hours of operation."""
+    E.g. Sales Support Q1 can be scheduled with 'FT 10.5h' and 'FT 8h' day models,
+    while Customer Service Q1 only gets 'FT 8h' due to different hours of operation."""
     __tablename__ = "quartile_schedule_rules"
 
     id               = db.Column(db.Integer, primary_key=True)

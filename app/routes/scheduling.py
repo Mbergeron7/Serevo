@@ -17,6 +17,7 @@ from flask import (Blueprint, render_template, request, jsonify,
                    Response)
 from app.auth import login_required, admin_required, get_current_user
 from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode
+from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.scheduling")
 
@@ -114,7 +115,7 @@ def filter_options():
     try:
         payload = request.get_json(silent=True) or {}
         lob = (payload.get("lob") or "").strip()
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             lob = ""
 
         user = get_current_user()
@@ -221,7 +222,7 @@ def generate():
     try:
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             lob = ""
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
@@ -544,12 +545,8 @@ def _demo_forecast_demand(lob, start_date, end_date):
     import datetime as _dt, math, random
     random.seed(42)
 
-    # Map LOB to PU names
-    pu_map = {
-        "SS Sales": ["SS Sales Combined", "SS Sales FR", "SS Sales EN"],
-        "SS Service": ["SS Service Combined", "SS Service FR", "SS Service EN"],
-    }
-    children = pu_map.get(lob, [f"{lob} Combined", f"{lob} FR", f"{lob} EN"])
+    # Map LOB to child PU names — dynamically generate from LOB name
+    children = [f"{lob} Combined", f"{lob} FR", f"{lob} EN"]
 
     def _make_intervals(date_obj, base_peak, split_ratio):
         """Generate 15-min intervals 8:00-20:00 with realistic call curve."""
@@ -923,7 +920,8 @@ def load_schedule():
         # ── Enrich today's shifts with attendance status ──────
         try:
             from zoneinfo import ZoneInfo
-            tz = ZoneInfo("America/Toronto")
+            from app.utils.timezone import get_app_timezone
+            tz = get_app_timezone()
             now_est = datetime.datetime.now(tz).replace(tzinfo=None)
             today = now_est.date()
 
@@ -1575,7 +1573,7 @@ def employees_for_lob():
     try:
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
-        if lob == "All":
+        if lob == LOB_ALL_LABEL:
             lob = ""
 
         selection_id = payload.get("selection_id", "")

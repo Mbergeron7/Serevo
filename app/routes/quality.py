@@ -10,6 +10,7 @@ import datetime as _dt
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, admin_required, get_current_user
 from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration, PlanningUnit
+from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.quality")
 
@@ -31,7 +32,7 @@ def index():
 def api_evaluations():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", "All")
+    lob = data.get("lob", LOB_ALL_LABEL)
     date_from = data.get("date_from")
     date_to = data.get("date_to")
 
@@ -42,7 +43,7 @@ def api_evaluations():
 
     try:
         q = QualityEvaluation.query
-        if lob and lob != "All":
+        if lob and lob != LOB_ALL_LABEL:
             q = q.filter(QualityEvaluation.lob == lob)
         if date_from:
             q = q.filter(QualityEvaluation.eval_date >= _dt.date.fromisoformat(date_from))
@@ -67,7 +68,7 @@ def api_evaluations():
 def api_dashboard():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", "All")
+    lob = data.get("lob", LOB_ALL_LABEL)
 
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_quality_dashboard
@@ -75,7 +76,7 @@ def api_dashboard():
 
     try:
         q = QualityEvaluation.query
-        if lob and lob != "All":
+        if lob and lob != LOB_ALL_LABEL:
             q = q.filter(QualityEvaluation.lob == lob)
 
         evals = q.order_by(QualityEvaluation.eval_date.desc()).limit(500).all()
@@ -400,7 +401,7 @@ def api_agent_performance():
     """
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", "All")
+    lob = data.get("lob", LOB_ALL_LABEL)
     date_from = data.get("date_from")
     date_to = data.get("date_to")
 
@@ -460,7 +461,7 @@ def api_agent_performance():
         ).join(QualityEvaluation).group_by(
             Employee.id, Employee.first_name, Employee.last_name, Employee.lob
         )
-        if lob and lob != "All":
+        if lob and lob != LOB_ALL_LABEL:
             q = q.filter(QualityEvaluation.lob == lob)
         if date_from:
             q = q.filter(QualityEvaluation.eval_date >= date_from)

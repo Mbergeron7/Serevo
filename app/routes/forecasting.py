@@ -15,7 +15,7 @@ log = logging.getLogger("serevo.forecasting")
 
 forecasting_bp = Blueprint("forecasting", __name__, url_prefix="/forecasting")
 
-TIMEZONE = "America/Toronto"
+from app.utils.timezone import get_app_timezone_name as _get_tz
 
 
 def _demo_guard():
@@ -41,7 +41,7 @@ def index():
         from backports.zoneinfo import ZoneInfo
 
     user = get_current_user()
-    now = dt.now(ZoneInfo(TIMEZONE))
+    now = dt.now(ZoneInfo(_get_tz()))
     year = int(request.args.get("year", now.year))
     years = list(range(2024, now.year + 3))
 
@@ -532,7 +532,7 @@ def forecast_api_data():
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
         from datetime import datetime as dt
-        year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+        year = int(payload.get("year", dt.now(ZoneInfo(_get_tz())).year))
 
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
@@ -1096,7 +1096,7 @@ def list_scenarios():
         from zoneinfo import ZoneInfo
     except ImportError:
         from backports.zoneinfo import ZoneInfo
-    year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+    year = int(payload.get("year", dt.now(ZoneInfo(_get_tz())).year))
 
     if not lob:
         return jsonify(success=True, scenarios=[])
@@ -1137,7 +1137,7 @@ def save_scenario():
     except ImportError:
         from backports.zoneinfo import ZoneInfo
 
-    year = int(payload.get("year", dt.now(ZoneInfo(TIMEZONE)).year))
+    year = int(payload.get("year", dt.now(ZoneInfo(_get_tz())).year))
     lob_n = normalize_lob(lob)
     unit = PlanningUnit.query.filter_by(name=lob_n).first()
     if not unit:

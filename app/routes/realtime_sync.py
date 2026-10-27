@@ -264,9 +264,9 @@ def _resolve_route_to_pu(route_id):
 
 def _resolve_route_to_all_pus(route_id):
     """Resolve a route ID to ALL PlanningUnits that have it assigned.
-    Supports combined + split PU setups (e.g. SS Sales has all routes,
-    SS Sales EN has only English routes — the same route_id appears under
-    both PUs and data should be counted under each)."""
+    Supports combined + split PU setups (e.g. a parent PU has all routes,
+    while child PUs have only their language-specific routes — the same
+    route_id appears under both and data should be counted under each)."""
     crs = CallRoute.query.filter_by(route_id=str(route_id).strip(), is_active=True).all()
     return [cr.planning_unit for cr in crs]
 
@@ -731,7 +731,7 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
     errors = []
 
     # Pre-aggregate: multiple routes can map to the same planning unit
-    # (e.g. SS Sales has 44+ sub-queues). SUM count fields across all
+    # (e.g. a parent PU may have 44+ sub-queues). SUM count fields across all
     # routes per (pu_id, timestamp) and compute weighted averages for
     # rate fields (ASA weighted by answered, AHT weighted by answered).
     aggregated = {}  # (pu_id, timestamp) -> vals dict
@@ -740,7 +740,7 @@ def sync_call_volume(spreadsheet, tab_name=None, custom_mapping=None):
         try:
             # Resolve to planning unit(s): try route_id first, then LOB name
             # A single route_id can be assigned to multiple PUs (e.g.
-            # combined "SS Sales" AND split "SS Sales EN"), so resolve to ALL.
+            # both parent and child PUs), so resolve to ALL.
             pus = []
             if "route_id" in col_map:
                 rid = row[col_map["route_id"]].strip()
@@ -1111,7 +1111,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
     Read raw event rows from a sheet, aggregate them into interval format,
     then run the standard sync function on the aggregated data.
 
-    This bridges event-level sources (like CallPotential) to the existing
+    This bridges event-level sources (like per-call ACD feeds) to the existing
     interval-based sync engine without modifying that engine.
 
     Returns (upserted, skipped, errors).
@@ -1470,7 +1470,7 @@ def run_sync(app=None):
         if "call_volume" not in feed_types_covered:
             calls_sheet, err = _open_sheet(
                 "realtime_calls_sheet_key",
-                env_fallback="CALLPOTENTIAL_SHEET_KEY",
+                env_fallback="REALTIME_SHEET_KEY",
             )
             # Fall back to the capacity sheet if no dedicated realtime sheet
             if err:
@@ -1607,7 +1607,7 @@ def sync_status():
     if auth_err:
         return auth_err
 
-    calls_key = os.environ.get("CALLPOTENTIAL_SHEET_KEY", "")
+    calls_key = os.environ.get("REALTIME_SHEET_KEY", os.environ.get("CALLPOTENTIAL_SHEET_KEY", ""))
     if not calls_key:
         try:
             calls_key = AppSetting.get("realtime_calls_sheet_key", "")
@@ -1624,11 +1624,11 @@ def sync_status():
     try:
         last_sync = AppSetting.get("realtime_last_sync", "")
         if not last_sync:
-            last_sync = AppSetting.get("callpotential_last_sync", "")
+            last_sync = AppSetting.get("callpotential_last_sync", "")  # legacy key compat
     except Exception:
         pass
 
-    sync_enabled = os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true").lower() == "true"
+    sync_enabled = os.environ.get("REALTIME_SYNC_ENABLED", os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true")).lower() == "true"
 
     # Include DataFeed info and DB counts when available
     result = {

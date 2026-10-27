@@ -14,6 +14,7 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, flash)
 from app.auth import login_required, get_current_user
 from app.capacity import planning as cp
+from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.capacity")
 
@@ -885,7 +886,7 @@ def longrange_view():
     growth_rate = int(request.args.get("growth_rate", 8))
     attrition_rate = int(request.args.get("attrition_rate", 20))
     shrinkage = int(request.args.get("shrinkage", 30))
-    sel_lob = request.args.get("lob", "All")
+    sel_lob = request.args.get("lob", LOB_ALL_LABEL)
 
     years_range = list(range(2024, now.year + 6))
 
@@ -893,7 +894,7 @@ def longrange_view():
     base_plan = _build_plan(user, start_year, shrinkage / 100.0, 0.85, 0.92)
     all_lobs = [p["lob"] for p in base_plan]
 
-    if sel_lob and sel_lob != "All":
+    if sel_lob and sel_lob != LOB_ALL_LABEL:
         base_plan = [p for p in base_plan if p["lob"] == sel_lob]
 
     projection = _build_longrange_projection(

@@ -384,7 +384,8 @@ class WFMLegacyConnector(BaseConnector):
             workload_hours = self.creds.get("workload_hours", {})
 
             import pandas as pd
-            local_tz = self.creds.get("timezone", "America/Toronto")
+            from app.utils.timezone import get_app_timezone_name
+            local_tz = self.creds.get("timezone", get_app_timezone_name())
 
             dates = pd.date_range(
                 start=pd.Timestamp(str(date_from)),

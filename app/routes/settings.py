@@ -100,8 +100,8 @@ def connections():
              "last_status": "success", "last_run": "2026-10-06 08:15", "last_error": ""},
         ])
         demo_conns = _json.dumps([
-            {"id": 1, "name": "Call Potential", "provider": "call_potential",
-             "base_url": "https://api.callpotential.com", "auth_type": "api_key",
+            {"id": 1, "name": "Realtime Feed", "provider": "realtime_api",
+             "base_url": "https://api.example.com", "auth_type": "api_key",
              "is_active": True, "last_status": "ok", "last_error": "", "last_tested": "2026-10-06 09:00"},
         ])
         return render_template("settings/connections.html",

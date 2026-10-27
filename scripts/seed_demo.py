@@ -72,7 +72,7 @@ LOA_HEADERS = ["id","lob","name","team_lead","loa_reason","start_date","return_d
                "ems_status","returned","status","archived","notes","created_at","updated_at"]
 ACCOM_HEADERS = ["id","lob","name","monday","tuesday","wednesday","thursday","friday",
                  "saturday","sunday","request_date","start_date","end_date",
-                 "injixo_contract","status","accommodation_type","comments",
+                 "wfm_contract","status","accommodation_type","comments",
                  "archived","created_at","updated_at"]
 
 SCHED_TAB = "Schedule"

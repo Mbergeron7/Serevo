@@ -33,7 +33,7 @@ _scheduler_started = False
 
 
 def _start_scheduler(app):
-    """Start APScheduler for the 5-minute Call Potential sync.
+    """Start APScheduler for the periodic realtime data sync.
     Only runs on the main Gunicorn worker (not in reloader or testing)."""
     global _scheduler_started
     if _scheduler_started:
@@ -43,8 +43,8 @@ def _start_scheduler(app):
     # Don't start in testing, or when explicitly disabled
     if app.testing:
         return
-    if os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true").lower() != "true":
-        log.info("Call Potential sync disabled (CALLPOTENTIAL_SYNC_ENABLED=false)")
+    if os.environ.get("REALTIME_SYNC_ENABLED", os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true")).lower() != "true":
+        log.info("Realtime sync disabled (REALTIME_SYNC_ENABLED=false)")
         return
 
     try:
@@ -56,16 +56,16 @@ def _start_scheduler(app):
             func=run_sync,
             trigger="interval",
             minutes=2,
-            id="callpotential_sync",
+            id="realtime_sync",
             kwargs={"app": app},
             replace_existing=True,
             max_instances=1,
         )
         scheduler.start()
         _scheduler_started = True
-        log.info("Call Potential auto-sync started (every 2 minutes)")
+        log.info("Realtime auto-sync started (every 2 minutes)")
     except ImportError:
-        log.warning("APScheduler not installed — Call Potential auto-sync disabled. "
+        log.warning("APScheduler not installed — realtime auto-sync disabled. "
                      "Install with: pip install APScheduler")
     except Exception as e:
         log.warning(f"Could not start scheduler: {e}")
@@ -114,130 +114,9 @@ def create_app():
             except Exception as e2:
                 log.warning(f"db.create_all() retry also failed: {e2}")
                 db.session.rollback()
-        # Auto-add missing columns to existing tables (works on both Postgres and SQLite)
-        _ensure_columns = [
-            ("employees", "external_id_1", "VARCHAR(50)"),
-            ("employees", "external_id_2", "VARCHAR(50)"),
-            ("employees", "contract_id", "INTEGER"),
-            ("users", "employee_id", "INTEGER REFERENCES employees(id)"),
-            ("pto_entries", "time_off_type_id", "INTEGER REFERENCES time_off_types(id)"),
-            ("pto_entries", "approval_status", "VARCHAR(20) DEFAULT 'approved'"),
-            ("pto_entries", "requested_by", "INTEGER REFERENCES users(id)"),
-            ("pto_entries", "reviewed_by", "INTEGER REFERENCES users(id)"),
-            ("pto_entries", "reviewed_at", "TIMESTAMP"),
-            ("users", "oauth_provider", "VARCHAR(30)"),
-            ("users", "oauth_id", "VARCHAR(255)"),
-            ("users", "is_demo", "BOOLEAN DEFAULT FALSE"),
-            ("users", "wfm_access", "BOOLEAN DEFAULT FALSE"),
-            # ── segment_codes columns added in contract config ──
-            ("data_feeds", "service_account_json", "TEXT"),
-            ("data_feeds", "column_mapping", "TEXT"),
-            ("data_feeds", "data_format", "VARCHAR(20) DEFAULT 'interval'"),
-            ("data_feeds", "interval_minutes", "INTEGER DEFAULT 15"),
-            ("data_feeds", "source_timezone", "VARCHAR(60) DEFAULT ''"),
-            ("day_models", "abbreviation", "VARCHAR(20)"),
-            ("day_models", "total_hours", "FLOAT"),
-            ("day_models", "model_type", "VARCHAR(20) DEFAULT 'Fixed'"),
-            ("day_models", "color", "VARCHAR(7) DEFAULT '#4472C4'"),
-            ("day_models", "day_type", "VARCHAR(20) DEFAULT 'any'"),
-            ("day_models", "planning_unit_id", "INTEGER"),
-            ("day_models", "sort_order", "INTEGER DEFAULT 0"),
-            ("segment_codes", "activity_type", "VARCHAR(20) DEFAULT 'presence'"),
-            ("segment_codes", "activity_category", "VARCHAR(20) DEFAULT 'status'"),
-            ("segment_codes", "official_name", "VARCHAR(120)"),
-            ("segment_codes", "abbreviation", "VARCHAR(20)"),
-            ("segment_codes", "shortcut", "VARCHAR(10)"),
-            ("segment_codes", "external_ids", "TEXT"),
-            ("segment_codes", "parent_id", "INTEGER REFERENCES segment_codes(id)"),
-            ("segment_codes", "is_multi_activity", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "is_replaceable", "BOOLEAN DEFAULT TRUE"),
-            ("segment_codes", "is_plannable", "BOOLEAN DEFAULT TRUE"),
-            ("segment_codes", "importance", "INTEGER DEFAULT 50"),
-            ("segment_codes", "priority", "INTEGER DEFAULT 50"),
-            ("segment_codes", "comply_rest_period", "BOOLEAN DEFAULT TRUE"),
-            ("segment_codes", "allow_overstaffing_zero", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "is_requestable", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "is_exchangeable", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "allow_full_day", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "special_handling", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "can_be_day_status", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "offset_mins", "INTEGER"),
-            ("segment_codes", "duration_mins", "INTEGER"),
-            ("segment_codes", "is_flexible", "BOOLEAN DEFAULT FALSE"),
-            ("segment_codes", "window_start_mins", "INTEGER"),
-            ("segment_codes", "window_end_mins", "INTEGER"),
-            ("employees", "start_date", "DATE"),
-            # ── roster_members columns ──
-            ("roster_members", "max_openings_per_week", "INTEGER"),
-            ("roster_members", "max_mids_per_week", "INTEGER"),
-            ("roster_members", "is_fill_in", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "weekend_primary_days", "TEXT"),
-            ("roster_members", "excluded_closing_days", "TEXT"),
-            ("roster_members", "static_days_json", "TEXT"),
-            ("roster_members", "accommodation_start", "TIME"),
-            ("roster_members", "accommodation_end", "TIME"),
-            ("roster_members", "accommodation_no_close", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "work_days", "TEXT"),
-            ("roster_members", "contracted_days", "INTEGER DEFAULT 5"),
-            ("roster_members", "contracted_hours", "FLOAT"),
-            ("roster_members", "dedicated_closer", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "dedicated_opener", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "exclude_from_weekends", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "exclude_from_saturday", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "exclude_from_sunday", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "exclude_from_opening", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "exclude_from_closing", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "excluded_opening_days", "TEXT"),
-            ("roster_members", "allow_split_shift", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "split_shift_min_gap", "FLOAT"),
-            ("roster_members", "consistent_start", "BOOLEAN DEFAULT FALSE"),
-            ("roster_members", "max_consecutive_days", "INTEGER"),
-            ("roster_members", "preferred_days_off", "TEXT"),
-            ("roster_members", "min_hours_per_week", "FLOAT"),
-            ("roster_members", "max_hours_per_week", "FLOAT"),
-            ("roster_members", "pair_with_member_id", "INTEGER"),
-            ("roster_members", "avoid_member_id", "INTEGER"),
-            ("roster_members", "rotation_order", "INTEGER DEFAULT 0"),
-        ]
-        dialect = db.engine.dialect.name
-        for tbl, col, col_type in _ensure_columns:
-            try:
-                if dialect == "sqlite":
-                    r = db.session.execute(db.text(f"PRAGMA table_info({tbl})"))
-                    existing = {row[1] for row in r.fetchall()}
-                    has_col = col in existing
-                else:
-                    r = db.session.execute(db.text(
-                        "SELECT 1 FROM information_schema.columns "
-                        f"WHERE table_name='{tbl}' AND column_name='{col}'"
-                    ))
-                    has_col = r.fetchone() is not None
-                if not has_col:
-                    db.session.execute(db.text(
-                        f"ALTER TABLE {tbl} ADD COLUMN {col} {col_type}"
-                    ))
-                    db.session.commit()
-                    log.info(f"Added column {tbl}.{col}")
-            except Exception as e:
-                db.session.rollback()
-                if "does not exist" in str(e) or "no such table" in str(e):
-                    log.warning(f"Table {tbl} does not exist yet, skipping {col}")
-                else:
-                    log.warning(f"Could not add {tbl}.{col}: {e}")
-
-        # ── Widen columns that were originally too narrow ──
-        _widen_columns = [
-            ("employees", "contract_type", "VARCHAR(100)"),
-        ]
-        if dialect != "sqlite":
-            for tbl, col, new_type in _widen_columns:
-                try:
-                    db.session.execute(db.text(
-                        f"ALTER TABLE {tbl} ALTER COLUMN {col} TYPE {new_type}"
-                    ))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
+        # All columns are now managed by Flask-Migrate / Alembic migrations.
+        # The legacy _ensure_columns block was removed — run
+        # `flask db upgrade` to apply any pending schema changes.
 
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
@@ -344,7 +223,7 @@ def create_app():
     ]:
         csrf.exempt(bp)
 
-    # ---- APScheduler: 5-minute Call Potential sync ----
+    # ---- APScheduler: periodic realtime data sync ----
     _start_scheduler(app)
 
     # ---- error handlers ----

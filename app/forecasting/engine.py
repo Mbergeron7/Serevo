@@ -284,43 +284,15 @@ def _get_sheet():
 
 
 def get_available_lobs(sheet=None):
-    """Return sorted list of distinct LOB names from forecast data."""
-    import os
-    # When using Postgres, pull LOBs from the PlanningUnit table
-    if os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
-        try:
-            from app.models import PlanningUnit
-            units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
-            if units:
-                return [u.name for u in units]
-        except Exception:
-            pass
+    """Return sorted list of distinct LOB names.
 
+    Delegates to PlanningUnit.get_available_lob_names() — the single
+    canonical source.  The *sheet* parameter is kept for API compat
+    but is no longer used.
+    """
     try:
-        from app.data_source import SheetSource, normalize_lob
-        src = SheetSource()
-        rows, err = src._records("FORECAST RAW")
-        if err or not rows:
-            # Fall back to employee roster LOBs
-            from app.people.manager import get_employees
-            employees, err2 = get_employees(sheet)
-            if err2:
-                return []
-            lobs = set()
-            for emp in employees:
-                status = str(emp.get("Status", "")).strip().lower()
-                if status in ("inactive", "terminated", "deleted"):
-                    continue
-                lob = (emp.get("Latest Skill Name") or "").strip()
-                if lob:
-                    lobs.add(normalize_lob(lob))
-            return sorted(lobs)
-        lobs = set()
-        for r in rows:
-            lob = _get_val(r, "LOB")
-            if lob:
-                lobs.add(normalize_lob(lob))
-        return sorted(lobs)
+        from app.models import PlanningUnit
+        return PlanningUnit.get_available_lob_names()
     except Exception:
         return []
 
@@ -601,7 +573,7 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
     hist_start = today - datetime.timedelta(days=historical_days)
     hist_end = today - datetime.timedelta(days=1)
 
-    # Try actuals first (from IntervalActual / CallPotential sync),
+    # Try actuals first (from IntervalActual / realtime sync),
     # then fall back to stored forecast data
     historical, err = get_historical_actuals(lob, hist_start, hist_end)
     if not historical:

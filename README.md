@@ -35,7 +35,7 @@ python scripts/seed_demo.py       # fills demo Sheets with synthetic data
 serevo/
 ├── app/                    # Flask application
 │   ├── __init__.py         # App factory + brand context processor
-│   ├── data_source.py      # Pluggable data layer (generic Sheets / PeopleWare)
+│   ├── data_source.py      # Pluggable data layer (Sheets / API / Postgres)
 │   ├── templates/          # Jinja2 templates
 │   └── static/             # CSS, JS, images
 ├── config/
@@ -58,7 +58,7 @@ All settings are environment-driven — see `.env.example` for the full list. Ke
 
 | Variable | Purpose |
 |---|---|
-| `DATA_SOURCE` | `generic` (Sheets) or `peopleware` (API) |
+| `DATA_SOURCE` | `generic` (Sheets), `api` (WFM API), or `postgres` |
 | `DEMO_MODE` | `true` disables live integrations |
 | `BRAND_NAME` | Injected into every template |
 
