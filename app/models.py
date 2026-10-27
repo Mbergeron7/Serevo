@@ -360,6 +360,52 @@ class Employee(db.Model):
         ).order_by(Employee.last_name, Employee.first_name)
         return q.all()
 
+    # ── Sync helpers: update denormalized FK caches from junction tables ──
+
+    def sync_planning_unit(self, target_date=None):
+        """Update self.planning_unit_id from the EmployeePlanningUnit junction table.
+
+        Uses *target_date* (defaults to today) to pick the current assignment.
+        Returns the new planning_unit_id (may be None).
+        """
+        from datetime import date as _date
+        target_date = target_date or _date.today()
+        self.planning_unit_id = self.planning_unit_id_on(target_date)
+        return self.planning_unit_id
+
+    def sync_contract(self, target_date=None):
+        """Update self.contract_id from the EmployeeContract junction table.
+
+        Uses *target_date* (defaults to today) to pick the current assignment.
+        Returns the new contract_id (may be None).
+        """
+        from datetime import date as _date
+        target_date = target_date or _date.today()
+        # Current assignment (no end date) whose start <= target_date
+        ec = EmployeeContract.query.filter(
+            EmployeeContract.employee_id == self.id,
+            EmployeeContract.valid_to.is_(None),
+            EmployeeContract.valid_from <= target_date,
+        ).first()
+        if not ec:
+            # Historical assignment spanning target_date
+            ec = EmployeeContract.query.filter(
+                EmployeeContract.employee_id == self.id,
+                EmployeeContract.valid_from <= target_date,
+                EmployeeContract.valid_to >= target_date,
+            ).order_by(EmployeeContract.valid_from.desc()).first()
+        self.contract_id = ec.contract_id if ec else self.contract_id
+        return self.contract_id
+
+    @staticmethod
+    def sync_all_caches(target_date=None):
+        """Bulk-sync planning_unit_id and contract_id for all active employees."""
+        from datetime import date as _date
+        target_date = target_date or _date.today()
+        for emp in Employee.query.filter_by(status="Active").all():
+            emp.sync_planning_unit(target_date)
+            emp.sync_contract(target_date)
+
     def __repr__(self):
         return f"<Employee {self.employee_id} {self.full_name}>"
 

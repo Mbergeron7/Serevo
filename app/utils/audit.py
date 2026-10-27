@@ -5,7 +5,7 @@ Usage:
     log_audit("schedule_published", detail="Week of 2026-01-05",
               entity_type="schedule", entity_id=42)
 """
-from flask_login import current_user
+from flask import session
 
 
 def log_audit(action, detail=None, entity_type=None, entity_id=None, user_id=None):
@@ -13,8 +13,8 @@ def log_audit(action, detail=None, entity_type=None, entity_id=None, user_id=Non
     from app.models import AuditLog, db
 
     uid = user_id
-    if uid is None and current_user and hasattr(current_user, "id") and current_user.is_authenticated:
-        uid = current_user.id
+    if uid is None:
+        uid = session.get("user_id")
 
     entry = AuditLog(
         user_id=uid,
