@@ -3244,7 +3244,6 @@ class RosterMember(db.Model):
     contracted_hours      = db.Column(db.Float, nullable=True)         # hours per week (e.g. 40.0)
     dedicated_closer      = db.Column(db.Boolean, default=False)       # always assigned closer
     dedicated_opener      = db.Column(db.Boolean, default=False)       # always assigned opener
-    exclude_from_weekends = db.Column(db.Boolean, default=False)       # legacy — kept for migration compat
     exclude_from_saturday = db.Column(db.Boolean, default=False)       # never scheduled on Saturday
     exclude_from_sunday   = db.Column(db.Boolean, default=False)       # never scheduled on Sunday
     exclude_from_opening  = db.Column(db.Boolean, default=False)       # never assigned opener
@@ -3304,7 +3303,6 @@ class RosterMember(db.Model):
             "contracted_hours": self.contracted_hours,
             "dedicated_closer": self.dedicated_closer,
             "dedicated_opener": self.dedicated_opener,
-            "exclude_from_weekends": self.exclude_from_weekends,
             "exclude_from_saturday": self.exclude_from_saturday,
             "exclude_from_sunday": self.exclude_from_sunday,
             "exclude_from_opening": self.exclude_from_opening,

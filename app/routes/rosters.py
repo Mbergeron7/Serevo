@@ -134,9 +134,8 @@ def api_add_member(gid):
         accommodation_no_close=d.get("accommodation_no_close", False),
         dedicated_closer=d.get("dedicated_closer", False),
         dedicated_opener=d.get("dedicated_opener", False),
-        exclude_from_weekends=d.get("exclude_from_weekends", False),
-        exclude_from_saturday=d.get("exclude_from_saturday", False),
-        exclude_from_sunday=d.get("exclude_from_sunday", False),
+        exclude_from_saturday=d.get("exclude_from_saturday", d.get("exclude_from_weekends", False)),
+        exclude_from_sunday=d.get("exclude_from_sunday", d.get("exclude_from_weekends", False)),
         exclude_from_opening=d.get("exclude_from_opening", False),
         exclude_from_closing=d.get("exclude_from_closing", False),
         excluded_opening_days=json.dumps(d["excluded_opening_days"]) if d.get("excluded_opening_days") else None,
@@ -169,7 +168,7 @@ def api_update_member(mid):
               "accommodation_no_close", "rotation_order",
               "contracted_days", "contracted_hours",
               "dedicated_closer", "dedicated_opener",
-              "exclude_from_weekends", "exclude_from_saturday", "exclude_from_sunday",
+              "exclude_from_saturday", "exclude_from_sunday",
               "exclude_from_opening", "exclude_from_closing",
               "allow_split_shift", "split_shift_min_gap",
               "consistent_start",
@@ -338,7 +337,6 @@ def api_debug_slots(gid):
             "dedicated_opener": m.dedicated_opener,
             "exclude_from_closing": m.exclude_from_closing,
             "exclude_from_opening": m.exclude_from_opening,
-            "exclude_from_weekends": m.exclude_from_weekends,
             "is_weekend_primary": m.is_weekend_primary,
             "weekend_primary_days": m.weekend_primary_days,
             "work_days": m.work_days,
@@ -405,7 +403,7 @@ def api_export_groups_csv():
         "Work Days", "Max Closings/Week", "Weekend Primary", "Weekend Days",
         "Fill-In Eligible", "Display Only", "No Closing Shifts",
         "Dedicated Closer", "Dedicated Opener",
-        "Exclude Weekends", "Exclude Opening", "Exclude Closing",
+        "Exclude Opening", "Exclude Closing",
     ])
     for g in groups:
         members = RosterMember.query.filter_by(roster_group_id=g.id).order_by(
@@ -440,7 +438,6 @@ def api_export_groups_csv():
                 "Yes" if m.accommodation_no_close else "",
                 "Yes" if m.dedicated_closer else "",
                 "Yes" if m.dedicated_opener else "",
-                "Yes" if m.exclude_from_weekends else "",
                 "Yes" if m.exclude_from_opening else "",
                 "Yes" if m.exclude_from_closing else "",
             ])
