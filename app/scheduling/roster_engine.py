@@ -961,23 +961,29 @@ def _process_week(week_days, group, members, slots_by_day_type,
         # exclusion flags, work_days, accommodations etc. are respected.
         # Skip dedicated closer/opener — they only get their dedicated role.
         applicable_slots_p5 = _get_applicable_slots(slots_by_day_type, day_type)
-        # Find a non-closer slot to use for eligibility checks
-        backfill_slot = None
-        for _bs in applicable_slots_p5:
-            if _bs.role not in ("closer",):
-                backfill_slot = _bs
-                break
-        if not backfill_slot:
+        # Collect ALL non-closer slots for eligibility checks
+        backfill_slots_p5 = [s for s in applicable_slots_p5 if s.role != "closer"]
+        if not backfill_slots_p5:
             continue
+        # Build per-slot eligibility map once for this day (avoids
+        # repeated _get_eligible_members calls per member).
+        slot_eligible = {}  # slot -> set of member ids
+        eligible_by_any_slot = set()
+        for _bs in backfill_slots_p5:
+            ids = {em.id for em in _get_eligible_members(
+                members, day_date, _bs, pto_dates, states, group)}
+            slot_eligible[_bs] = ids
+            eligible_by_any_slot |= ids
+
         unassigned_today = [
-            m for m in _get_eligible_members(
-                members, day_date, backfill_slot, pto_dates, states, group)
-            if m.id not in daily_assigned[day_date]
+            m for m in members
+            if m.id in eligible_by_any_slot
+            and m.id not in daily_assigned[day_date]
             and _contract_deficit(m.id) > 0
             and not m.dedicated_closer
             and not m.dedicated_opener
             and _consecutive_ok(m, day_date)
-            and _hours_ok(m, backfill_slot)
+            and _hours_ok(m, backfill_slots_p5[0])
         ]
         if not unassigned_today:
             continue
@@ -989,19 +995,17 @@ def _process_week(week_days, group, members, slots_by_day_type,
             getattr(m, 'rotation_order', 0) or 0
         ))
 
-        # Pick a non-closer slot to double up on
-        applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
-        backfill_slots = [s for s in applicable_slots if s.role != "closer"]
-        if not backfill_slots:
-            continue
-
         for m in unassigned_today:
             if _contract_deficit(m.id) <= 0:
                 break
+            # Per-member eligible slots from the cached map
+            m_eligible_slots = [s for s in backfill_slots_p5
+                                if m.id in slot_eligible[s]]
+            if not m_eligible_slots:
+                continue
             # Pick the slot this member has done least (for variety),
             # hard-filter by consistent start, fallback to all if none match
-            m_slots = _apply_consistent_start_filter(backfill_slots, backfill_slots[0])
-            m_slots = [s for s in backfill_slots if _consistent_start_ok(m, s)] or backfill_slots
+            m_slots = [s for s in m_eligible_slots if _consistent_start_ok(m, s)] or m_eligible_slots
             best_slot = min(m_slots, key=lambda s: (
                 _consistent_start_penalty(m, s),
                 role_counts.get(m.id, {}).get(s.label or s.role, 0) if role_counts else 0,
