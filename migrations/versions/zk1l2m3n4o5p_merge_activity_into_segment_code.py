@@ -26,17 +26,27 @@ def upgrade():
 
     # 2. Copy any Activity rows into segment_codes that don't already exist
     #    (match by label/name)
+    # Detect which columns actually exist on the activities table
+    existing_cols = {c["name"] for c in inspector.get_columns("activities")}
+    base_cols = ["id", "name", "short_name", "activity_type", "is_paid", "is_productive",
+                 "duration_mins", "color", "segment_code_id", "is_active", "sort_order"]
+    optional_cols = ["activity_category", "external_ids", "parent_id", "is_multi_activity"]
+    select_cols = base_cols + [c for c in optional_cols if c in existing_cols]
     activities = conn.execute(sa.text(
-        "SELECT id, name, short_name, activity_type, is_paid, is_productive, "
-        "duration_mins, color, segment_code_id, is_active, sort_order, "
-        "activity_category, external_ids, parent_id, is_multi_activity "
-        "FROM activities"
+        f"SELECT {', '.join(select_cols)} FROM activities"
     )).fetchall()
+
+    def _get(row, col, default=None):
+        """Safely get a column value that may not exist in the result set."""
+        try:
+            return getattr(row, col, default)
+        except Exception:
+            return default
 
     activity_id_to_sc_id = {}
     for act in activities:
         # If the activity has a segment_code_id, use that mapping directly
-        if act.segment_code_id:
+        if _get(act, "segment_code_id"):
             activity_id_to_sc_id[act.id] = act.segment_code_id
         else:
             # Check if a segment_code with the same label exists
@@ -70,15 +80,17 @@ def upgrade():
                     ":external_ids, :is_multi_activity, :duration_mins)"
                 ), {
                     "code": code_slug, "label": act.name,
-                    "color": act.color or "#6b7280",
-                    "is_productive": act.is_productive, "is_paid": act.is_paid,
-                    "is_active": act.is_active, "sort_order": act.sort_order or 0,
-                    "activity_type": act.activity_type or "presence",
-                    "activity_category": act.activity_category or "status",
-                    "abbreviation": act.short_name or "",
-                    "external_ids": act.external_ids,
-                    "is_multi_activity": act.is_multi_activity or False,
-                    "duration_mins": act.duration_mins,
+                    "color": _get(act, "color") or "#6b7280",
+                    "is_productive": _get(act, "is_productive", True),
+                    "is_paid": _get(act, "is_paid", True),
+                    "is_active": _get(act, "is_active", True),
+                    "sort_order": _get(act, "sort_order", 0) or 0,
+                    "activity_type": _get(act, "activity_type") or "presence",
+                    "activity_category": _get(act, "activity_category") or "status",
+                    "abbreviation": _get(act, "short_name") or "",
+                    "external_ids": _get(act, "external_ids"),
+                    "is_multi_activity": _get(act, "is_multi_activity", False) or False,
+                    "duration_mins": _get(act, "duration_mins"),
                 })
                 new_row = conn.execute(sa.text(
                     "SELECT id FROM segment_codes WHERE code = :code"
