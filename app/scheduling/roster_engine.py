@@ -658,9 +658,6 @@ def _process_week(week_days, group, members, slots_by_day_type,
             static_picks, rotation_pool = _split_static_rotation(
                 eligible, day_date, slot, group, daily_assigned[day_date]
             )
-                     [(m.id, m.employee.first_name if m.employee else '?') for m in static_picks],
-                     [(m.id, m.employee.first_name if m.employee else '?') for m in rotation_pool],
-                     needed)
 
             for m in static_picks[:needed]:
                 _sp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
