@@ -932,9 +932,33 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
 # HOLIDAY / SPECIAL DAY ADJUSTMENTS
 # ═══════════════════════════════════════════════════════════════
 
-def _get_holidays_in_range(start_date, end_date):
-    """Return set of date strings that are holidays."""
+def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
+    """Return set of date strings that are holidays.
+
+    If a planning unit has a PlanningCalendar assigned, uses calendar entries
+    whose DayType.is_holiday is True.  Otherwise falls back to the legacy
+    Holiday table.
+    """
     try:
+        if planning_unit_name:
+            from app.models import PlanningUnit, CalendarEntry, DayType
+            pu = PlanningUnit.query.filter_by(name=planning_unit_name).first()
+            if pu and pu.calendar_id:
+                entries = (
+                    CalendarEntry.query
+                    .join(DayType)
+                    .filter(
+                        CalendarEntry.calendar_id == pu.calendar_id,
+                        CalendarEntry.date >= start_date,
+                        CalendarEntry.date <= end_date,
+                        DayType.is_holiday.is_(True),
+                    )
+                    .all()
+                )
+                return {e.date.isoformat() if hasattr(e.date, 'isoformat') else str(e.date)
+                        for e in entries}
+
+        # Fallback: legacy Holiday table
         from app.models import Holiday
         holidays = Holiday.query.filter(
             Holiday.date >= start_date,
@@ -995,12 +1019,14 @@ def _compute_holiday_factor(historical, holidays_set):
     return avg_holiday / avg_normal
 
 
-def apply_holiday_adjustments(forecast, historical=None):
+def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None):
     """
     Adjust forecast intervals for known holidays.
 
     If historical data is provided, computes a data-driven holiday factor.
     Otherwise uses a default 0.5 factor (50% of normal volume).
+    When planning_unit_name is given, uses the unit's PlanningCalendar
+    (if assigned) instead of the legacy Holiday table.
     """
     if not forecast:
         return forecast
@@ -1013,7 +1039,7 @@ def apply_holiday_adjustments(forecast, historical=None):
     except Exception:
         return forecast
 
-    holidays_set = _get_holidays_in_range(start, end)
+    holidays_set = _get_holidays_in_range(start, end, planning_unit_name=planning_unit_name)
     if not holidays_set:
         return forecast
 
@@ -1026,7 +1052,7 @@ def apply_holiday_adjustments(forecast, historical=None):
         except Exception:
             hist_start = start - datetime.timedelta(days=90)
             hist_end = start - datetime.timedelta(days=1)
-        hist_holidays = _get_holidays_in_range(hist_start, hist_end)
+        hist_holidays = _get_holidays_in_range(hist_start, hist_end, planning_unit_name=planning_unit_name)
         factor = _compute_holiday_factor(historical, hist_holidays)
     else:
         factor = 0.5  # default: holidays get ~50% of normal volume
@@ -1588,7 +1614,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
         if hw_result.get("error"):
             return hw_result
         forecast = hw_result.get("forecast", [])
-        forecast = apply_holiday_adjustments(forecast, historical)
+        forecast = apply_holiday_adjustments(forecast, historical, planning_unit_name=lob)
         return {
             "method": "holt_winters",
             "historical_days_used": historical_days,
@@ -1677,7 +1703,7 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             forecast.extend(day_rows)
 
     # Apply holiday adjustments to all methods (not just Holt-Winters)
-    forecast = apply_holiday_adjustments(forecast, historical)
+    forecast = apply_holiday_adjustments(forecast, historical, planning_unit_name=lob)
 
     return {
         "method": method,

@@ -85,7 +85,7 @@ def generate_roster(group_id, start_date, end_date):
             log.info("  SLOT-INFO id=%s day_type=%s role='%s' label=%s start=%s end=%s hours=%.1f", s.id, dt, s.role, s.label, s.shift_start, s.shift_end, _s_hrs)
 
     # Load holiday dates for the planning unit's date range
-    stat_dates = _get_stat_dates(start_date, end_date)
+    stat_dates = _get_stat_dates(start_date, end_date, planning_unit_id=group.planning_unit_id)
 
     # Load existing PTO for all members in the date range
     member_employee_ids = {m.id: m.employee_id for m in active_members}
@@ -219,8 +219,31 @@ def _index_slots(slots):
     return out
 
 
-def _get_stat_dates(start, end):
-    """Return set of dates that are statutory holidays in the range."""
+def _get_stat_dates(start, end, planning_unit_id=None):
+    """Return set of dates that are statutory holidays in the range.
+
+    If the planning unit has a PlanningCalendar assigned, uses calendar
+    entries whose DayType.is_holiday is True.  Otherwise falls back to
+    the legacy Holiday table.
+    """
+    if planning_unit_id:
+        from app.models import PlanningUnit, CalendarEntry, DayType
+        pu = PlanningUnit.query.get(planning_unit_id)
+        if pu and pu.calendar_id:
+            entries = (
+                CalendarEntry.query
+                .join(DayType)
+                .filter(
+                    CalendarEntry.calendar_id == pu.calendar_id,
+                    CalendarEntry.date >= start,
+                    CalendarEntry.date <= end,
+                    DayType.is_holiday.is_(True),
+                )
+                .all()
+            )
+            return {e.date for e in entries}
+
+    # Fallback: legacy Holiday table
     holidays = Holiday.query.filter(
         Holiday.date >= start,
         Holiday.date <= end,
@@ -1012,12 +1035,19 @@ def _process_week(week_days, group, members, slots_by_day_type,
                         _reasons.append("ded_opener")
                     if not _consecutive_ok(_mobj, day_date):
                         _reasons.append("consecutive_fail")
-                    if not _hours_ok(_mobj, backfill_slots_p5[0]):
+                    if not any(_hours_ok(_mobj, _bs) for _bs in backfill_slots_p5 if _mid in slot_eligible.get(_bs, set())):
                         _reasons.append(f"hours_fail(wk_hrs={week_hours.get(_mid,0)},max={getattr(_mobj,'max_hours_per_week',None)})")
                 if _reasons:
                     log.info("P5-TRACE   m%d SKIP: %s", _mid, ", ".join(_reasons))
                 else:
                     log.info("P5-TRACE   m%d PASS (deficit=%d)", _mid, _contract_deficit(_mid))
+
+        # Check if ANY eligible non-closer slot fits the member's hours
+        def _any_slot_fits(m):
+            for _bs in backfill_slots_p5:
+                if m.id in slot_eligible.get(_bs, set()) and _hours_ok(m, _bs):
+                    return True
+            return False
 
         unassigned_today = [
             m for m in members
@@ -1027,7 +1057,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             and not m.dedicated_closer
             and not m.dedicated_opener
             and _consecutive_ok(m, day_date)
-            and _hours_ok(m, backfill_slots_p5[0])
+            and _any_slot_fits(m)
         ]
         if _p5_trace:
             log.info("P5-TRACE %s: unassigned_today=%s", day_date, [(m.id, _contract_deficit(m.id)) for m in unassigned_today])
@@ -1044,9 +1074,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
         for m in unassigned_today:
             if _contract_deficit(m.id) <= 0:
                 break
-            # Per-member eligible slots from the cached map
+            # Per-member eligible slots from the cached map, filtered by hours
             m_eligible_slots = [s for s in backfill_slots_p5
-                                if m.id in slot_eligible[s]]
+                                if m.id in slot_eligible[s] and _hours_ok(m, s)]
             if not m_eligible_slots:
                 continue
             # Pick the slot this member has done least (for variety),

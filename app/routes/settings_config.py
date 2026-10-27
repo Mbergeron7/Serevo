@@ -42,12 +42,14 @@ def planning_units_page():
             d["employee_count"] = Employee.query.filter_by(planning_unit_id=pu.id).count()
             items.append(d)
         activities = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.label).all()]
+        from app.models import PlanningCalendar
+        calendars = [c.to_dict() for c in PlanningCalendar.query.order_by(PlanningCalendar.name).all()]
     except Exception as e:
         log.warning(f"planning_units query failed: {e}")
         from app.models import db
         db.session.rollback()
-        items, activities = [], []
-    return render_template("settings/planning_units.html", items=items, activities=activities)
+        items, activities, calendars = [], [], []
+    return render_template("settings/planning_units.html", items=items, activities=activities, calendars=calendars)
 
 
 @settings_bp.route("/planning-units/save", methods=["POST"])
@@ -72,6 +74,8 @@ def planning_units_save():
         item.is_multi_activity = bool(d.get("is_multi_activity", False))
         parent_id = d.get("parent_id")
         item.parent_id = int(parent_id) if parent_id else None
+        calendar_id = d.get("calendar_id")
+        item.calendar_id = int(calendar_id) if calendar_id else None
         # If this is a multi-activity parent, clear its own parent
         if item.is_multi_activity:
             item.parent_id = None
@@ -519,6 +523,7 @@ def day_types_save():
         item.name = d["name"]
         item.color = d.get("color", "#ef4444")
         item.is_holiday = bool(d.get("is_holiday", False))
+        item.volume_factor = float(d.get("volume_factor", 0.0))
         if not d.get("id"):
             db.session.add(item)
         db.session.commit()
@@ -620,6 +625,87 @@ def calendar_entries_delete():
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/planning-calendars/<int:cal_id>/prepopulate-ontario", methods=["POST"])
+@admin_required
+def prepopulate_ontario_holidays(cal_id):
+    """Pre-populate a calendar with Ontario statutory holidays for 2025-2027."""
+    from datetime import date as _date
+    from app.models import CalendarEntry, DayType, PlanningCalendar, db
+
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    cal = PlanningCalendar.query.get(cal_id)
+    if not cal:
+        return jsonify(success=False, error="Calendar not found")
+
+    # Ensure a "Statutory Holiday" day type exists
+    stat_dt = DayType.query.filter(DayType.name.ilike("statutory holiday")).first()
+    if not stat_dt:
+        stat_dt = DayType.query.filter(DayType.name.ilike("stat holiday")).first()
+    if not stat_dt:
+        stat_dt = DayType.query.filter(DayType.name.ilike("holiday")).first()
+    if not stat_dt:
+        stat_dt = DayType(name="Statutory Holiday", color="#ef4444",
+                          is_holiday=True, volume_factor=0.0)
+        db.session.add(stat_dt)
+        db.session.flush()
+
+    ontario_holidays = [
+        # 2025
+        ("New Year's Day", _date(2025, 1, 1)),
+        ("Family Day", _date(2025, 2, 17)),
+        ("Good Friday", _date(2025, 4, 18)),
+        ("Victoria Day", _date(2025, 5, 19)),
+        ("Canada Day", _date(2025, 7, 1)),
+        ("Civic Holiday", _date(2025, 8, 4)),
+        ("Labour Day", _date(2025, 9, 1)),
+        ("Thanksgiving", _date(2025, 10, 13)),
+        ("Christmas Day", _date(2025, 12, 25)),
+        ("Boxing Day", _date(2025, 12, 26)),
+        # 2026
+        ("New Year's Day", _date(2026, 1, 1)),
+        ("Family Day", _date(2026, 2, 16)),
+        ("Good Friday", _date(2026, 4, 3)),
+        ("Victoria Day", _date(2026, 5, 18)),
+        ("Canada Day", _date(2026, 7, 1)),
+        ("Civic Holiday", _date(2026, 8, 3)),
+        ("Labour Day", _date(2026, 9, 7)),
+        ("Thanksgiving", _date(2026, 10, 12)),
+        ("Christmas Day", _date(2026, 12, 25)),
+        ("Boxing Day", _date(2026, 12, 26)),
+        # 2027
+        ("New Year's Day", _date(2027, 1, 1)),
+        ("Family Day", _date(2027, 2, 15)),
+        ("Good Friday", _date(2027, 3, 26)),
+        ("Victoria Day", _date(2027, 5, 24)),
+        ("Canada Day", _date(2027, 7, 1)),
+        ("Civic Holiday", _date(2027, 8, 2)),
+        ("Labour Day", _date(2027, 9, 6)),
+        ("Thanksgiving", _date(2027, 10, 11)),
+        ("Christmas Day", _date(2027, 12, 25)),
+        ("Boxing Day", _date(2027, 12, 26)),
+    ]
+
+    added = 0
+    skipped = 0
+    for name, dt in ontario_holidays:
+        exists = CalendarEntry.query.filter_by(
+            calendar_id=cal_id, date=dt).first()
+        if exists:
+            skipped += 1
+            continue
+        entry = CalendarEntry(calendar_id=cal_id, day_type_id=stat_dt.id,
+                              date=dt)
+        db.session.add(entry)
+        added += 1
+
+    db.session.commit()
+    return jsonify(success=True, added=added, skipped=skipped,
+                   message=f"Added {added} Ontario holidays ({skipped} already existed)")
 
 
 # ═══════════════════════════════════════════════════════════════

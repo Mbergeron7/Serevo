@@ -118,6 +118,12 @@
             <div id="childrenContainer" style="font-size:0.85rem;"></div>
             <p style="font-size:0.78rem;color:var(--text-muted);margin:8px 0 0;">To add children, edit another planning unit and set its Parent to this one.</p>
           </div>
+          <label style="margin-top:12px;">Planning Calendar
+            <select id="f_calendar_id" class="form-input">
+              <option value="">— None —</option>
+            </select>
+          </label>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Assign a calendar to use its holidays in scheduling and forecasting instead of the legacy Holiday table.</p>
         </div>
       </div>
 
@@ -171,6 +177,7 @@
 
 <script>
 const DATA = {{ items | tojson }};
+const CALENDARS = {{ calendars | tojson }};
 const ALL_ACTIVITIES = {{ activities | tojson }};
 const tbody = document.querySelector('#main-table tbody');
 const dlg = document.getElementById('editModal');
@@ -273,6 +280,11 @@ function openModal(item) {
   document.getElementById('multiParentSection').style.display = isMulti ? 'none' : 'block';
   document.getElementById('multiChildrenSection').style.display = isMulti ? 'block' : 'none';
   if (isMulti && item) renderChildren(item.id);
+
+  // Populate calendar dropdown
+  const calSel = document.getElementById('f_calendar_id');
+  calSel.innerHTML = '<option value="">— None —</option>' + CALENDARS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  calSel.value = item ? (item.calendar_id || '') : '';
 
   bizHours = item ? JSON.parse(JSON.stringify(item.business_hours || [])) : [];
   puActivities = item ? JSON.parse(JSON.stringify(item.assigned_activities || [])) : [];
@@ -450,6 +462,7 @@ async function saveItem() {
     is_active: document.getElementById('f_is_active').checked,
     is_multi_activity: document.getElementById('f_is_multi_activity').checked,
     parent_id: document.getElementById('f_parent_id').value || null,
+    calendar_id: document.getElementById('f_calendar_id').value || null,
     business_hours: bizHours,
     assigned_activities: puActivities,
     call_routes: callRoutes,

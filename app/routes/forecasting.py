@@ -209,7 +209,8 @@ def generate():
             # Apply holiday adjustments
             if result.get("forecast"):
                 result["forecast"] = apply_holiday_adjustments(
-                    result["forecast"], result.get("historical"))
+                    result["forecast"], result.get("historical"),
+                    planning_unit_name=lob)
 
         if result.get("error"):
             return jsonify({"success": False, "error": result["error"]})

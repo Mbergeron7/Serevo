@@ -78,6 +78,9 @@ class PlanningUnit(db.Model):
 
     description  = db.Column(db.String(255), nullable=True)
     timezone     = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
+    calendar_id  = db.Column(db.Integer, db.ForeignKey("planning_calendars.id"), nullable=True)
+
+    calendar     = db.relationship("PlanningCalendar", backref="planning_units")
 
     # Multi-activity: a parent PU (e.g. "Sales Support") with child PUs
     # (e.g. "Sales EN", "Sales FR") that represent skill/language splits.
@@ -117,6 +120,7 @@ class PlanningUnit(db.Model):
             "is_multi_activity": self.is_multi_activity or False,
             "parent_id": self.parent_id,
             "parent_name": self.parent.name if self.parent_id and self.parent else None,
+            "calendar_id": self.calendar_id,
             "business_hours": [bh.to_dict() for bh in self.business_hours],
             "assigned_activities": [pa.to_dict() for pa in self.assigned_activities],
             "parameters": [p.to_dict() for p in self.unit_parameters],
@@ -2365,13 +2369,15 @@ class DayType(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(80), unique=True, nullable=False)
     color      = db.Column(db.String(10), default="#ef4444")
-    is_holiday = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=_utcnow)
+    is_holiday     = db.Column(db.Boolean, default=False)
+    volume_factor  = db.Column(db.Float, default=0.0)       # 0=closed, 0.5=half volume, 1.0=normal
+    created_at     = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
             "id": self.id, "name": self.name,
             "color": self.color, "is_holiday": self.is_holiday,
+            "volume_factor": self.volume_factor if self.volume_factor is not None else 0.0,
         }
 
 
