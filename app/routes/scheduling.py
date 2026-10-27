@@ -1575,6 +1575,8 @@ def employees_for_lob():
     try:
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
+        if lob == "All":
+            lob = ""
 
         selection_id = payload.get("selection_id", "")
         skill_id = payload.get("skill_id", "")

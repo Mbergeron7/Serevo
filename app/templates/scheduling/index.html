@@ -1049,7 +1049,7 @@
       <div class="form-group">
         <label>Filter by LOB</label>
         <select id="massFilterLob" onchange="massApplyFilters()" style="font-size:.82rem">
-          <option value="">All LOBs</option>
+          <option value="All">All LOBs</option>
         </select>
       </div>
     </div>
@@ -2780,7 +2780,7 @@ function openMassModal() {
   _massCrossLobCoverage = [];
   _massAllShifts = [];
   document.getElementById('massFilterTL').innerHTML = '<option value="">All Team Leads</option>';
-  document.getElementById('massFilterLob').innerHTML = '<option value="">All LOBs</option>';
+  document.getElementById('massFilterLob').innerHTML = '<option value="All">All LOBs</option>';
   massToggleScope();
 
   // Set date to current config date
@@ -2893,7 +2893,7 @@ function _massPopulateFilters() {
   tlSel.innerHTML = '<option value="">All Team Leads</option>';
   [...tls].sort().forEach(tl => { tlSel.innerHTML += `<option value="${tl}">${tl}</option>`; });
   const lobSel = document.getElementById('massFilterLob');
-  lobSel.innerHTML = '<option value="">All LOBs</option>';
+  lobSel.innerHTML = '<option value="All">All LOBs</option>';
   [...lobs].sort().forEach(l => { lobSel.innerHTML += `<option value="${l}">${l}</option>`; });
 }
 
@@ -2901,7 +2901,7 @@ function _massRenderEmpList() {
   const filterTL = document.getElementById('massFilterTL').value;
   const filterLob = document.getElementById('massFilterLob').value;
   const filtered = _massAllShifts.filter(s =>
-    (!filterTL || s.team_lead === filterTL) && (!filterLob || s.lob === filterLob)
+    (!filterTL || filterTL === 'All' || s.team_lead === filterTL) && (!filterLob || filterLob === 'All' || s.lob === filterLob)
   );
   const list = document.getElementById('massEmpList');
   if (!filtered.length) {
