@@ -975,6 +975,33 @@ def _process_week(week_days, group, members, slots_by_day_type,
             slot_eligible[_bs] = ids
             eligible_by_any_slot |= ids
 
+        # ── P5 TRACE (first 2 weeks only) ──
+        _p5_trace = (day_date - week_days[0]).days < 14
+        if _p5_trace:
+            log.info("P5-TRACE %s: eligible_by_any=%s daily_assigned=%s",
+                     day_date, sorted(eligible_by_any_slot), sorted(daily_assigned.get(day_date, set())))
+            for _mid in sorted(eligible_by_any_slot):
+                _reasons = []
+                if _mid in daily_assigned.get(day_date, set()):
+                    _reasons.append("already_assigned")
+                if _contract_deficit(_mid) <= 0:
+                    _reasons.append(f"deficit={_contract_deficit(_mid)}")
+                # find member obj
+                _mobj = next((mm for mm in members if mm.id == _mid), None)
+                if _mobj:
+                    if _mobj.dedicated_closer:
+                        _reasons.append("ded_closer")
+                    if _mobj.dedicated_opener:
+                        _reasons.append("ded_opener")
+                    if not _consecutive_ok(_mobj, day_date):
+                        _reasons.append("consecutive_fail")
+                    if not _hours_ok(_mobj, backfill_slots_p5[0]):
+                        _reasons.append(f"hours_fail(wk_hrs={week_hours.get(_mid,0)},max={getattr(_mobj,'max_hours_per_week',None)})")
+                if _reasons:
+                    log.info("P5-TRACE   m%d SKIP: %s", _mid, ", ".join(_reasons))
+                else:
+                    log.info("P5-TRACE   m%d PASS (deficit=%d)", _mid, _contract_deficit(_mid))
+
         unassigned_today = [
             m for m in members
             if m.id in eligible_by_any_slot
@@ -985,6 +1012,8 @@ def _process_week(week_days, group, members, slots_by_day_type,
             and _consecutive_ok(m, day_date)
             and _hours_ok(m, backfill_slots_p5[0])
         ]
+        if _p5_trace:
+            log.info("P5-TRACE %s: unassigned_today=%s", day_date, [(m.id, _contract_deficit(m.id)) for m in unassigned_today])
         if not unassigned_today:
             continue
 
