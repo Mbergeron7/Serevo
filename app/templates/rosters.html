@@ -412,6 +412,7 @@
     <div class="form-row">
       <div class="check-row" style="gap:16px; flex-wrap:wrap;">
         <span><input type="checkbox" id="mbr-no-close"> <label for="mbr-no-close">Exclude from Closing</label></span>
+        <span><input type="checkbox" id="mbr-accom-no-close"> <label for="mbr-accom-no-close">Accommodation: No Close</label></span>
         <span><input type="checkbox" id="mbr-exclude-opening"> <label for="mbr-exclude-opening">Exclude from Opening</label></span>
         <span><input type="checkbox" id="mbr-exclude-saturday"> <label for="mbr-exclude-saturday">Exclude from Saturday</label></span>
         <span><input type="checkbox" id="mbr-exclude-sunday"> <label for="mbr-exclude-sunday">Exclude from Sunday</label></span>
@@ -670,7 +671,7 @@ function renderMembersTable(g) {
         <td style="font-size:.78rem;">${m.contracted_days || 5}d${m.contracted_hours ? ' / '+m.contracted_hours+'h' : ''}</td>
         <td>${m.rotation_order || '—'}</td>
         <td>${m.max_closings_per_week}</td>
-        <td style="font-size:.78rem;">${(m.work_days||['mon','tue','wed','thu','fri']).map(d=>d.charAt(0).toUpperCase()+d.slice(1,3)).join(', ')}</td>
+        <td style="font-size:.78rem;">${m.work_days ? m.work_days.map(d=>d.charAt(0).toUpperCase()+d.slice(1,3)).join(', ') : 'All'}</td>
         <td style="font-size:.78rem;">
           ${m.accommodation_no_close ? '🚫 No close · ' : ''}
           ${m.excluded_closing_days ? 'Excl Close: '+m.excluded_closing_days.join(', ')+' · ' : ''}
@@ -754,6 +755,7 @@ async function openAddMember(groupId) {
   document.getElementById('mbr-dedicated-closer').checked = false;
   document.getElementById('mbr-dedicated-opener').checked = false;
   document.getElementById('mbr-no-close').checked = false;
+  document.getElementById('mbr-accom-no-close').checked = false;
   document.getElementById('mbr-exclude-opening').checked = false;
   document.getElementById('mbr-exclude-saturday').checked = false;
   document.getElementById('mbr-exclude-sunday').checked = false;
@@ -806,7 +808,8 @@ async function editMember(groupId, memberId) {
   document.getElementById('mbr-display-only').checked = !!m.is_display_only;
   document.getElementById('mbr-dedicated-closer').checked = !!m.dedicated_closer;
   document.getElementById('mbr-dedicated-opener').checked = !!m.dedicated_opener;
-  document.getElementById('mbr-no-close').checked = !!m.accommodation_no_close || !!m.exclude_from_closing;
+  document.getElementById('mbr-no-close').checked = !!m.exclude_from_closing;
+  document.getElementById('mbr-accom-no-close').checked = !!m.accommodation_no_close;
   document.getElementById('mbr-exclude-opening').checked = !!m.exclude_from_opening;
   document.getElementById('mbr-exclude-saturday').checked = !!m.exclude_from_saturday;
   document.getElementById('mbr-exclude-sunday').checked = !!m.exclude_from_sunday;
@@ -838,8 +841,9 @@ async function editMember(groupId, memberId) {
   avoidSel.innerHTML = '<option value="">— None —</option>' + mbrOpts;
   pairSel.value = m.pair_with_member_id || '';
   avoidSel.value = m.avoid_member_id || '';
-  const wd = m.work_days || ['mon','tue','wed','thu','fri'];
-  document.querySelectorAll('.mbr-wd-cb').forEach(cb => cb.checked = wd.includes(cb.value));
+  const wd = m.work_days || [];  // null = available every day → all checked
+  const allDays = !m.work_days;  // true when no restriction set
+  document.querySelectorAll('.mbr-wd-cb').forEach(cb => cb.checked = allDays || wd.includes(cb.value));
   const excl = m.excluded_closing_days || [];
   document.querySelectorAll('.mbr-excl-cb').forEach(cb => cb.checked = excl.includes(cb.value));
   const exclOpen = m.excluded_opening_days || [];
@@ -868,7 +872,7 @@ async function saveMember() {
     exclude_from_saturday: document.getElementById('mbr-exclude-saturday').checked,
     exclude_from_sunday: document.getElementById('mbr-exclude-sunday').checked,
     exclude_from_opening: document.getElementById('mbr-exclude-opening').checked,
-    exclude_from_closing: document.getElementById('mbr-no-close').checked,
+    exclude_from_closing: document.getElementById('mbr-no-close').checked || document.getElementById('mbr-accom-no-close').checked,
     consistent_start: document.getElementById('mbr-consistent-start').checked,
     allow_split_shift: document.getElementById('mbr-split-shift').checked,
     split_shift_min_gap: +document.getElementById('mbr-split-gap').value || null,
@@ -876,7 +880,7 @@ async function saveMember() {
     max_closings_per_week: +document.getElementById('mbr-max-close').value,
     max_openings_per_week: +document.getElementById('mbr-max-open').value || null,
     max_mids_per_week: +document.getElementById('mbr-max-mid').value || null,
-    accommodation_no_close: document.getElementById('mbr-no-close').checked,
+    accommodation_no_close: document.getElementById('mbr-accom-no-close').checked,
     accommodation_start: document.getElementById('mbr-acc-start').value || null,
     accommodation_end: document.getElementById('mbr-acc-end').value || null,
     work_days: workDays.length ? workDays : null,
