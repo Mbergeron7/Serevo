@@ -1834,8 +1834,8 @@ def api_live_agents():
                 if uid in dismissed_uids:
                     continue
                 first_seen = ag.get("first_seen")
-                # 4b) Any status stuck for 8+ hours → stale
-                STALE_UNSCHED_HOURS = 8
+                # 4b) Any status stuck for 2+ hours → stale
+                STALE_UNSCHED_HOURS = 2
                 if first_seen and (now_est - first_seen).total_seconds() / 3600 >= STALE_UNSCHED_HOURS:
                     continue
                 # 4c) Only activity is from yesterday
@@ -1844,6 +1844,12 @@ def api_live_agents():
                 # 4d) Never had a productive status (Ready, On-call, etc.)
                 had_productive = ag.get("had_productive", False)
                 if not had_productive:
+                    continue
+                # 4e) Phantom detection: unscheduled agent with very few events
+                #     whose status hasn't changed in 60+ min — likely stale ACD data
+                event_count = ag.get("event_count", 0)
+                mins_stuck = ag.get("minutes_in_status", 0)
+                if event_count <= 3 and mins_stuck >= 60:
                     continue
 
             agent = {
@@ -1985,6 +1991,10 @@ def api_agent_detail():
             employee_id=emp.id, schedule_date=today, status="scheduled"
         ).first()
 
+        # Build segment code → display label map
+        from app.models import SegmentCode as _SC
+        _seg_labels = {sc.code: sc.label for sc in _SC.query.all()}
+
         segments = []
         if sched and sched.segments:
             for seg in sched.segments:
@@ -1999,7 +2009,7 @@ def api_agent_detail():
                     adh_class = "upcoming"
                     adherence = "Upcoming"
                 segments.append({
-                    "activity": seg.activity_type,
+                    "activity": _seg_labels.get(seg.activity_type, seg.activity_type),
                     "start": seg.start_time.strftime("%H:%M") if seg.start_time else "",
                     "end": seg.end_time.strftime("%H:%M") if seg.end_time else "",
                     "duration_mins": seg.duration_mins,
