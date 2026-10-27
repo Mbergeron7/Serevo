@@ -97,7 +97,7 @@
       <div class="tab-panel" data-panel="multiactivity">
         <div class="info-box">
           <strong>Multi-Activity</strong> lets you group skill/language splits under a parent LOB.
-          For example, "SS Sales" is the parent with "SS Sales EN" and "SS Sales FR" as children.
+          For example, "Sales Support" is the parent with "Sales EN" and "Sales FR" as children.
           The parent aggregates data from all children's call routes plus its own.
         </div>
         <div style="display:grid;gap:14px;">
@@ -388,7 +388,7 @@ function renderCallRoutes() {
     row.style.gridTemplateColumns = '140px 1fr 80px 36px';
     row.innerHTML = `
       <label style="font-size:.75rem;">Route ID<input class="form-input" placeholder="e.g. 719" value="${esc(cr.route_id||'')}" onchange="updateCallRoute(${i},'route_id',this.value)"></label>
-      <label style="font-size:.75rem;">Route Name<input class="form-input" placeholder="e.g. SS Sales EN" value="${esc(cr.name||'')}" onchange="updateCallRoute(${i},'name',this.value)"></label>
+      <label style="font-size:.75rem;">Route Name<input class="form-input" placeholder="e.g. Sales EN" value="${esc(cr.name||'')}" onchange="updateCallRoute(${i},'name',this.value)"></label>
       <label style="font-size:.75rem;display:flex;align-items:center;gap:6px;padding-top:18px;">
         <input type="checkbox" ${cr.is_active!==false?'checked':''} onchange="updateCallRoute(${i},'is_active',this.checked)"> Active
       </label>

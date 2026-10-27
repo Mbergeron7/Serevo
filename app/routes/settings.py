@@ -1552,7 +1552,7 @@ def save_lob_mapping():
     dg = _demo_guard()
     if dg:
         return dg
-    from app.models import db, LobMapping
+    from app.models import db, LobMapping, PlanningUnit
     data = request.get_json(silent=True) or {}
     mid = data.get("id")
     source = (data.get("source_name") or "").strip()
@@ -1573,6 +1573,10 @@ def save_lob_mapping():
 
     m.source_name = source
     m.planning_unit_name = target
+    # Resolve FK from name
+    pu = PlanningUnit.query.filter_by(name=target).first()
+    if pu:
+        m.planning_unit_id = pu.id
     db.session.commit()
     return jsonify({"success": True, "item": {
         "id": m.id, "source_name": m.source_name,

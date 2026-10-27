@@ -2787,5 +2787,11 @@ def publish_schedule():
         db.session.add(notif)
         notified += 1
 
+    # Audit trail
+    from app.utils.audit import log_audit
+    log_audit("schedule_published",
+              detail=f"{lob or 'All'} {start} to {end or start}, {len(schedules)} shifts, {notified} notified",
+              entity_type="schedule")
+
     db.session.commit()
     return jsonify(success=True, notified=notified, total_shifts=len(schedules))

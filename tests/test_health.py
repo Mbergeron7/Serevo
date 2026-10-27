@@ -44,7 +44,7 @@ class TestPageLoads:
         "/settings/customization",
         "/settings/activities",
         "/settings/contracts",
-        "/settings/day-models",
+        # Day models was consolidated into scheduling config (task #348)
         "/settings/planning-units",
         "/settings/skills",
         "/settings/selections",

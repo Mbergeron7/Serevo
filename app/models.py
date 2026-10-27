@@ -16,6 +16,27 @@ db = SQLAlchemy()
 
 
 # ═══════════════════════════════════════════════════════════════
+# ORGANIZATION — Multi-tenancy foundation
+# ═══════════════════════════════════════════════════════════════
+
+class Organization(db.Model):
+    """Tenant container. All data-bearing models should eventually carry
+    an organization_id FK so a single database can serve multiple clients.
+    Currently single-tenant; this model lays the groundwork."""
+    __tablename__ = "organizations"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(120), unique=True, nullable=False)
+    slug        = db.Column(db.String(60), unique=True, nullable=False)   # URL-safe identifier
+    timezone    = db.Column(db.String(60), default="America/Toronto")
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=_utcnow)
+
+    def __repr__(self):
+        return f"<Organization {self.slug}>"
+
+
+# ═══════════════════════════════════════════════════════════════
 # USERS & AUTH
 # ═══════════════════════════════════════════════════════════════
 
@@ -215,6 +236,8 @@ class Employee(db.Model):
     first_name       = db.Column(db.String(80), nullable=False)
     last_name        = db.Column(db.String(80), nullable=False)
     status           = db.Column(db.String(20), nullable=False, default="Active", index=True)
+    # Denormalized cache of primary PU; source of truth is EmployeePlanningUnit junction table.
+    # Synced by _sync_employee_planning_units() in routes/people.py.
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True, index=True)
     all_skills       = db.Column(db.Text, default="")
     skill_start      = db.Column(db.Date, nullable=True)
@@ -223,6 +246,7 @@ class Employee(db.Model):
     end_date         = db.Column(db.Date, nullable=True)
     languages        = db.Column(db.String(100), default="English")
     contract_type    = db.Column(db.String(100), default="Full-Time")    # Full-Time | Part-Time
+    # Denormalized cache of active contract; source of truth is EmployeeContract junction table.
     contract_id      = db.Column(db.Integer, db.ForeignKey("contracts.id"), nullable=True)
     weekly_hours     = db.Column(db.Float, default=42.5)
     days_per_week    = db.Column(db.Integer, default=5)
@@ -885,7 +909,11 @@ class AppSetting(db.Model):
 
 class SegmentCode(db.Model):
     """Activity/segment codes used in scheduling (e.g. on-call, break, lunch).
-    Clients can rename, recolor, and add their own codes."""
+    Clients can rename, recolor, and add their own codes.
+
+    NOTE: ~80% column overlap with Activity model. Activity.segment_code_id
+    links the two. Future refactor: merge into a single model. See also
+    Activity class below."""
     __tablename__ = "segment_codes"
 
     id           = db.Column(db.Integer, primary_key=True)
@@ -1065,7 +1093,10 @@ class ShiftTemplate(db.Model):
 
 
 class RotationPattern(db.Model):
-    """Multi-week rotation patterns — e.g. Week 1: days, Week 2: closing, Week 3: weekend."""
+    """Multi-week rotation patterns — e.g. Week 1: days, Week 2: closing, Week 3: weekend.
+    CONSOLIDATION NOTE: This is one of 5 scheduling paradigms (Rotation, ShiftSequence,
+    Quartile, WeekTimePattern, direct DayModel). Future refactor could fold into
+    ShiftSequence which is more flexible."""
     __tablename__ = "rotation_patterns"
 
     id          = db.Column(db.Integer, primary_key=True)
@@ -1815,15 +1846,19 @@ class IntervalActual(db.Model):
 
 
 class LobMapping(db.Model):
-    """Maps a source LOB/workload name to a canonical planning-unit name.
-    E.g. 'Sales Combined' → 'Sales Support'.
-    Replaces the hard-coded _LOB_TO_PU dict for generic client support."""
+    """Maps a source LOB/workload name to a canonical planning unit.
+    E.g. 'Sales Combined' → PlanningUnit 'Sales Support'.
+    Uses planning_unit_id FK for integrity; planning_unit_name kept for
+    backwards compat but derived from the FK relationship."""
     __tablename__ = "lob_mappings"
 
     id               = db.Column(db.Integer, primary_key=True)
     source_name      = db.Column(db.String(200), unique=True, nullable=False, index=True)
-    planning_unit_name = db.Column(db.String(200), nullable=False)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True, index=True)
+    planning_unit_name = db.Column(db.String(200), nullable=False)  # kept for compat; prefer FK
     created_at       = db.Column(db.DateTime, default=_utcnow)
+
+    planning_unit    = db.relationship("PlanningUnit", backref="lob_mappings", lazy="select")
 
     def __repr__(self):
         return f"<LobMapping {self.source_name!r} → {self.planning_unit_name!r}>"
@@ -1971,7 +2006,9 @@ class Contract(db.Model):
     weeks_max_1_sat           = db.Column(db.Integer, nullable=True)
     min_rest_hours            = db.Column(db.Float, default=10.0)        # between shifts
 
-    # ── Scheduling Parameters ───────────────────────────────────
+    # ── Scheduling Parameters (RESERVED — not yet read by engine) ──
+    # These columns are ready for advanced scheduling constraints but
+    # are not currently consumed by any route or engine code.
     max_saturdays_per_month   = db.Column(db.Integer, nullable=True)
     max_sundays_per_month     = db.Column(db.Integer, nullable=True)     # (kept for legacy)
     min_net_work_hours_day    = db.Column(db.String(5), nullable=True)   # HH:MM
@@ -2087,6 +2124,37 @@ class DayModel(db.Model):
             "planning_unit_id": self.planning_unit_id,
             "planning_unit": pu.name if pu else "All",
             "is_active": self.is_active, "sort_order": self.sort_order,
+        }
+
+
+class DayModelActivity(db.Model):
+    """Junction table: activities placed within a day model.
+    Replaces DayModel.activities_json for queryable relationships.
+    Each row is one activity placement at a specific offset in the day."""
+    __tablename__ = "day_model_activities"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    day_model_id    = db.Column(db.Integer, db.ForeignKey("day_models.id", ondelete="CASCADE"),
+                                nullable=False, index=True)
+    activity_id     = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=True)
+    offset_mins     = db.Column(db.Integer, default=0)        # minutes from day model start
+    duration_mins   = db.Column(db.Integer, default=30)
+    is_flexible     = db.Column(db.Boolean, default=False)     # can be moved within window
+    window_start    = db.Column(db.Integer, nullable=True)     # earliest offset (mins) if flexible
+    window_end      = db.Column(db.Integer, nullable=True)     # latest offset (mins) if flexible
+    sort_order      = db.Column(db.Integer, default=0)
+
+    day_model = db.relationship("DayModel", backref=db.backref("activity_placements", lazy="select",
+                                cascade="all, delete-orphan", order_by="DayModelActivity.sort_order"))
+    activity  = db.relationship("Activity", backref="day_model_placements")
+
+    def to_dict(self):
+        return {
+            "id": self.id, "day_model_id": self.day_model_id,
+            "activity_id": self.activity_id, "offset_mins": self.offset_mins,
+            "duration_mins": self.duration_mins, "is_flexible": self.is_flexible,
+            "window_start": self.window_start, "window_end": self.window_end,
+            "sort_order": self.sort_order,
         }
 
 

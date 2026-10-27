@@ -202,6 +202,11 @@ def delete_employee():
         # Unlink any user accounts referencing this employee
         User.query.filter_by(employee_id=emp.id).update({User.employee_id: None})
         db.session.flush()
+        # Audit trail
+        from app.utils.audit import log_audit
+        log_audit("employee_deleted",
+                  detail=f"{emp.first_name} {emp.last_name} (ID {emp.id})",
+                  entity_type="employee", entity_id=emp.id)
         db.session.delete(emp)
         db.session.commit()
         return jsonify({"success": True})

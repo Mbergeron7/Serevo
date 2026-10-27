@@ -178,7 +178,7 @@ def roster():
         emp_error=emp_err,
         active_count=len(active),
         total_count=len(employees),
-        lob_count=len(lobs),
+        lob_count=len(all_pu_names),
         accom_count=len(accoms),
         pto_count=len(pto_list),
         all_pu_names=all_pu_names,
