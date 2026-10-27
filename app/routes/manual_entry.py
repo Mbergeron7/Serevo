@@ -11,6 +11,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 from app.auth import login_required
 from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability, User
+from app.constants import DEFAULT_TIMEZONE
 
 log = logging.getLogger("serevo.manual_entry")
 
@@ -85,7 +86,7 @@ def list_employees():
             "weekly_hours": e.get("Weekly Hours", 40.0),
             "days_per_week": e.get("Days Per Week", 5),
             "hours_per_day": e.get("Hours Per Day", 8.0),
-            "timezone": e.get("Timezone", "America/New_York"),
+            "timezone": e.get("Timezone", DEFAULT_TIMEZONE),
             "schedule_excluded": bool(e.get("Schedule Excluded")),
         } for i, e in enumerate(DEMO_EMPLOYEES)]})
     emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
@@ -108,7 +109,7 @@ def list_employees():
             "weekly_hours": e.weekly_hours or 40.0,
             "days_per_week": e.days_per_week or 5,
             "hours_per_day": e.hours_per_day or 8.0,
-            "timezone": e.timezone or "America/New_York",
+            "timezone": e.timezone or DEFAULT_TIMEZONE,
             "schedule_excluded": e.schedule_excluded or False,
         })
     return jsonify({"employees": result})
@@ -169,7 +170,7 @@ def save_employee():
         emp.weekly_hours = float(data.get("weekly_hours") or 42.5)
         emp.days_per_week = int(data.get("days_per_week") or 5)
         emp.hours_per_day = float(data.get("hours_per_day") or 8.5)
-        emp.timezone = (data.get("timezone") or "America/New_York").strip()
+        emp.timezone = (data.get("timezone") or DEFAULT_TIMEZONE).strip()
         emp.email = (data.get("email") or "").strip() or None
         emp.team_lead = (data.get("team_lead") or "").strip()
         emp.schedule_excluded = bool(data.get("schedule_excluded"))
@@ -229,7 +230,7 @@ def list_planning_units():
             {"id": 1, "name": "Sales Support"}, {"id": 2, "name": "Billing"},
             {"id": 3, "name": "Tech Support"}, {"id": 4, "name": "Retention"},
         ]})
-    units = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+    units = PlanningUnit.get_all_active()
     return jsonify({"units": [{"id": u.id, "name": u.name} for u in units]})
 
 

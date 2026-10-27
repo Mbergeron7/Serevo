@@ -1549,7 +1549,7 @@ def vto_ot_page():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
     from app.models import PlanningUnit
-    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    lobs = [pu.name for pu in PlanningUnit.get_all_active()]
     return render_template("realtime/vto_ot.html", user=user, lobs=lobs)
 
 

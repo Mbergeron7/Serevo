@@ -34,7 +34,7 @@ def index():
         today = date.today()
         try:
             emp_count = Employee.query.count()
-            pu_count = PlanningUnit.query.filter_by(is_active=True).count()
+            pu_count = len(PlanningUnit.get_all_active())
             from app.models import TimeClock
             live_stats = {
                 "total_employees": emp_count,

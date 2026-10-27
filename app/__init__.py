@@ -131,6 +131,12 @@ def create_app():
     def inject_brand():
         return cfg.brand_context
 
+    # ---- inject constants into every template ----
+    @app.context_processor
+    def inject_constants():
+        from app.constants import DEFAULT_TIMEZONE
+        return {"DEFAULT_TIMEZONE": DEFAULT_TIMEZONE}
+
     # ---- inject current user into every template ----
     @app.context_processor
     def inject_user():

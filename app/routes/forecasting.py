@@ -56,7 +56,7 @@ def index():
             lob_activities[pu["name"]] = acts
     else:
         from app.models import PlanningUnit
-        units = PlanningUnit.query.filter_by(is_active=True).all()
+        units = PlanningUnit.get_all_active()
         all_lobs = sorted([pu.name for pu in units])
         lob_activities = {}
         for pu in units:

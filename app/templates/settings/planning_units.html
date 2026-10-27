@@ -220,7 +220,7 @@ function appendPuRow(r, isChild, isParent) {
   tr.innerHTML = `
     <td style="font-weight:600;">${indent}${esc(r.name)}${multiBadge}</td>
     <td style="color:var(--text-muted);font-size:.85rem;">${esc(r.description || '—')}</td>
-    <td style="font-size:.82rem;font-family:monospace;">${esc(r.timezone || 'America/New_York')}</td>
+    <td style="font-size:.82rem;font-family:monospace;">${esc(r.timezone || '{{ DEFAULT_TIMEZONE }}')}</td>
     <td>${r.employee_count}</td>
     <td>${bhCount ? '<span class="badge-count">'+bhCount+'</span>' : '—'}</td>
     <td>${actCount ? '<span class="badge-count">'+actCount+'</span>' : '—'}</td>
@@ -262,7 +262,7 @@ function openModal(item) {
   document.getElementById('f_id').value = item ? item.id : '';
   document.getElementById('f_name').value = item ? item.name : '';
   document.getElementById('f_description').value = item ? (item.description || '') : '';
-  document.getElementById('f_timezone').value = item ? (item.timezone || 'America/New_York') : 'America/New_York';
+  document.getElementById('f_timezone').value = item ? (item.timezone || '{{ DEFAULT_TIMEZONE }}') : '{{ DEFAULT_TIMEZONE }}';
   document.getElementById('f_is_active').checked = item ? item.is_active : true;
 
   /* Multi-activity fields */

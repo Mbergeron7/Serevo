@@ -24,7 +24,7 @@ def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    lobs = [pu.name for pu in PlanningUnit.get_all_active()]
     return render_template("team_calendar/index.html", user=user, lobs=lobs)
 
 

@@ -242,7 +242,7 @@
         </div>
         <div class="info-item">
           <label>Time Zone</label>
-          <div class="val">{{ emp.timezone or 'America/New_York' }}</div>
+          <div class="val">{{ emp.timezone or DEFAULT_TIMEZONE }}</div>
         </div>
         <div class="info-item">
           <label>Start Date</label>
@@ -1089,7 +1089,7 @@
           <label>Time Zone</label>
           <select id="basic_tz">
             {% for tz in ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto','America/Winnipeg','America/Edmonton','America/Vancouver','America/Halifax','America/St_Johns','Europe/London','Europe/Paris','Asia/Kolkata','Asia/Manila','UTC'] %}
-            <option value="{{ tz }}" {{ 'selected' if (emp.timezone or 'America/New_York') == tz }}>{{ tz }}</option>
+            <option value="{{ tz }}" {{ 'selected' if (emp.timezone or DEFAULT_TIMEZONE) == tz }}>{{ tz }}</option>
             {% endfor %}
           </select>
         </div>

@@ -22,7 +22,7 @@ quality_bp = Blueprint("quality", __name__, url_prefix="/quality",
 @login_required
 def index():
     user = get_current_user()
-    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    lobs = [pu.name for pu in PlanningUnit.get_all_active()]
     return render_template("quality/index.html", user=user, lobs=lobs)
 
 

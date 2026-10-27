@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import render_template, request, jsonify, redirect, url_for
 from app.auth import login_required, admin_required, get_current_user
 from app.routes.settings import settings_bp, _demo_guard, _parse_date
+from app.constants import DEFAULT_TIMEZONE
 
 log = logging.getLogger("serevo.settings")
 
@@ -66,7 +67,7 @@ def planning_units_save():
         if not item.name:
             return jsonify(success=False, error="Name is required")
         item.description = (d.get("description") or "").strip() or None
-        item.timezone = (d.get("timezone") or "America/New_York").strip()
+        item.timezone = (d.get("timezone") or DEFAULT_TIMEZONE).strip()
         item.is_active = bool(d.get("is_active", True))
         item.is_multi_activity = bool(d.get("is_multi_activity", False))
         parent_id = d.get("parent_id")

@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
 from app.models import db, Employee, TimeClock, Schedule
+from app.constants import DEFAULT_TIMEZONE
 
 log = logging.getLogger("serevo.attendance")
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")
@@ -53,7 +54,7 @@ def clock_in():
     now = _utcnow()
     # Use employee's timezone for the date field so it matches their local calendar day
     from zoneinfo import ZoneInfo
-    emp_tz = ZoneInfo(emp.timezone or "America/New_York")
+    emp_tz = ZoneInfo(emp.timezone or DEFAULT_TIMEZONE)
     local_date = now.astimezone(emp_tz).date()
     entry = TimeClock(
         employee_id=emp.id,

@@ -11,6 +11,7 @@ from datetime import datetime, date, time, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from flask_sqlalchemy import SQLAlchemy
+from app.constants import DEFAULT_TIMEZONE
 
 db = SQLAlchemy()
 
@@ -28,7 +29,7 @@ class Organization(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     name        = db.Column(db.String(120), unique=True, nullable=False)
     slug        = db.Column(db.String(60), unique=True, nullable=False)   # URL-safe identifier
-    timezone    = db.Column(db.String(60), default="America/Toronto")
+    timezone    = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
     is_active   = db.Column(db.Boolean, default=True)
     created_at  = db.Column(db.DateTime, default=_utcnow)
 
@@ -76,7 +77,7 @@ class PlanningUnit(db.Model):
     created_at = db.Column(db.DateTime, default=_utcnow)
 
     description  = db.Column(db.String(255), nullable=True)
-    timezone     = db.Column(db.String(60), default="America/New_York")
+    timezone     = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
 
     # Multi-activity: a parent PU (e.g. "Sales Support") with child PUs
     # (e.g. "Sales EN", "Sales FR") that represent skill/language splits.
@@ -112,7 +113,7 @@ class PlanningUnit(db.Model):
         return {
             "id": self.id, "name": self.name, "is_active": self.is_active,
             "description": self.description or "",
-            "timezone": self.timezone or "America/New_York",
+            "timezone": self.timezone or DEFAULT_TIMEZONE,
             "is_multi_activity": self.is_multi_activity or False,
             "parent_id": self.parent_id,
             "parent_name": self.parent.name if self.parent_id and self.parent else None,
@@ -251,7 +252,7 @@ class Employee(db.Model):
     weekly_hours     = db.Column(db.Float, default=42.5)
     days_per_week    = db.Column(db.Integer, default=5)
     hours_per_day    = db.Column(db.Float, default=8.5)
-    timezone         = db.Column(db.String(60), default="America/New_York")
+    timezone         = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
     email            = db.Column(db.String(255), nullable=True, index=True)
     team_lead        = db.Column(db.String(100), default="")
     schedule_excluded = db.Column(db.Boolean, default=False, server_default="false")
@@ -295,7 +296,7 @@ class Employee(db.Model):
             "Weekly Hours": self.weekly_hours or 40.0,
             "Days Per Week": self.days_per_week or 5,
             "Hours Per Day": self.hours_per_day or 8.0,
-            "Timezone": self.timezone or "America/New_York",
+            "Timezone": self.timezone or DEFAULT_TIMEZONE,
             "Schedule Excluded": self.schedule_excluded or False,
             "End Date": self.end_date.isoformat() if self.end_date else "",
             "Team Lead": self.team_lead or "",

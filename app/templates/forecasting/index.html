@@ -739,7 +739,7 @@ function updateNavLabel() {
   const label = document.getElementById('navLabel');
   const datePicker = document.getElementById('navDate');
   const d = navAnchor;
-  const opts = { timeZone: 'America/New_York' };
+  const opts = { timeZone: '{{ DEFAULT_TIMEZONE }}' };
 
   if (currentView === 'daily') {
     label.textContent = d.toLocaleDateString('en-US', {day:'numeric', month:'long', year:'numeric'});

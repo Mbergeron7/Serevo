@@ -733,7 +733,7 @@ def dropdown_data():
 
     # ── LOBs / Planning Units (with id so we can filter agents) ──
     try:
-        lobs = PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()
+        lobs = PlanningUnit.get_all_active()
         lob_list = [{"id": u.id, "name": u.name} for u in lobs]
     except Exception:
         lob_list = []
