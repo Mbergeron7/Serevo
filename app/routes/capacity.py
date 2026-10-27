@@ -575,8 +575,11 @@ def plan_view():
     except Exception as e:
         log.exception("Capacity plan view error")
         flash("Could not load capacity plan. Please check your data sources.", "error")
+        _now = datetime.now()
+        _year = int(request.args.get("year", _now.year))
+        _years = list(range(2024, _now.year + 2))
         return render_template("capacity/plan.html",
-            user=user, plan=[], year=year, years=years, now="",
+            user=user, plan=[], year=_year, years=_years, now="",
             all_lobs=[], sel_lobs=[],
             shrinkage=30, occupancy=85, answer_rate=92)
 

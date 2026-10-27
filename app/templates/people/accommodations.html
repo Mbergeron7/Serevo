@@ -152,7 +152,7 @@
            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);min-width:0;flex:1;">
     <select id="filterLOB" onchange="filterAccom()"
             style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
-      <option value="">All LOBs</option>
+      <option value="All">All LOBs</option>
     </select>
   </div>
   <div class="accom-table-wrap">
@@ -377,7 +377,7 @@ overlay.addEventListener('click', e => { if (e.target === overlay) closeModal();
 
 function filterAccom() {
   const q = (document.getElementById('filterName').value || '').toLowerCase();
-  const lob = (document.getElementById('filterLOB').value || '').toLowerCase();
+  const lob = document.getElementById('filterLOB').value === 'All' ? '' : (document.getElementById('filterLOB').value || '').toLowerCase();
   document.querySelectorAll('#accomTable tbody tr').forEach(row => {
     const nameOk = !q || (row.dataset.name || '').includes(q);
     const lobOk = !lob || (row.dataset.lob || '') === lob;

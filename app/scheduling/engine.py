@@ -1150,11 +1150,13 @@ def _get_day_model_rules(start_time, end_time, planning_unit_id=None):
         from app.models import DayModel, SegmentCode
         import json as _json
 
-        # Build SegmentCode lookup
+        # Build SegmentCode lookup (code for matching, label for display)
         _code_by_id = {}
+        _label_by_code = {}
         for sc in SegmentCode.query.all():
             _code_by_id[str(sc.id)] = sc.code
             _code_by_id[sc.code] = sc.code
+            _label_by_code[sc.code] = getattr(sc, 'label', None) or sc.code
 
         # Try matching with PU first, then without
         for pu_id in ([planning_unit_id, None] if planning_unit_id else [None]):
@@ -1168,11 +1170,12 @@ def _get_day_model_rules(start_time, end_time, planning_unit_id=None):
                             act_type = _code_by_id.get(act_id, act_id)
                             rules.append({
                                 "type": act_type,
+                                "label": _label_by_code.get(act_type, act_type),
                                 "offset_mins": act.get("offset_mins") or act.get("window_start_mins", 0),
                                 "duration_mins": act.get("duration_mins", 15),
                                 "is_flexible": True,
                                 "window_start_mins": act.get("window_start_mins", 0),
-                                "window_end_mins": act.get("window_end_mins", 0),
+                                "window_end_mins": act.get("window_end_mins") or (act.get("offset_mins") or act.get("window_start_mins", 0)) + act.get("duration_mins", 15),
                                 "interval_mins": act.get("interval_mins"),
                                 "relative": act.get("relative", True),
                             })
@@ -1246,6 +1249,7 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
         if p_end <= e_min:
             pauses.append({
                 "type": rule["type"],
+                "label": rule.get("label", rule["type"]),
                 "start_min": p_start,
                 "end_min": p_end,
                 "duration_mins": duration,

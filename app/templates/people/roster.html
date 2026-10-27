@@ -194,7 +194,7 @@
 <div class="filter-bar">
   <input type="text" id="filterName" placeholder="Search by name…" oninput="currentPage=1;filterTable()">
   <select id="filterLOB" onchange="currentPage=1;filterTable()">
-    <option value="">All LOBs</option>
+    <option value="All">All LOBs</option>
     {% for lob in all_pu_names %}
       <option value="{{ lob }}">{{ lob }}</option>
     {% endfor %}
@@ -586,7 +586,7 @@ function restoreStateFromURL() {
 
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
-  const lobQ    = document.getElementById('filterLOB').value.toLowerCase();
+  const lobQ    = document.getElementById('filterLOB').value === 'All' ? '' : document.getElementById('filterLOB').value.toLowerCase();
   const statusQ = document.getElementById('filterStatus').value.toLowerCase();
   const tlQ     = document.getElementById('filterTL') ? document.getElementById('filterTL').value.toLowerCase() : '';
   const rows = document.querySelectorAll('#rosterTable tbody tr');

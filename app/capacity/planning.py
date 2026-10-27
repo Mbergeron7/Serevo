@@ -113,9 +113,14 @@ def _wfm_headers():
 
 def _to_utc(local_dt, utc_offset=None):
     """Convert local datetime to UTC ISO string for API calls."""
-    if utc_offset is None:
-        utc_offset = WFM_UTC_OFFSET
-    utc_dt = local_dt - datetime.timedelta(hours=utc_offset)
+    if utc_offset is not None:
+        utc_dt = local_dt - datetime.timedelta(hours=utc_offset)
+    else:
+        # Use proper timezone for DST-aware conversion
+        tz = ZoneInfo(TIMEZONE)
+        if local_dt.tzinfo is None:
+            local_dt = local_dt.replace(tzinfo=tz)
+        utc_dt = local_dt.astimezone(ZoneInfo("UTC"))
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -1309,13 +1314,28 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
 
                 # Forecast data (DB only has combined per PU)
                 fc_month = fc_data.get(pu_id, {}).get(m, {})
-                fc_offered = fc_month.get("offered", 0)
+                fc_offered_combined = fc_month.get("offered", 0)
                 avg_aht = fc_month.get("aht", 0)
-                fc_answered = round(fc_offered * ar)
 
                 # Requirements data
                 rq_month = rq_data.get(pu_id, {}).get(m, {})
-                psih_raw = rq_month.get("total", 0) * 0.5
+                psih_raw_combined = rq_month.get("total", 0) * 0.5
+
+                # For language variants, split proportionally by headcount
+                if variant in ("EN", "FR") and fc_offered_combined > 0:
+                    combined_hc = hc_by_pu.get(pu_name, {}).get(m, 0)
+                    lang_hc = hc_source.get(m, 0)
+                    if combined_hc > 0:
+                        lang_ratio = lang_hc / combined_hc
+                    else:
+                        lang_ratio = 0.5  # default 50/50 if no HC data
+                    fc_offered = fc_offered_combined * lang_ratio
+                    psih_raw = psih_raw_combined * lang_ratio
+                else:
+                    fc_offered = fc_offered_combined
+                    psih_raw = psih_raw_combined
+
+                fc_answered = round(fc_offered * ar)
                 psih_shr = psih_raw / (1 - shr) if psih_raw > 0 else 0
                 fte_req = round(psih_shr / working_hrs, 1) if working_hrs > 0 and psih_shr > 0 else 0
 

@@ -540,7 +540,7 @@ def api_bundle():
                                       get_service_level_intraday)
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
@@ -611,7 +611,7 @@ def snapshot():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:
@@ -650,7 +650,7 @@ def adherence():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:
@@ -687,7 +687,7 @@ def adherence_timeline():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
         employee_id = payload.get("employee_id", "").strip()
         employee_name = payload.get("employee", "").strip()
@@ -952,7 +952,7 @@ def leaderboard():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1084,7 +1084,7 @@ def net_staffing():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1179,7 +1179,7 @@ def service_level():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:
@@ -1221,7 +1221,7 @@ def optimize():
     """
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip()
+        lob = payload.get("lob", "").strip() or "All"
         date_str = payload.get("date", "")
 
         if not lob:

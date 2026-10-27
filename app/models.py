@@ -224,6 +224,11 @@ class Employee(db.Model):
     pto_entries    = db.relationship("PTOEntry", backref="employee", lazy="dynamic",
                                     cascade="all, delete-orphan")
 
+    __table_args__ = (
+        db.Index("ix_employee_ext1", "external_id_1"),
+        db.Index("ix_employee_ext2", "external_id_2"),
+    )
+
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
@@ -435,6 +440,10 @@ class PTOEntry(db.Model):
     time_off_type    = db.relationship("TimeOffType", backref="pto_entries")
     requester        = db.relationship("User", foreign_keys=[requested_by])
     reviewer         = db.relationship("User", foreign_keys=[reviewed_by])
+
+    __table_args__ = (
+        db.Index("ix_pto_emp_start", "employee_id", "start_date"),
+    )
 
     def to_legacy_dict(self):
         emp = self.employee
@@ -1439,6 +1448,10 @@ class AttendanceEvent(db.Model):
     adherence_exception   = db.relationship("AdherenceException")
     coded_by_user         = db.relationship("User", foreign_keys=[coded_by])
 
+    __table_args__ = (
+        db.Index("ix_attendance_emp_date", "employee_id", "event_date"),
+    )
+
     def to_dict(self):
         exc = self.adherence_exception
         emp = self.employee
@@ -1587,6 +1600,10 @@ class EmployeePlanningUnit(db.Model):
 
     employee      = db.relationship("Employee", backref="planning_unit_assignments")
     planning_unit = db.relationship("PlanningUnit", backref="employee_pu_assignments")
+
+    __table_args__ = (
+        db.Index("ix_emp_pu_emp_valid", "employee_id", "valid_to"),
+    )
 
     # No unique constraint — multiple records allowed for history tracking
 
@@ -2838,6 +2855,10 @@ class TimeClock(db.Model):
     employee = db.relationship("Employee", backref="time_punches")
     editor   = db.relationship("User", foreign_keys=[edited_by])
     approver = db.relationship("User", foreign_keys=[approved_by])
+
+    __table_args__ = (
+        db.Index("ix_timeclock_emp_date", "employee_id", "date"),
+    )
 
 
 class Announcement(db.Model):

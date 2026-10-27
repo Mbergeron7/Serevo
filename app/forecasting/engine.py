@@ -177,7 +177,17 @@ def _operating_slots(lob_setting, target_date, planning_unit=None):
     start_mins = sh * 60 + sm
     end_mins = eh * 60 + em
     if end_mins <= start_mins:
-        return None
+        # Overnight wrap-around (e.g., 22:00-06:00)
+        slots = []
+        m = start_mins
+        while m < 24 * 60:
+            slots.append(f"{m // 60:02d}:{m % 60:02d}")
+            m += interval
+        m = 0
+        while m < end_mins:
+            slots.append(f"{m // 60:02d}:{m % 60:02d}")
+            m += interval
+        return slots if slots else None
 
     slots = []
     m = start_mins
@@ -1236,15 +1246,21 @@ def erlang_c_staffing(offered, aht, interval_seconds=1800,
     if occupancy is None:
         occupancy = DEFAULT_OCCUPANCY
 
-    if offered <= 0 or aht <= 0:
-        return {
-            "agents_raw": 0,
-            "agents_with_shrinkage": 0,
-            "service_level": 1.0,
-            "erlang_c_prob": 0.0,
-            "traffic_intensity": 0.0,
-            "occupancy": 0.0,
-        }
+    # Validate inputs
+    if shrinkage < 0:
+        shrinkage = 0
+    elif shrinkage >= 1.0:
+        shrinkage = 0.99
+    if service_level_target <= 0 or service_level_target > 1.0:
+        service_level_target = 0.80
+    if target_asa <= 0:
+        target_asa = 20
+    if aht <= 0:
+        return {"agents_raw": 0, "agents_with_shrinkage": 0, "service_level": 0,
+                "erlang_c_prob": 0, "traffic_intensity": 0, "occupancy": 0}
+    if offered <= 0:
+        return {"agents_raw": 0, "agents_with_shrinkage": 0, "service_level": 1.0,
+                "erlang_c_prob": 0, "traffic_intensity": 0, "occupancy": 0}
 
     # Traffic intensity (Erlangs)
     traffic = (offered * aht) / interval_seconds
@@ -1397,13 +1413,16 @@ def compute_accuracy(lob, start_date, end_date, sheet=None):
     except Exception as e:
         log.warning(f"Could not load actuals for accuracy: {e}")
 
-    # Fallback: if no actuals found in DB, try requirements (agents) with a warning
+    # If no actuals found, return empty accuracy rather than comparing
+    # forecast volume against agents_required (different units)
     if not actual_map:
-        requirements, r_err = get_requirements_data(lob, start_date, end_date, sheet)
-        if not r_err and requirements:
-            for r in requirements:
-                key = (r["date"], r["time"])
-                actual_map[key] = r["agents_required"]
+        return {
+            "intervals": [],
+            "mape": None,
+            "wmape": None,
+            "bias": None,
+            "warning": "No actual data available for accuracy calculation",
+        }
 
     intervals = []
     abs_errors = []

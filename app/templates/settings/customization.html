@@ -169,7 +169,7 @@
         <label>Operator <select id="alrt-op"><option value="lt">Below (&lt;)</option><option value="gt">Above (&gt;)</option><option value="eq">Equals (=)</option></select></label>
       </div>
       <div class="form-row">
-        <label>LOB <select id="alrt-lob"><option value="">All LOBs</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label>
+        <label>LOB <select id="alrt-lob"><option value="All">All LOBs</option>{% for lob in all_lobs %}<option value="{{ lob.id }}">{{ lob.name }}</option>{% endfor %}</select></label>
         <label>Cooldown (min) <input type="number" id="alrt-cooldown" value="30" min="1"></label>
       </div>
       <div class="form-row" style="gap:1.5rem;"><label><input type="checkbox" id="alrt-inapp" checked> In-App</label><label><input type="checkbox" id="alrt-email"> Email</label></div>

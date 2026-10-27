@@ -122,6 +122,10 @@ def forecast_data():
         sl_target = float(payload.get("service_level", 0.80))
         asa_target = float(payload.get("target_asa", 30))
         shrinkage = float(payload.get("shrinkage", 0.30))
+        # Clamp Erlang C parameters to valid ranges
+        sl_target = max(0.01, min(sl_target, 1.0))
+        asa_target = max(1, asa_target)
+        shrinkage = max(0, min(shrinkage, 0.99))
 
         erlang_results = compute_requirements_from_forecast(
             forecast,
@@ -211,9 +215,9 @@ def generate():
             return jsonify({"success": False, "error": result["error"]})
 
         # Compute Erlang C on forecast
-        sl_target = float(payload.get("service_level", 0.80))
-        asa_target = float(payload.get("target_asa", 30))
-        shrinkage = float(payload.get("shrinkage", 0.30))
+        sl_target = max(0.01, min(float(payload.get("service_level", 0.80)), 1.0))
+        asa_target = max(1, float(payload.get("target_asa", 30)))
+        shrinkage = max(0, min(float(payload.get("shrinkage", 0.30)), 0.99))
 
         erlang_forecast = compute_requirements_from_forecast(
             result["forecast"],
@@ -292,6 +296,7 @@ def generate():
                 log.info(f"Saved forecast + requirements to DB for '{lob_normalized}'")
             except Exception as e:
                 log.warning(f"Failed to save forecast to DB: {e}")
+                result["db_warning"] = f"Forecast generated but not saved to DB: {e}"
 
         return jsonify(result)
 
