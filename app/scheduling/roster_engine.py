@@ -557,6 +557,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # On close-week: only assign closer (1 person). Off-week: only opener (1 person).
     # This prevents 2 people from the same group on the same weekend day.
     parity_weekend_days = set()  # dates handled by parity logic (skip in later phases)
+    log.info("CLOSER-TRACE: wk_parity=%s, is_close_weekend=%s, iso_week=%d", wk_parity, is_close_weekend, iso_week)
     if wk_parity:
         for day_date in week_days:
             day_type = _detect_day_type(day_date, stat_dates)
@@ -645,6 +646,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
         if day_date in parity_weekend_days:
+            log.info("CLOSER-TRACE %s: skipped (parity_weekend_day)", day_date)
             continue  # already handled above
         day_type = _detect_day_type(day_date, stat_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
@@ -652,17 +654,24 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
         for slot in closer_slots:
             needed = _slots_needed(slot, group, day_type)
+            log.info("CLOSER-TRACE %s (%s): needed=%d, slot=%s", day_date, day_type, needed, slot.label or slot.role)
 
             # Static/dedicated assignments first
             eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
-            if day_date.weekday() == 3:  # Thursday debug
-                log.debug("  Phase1 THU %s: eligible_ids=%s, daily_assigned=%s",
-                         day_date, [m.id for m in eligible], daily_assigned[day_date])
+            log.info("CLOSER-TRACE %s: eligible=%s", day_date,
+                     [(m.id, m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}") for m in eligible])
             static_picks, rotation_pool = _split_static_rotation(
                 eligible, day_date, slot, group, daily_assigned[day_date]
             )
+            log.info("CLOSER-TRACE %s: static_picks=%s rotation_pool=%s needed=%d",
+                     day_date,
+                     [(m.id, m.employee.first_name if m.employee else '?') for m in static_picks],
+                     [(m.id, m.employee.first_name if m.employee else '?') for m in rotation_pool],
+                     needed)
 
             for m in static_picks[:needed]:
+                _sp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
+                log.info("CLOSER-TRACE %s: ASSIGN static_pick %s (id=%d) as closer", day_date, _sp_name, m.id)
                 assignments.append(_make_assignment(m, slot, day_date, day_type, "static"))
                 _track_day(m.id, day_date, slot)
                 _update_state_for_assignment(states[m.id], day_date, slot)
@@ -695,22 +704,29 @@ def _process_week(week_days, group, members, slots_by_day_type,
                      day_date, len(dedicated_pool), len(rotation_pool), remaining)
             scored = []
             for m in rotation_pool:
+                _mname = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
                 if m.id in daily_assigned[day_date]:
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP already_assigned", day_date, _mname, m.id)
                     continue
                 if m.dedicated_closer:
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP dedicated_closer", day_date, _mname, m.id)
                     continue  # already assigned above
                 # Hard cap: skip members who already hit their weekly closing limit
                 max_pw = m.max_closings_per_week or 1
                 if week_closings.get(m.id, 0) >= max_pw:
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP max_closings %d>=%d", day_date, _mname, m.id, week_closings.get(m.id, 0), max_pw)
                     continue
                 # Enhancement: max consecutive days
                 if not _consecutive_ok(m, day_date):
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP consecutive", day_date, _mname, m.id)
                     continue
                 # Enhancement: max hours guardrail
                 if not _hours_ok(m, slot):
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP hours", day_date, _mname, m.id)
                     continue
                 # Enhancement: consistent start — hard filter
                 if not _consistent_start_ok(m, slot):
+                    log.info("CLOSER-TRACE %s: %s (id=%d) SKIP consistent_start", day_date, _mname, m.id)
                     continue
                 dow = day_date.weekday()
                 st = states[m.id]
@@ -730,10 +746,13 @@ def _process_week(week_days, group, members, slots_by_day_type,
                 else:
                     raw_count = st.sunday_count or 0
                 rot_ord = getattr(m, 'rotation_order', 0) or 0
+                log.info("CLOSER-TRACE %s: %s (id=%d rot=%d) SCORED deficit=%s dow_cnt=%s raw=%s fairness=%s",
+                         day_date, _mname, m.id, rot_ord, deficit, dow_cnt, raw_count, s)
                 scored.append((deficit, dow_cnt, raw_count, rot_ord, s, m))
             scored.sort(key=lambda x: (x[0], x[1], x[2], x[3], x[4]))
-            log.debug("  Phase1 scored candidates on %s: %s", day_date,
-                     [(getattr(x[5], 'id', '?'), x[0], x[1], x[2], x[3], x[4]) for x in scored[:5]])
+            log.info("CLOSER-TRACE %s: SORTED scored (top 8): %s", day_date,
+                     [(x[5].employee.first_name + " " + x[5].employee.last_name if x[5].employee else f"emp#{x[5].employee_id}",
+                       f"def={x[0]} dow={x[1]} raw={x[2]} rot={x[3]} fair={x[4]}") for x in scored[:8]])
 
             for _, _, _, _, _, m in scored[:remaining]:
                 emp_name = m.employee.first_name + " " + m.employee.last_name if m.employee else f"emp#{m.employee_id}"
