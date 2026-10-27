@@ -52,6 +52,33 @@ def get_acd_timezone() -> ZoneInfo:
     return ZoneInfo(get_acd_timezone_name())
 
 
+def get_pu_timezone_name(planning_unit_id: int) -> str:
+    """Return the IANA timezone for a specific PlanningUnit.
+
+    Falls back to the global app timezone if the PU has no timezone set.
+    """
+    cache_key = f"pu_tz_{planning_unit_id}"
+    now = _time.time()
+    entry = _cache.get(cache_key)
+    if entry and now - entry["ts"] < _CACHE_TTL:
+        return entry["val"]
+
+    try:
+        from app.models import PlanningUnit
+        pu = PlanningUnit.query.get(planning_unit_id)
+        val = (pu.timezone if pu and pu.timezone else None) or get_app_timezone_name()
+    except Exception:
+        val = get_app_timezone_name()
+
+    _cache[cache_key] = {"val": val, "ts": now}
+    return val
+
+
+def get_pu_timezone(planning_unit_id: int) -> ZoneInfo:
+    """Return a :class:`ZoneInfo` for a specific PlanningUnit's timezone."""
+    return ZoneInfo(get_pu_timezone_name(planning_unit_id))
+
+
 def invalidate_cache():
     """Clear the timezone cache (call after settings change)."""
     _cache.clear()
