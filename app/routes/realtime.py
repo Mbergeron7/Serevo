@@ -1845,11 +1845,11 @@ def api_live_agents():
                 had_productive = ag.get("had_productive", False)
                 if not had_productive:
                     continue
-                # 4e) Phantom detection: unscheduled agent with very few events
-                #     whose status hasn't changed in 60+ min — likely stale ACD data
-                event_count = ag.get("event_count", 0)
+                # 4e) Phantom detection: unscheduled agent stuck in same status
+                #     for 30+ min — no schedule means they shouldn't be here,
+                #     and a real login would show schedule or status changes
                 mins_stuck = ag.get("minutes_in_status", 0)
-                if event_count <= 3 and mins_stuck >= 60:
+                if mins_stuck >= 30:
                     continue
 
             agent = {
