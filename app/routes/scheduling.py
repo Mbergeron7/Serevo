@@ -114,6 +114,8 @@ def filter_options():
     try:
         payload = request.get_json(silent=True) or {}
         lob = (payload.get("lob") or "").strip()
+        if lob == "All":
+            lob = ""
 
         user = get_current_user()
         if user and user.get("is_demo"):
@@ -219,6 +221,8 @@ def generate():
     try:
         payload = request.get_json(silent=True) or {}
         lob = payload.get("lob", "").strip()
+        if lob == "All":
+            lob = ""
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
         shift_hrs = float(payload.get("shift_length_hrs", 8))

@@ -47,6 +47,8 @@ def api_data():
 
     payload = request.get_json(silent=True) or {}
     lob = payload.get("lob", "")
+    if lob == "All":
+        lob = ""
     week_start_str = payload.get("week_start")
 
     try:
