@@ -37,29 +37,34 @@ def upgrade():
         op.create_index("ix_day_model_activities_day_model_id", "day_model_activities", ["day_model_id"])
         op.create_index("ix_day_model_activities_activity_id", "day_model_activities", ["activity_id"])
 
-    # Backfill from activities_json
-    conn = op.get_bind()
-    rows = conn.execute(sa.text("SELECT id, activities_json FROM day_models WHERE activities_json IS NOT NULL AND activities_json != '[]'"))
-    for row in rows:
-        try:
-            acts = json.loads(row[1]) if row[1] else []
-        except (json.JSONDecodeError, TypeError):
-            continue
-        for i, act in enumerate(acts):
-            conn.execute(sa.text("""
-                INSERT INTO day_model_activities
-                    (day_model_id, activity_id, offset_mins, duration_mins, is_flexible, window_start, window_end, sort_order)
-                VALUES (:dm_id, :act_id, :offset, :dur, :flex, :ws, :we, :so)
-            """), {
-                "dm_id": row[0],
-                "act_id": act.get("activity_id"),
-                "offset": act.get("offset_mins", 0),
-                "dur": act.get("duration_mins", 30),
-                "flex": act.get("is_flexible", False),
-                "ws": act.get("window_start"),
-                "we": act.get("window_end"),
-                "so": i,
-            })
+        # Backfill from activities_json (only when table was just created)
+        # Get valid activity IDs to avoid FK violations
+        valid_ids = {r[0] for r in conn.execute(sa.text("SELECT id FROM activities")).fetchall()}
+
+        rows = conn.execute(sa.text("SELECT id, activities_json FROM day_models WHERE activities_json IS NOT NULL AND activities_json != '[]'"))
+        for row in rows:
+            try:
+                acts = json.loads(row[1]) if row[1] else []
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for i, act in enumerate(acts):
+                act_id = act.get("activity_id")
+                if act_id is not None and int(act_id) not in valid_ids:
+                    continue  # Skip references to non-existent activities
+                conn.execute(sa.text("""
+                    INSERT INTO day_model_activities
+                        (day_model_id, activity_id, offset_mins, duration_mins, is_flexible, window_start, window_end, sort_order)
+                    VALUES (:dm_id, :act_id, :offset, :dur, :flex, :ws, :we, :so)
+                """), {
+                    "dm_id": row[0],
+                    "act_id": act_id,
+                    "offset": act.get("offset_mins", 0),
+                    "dur": act.get("duration_mins", 30),
+                    "flex": act.get("is_flexible", False),
+                    "ws": act.get("window_start"),
+                    "we": act.get("window_end"),
+                    "so": i,
+                })
 
 
 def downgrade():
