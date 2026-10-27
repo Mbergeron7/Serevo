@@ -105,7 +105,24 @@ def upgrade():
                 "WHERE activity_id = :old_id"
             ), {"new_id": new_id, "old_id": old_id})
 
-    # 4. Drop the activities table
+    # 4. Drop FK constraints that reference activities before dropping it
+    if "day_model_activities" in inspector.get_table_names():
+        # Drop the FK from day_model_activities -> activities
+        try:
+            op.drop_constraint("day_model_activities_activity_id_fkey", "day_model_activities", type_="foreignkey")
+        except Exception:
+            pass  # Constraint may not exist or have a different name
+        # Re-point FK to segment_codes
+        try:
+            op.create_foreign_key(
+                "day_model_activities_activity_id_fkey",
+                "day_model_activities", "segment_codes",
+                ["activity_id"], ["id"]
+            )
+        except Exception:
+            pass  # May already exist
+
+    # 5. Drop the activities table
     op.drop_table("activities")
 
 
