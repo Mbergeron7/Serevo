@@ -76,7 +76,13 @@ def generate_roster(group_id, start_date, end_date):
     # Log slot roles after normalisation
     for dt, slot_list in slots_by_day_type.items():
         for s in slot_list:
-            log.debug("  Slot id=%s day_type=%s role='%s' label=%s", s.id, dt, s.role, s.label)
+            from datetime import datetime as _dt_tmp
+            _s_start = _dt_tmp.combine(date.today(), s.shift_start)
+            _s_end = _dt_tmp.combine(date.today(), s.shift_end)
+            _s_hrs = (_s_end - _s_start).total_seconds() / 3600
+            if _s_hrs < 0:
+                _s_hrs += 24
+            log.info("  SLOT-INFO id=%s day_type=%s role='%s' label=%s start=%s end=%s hours=%.1f", s.id, dt, s.role, s.label, s.shift_start, s.shift_end, _s_hrs)
 
     # Load holiday dates for the planning unit's date range
     stat_dates = _get_stat_dates(start_date, end_date)
@@ -367,6 +373,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
         if slot is not None:
             _record_consistent_start(member_id, slot, the_date)
             week_hours[member_id] = week_hours.get(member_id, 0) + _slot_hours(slot)
+            log.info("ASSIGN-TRACE m%d %s role=%s hrs=%.1f total_wk_hrs=%.1f days=%d",
+                      member_id, the_date, slot.role, _slot_hours(slot), week_hours[member_id],
+                      week_day_counts.get(member_id, 0))
             # Record slot times for split shift gap checking
             if the_date not in daily_slots:
                 daily_slots[the_date] = {}
