@@ -908,17 +908,21 @@ class AppSetting(db.Model):
 # ═══════════════════════════════════════════════════════════════
 
 class SegmentCode(db.Model):
-    """Activity/segment codes used in scheduling (e.g. on-call, break, lunch).
+    """Unified activity/segment model — the single source of truth for
+    schedulable activities (on-call, break, lunch, meetings, etc.).
     Clients can rename, recolor, and add their own codes.
 
-    NOTE: ~80% column overlap with Activity model. Activity.segment_code_id
-    links the two. Future refactor: merge into a single model. See also
-    Activity class below."""
+    Historical note: formerly split across SegmentCode + Activity tables.
+    Now merged into one model. The alias ``Activity = SegmentCode`` provides
+    backwards compatibility; new code should import ``Activity``."""
     __tablename__ = "segment_codes"
 
     id           = db.Column(db.Integer, primary_key=True)
     code         = db.Column(db.String(40), unique=True, nullable=False)  # internal key
     label        = db.Column(db.String(80), nullable=False)               # display name
+    # Synonyms so Activity.name / Activity.short_name work in queries and Python
+    name         = db.synonym('label')
+    short_name   = db.synonym('abbreviation')
     color        = db.Column(db.String(20), default="#6b7280")            # hex color for UI
     is_productive = db.Column(db.Boolean, default=True)                   # counts toward productive time
     is_paid      = db.Column(db.Boolean, default=True)                    # counts as paid time
@@ -980,6 +984,9 @@ class SegmentCode(db.Model):
     def to_dict(self):
         return {
             "id": self.id, "code": self.code, "label": self.label,
+            # Backwards-compat keys from the old Activity model
+            "name": self.label, "short_name": self.abbreviation or "",
+            "segment_code_id": self.id, "segment_code": self.label,
             "color": self.color, "is_productive": self.is_productive,
             "is_paid": self.is_paid, "is_default": self.is_default,
             "sort_order": self.sort_order, "is_active": self.is_active,
@@ -1895,66 +1902,11 @@ class AgentStatusEvent(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
-# ACTIVITIES — What agents do (calls, email, break, training…)
+# ACTIVITY ALIAS — backwards compatibility
 # ═══════════════════════════════════════════════════════════════
-
-class Activity(db.Model):
-    """Schedulable activities — the building blocks of day models.
-    Maps to WFM platform 'Activities' concept. Each activity has a type
-    (presence = on-phone/productive, absence = break/lunch, meeting, training)
-    and a linked segment code for color/labeling in the schedule view."""
-    __tablename__ = "activities"
-
-    id            = db.Column(db.Integer, primary_key=True)
-    name          = db.Column(db.String(100), unique=True, nullable=False)
-    short_name    = db.Column(db.String(20), default="")           # abbrev for compact views
-    activity_type = db.Column(db.String(30), default="presence")   # presence | absence | meeting | training | other
-    is_paid       = db.Column(db.Boolean, default=True)
-    is_productive = db.Column(db.Boolean, default=True)            # counts toward productive time
-    duration_mins = db.Column(db.Integer, nullable=True)           # default duration (NULL = variable)
-    color         = db.Column(db.String(20), default="#6b7280")
-    segment_code_id = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
-    is_active     = db.Column(db.Boolean, default=True)
-    sort_order    = db.Column(db.Integer, default=0)
-    # ── Activity category ────────────────────────────────────
-    activity_category = db.Column(db.String(20), default="status")  # status | lob
-    # ── External ID mapping ──────────────────────────────────
-    external_ids  = db.Column(db.Text, nullable=True)              # JSON array of external system IDs
-    # ── Multi-activity support ───────────────────────────────
-    parent_id     = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=True)
-    is_multi_activity = db.Column(db.Boolean, default=False)       # True = parent with subactivities
-    created_at    = db.Column(db.DateTime, default=_utcnow)
-
-    segment_code = db.relationship("SegmentCode", backref="activities")
-    parent = db.relationship("Activity", remote_side=[id], backref=db.backref("subactivities", lazy="dynamic"))
-
-    def get_external_ids(self):
-        if not self.external_ids:
-            return []
-        try:
-            import json
-            return json.loads(self.external_ids)
-        except (json.JSONDecodeError, TypeError):
-            return []
-
-    def set_external_ids(self, ids_list):
-        import json
-        self.external_ids = json.dumps(ids_list) if ids_list else None
-
-    def to_dict(self):
-        sc = self.segment_code
-        return {
-            "id": self.id, "name": self.name, "short_name": self.short_name,
-            "activity_type": self.activity_type, "is_paid": self.is_paid,
-            "is_productive": self.is_productive, "duration_mins": self.duration_mins,
-            "color": self.color, "segment_code_id": self.segment_code_id,
-            "segment_code": sc.label if sc else "",
-            "is_active": self.is_active, "sort_order": self.sort_order,
-            "activity_category": self.activity_category or "status",
-            "external_ids": self.get_external_ids(),
-            "parent_id": self.parent_id,
-            "is_multi_activity": self.is_multi_activity,
-        }
+# The old Activity class has been merged into SegmentCode above.
+# This alias lets existing code using ``Activity`` keep working.
+Activity = SegmentCode
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2136,7 +2088,7 @@ class DayModelActivity(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     day_model_id    = db.Column(db.Integer, db.ForeignKey("day_models.id", ondelete="CASCADE"),
                                 nullable=False, index=True)
-    activity_id     = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=True)
+    activity_id     = db.Column(db.Integer, db.ForeignKey("segment_codes.id"), nullable=True)
     offset_mins     = db.Column(db.Integer, default=0)        # minutes from day model start
     duration_mins   = db.Column(db.Integer, default=30)
     is_flexible     = db.Column(db.Boolean, default=False)     # can be moved within window
@@ -2146,7 +2098,7 @@ class DayModelActivity(db.Model):
 
     day_model = db.relationship("DayModel", backref=db.backref("activity_placements", lazy="select",
                                 cascade="all, delete-orphan", order_by="DayModelActivity.sort_order"))
-    activity  = db.relationship("Activity", backref="day_model_placements")
+    activity  = db.relationship("SegmentCode", backref="day_model_placements")
 
     def to_dict(self):
         return {

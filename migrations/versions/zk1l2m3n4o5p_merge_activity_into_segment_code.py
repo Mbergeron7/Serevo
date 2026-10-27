@@ -1,0 +1,120 @@
+"""Merge Activity table into SegmentCode.
+
+Activity rows are copied into segment_codes (matching by name→label),
+DayModelActivity FK is updated, then the activities table is dropped.
+
+Revision ID: zk1l2m3n4o5p
+Revises: zj0k1l2m3n4o
+Create Date: 2026-10-27
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = "zk1l2m3n4o5p"
+down_revision = "zj0k1l2m3n4o"
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    conn = op.get_bind()
+
+    # 1. Check if activities table exists (it may not on fresh installs)
+    inspector = sa.inspect(conn)
+    if "activities" not in inspector.get_table_names():
+        return
+
+    # 2. Copy any Activity rows into segment_codes that don't already exist
+    #    (match by label/name)
+    activities = conn.execute(sa.text(
+        "SELECT id, name, short_name, activity_type, is_paid, is_productive, "
+        "duration_mins, color, segment_code_id, is_active, sort_order, "
+        "activity_category, external_ids, parent_id, is_multi_activity "
+        "FROM activities"
+    )).fetchall()
+
+    activity_id_to_sc_id = {}
+    for act in activities:
+        # If the activity has a segment_code_id, use that mapping directly
+        if act.segment_code_id:
+            activity_id_to_sc_id[act.id] = act.segment_code_id
+        else:
+            # Check if a segment_code with the same label exists
+            existing = conn.execute(sa.text(
+                "SELECT id FROM segment_codes WHERE label = :label"
+            ), {"label": act.name}).fetchone()
+            if existing:
+                activity_id_to_sc_id[act.id] = existing.id
+            else:
+                # Insert a new segment_code from this activity
+                code_slug = act.name.lower().replace(" ", "_").replace("-", "_")[:40]
+                # Ensure code is unique
+                dup = conn.execute(sa.text(
+                    "SELECT id FROM segment_codes WHERE code = :code"
+                ), {"code": code_slug}).fetchone()
+                suffix = 1
+                orig_slug = code_slug
+                while dup:
+                    code_slug = f"{orig_slug[:36]}_{suffix}"
+                    dup = conn.execute(sa.text(
+                        "SELECT id FROM segment_codes WHERE code = :code"
+                    ), {"code": code_slug}).fetchone()
+                    suffix += 1
+
+                conn.execute(sa.text(
+                    "INSERT INTO segment_codes (code, label, color, is_productive, is_paid, "
+                    "is_active, sort_order, activity_type, activity_category, abbreviation, "
+                    "external_ids, is_multi_activity, duration_mins) "
+                    "VALUES (:code, :label, :color, :is_productive, :is_paid, "
+                    ":is_active, :sort_order, :activity_type, :activity_category, :abbreviation, "
+                    ":external_ids, :is_multi_activity, :duration_mins)"
+                ), {
+                    "code": code_slug, "label": act.name,
+                    "color": act.color or "#6b7280",
+                    "is_productive": act.is_productive, "is_paid": act.is_paid,
+                    "is_active": act.is_active, "sort_order": act.sort_order or 0,
+                    "activity_type": act.activity_type or "presence",
+                    "activity_category": act.activity_category or "status",
+                    "abbreviation": act.short_name or "",
+                    "external_ids": act.external_ids,
+                    "is_multi_activity": act.is_multi_activity or False,
+                    "duration_mins": act.duration_mins,
+                })
+                new_row = conn.execute(sa.text(
+                    "SELECT id FROM segment_codes WHERE code = :code"
+                ), {"code": code_slug}).fetchone()
+                activity_id_to_sc_id[act.id] = new_row.id
+
+    # 3. Update DayModelActivity FK values
+    if "day_model_activities" in inspector.get_table_names():
+        for old_id, new_id in activity_id_to_sc_id.items():
+            conn.execute(sa.text(
+                "UPDATE day_model_activities SET activity_id = :new_id "
+                "WHERE activity_id = :old_id"
+            ), {"new_id": new_id, "old_id": old_id})
+
+    # 4. Drop the activities table
+    op.drop_table("activities")
+
+
+def downgrade():
+    # Recreate the activities table (empty — data migration is one-way)
+    op.create_table(
+        "activities",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(100), unique=True, nullable=False),
+        sa.Column("short_name", sa.String(20), default=""),
+        sa.Column("activity_type", sa.String(30), default="presence"),
+        sa.Column("is_paid", sa.Boolean, default=True),
+        sa.Column("is_productive", sa.Boolean, default=True),
+        sa.Column("duration_mins", sa.Integer, nullable=True),
+        sa.Column("color", sa.String(20), default="#6b7280"),
+        sa.Column("segment_code_id", sa.Integer, sa.ForeignKey("segment_codes.id"), nullable=True),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column("sort_order", sa.Integer, default=0),
+        sa.Column("activity_category", sa.String(20), default="status"),
+        sa.Column("external_ids", sa.Text, nullable=True),
+        sa.Column("parent_id", sa.Integer, nullable=True),
+        sa.Column("is_multi_activity", sa.Boolean, default=False),
+        sa.Column("created_at", sa.DateTime),
+    )
