@@ -13,7 +13,7 @@ from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from app.models import (db, DayModel, WeekTimePattern, WeekTimePatternDayModel,
                         WorkTimePatternModel, WorkTimePatternModelPattern,
-                        EmployeeQuartile, QuartileScheduleRule,
+                        EmployeeQuartile,
                         Employee, PlanningUnit, ShiftTemplate,
                         Activity)
 
@@ -347,100 +347,6 @@ def delete_quartile(item_id):
 # QUARTILE SCHEDULE RULES API
 # ═══════════════════════════════════════════════════════════════
 
-@scheduling_config_bp.route("/api/quartile-rules")
-@login_required
-def list_quartile_rules():
-    user = get_current_user()
-    if user and user.get("is_demo"):
-        return jsonify(success=True, items=_demo_quartile_rules())
-    pu_id = request.args.get("planning_unit_id")
-    q = QuartileScheduleRule.query
-    if pu_id:
-        q = q.filter_by(planning_unit_id=int(pu_id))
-    items = [r.to_dict() for r in q.order_by(
-        QuartileScheduleRule.planning_unit_id,
-        QuartileScheduleRule.quartile,
-        QuartileScheduleRule.priority).all()]
-    return jsonify(success=True, items=items)
-
-
-@scheduling_config_bp.route("/api/quartile-rules", methods=["POST"])
-@login_required
-def save_quartile_rule():
-    user, err = _admin_or_supervisor()
-    if err:
-        return err
-    d = request.json or {}
-    try:
-        item = QuartileScheduleRule.query.get(int(d["id"])) if d.get("id") else None
-        if not item:
-            item = QuartileScheduleRule()
-            db.session.add(item)
-        item.planning_unit_id = int(d["planning_unit_id"])
-        item.quartile = int(d["quartile"])
-        item.day_model_id = int(d["day_model_id"])
-        item.priority = int(d.get("priority", 0))
-        db.session.commit()
-        return jsonify(success=True, item=item.to_dict())
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-@scheduling_config_bp.route("/api/quartile-rules/bulk", methods=["POST"])
-@login_required
-def bulk_save_quartile_rules():
-    """Bulk set rules for a (planning_unit, quartile) pair.
-    Body: {planning_unit_id, quartile, day_model_ids: [id, ...]}
-    Replaces all existing rules for that pair."""
-    user, err = _admin_or_supervisor()
-    if err:
-        return err
-    d = request.json or {}
-    try:
-        pu_id = int(d["planning_unit_id"])
-        quartile = int(d["quartile"])
-        dm_ids = d.get("day_model_ids", [])
-
-        # Delete existing rules for this pair
-        QuartileScheduleRule.query.filter_by(
-            planning_unit_id=pu_id, quartile=quartile
-        ).delete()
-
-        # Create new rules
-        for pos, dm_id in enumerate(dm_ids):
-            rule = QuartileScheduleRule(
-                planning_unit_id=pu_id,
-                quartile=quartile,
-                day_model_id=int(dm_id),
-                priority=pos,
-            )
-            db.session.add(rule)
-
-        db.session.commit()
-        return jsonify(success=True, saved=len(dm_ids))
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
-@scheduling_config_bp.route("/api/quartile-rules/<int:item_id>", methods=["DELETE"])
-@login_required
-def delete_quartile_rule(item_id):
-    user, err = _admin_or_supervisor()
-    if err:
-        return err
-    try:
-        item = QuartileScheduleRule.query.get(item_id)
-        if item:
-            db.session.delete(item)
-            db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, error=str(e))
-
-
 # ═══════════════════════════════════════════════════════════════
 # SUPPORTING DATA API
 # ═══════════════════════════════════════════════════════════════
@@ -596,22 +502,3 @@ def _demo_quartiles():
     return items
 
 
-def _demo_quartile_rules():
-    return [
-        {"id": 1, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
-         "quartile": 1, "day_model_id": 1, "day_model_name": "8h Day (08-16)",
-         "day_model_abbr": "8D", "day_model_start": "08:00", "day_model_end": "16:00",
-         "day_model_paid": 8.0, "priority": 0},
-        {"id": 2, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
-         "quartile": 1, "day_model_id": 2, "day_model_name": "8h Mid (10-18)",
-         "day_model_abbr": "8M", "day_model_start": "10:00", "day_model_end": "18:00",
-         "day_model_paid": 8.0, "priority": 1},
-        {"id": 3, "planning_unit_id": 1, "planning_unit_name": "Sales Support",
-         "quartile": 4, "day_model_id": 3, "day_model_name": "10h Day (07-17)",
-         "day_model_abbr": "10D", "day_model_start": "07:00", "day_model_end": "17:00",
-         "day_model_paid": 10.0, "priority": 0},
-        {"id": 4, "planning_unit_id": 2, "planning_unit_name": "PS Sales",
-         "quartile": 1, "day_model_id": 4, "day_model_name": "9h Day (09-18)",
-         "day_model_abbr": "9D", "day_model_start": "09:00", "day_model_end": "18:00",
-         "day_model_paid": 9.0, "priority": 0},
-    ]

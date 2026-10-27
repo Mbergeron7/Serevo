@@ -1992,6 +1992,11 @@ class Contract(db.Model):
     max_day_models_24h        = db.Column(db.Integer, nullable=True)
     max_work_time_deviation   = db.Column(db.String(5), nullable=True)
 
+    # ── Quartile / shift eligibility (folded from EmployeeQuartile) ──
+    allowed_shift_templates = db.Column(db.Text, nullable=True)       # JSON list of DayModel IDs
+    max_weekends_per_period = db.Column(db.Integer, nullable=True)    # max weekend days per scheduling period
+    scheduling_priority     = db.Column(db.Integer, nullable=True)    # 1-4 (lower = higher priority, replaces quartile number)
+
     # ── Legacy / general ──────────────────────────────────────
     break_duration_mins = db.Column(db.Integer, default=30)
     break_after_hours   = db.Column(db.Float, default=4.0)
@@ -2294,47 +2299,6 @@ class EmployeeQuartile(db.Model):
             "effective_date": self.effective_date.isoformat() if self.effective_date else "",
             "end_date": self.end_date.isoformat() if self.end_date else "",
             "notes": self.notes or "",
-        }
-
-
-class QuartileScheduleRule(db.Model):
-    """Maps a (planning_unit, quartile) pair to eligible day models.
-    E.g. Sales Support Q1 can be scheduled with 'FT 10.5h' and 'FT 8h' day models,
-    while Customer Service Q1 only gets 'FT 8h' due to different hours of operation."""
-    __tablename__ = "quartile_schedule_rules"
-
-    id               = db.Column(db.Integer, primary_key=True)
-    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id", ondelete="CASCADE"),
-                                  nullable=False, index=True)
-    quartile         = db.Column(db.Integer, nullable=False)   # 1-4
-    day_model_id     = db.Column(db.Integer, db.ForeignKey("day_models.id", ondelete="CASCADE"),
-                                  nullable=False, index=True)
-    priority         = db.Column(db.Integer, default=0)        # lower = preferred
-    created_at       = db.Column(db.DateTime, default=_utcnow)
-
-    planning_unit = db.relationship("PlanningUnit", backref="quartile_schedule_rules")
-    day_model     = db.relationship("DayModel", backref="quartile_schedule_rules")
-
-    __table_args__ = (
-        db.UniqueConstraint("planning_unit_id", "quartile", "day_model_id",
-                            name="uq_quartile_rule"),
-    )
-
-    def to_dict(self):
-        dm = self.day_model
-        pu = self.planning_unit
-        return {
-            "id": self.id,
-            "planning_unit_id": self.planning_unit_id,
-            "planning_unit_name": pu.name if pu else "",
-            "quartile": self.quartile,
-            "day_model_id": self.day_model_id,
-            "day_model_name": dm.name if dm else "",
-            "day_model_abbr": dm.abbreviation if dm else "",
-            "day_model_start": dm.start_time if dm else "",
-            "day_model_end": dm.end_time if dm else "",
-            "day_model_paid": dm.paid_hours if dm else 0,
-            "priority": self.priority,
         }
 
 

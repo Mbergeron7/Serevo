@@ -926,13 +926,69 @@ def _get_quartile_eligible_shifts(employee_db_id, date_obj):
         return []
 
 
-def _get_employee_quartile(employee_db_id, planning_unit_id=None):
+def _get_contract_eligible_shifts(employee_db_id, date_obj):
     """
-    Get an employee's quartile assignment (1-4).
-    Returns the quartile number or None if not assigned.
+    Resolve eligible day models from an employee's Contract.allowed_shift_templates.
+    Fallback when no EmployeeQuartile override exists.
+    Returns list of DayModel dicts or empty list.
     """
     try:
-        from app.models import EmployeeQuartile
+        import json as _json
+        from app.models import Employee, DayModel
+
+        emp = Employee.query.get(employee_db_id)
+        if not emp or not emp.contract_id:
+            return []
+
+        contract = emp.contract
+        if not contract or not contract.allowed_shift_templates:
+            return []
+
+        dm_ids = _json.loads(contract.allowed_shift_templates)
+        if not dm_ids:
+            return []
+
+        day_of_week = date_obj.weekday()
+        if day_of_week < 5:
+            today_type = "weekday"
+        elif day_of_week == 5:
+            today_type = "saturday"
+        else:
+            today_type = "sunday"
+
+        eligible = []
+        for dm_id in dm_ids:
+            dm = DayModel.query.get(int(dm_id))
+            if not dm or not dm.is_active:
+                continue
+            if dm.day_type and dm.day_type != "any" and dm.day_type != today_type:
+                continue
+            eligible.append({
+                "day_model_id": dm.id,
+                "name": dm.name,
+                "abbreviation": dm.abbreviation or "",
+                "start_time": dm.start_time,
+                "end_time": dm.end_time,
+                "paid_hours": dm.paid_hours or 8.0,
+                "total_hours": dm.total_hours or 8.5,
+                "model_type": dm.model_type or "Fixed",
+                "color": dm.color or "#4472C4",
+                "activities_json": dm.activities_json or "[]",
+            })
+        return eligible
+    except Exception as e:
+        log.warning(f"Contract shift resolution error for employee {employee_db_id}: {e}")
+        return []
+
+
+def _get_employee_quartile(employee_db_id, planning_unit_id=None):
+    """
+    Get an employee's scheduling priority (1-4, lower = higher priority).
+    Checks EmployeeQuartile first, then falls back to Contract.scheduling_priority.
+    Returns the priority number or None if not assigned.
+    """
+    try:
+        from app.models import EmployeeQuartile, Employee
         q = EmployeeQuartile.query.filter_by(employee_id=employee_db_id)
         if planning_unit_id:
             q = q.filter(
@@ -940,7 +996,14 @@ def _get_employee_quartile(employee_db_id, planning_unit_id=None):
                 (EmployeeQuartile.planning_unit_id.is_(None))
             )
         row = q.first()
-        return row.quartile if row else None
+        if row:
+            return row.quartile
+
+        # Fallback to Contract.scheduling_priority
+        emp = Employee.query.get(employee_db_id)
+        if emp and emp.contract and emp.contract.scheduling_priority:
+            return emp.contract.scheduling_priority
+        return None
     except Exception:
         return None
 
@@ -1360,10 +1423,12 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 hours = rot_shift.get("hours", shift_length_hrs)
                 stype = rot_shift.get("type", "full")
             else:
-                # Check WTPM eligible shifts, then fall back to quartile entity
+                # Check WTPM eligible shifts → quartile entity → contract allowed shifts
                 wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj) if db_id else []
                 if not wtpm_shifts and db_id:
                     wtpm_shifts = _get_quartile_eligible_shifts(db_id, date_obj)
+                if not wtpm_shifts and db_id:
+                    wtpm_shifts = _get_contract_eligible_shifts(db_id, date_obj)
                 if wtpm_shifts:
                     # Filter by availability, pick first eligible
                     chosen_dm = None
@@ -1542,9 +1607,14 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             db_id = _resolve_employee_db_id(ext_id)
 
         # WTPM eligible day models (only used if no rotation/shift sequence)
+        # Chain: WTPM → quartile entity → contract allowed shifts
         wtpm_shifts = []
         if not rot_shift and db_id:
             wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj)
+            if not wtpm_shifts:
+                wtpm_shifts = _get_quartile_eligible_shifts(db_id, date_obj)
+            if not wtpm_shifts:
+                wtpm_shifts = _get_contract_eligible_shifts(db_id, date_obj)
 
         quartile = None
         if use_quartiles and db_id:
