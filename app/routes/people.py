@@ -862,6 +862,10 @@ def profile_assign():
         else:
             return jsonify({"success": False, "error": f"Unknown assignment type: {assign_type}"})
 
+        from app.utils.audit import log_audit
+        log_audit(f"employee_{assign_type}_{'updated' if assignment_id else 'assigned'}",
+                  detail=f"emp={emp_id} item={item_id or data.get('schedule_quartile_id')}",
+                  entity_type="employee", entity_id=emp_id)
         db.session.commit()
         return jsonify({"success": True})
     except Exception as e:
@@ -921,6 +925,11 @@ def profile_unassign():
         obj.end_date = _today
     else:
         db.session.delete(obj)
+    from app.utils.audit import log_audit
+    emp_id = getattr(obj, "employee_id", None)
+    log_audit(f"employee_{assign_type}_unassigned",
+              detail=f"assignment_id={assign_id}",
+              entity_type="employee", entity_id=emp_id)
     db.session.commit()
     return jsonify({"success": True})
 

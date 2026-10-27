@@ -189,6 +189,9 @@ def activities_save():
         db.session.flush()  # ensure item.id is set
         _save_activity_skills(item, data.get("skills", []))
         _save_external_status_mappings(item, data.get("external_statuses", []))
+        from app.utils.audit import log_audit
+        log_audit("activity_saved", detail=f"{item.label} ({item.code})",
+                  entity_type="segment_code", entity_id=item.id)
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
@@ -216,6 +219,9 @@ def activities_delete():
         fallback = default_code.code if default_code else "on-call"
         ShiftSegment.query.filter_by(activity_type=item.code).update(
             {"activity_type": fallback}, synchronize_session=False)
+        from app.utils.audit import log_audit
+        log_audit("activity_deleted", detail=f"{item.label} ({item.code})",
+                  entity_type="segment_code", entity_id=item.id)
         db.session.delete(item)
         db.session.commit()
         return jsonify(success=True)
@@ -314,6 +320,9 @@ def contracts_save():
         item.schedule_rule_id = int(d["schedule_rule_id"]) if d.get("schedule_rule_id") else None
         if not d.get("id"):
             db.session.add(item)
+        from app.utils.audit import log_audit
+        log_audit("contract_saved", detail=item.name,
+                  entity_type="contract", entity_id=item.id)
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
@@ -329,6 +338,9 @@ def contracts_delete():
     try:
         item = Contract.query.get(int(d["id"]))
         if item:
+            from app.utils.audit import log_audit
+            log_audit("contract_deleted", detail=item.name,
+                      entity_type="contract", entity_id=item.id)
             db.session.delete(item)
             db.session.commit()
         return jsonify(success=True)
