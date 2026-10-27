@@ -32,22 +32,30 @@ def _constraint_exists(name):
     return result.scalar()
 
 
+def _table_exists(table):
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = :t)"
+    ), {"t": table})
+    return result.scalar()
+
+
 def upgrade():
     # SegmentCode: activity_category, external_ids, parent_id, is_multi_activity
-    with op.batch_alter_table('segment_codes', schema=None) as batch_op:
-        for col_name, col_type, default in [
-            ('activity_category', sa.String(20), 'status'),
-            ('external_ids', sa.Text(), None),
-            ('parent_id', sa.Integer(), None),
-            ('is_multi_activity', sa.Boolean(), '0'),
-        ]:
-            if not _column_exists('segment_codes', col_name):
-                batch_op.add_column(sa.Column(col_name, col_type, server_default=default, nullable=True))
-        if not _constraint_exists('fk_segment_codes_parent'):
-            batch_op.create_foreign_key('fk_segment_codes_parent', 'segment_codes', ['parent_id'], ['id'])
+    for col_name, col_type, default in [
+        ('activity_category', sa.String(20), 'status'),
+        ('external_ids', sa.Text(), None),
+        ('parent_id', sa.Integer(), None),
+        ('is_multi_activity', sa.Boolean(), '0'),
+    ]:
+        if not _column_exists('segment_codes', col_name):
+            op.add_column('segment_codes', sa.Column(col_name, col_type, server_default=default, nullable=True))
+    if not _constraint_exists('fk_segment_codes_parent'):
+        op.create_foreign_key('fk_segment_codes_parent', 'segment_codes', 'segment_codes', ['parent_id'], ['id'])
 
     # Activity: activity_category, external_ids, parent_id, is_multi_activity
-    with op.batch_alter_table('activities', schema=None) as batch_op:
+    # Only if the activities table still exists (it gets dropped by a later migration)
+    if _table_exists('activities'):
         for col_name, col_type, default in [
             ('activity_category', sa.String(20), 'status'),
             ('external_ids', sa.Text(), None),
@@ -55,22 +63,21 @@ def upgrade():
             ('is_multi_activity', sa.Boolean(), '0'),
         ]:
             if not _column_exists('activities', col_name):
-                batch_op.add_column(sa.Column(col_name, col_type, server_default=default, nullable=True))
+                op.add_column('activities', sa.Column(col_name, col_type, server_default=default, nullable=True))
         if not _constraint_exists('fk_activities_parent'):
-            batch_op.create_foreign_key('fk_activities_parent', 'activities', ['parent_id'], ['id'])
+            op.create_foreign_key('fk_activities_parent', 'activities', 'activities', ['parent_id'], ['id'])
 
 
 def downgrade():
-    with op.batch_alter_table('activities', schema=None) as batch_op:
-        batch_op.drop_constraint('fk_activities_parent', type_='foreignkey')
-        batch_op.drop_column('is_multi_activity')
-        batch_op.drop_column('parent_id')
-        batch_op.drop_column('external_ids')
-        batch_op.drop_column('activity_category')
+    if _table_exists('activities'):
+        op.drop_constraint('fk_activities_parent', 'activities', type_='foreignkey')
+        op.drop_column('activities', 'is_multi_activity')
+        op.drop_column('activities', 'parent_id')
+        op.drop_column('activities', 'external_ids')
+        op.drop_column('activities', 'activity_category')
 
-    with op.batch_alter_table('segment_codes', schema=None) as batch_op:
-        batch_op.drop_constraint('fk_segment_codes_parent', type_='foreignkey')
-        batch_op.drop_column('is_multi_activity')
-        batch_op.drop_column('parent_id')
-        batch_op.drop_column('external_ids')
-        batch_op.drop_column('activity_category')
+    op.drop_constraint('fk_segment_codes_parent', 'segment_codes', type_='foreignkey')
+    op.drop_column('segment_codes', 'is_multi_activity')
+    op.drop_column('segment_codes', 'parent_id')
+    op.drop_column('segment_codes', 'external_ids')
+    op.drop_column('segment_codes', 'activity_category')
