@@ -1145,63 +1145,6 @@ class ShiftTemplate(db.Model):
         }
 
 
-class RotationPattern(db.Model):
-    """Multi-week rotation patterns — e.g. Week 1: days, Week 2: closing, Week 3: weekend.
-    CONSOLIDATION NOTE: This is one of 5 scheduling paradigms (Rotation, ShiftSequence,
-    Quartile, WeekTimePattern, direct DayModel). Future refactor could fold into
-    ShiftSequence which is more flexible."""
-    __tablename__ = "rotation_patterns"
-
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(80), nullable=False)           # e.g. "3-Week Day/Close/Weekend"
-    weeks_json  = db.Column(db.Text, nullable=False, default="[]")   # JSON array of week definitions
-    # Each week: {label, shifts: {mon: template_id|null, tue: ..., sun: ...}}
-    cycle_weeks = db.Column(db.Integer, default=1)                   # total weeks in cycle
-    is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=_utcnow)
-
-    assignments = db.relationship("RotationAssignment", backref="pattern",
-                                  cascade="all, delete-orphan", lazy="joined")
-
-    def to_dict(self):
-        import json
-        return {
-            "id": self.id, "name": self.name,
-            "weeks": json.loads(self.weeks_json) if self.weeks_json else [],
-            "cycle_weeks": self.cycle_weeks, "is_active": self.is_active,
-            "assignments": [a.to_dict() for a in self.assignments],
-        }
-
-
-class RotationAssignment(db.Model):
-    """Links an employee to a rotation pattern with their current week offset."""
-    __tablename__ = "rotation_assignments"
-
-    id           = db.Column(db.Integer, primary_key=True)
-    rotation_id  = db.Column(db.Integer, db.ForeignKey("rotation_patterns.id", ondelete="CASCADE"),
-                             nullable=False, index=True)
-    employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
-    current_week = db.Column(db.Integer, default=0)       # 0-indexed week in the cycle
-    start_date   = db.Column(db.Date, nullable=True)      # when this assignment starts
-    created_at   = db.Column(db.DateTime, default=_utcnow)
-
-    employee = db.relationship("Employee", backref="rotation_assignments")
-
-    __table_args__ = (
-        db.UniqueConstraint("rotation_id", "employee_id", name="uq_rotation_employee"),
-    )
-
-    def to_dict(self):
-        emp = self.employee
-        return {
-            "id": self.id, "rotation_id": self.rotation_id,
-            "employee_id": emp.employee_id if emp else "",
-            "employee_name": emp.full_name if emp else "",
-            "current_week": self.current_week,
-            "start_date": self.start_date.isoformat() if self.start_date else "",
-        }
-
-
 class FillInRule(db.Model):
     """Defines backup/fill-in employees for a shift category when the primary is unavailable.
 

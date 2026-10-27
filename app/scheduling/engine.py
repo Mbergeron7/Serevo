@@ -672,68 +672,6 @@ def _get_db_availability(employee_db_id, day_of_week):
         return None
 
 
-def _get_rotation_shift(employee_db_id, date_obj):
-    """
-    Check if an employee has a rotation assignment and return the
-    shift template for the given date based on their cycle position.
-    Returns ShiftTemplate dict or None.
-    """
-    try:
-        import json
-        from app.models import RotationAssignment, ShiftTemplate
-        assignment = RotationAssignment.query.filter_by(employee_id=employee_db_id).first()
-        if not assignment or not assignment.pattern or not assignment.pattern.is_active:
-            return None
-
-        pattern = assignment.pattern
-        weeks = json.loads(pattern.weeks_json) if pattern.weeks_json else []
-        if not weeks:
-            return None
-
-        # Determine which week in the cycle this date falls on
-        cycle_weeks = pattern.cycle_weeks or len(weeks)
-        if cycle_weeks < 1:
-            cycle_weeks = 1
-
-        # Calculate weeks elapsed since the assignment's start_date (or pattern creation)
-        ref_date = assignment.start_date or (pattern.created_at.date() if pattern.created_at else date_obj)
-        days_elapsed = (date_obj - ref_date).days
-        if days_elapsed < 0:
-            days_elapsed = 0
-        weeks_elapsed = days_elapsed // 7
-        current_week_idx = (assignment.current_week + weeks_elapsed) % cycle_weeks
-
-        if current_week_idx >= len(weeks):
-            return None
-
-        week_def = weeks[current_week_idx]
-        day_name = DAYS_OF_WEEK[date_obj.weekday()].lower()[:3]
-
-        # week_def.shifts is {mon: template_id|null, ...}
-        shifts_map = week_def.get("shifts", {})
-        template_id = shifts_map.get(day_name)
-        if template_id in (None, "", "off", 0, "0"):
-            # Employee IS on a rotation and the rotation says this is a day off
-            return {"off": True, "name": pattern.name}
-
-        try:
-            template = ShiftTemplate.query.get(int(template_id))
-        except (TypeError, ValueError):
-            template = None
-        if not template:
-            return None
-
-        return {
-            "start": template.start_time,
-            "end": template.end_time,
-            "hours": template.hours or 8.0,
-            "type": template.shift_type or "full",
-            "name": template.name,
-        }
-    except Exception:
-        return None
-
-
 def _get_shift_sequence_shift(employee_db_id, date_obj):
     """
     Check if an employee has a shift sequence assignment and return the
@@ -1410,9 +1348,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
 
             # Check for rotation-assigned or shift-sequence-assigned shift
             db_id = _resolve_employee_db_id(emp.get("employee_id"))
-            rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
-            if not rot_shift and db_id:
-                rot_shift = _get_shift_sequence_shift(db_id, date_obj)
+            rot_shift = _get_shift_sequence_shift(db_id, date_obj) if db_id else None
             if rot_shift and rot_shift.get("off"):
                 skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
                 unassigned.append(emp["name"])
@@ -1574,9 +1510,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         db_id = _db_id_cache.get(ext_id) if ext_id else None
         if db_id is None and ext_id:
             db_id = _resolve_employee_db_id(ext_id)
-        rot_shift = _get_rotation_shift(db_id, date_obj) if db_id else None
-        if not rot_shift and db_id:
-            rot_shift = _get_shift_sequence_shift(db_id, date_obj)
+        rot_shift = _get_shift_sequence_shift(db_id, date_obj) if db_id else None
         if rot_shift and rot_shift.get("off"):
             log.info(f"  SKIP {emp['name']} (rotation day off)")
             skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
