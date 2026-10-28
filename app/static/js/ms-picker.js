@@ -54,7 +54,23 @@ const MSPicker = (() => {
   function toggle(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.querySelector('.ms-dropdown').classList.toggle('open');
+    const dd = el.querySelector('.ms-dropdown');
+    const wasOpen = dd.classList.contains('open');
+    // Close all other open pickers first
+    document.querySelectorAll('.ms-dropdown.open').forEach(d => {
+      d.classList.remove('open');
+      d.style.position = '';
+      d.style.top = '';
+      d.style.left = '';
+    });
+    if (wasOpen) return;
+    // Check if inside an overflow-clipping ancestor
+    const btn = el.querySelector('.ms-picker-btn');
+    const rect = btn.getBoundingClientRect();
+    dd.style.position = 'fixed';
+    dd.style.top = (rect.bottom + 2) + 'px';
+    dd.style.left = rect.left + 'px';
+    dd.classList.add('open');
   }
 
   function filter(id, q) {
@@ -102,8 +118,13 @@ const MSPicker = (() => {
 
   // Close any open picker when clicking outside
   document.addEventListener('click', e => {
-    if (!e.target.closest('.ms-picker')) {
-      document.querySelectorAll('.ms-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!e.target.closest('.ms-picker') && !e.target.closest('.ms-dropdown')) {
+      document.querySelectorAll('.ms-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+        d.style.position = '';
+        d.style.top = '';
+        d.style.left = '';
+      });
     }
   });
 
