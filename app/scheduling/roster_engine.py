@@ -222,10 +222,32 @@ def _index_slots(slots):
 def _get_stat_dates(start, end, planning_unit_id=None):
     """Return set of dates that are statutory holidays in the range.
 
-    If the planning unit has a PlanningCalendar assigned, uses calendar
-    entries whose DayType.is_holiday is True.  Otherwise falls back to
-    the legacy Holiday table.
+    Primary source: SpecialDay table (day_type='holiday').
+    Falls back to legacy PlanningCalendar → Holiday table chain.
     """
+    try:
+        # ── Primary: SpecialDay table ──
+        from app.models import SpecialDay
+        specials = SpecialDay.query.filter(
+            SpecialDay.date >= start,
+            SpecialDay.date <= end,
+            SpecialDay.day_type == "holiday",
+        ).all()
+        if specials:
+            result = set()
+            for sd in specials:
+                if sd.applies_to_all:
+                    result.add(sd.date)
+                elif planning_unit_id:
+                    pu_ids = [pu.id for pu in sd.planning_units]
+                    if planning_unit_id in pu_ids:
+                        result.add(sd.date)
+            if result:
+                return result
+    except Exception:
+        pass
+
+    # ── Fallback: legacy PlanningCalendar system ──
     if planning_unit_id:
         from app.models import PlanningUnit, CalendarEntry, DayType
         pu = PlanningUnit.query.get(planning_unit_id)
@@ -243,7 +265,7 @@ def _get_stat_dates(start, end, planning_unit_id=None):
             )
             return {e.date for e in entries}
 
-    # Fallback: legacy Holiday table
+    # ── Fallback: legacy Holiday table ──
     holidays = Holiday.query.filter(
         Holiday.date >= start,
         Holiday.date <= end,
@@ -690,11 +712,18 @@ def _process_week(week_days, group, members, slots_by_day_type,
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         closer_slots = [s for s in applicable_slots if s.role == "closer"]
 
+        if day_date.weekday() == 4:  # Friday Phase 1 debug
+            log.debug("  Phase1 FRI %s: day_type=%s applicable_slots=%d closer_slots=%d",
+                     day_date, day_type, len(applicable_slots), len(closer_slots))
+
         for slot in closer_slots:
             needed = _slots_needed(slot, group, day_type)
 
             # Static/dedicated assignments first
             eligible = _get_eligible_members(members, day_date, slot, pto_dates, states, group)
+            if day_date.weekday() == 4:  # Friday debug
+                log.debug("  Phase1 FRI %s slot=%s: needed=%d eligible=%d",
+                         day_date, slot.role, needed, len(eligible))
             static_picks, rotation_pool = _split_static_rotation(
                 eligible, day_date, slot, group, daily_assigned[day_date]
             )
@@ -1172,10 +1201,11 @@ def _is_available(member, day_date, pto_dates):
 
 
 _thu_debug_done = False  # module-level flag for one-shot Thursday debug
+_fri_debug_done = False  # module-level flag for one-shot Friday debug
 
 def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
     """Filter members eligible for a specific slot on a specific day."""
-    global _thu_debug_done
+    global _thu_debug_done, _fri_debug_done
     dow = day_date.weekday()
     day_abbr = DOW_ABBR[dow]
     day_full = DOW_FULL[dow]
@@ -1186,6 +1216,13 @@ def _get_eligible_members(members, day_date, slot, pto_dates, states, group):
     if trace:
         _thu_debug_done = True
         log.debug("  THU-TRACE %s: day_abbr=%s day_full=%s role=%s slot_start=%s slot_end=%s members=%d",
+                 day_date, day_abbr, day_full, role, slot.shift_start, slot.shift_end, len(members))
+
+    # One-shot detailed debug for first Friday closer
+    if dow == 4 and role == "closer" and not _fri_debug_done and len(members) > 1:
+        _fri_debug_done = True
+        trace = True
+        log.debug("  FRI-TRACE %s: day_abbr=%s day_full=%s role=%s slot_start=%s slot_end=%s members=%d",
                  day_date, day_abbr, day_full, role, slot.shift_start, slot.shift_end, len(members))
 
     eligible = []

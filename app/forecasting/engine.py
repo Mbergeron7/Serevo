@@ -935,11 +935,33 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
 def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
     """Return set of date strings that are holidays.
 
-    If a planning unit has a PlanningCalendar assigned, uses calendar entries
-    whose DayType.is_holiday is True.  Otherwise falls back to the legacy
-    Holiday table.
+    Primary source: SpecialDay table (day_type='holiday' or 'half_day').
+    Falls back to legacy PlanningCalendar → Holiday table chain for
+    backward compatibility during migration.
     """
     try:
+        # ── Primary: SpecialDay table ──
+        from app.models import SpecialDay
+        query = SpecialDay.query.filter(
+            SpecialDay.date >= start_date,
+            SpecialDay.date <= end_date,
+            SpecialDay.day_type.in_(["holiday", "half_day"]),
+        )
+        all_special = query.all()
+        if all_special:
+            result = set()
+            for sd in all_special:
+                if sd.applies_to_all:
+                    result.add(sd.date.isoformat() if hasattr(sd.date, 'isoformat') else str(sd.date))
+                elif planning_unit_name:
+                    from app.models import PlanningUnit
+                    pu = PlanningUnit.query.filter_by(name=planning_unit_name).first()
+                    if pu and pu in sd.planning_units:
+                        result.add(sd.date.isoformat() if hasattr(sd.date, 'isoformat') else str(sd.date))
+            if result:
+                return result
+
+        # ── Fallback: legacy PlanningCalendar system ──
         if planning_unit_name:
             from app.models import PlanningUnit, CalendarEntry, DayType
             pu = PlanningUnit.query.filter_by(name=planning_unit_name).first()
@@ -958,7 +980,7 @@ def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
                 return {e.date.isoformat() if hasattr(e.date, 'isoformat') else str(e.date)
                         for e in entries}
 
-        # Fallback: legacy Holiday table
+        # ── Fallback: legacy Holiday table ──
         from app.models import Holiday
         holidays = Holiday.query.filter(
             Holiday.date >= start_date,
@@ -1043,7 +1065,23 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
     if not holidays_set:
         return forecast
 
-    # Compute factor from historical data if available
+    # Try to get per-date volume factors from SpecialDay table
+    volume_factors = {}
+    try:
+        from app.models import SpecialDay
+        specials = SpecialDay.query.filter(
+            SpecialDay.date >= start,
+            SpecialDay.date <= end,
+            SpecialDay.day_type.in_(["holiday", "half_day"]),
+        ).all()
+        for sd in specials:
+            ds = sd.date.isoformat()
+            if ds in holidays_set and sd.volume_factor is not None:
+                volume_factors[ds] = sd.volume_factor
+    except Exception:
+        pass
+
+    # Compute fallback factor from historical data if available
     if historical:
         hist_dates = [r["date"] for r in historical]
         try:
@@ -1053,15 +1091,17 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
             hist_start = start - datetime.timedelta(days=90)
             hist_end = start - datetime.timedelta(days=1)
         hist_holidays = _get_holidays_in_range(hist_start, hist_end, planning_unit_name=planning_unit_name)
-        factor = _compute_holiday_factor(historical, hist_holidays)
+        fallback_factor = _compute_holiday_factor(historical, hist_holidays)
     else:
-        factor = 0.5  # default: holidays get ~50% of normal volume
+        fallback_factor = 0.5  # default: holidays get ~50% of normal volume
 
     # Apply factor to forecast intervals on holiday dates
     adjusted = []
     for row in forecast:
         if row["date"] in holidays_set:
             row = dict(row)
+            # Use SpecialDay's volume_factor if set, otherwise fallback
+            factor = volume_factors.get(row["date"], fallback_factor)
             row["offered"] = round(row["offered"] * factor, 2)
             row["is_holiday"] = True
         adjusted.append(row)

@@ -39,6 +39,29 @@ SEGMENT_RULES_HALF = [
 ACTIVITY_TYPES = ["on-call", "break", "lunch", "meeting", "training", "other"]
 
 
+def _get_special_day_for_date(lob, date_obj):
+    """Check if date_obj is a special day for this LOB.
+
+    Returns dict with name, day_type, volume_factor if it is, else None.
+    """
+    try:
+        from app.models import SpecialDay, PlanningUnit
+        specials = SpecialDay.query.filter(SpecialDay.date == date_obj).all()
+        if not specials:
+            return None
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        for sd in specials:
+            if sd.applies_to_all:
+                return {"name": sd.name, "day_type": sd.day_type,
+                        "volume_factor": sd.volume_factor if sd.volume_factor is not None else 0.0}
+            elif pu and pu in sd.planning_units:
+                return {"name": sd.name, "day_type": sd.day_type,
+                        "volume_factor": sd.volume_factor if sd.volume_factor is not None else 0.0}
+    except Exception as e:
+        log.debug(f"_get_special_day_for_date error: {e}")
+    return None
+
+
 def _get_segment_rules(shift_type="full"):
     """
     Load segment placement rules from the SegmentCode DB table.
@@ -1333,6 +1356,22 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
     all_employees = _get_employees_for_lob(lob, sheet)
     employees = list(all_employees)
     warnings = []
+
+    # ── Holiday / special day check ──
+    special_day_info = _get_special_day_for_date(lob, date_obj)
+    if special_day_info:
+        sd_name = special_day_info["name"]
+        sd_factor = special_day_info["volume_factor"]
+        warnings.append(f"📅 {sd_name} — volume factor {sd_factor}")
+        if sd_factor == 0.0:
+            # Closed day — no shifts needed
+            log.info(f"generate_shifts: {lob} on {date_obj}: CLOSED ({sd_name})")
+            return [], [e["name"] for e in employees], warnings
+        elif sd_factor < 1.0 and requirements:
+            # Reduced volume — scale down requirements
+            for req in requirements:
+                req["required"] = max(1, round(req["required"] * sd_factor))
+
     log.info(f"generate_shifts: {lob} on {date_obj}: {len(employees)} employees found, "
              f"{len(requirements)} requirement intervals")
 
@@ -2057,10 +2096,17 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
             total_coverage_sum += summary["avg_coverage_pct"]
             total_days_with_coverage += 1
 
+        # Check if this date is a special day (holiday, half-day, etc.)
+        special_info = _get_special_day_for_date(lob, d)
+        is_holiday = special_info is not None and special_info["day_type"] in ("holiday", "half_day")
+
         days.append({
             "date": d.strftime("%Y-%m-%d"),
             "date_label": d.strftime("%a %b %d"),
             "day_of_week": DAYS_OF_WEEK[d.weekday()],
+            "is_holiday": is_holiday,
+            "special_day": special_info["name"] if special_info else None,
+            "volume_factor": special_info["volume_factor"] if special_info else 1.0,
             "shifts": shifts,
             "unassigned": unassigned,
             "coverage": coverage,
