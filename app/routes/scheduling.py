@@ -132,21 +132,26 @@ def filter_options():
         from app.models import (PlanningUnit, Employee, Selection, SelectionMember,
                                 SkillGroup, SkillMapping, ShiftSequence, EmployeeShiftSequence)
 
-        if not lob:
+        # Support comma-separated multi-LOB
+        lob_list = [l.strip() for l in lob.split(",") if l.strip()] if lob else []
+        if not lob_list:
             # No LOB filter — return all active items
             selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
             skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
             shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
         else:
-            # Find PU for selected LOB
-            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
-            if not pu:
+            # Find PUs for selected LOBs
+            pu_ids = []
+            for lname in lob_list:
+                pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lname.lower()).first()
+                if pu:
+                    pu_ids.append(pu.id)
+                    if pu.is_multi_activity:
+                        pu_ids += [c.id for c in (pu.children or [])]
+            if not pu_ids:
                 return jsonify({"success": True, "selections": [], "skills": [], "shift_sequences": []})
 
-            # Get employee IDs in this LOB (include children for multi-activity PUs)
-            pu_ids = [pu.id]
-            if pu.is_multi_activity:
-                pu_ids += [c.id for c in (pu.children or [])]
+            # Get employee IDs in these LOBs
             emp_ids = [e.id for e in Employee.query.filter(
                 Employee.planning_unit_id.in_(pu_ids),
                 Employee.status.notin_(["Inactive", "Terminated", "Deleted"]),
@@ -897,14 +902,23 @@ def load_schedule():
             return jsonify({"success": True, "shifts": shifts})
 
         from app.models import PlanningUnit
-        if lob:
-            pu = PlanningUnit.query.filter(
-                db.func.lower(PlanningUnit.name) == lob.lower()
-            ).first()
-            if not pu:
+        from app.constants import LOB_ALL_LABEL
+        # Parse comma-separated LOBs; treat "All" or empty as all LOBs
+        lob_list = []
+        if lob and lob != LOB_ALL_LABEL:
+            lob_list = [l.strip() for l in lob.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
+        if lob_list:
+            pu_ids = []
+            for lname in lob_list:
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lname.lower()
+                ).first()
+                if pu:
+                    pu_ids.append(pu.id)
+            if not pu_ids:
                 return jsonify({"success": True, "shifts": [], "message": "No planning unit found"})
             schedules = Schedule.query.filter(
-                Schedule.planning_unit_id == pu.id,
+                Schedule.planning_unit_id.in_(pu_ids),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
@@ -1613,10 +1627,18 @@ def employees_for_lob():
 
         from app.scheduling.engine import _get_employees_for_lob
         sheet = _get_sheet()
-        emps = _get_employees_for_lob(lob, sheet) if lob else []
-
-        # If no LOB filter, return all active employees
-        if not lob:
+        # Support comma-separated multi-LOB
+        lob_list = [l.strip() for l in lob.split(",") if l.strip()] if lob else []
+        if lob_list:
+            emps = []
+            seen = set()
+            for _lname in lob_list:
+                for e in _get_employees_for_lob(_lname, sheet):
+                    eid = e.get("employee_id")
+                    if eid not in seen:
+                        seen.add(eid)
+                        emps.append(e)
+        else:
             from app.people.manager import get_active_employees
             active, _ = get_active_employees(sheet)
             emps = []
