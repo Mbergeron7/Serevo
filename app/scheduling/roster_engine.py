@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta
 
 from app.models import (
     db, RosterGroup, RosterMember, RosterSlot,
-    RosterRotationState, Schedule, ShiftSegment, Holiday, Employee,
+    RosterRotationState, Schedule, Holiday, Employee,
 )
 
 log = logging.getLogger("serevo.roster_engine")
@@ -1477,7 +1477,6 @@ def _write_schedule_rows(assignments, group):
     individual round-trips to PostgreSQL (a year = ~1500+ Schedule rows
     + ~6000 segments; individual adds caused gunicorn worker timeouts).
     """
-    from app.scheduling.engine import _generate_segments
     from collections import defaultdict
 
     if not assignments:
@@ -1489,13 +1488,12 @@ def _write_schedule_rows(assignments, group):
 
     # --- Pass 1: bulk-insert all Schedule rows at once ---
     schedule_dicts = []   # dicts for the bulk INSERT
-    seg_meta = []         # (index, shift_type, start_str, end_str, stagger_idx, total_on_day)
+
 
     for day_date in sorted(by_date.keys()):
         day_assignments = by_date[day_date]
-        total_on_day = len(day_assignments)
 
-        for stagger_idx, a in enumerate(day_assignments):
+        for a in day_assignments:
             member = a["member"]
             slot = a["slot"]
 
@@ -1506,7 +1504,6 @@ def _write_schedule_rows(assignments, group):
                 hours += 24
 
             shift_type = slot.label or slot.role
-            idx = len(schedule_dicts)
 
             schedule_dicts.append(dict(
                 employee_id=member.employee_id,
@@ -1520,89 +1517,14 @@ def _write_schedule_rows(assignments, group):
                 source="roster",
             ))
 
-            seg_meta.append((
-                idx, shift_type,
-                slot.shift_start.strftime("%H:%M"),
-                slot.shift_end.strftime("%H:%M"),
-                stagger_idx, total_on_day,
-            ))
 
-    # Single bulk INSERT for all Schedule rows.
-    # Use INSERT … RETURNING with .values() on PostgreSQL to get IDs
-    # in one round-trip.  SQLAlchemy's executemany (list-of-dicts as 2nd
-    # arg) does NOT support RETURNING, so we must use .values() instead.
-    sched_tbl = Schedule.__table__
-    dialect = db.session.bind.dialect.name if db.session.bind else "sqlite"
-
-    id_lookup = {}
-    if dialect == "postgresql" and schedule_dicts:
-        # .values() with a list builds a single multi-row INSERT
-        result = db.session.execute(
-            sched_tbl.insert()
-            .values(schedule_dicts)
-            .returning(
-                sched_tbl.c.id,
-                sched_tbl.c.employee_id,
-                sched_tbl.c.schedule_date,
-                sched_tbl.c.shift_start,
-            )
-        )
-        for row in result:
-            id_lookup[(row.employee_id, row.schedule_date, row.shift_start)] = row.id
-    elif schedule_dicts:
-        # SQLite fallback: insert then query back
+    # Single bulk INSERT for all Schedule rows (executemany).
+    # Segments are NOT created here — they are generated lazily when
+    # schedules are loaded via ensure_segments_exist() to keep the
+    # generation request fast enough for gunicorn's timeout.
+    if schedule_dicts:
+        sched_tbl = Schedule.__table__
         db.session.execute(sched_tbl.insert(), schedule_dicts)
-        emp_ids = list({d["employee_id"] for d in schedule_dicts})
-        date_min = min(d["schedule_date"] for d in schedule_dicts)
-        date_max = max(d["schedule_date"] for d in schedule_dicts)
-        inserted = db.session.execute(
-            sched_tbl.select().where(
-                sched_tbl.c.employee_id.in_(emp_ids),
-                sched_tbl.c.schedule_date >= date_min,
-                sched_tbl.c.schedule_date <= date_max,
-                sched_tbl.c.source == "roster",
-                sched_tbl.c.status == "draft",
-                sched_tbl.c.planning_unit_id == group.planning_unit_id,
-            )
-        ).fetchall()
-        for row in inserted:
-            id_lookup[(row.employee_id, row.schedule_date, row.shift_start)] = row.id
-
-    # --- Pass 2: generate segments now that we have IDs ---
-    all_segments = []
-    for idx, shift_type, start_str, end_str, stagger_idx, total_on_day in seg_meta:
-        d = schedule_dicts[idx]
-        sched_id = id_lookup.get((d["employee_id"], d["schedule_date"], d["shift_start"]))
-        if not sched_id:
-            continue
-        try:
-            segments = _generate_segments(
-                start_str, end_str, shift_type,
-                stagger_index=stagger_idx,
-                total_employees=total_on_day,
-                planning_unit_id=group.planning_unit_id,
-            )
-            for sort_i, seg in enumerate(segments):
-                all_segments.append(dict(
-                    schedule_id=sched_id,
-                    activity_type=seg["type"],
-                    start_time=datetime.strptime(seg["start"], "%H:%M").time(),
-                    end_time=datetime.strptime(seg["end"], "%H:%M").time(),
-                    duration_mins=seg["duration_mins"],
-                    sort_order=sort_i,
-                ))
-        except Exception as seg_err:
-            log.warning("Failed to generate segments for schedule %s: %s", sched_id, seg_err)
-
-    if all_segments:
-        try:
-            seg_tbl = ShiftSegment.__table__
-            # Insert in chunks of 500 to keep individual statements fast
-            CHUNK = 500
-            for i in range(0, len(all_segments), CHUNK):
-                db.session.execute(seg_tbl.insert(), all_segments[i:i + CHUNK])
-        except Exception as seg_err:
-            log.warning("Bulk segment insert failed (table may not exist yet): %s", seg_err)
 
     # Return lightweight result (no ORM objects loaded)
     return schedule_dicts
