@@ -1471,6 +1471,10 @@ def _write_schedule_rows(assignments, group):
     for a in assignments:
         by_date[a["date"]].append(a)
 
+    # --- Pass 1: create all Schedule rows, then flush ONCE to get IDs ---
+    # Store metadata needed for segment generation alongside each row
+    segment_info = []  # list of (row, shift_type, start_str, end_str, stagger_idx, total_on_day)
+
     for day_date in sorted(by_date.keys()):
         day_assignments = by_date[day_date]
         total_on_day = len(day_assignments)
@@ -1479,14 +1483,12 @@ def _write_schedule_rows(assignments, group):
             member = a["member"]
             slot = a["slot"]
 
-            # Calculate hours
             start_dt = datetime.combine(day_date, slot.shift_start)
             end_dt = datetime.combine(day_date, slot.shift_end)
             hours = (end_dt - start_dt).total_seconds() / 3600
             if hours < 0:
                 hours += 24  # overnight shift
 
-            # Use label if available, otherwise role
             shift_type = slot.label or slot.role
 
             row = Schedule(
@@ -1501,33 +1503,39 @@ def _write_schedule_rows(assignments, group):
                 source="roster",
             )
             db.session.add(row)
-            db.session.flush()  # get row.id for segments
-
-            # Generate break/lunch segments using the main engine's logic
-            try:
-                start_str = slot.shift_start.strftime("%H:%M")
-                end_str = slot.shift_end.strftime("%H:%M")
-                segments = _generate_segments(
-                    start_str, end_str, shift_type,
-                    stagger_index=stagger_idx,
-                    total_employees=total_on_day,
-                    planning_unit_id=group.planning_unit_id,
-                )
-
-                for sort_i, seg in enumerate(segments):
-                    seg_row = ShiftSegment(
-                        schedule_id=row.id,
-                        activity_type=seg["type"],
-                        start_time=datetime.strptime(seg["start"], "%H:%M").time(),
-                        end_time=datetime.strptime(seg["end"], "%H:%M").time(),
-                        duration_mins=seg["duration_mins"],
-                        sort_order=sort_i,
-                    )
-                    db.session.add(seg_row)
-            except Exception as seg_err:
-                log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
-
             rows.append(row)
+
+            segment_info.append((
+                row, shift_type,
+                slot.shift_start.strftime("%H:%M"),
+                slot.shift_end.strftime("%H:%M"),
+                stagger_idx, total_on_day,
+            ))
+
+    # Single flush to assign IDs to all Schedule rows at once
+    db.session.flush()
+
+    # --- Pass 2: generate segments now that all row.id values exist ---
+    for row, shift_type, start_str, end_str, stagger_idx, total_on_day in segment_info:
+        try:
+            segments = _generate_segments(
+                start_str, end_str, shift_type,
+                stagger_index=stagger_idx,
+                total_employees=total_on_day,
+                planning_unit_id=group.planning_unit_id,
+            )
+            for sort_i, seg in enumerate(segments):
+                seg_row = ShiftSegment(
+                    schedule_id=row.id,
+                    activity_type=seg["type"],
+                    start_time=datetime.strptime(seg["start"], "%H:%M").time(),
+                    end_time=datetime.strptime(seg["end"], "%H:%M").time(),
+                    duration_mins=seg["duration_mins"],
+                    sort_order=sort_i,
+                )
+                db.session.add(seg_row)
+        except Exception as seg_err:
+            log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
 
     return rows
 
