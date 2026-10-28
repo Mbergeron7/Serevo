@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}Special Days — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Special Days</h1>
+  <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage holidays, campaign days, and other special dates that affect scheduling and forecasting.</p>
+</div>
+
+<div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+  <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
+  <div style="display:flex;gap:8px;">
+    <button class="btn" onclick="prepopulateOntario()">🍁 Ontario Holidays</button>
+    <button class="btn btn-primary" onclick="openModal()">+ Add Special Day</button>
+  </div>
+</div>
+
+<!-- ── Calendar View ── -->
+<div class="card" style="padding:20px;margin-bottom:1.5rem;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <button class="btn btn-sm" onclick="changeMonth(-1)">‹</button>
+    <h3 id="calTitle" style="margin:0;"></h3>
+    <button class="btn btn-sm" onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="cal-grid" id="calGrid">
+    <div class="cal-hdr">Mon</div><div class="cal-hdr">Tue</div><div class="cal-hdr">Wed</div>
+    <div class="cal-hdr">Thu</div><div class="cal-hdr">Fri</div><div class="cal-hdr cal-weekend">Sat</div>
+    <div class="cal-hdr cal-weekend">Sun</div>
+  </div>
+</div>
+
+<!-- ── List View ── -->
+<div style="overflow-x:auto;">
+  <table class="data-table" id="sdTable">
+    <thead>
+      <tr>
+        <th style="cursor:pointer;" onclick="sortTable('date')">Date ↕</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Volume</th>
+        <th>Applies To</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="sdBody"></tbody>
+  </table>
+</div>
+
+<!-- ── Add/Edit Modal ── -->
+<dialog id="sdModal" style="border-radius:12px;border:1px solid var(--border);padding:28px;max-width:500px;width:92vw;background:var(--surface);color:var(--text);">
+  <h3 id="sdModalTitle" style="margin:0 0 16px;">Add Special Day</h3>
+  <input type="hidden" id="sd_id">
+  <div style="display:grid;gap:12px;">
+    <label>Name<input id="sd_name" class="form-input" required placeholder="e.g. Christmas Day"></label>
+    <label>Date<input id="sd_date" type="date" class="form-input" required></label>
+    <label>Type
+      <select id="sd_type" class="form-input" onchange="applyTypeDefaults()">
+        <option value="holiday">Holiday</option>
+        <option value="half_day">Half Day</option>
+        <option value="campaign">Campaign</option>
+        <option value="custom">Custom</option>
+      </select>
+    </label>
+    <div style="display:flex;gap:12px;">
+      <label style="flex:1;">Color<input id="sd_color" type="color" value="#ef4444" style="height:36px;width:100%;border:1px solid var(--border);border-radius:6px;"></label>
+      <label style="flex:2;">Volume Factor <span style="font-size:.8rem;color:var(--text-muted);">(0=closed, 1=normal)</span>
+        <input id="sd_volume" type="number" step="0.1" min="0" max="2" value="0" class="form-input">
+      </label>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;"><input id="sd_recurring" type="checkbox"> Recurring annually</label>
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+      <legend style="font-size:.9rem;font-weight:600;padding:0 4px;">Applies To</legend>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <input type="radio" name="applies" value="all" checked onchange="togglePUList()"> All LOBs
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <input type="radio" name="applies" value="specific" onchange="togglePUList()"> Specific LOBs
+      </label>
+      <div id="puList" style="display:none;max-height:160px;overflow-y:auto;padding-left:24px;"></div>
+    </fieldset>
+    <label>Notes <span style="font-size:.8rem;color:var(--text-muted);">(optional)</span>
+      <textarea id="sd_notes" class="form-input" rows="2" placeholder="Any additional context..."></textarea>
+    </label>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <button type="button" class="btn" onclick="document.getElementById('sdModal').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" onclick="saveSD()">Save</button>
+  </div>
+</dialog>
+
+<style>
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-hdr{text-align:center;font-size:.75rem;font-weight:600;color:var(--text-muted);padding:4px 0;}
+.cal-hdr.cal-weekend{color:var(--text-muted);opacity:.6;}
+.cal-day{min-height:56px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;cursor:pointer;background:var(--surface);transition:background .15s;}
+.cal-day:hover{background:var(--surface-hover,rgba(0,0,0,.04));}
+.cal-day.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.cal-day.outside{opacity:.35;pointer-events:none;}
+.cal-day.weekend{background:color-mix(in srgb,var(--surface) 96%,var(--text-muted));}
+.cal-day .day-num{font-size:.8rem;font-weight:600;margin-bottom:2px;}
+.cal-dots{display:flex;flex-wrap:wrap;gap:3px;}
+.cal-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.type-pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.75rem;font-weight:600;color:#fff;}
+@media(max-width:600px){
+  .cal-day{min-height:40px;padding:2px 3px;}
+  .cal-day .day-num{font-size:.7rem;}
+  .cal-dot{width:6px;height:6px;}
+}
+</style>
+
+<script>
+const SPECIAL_DAYS = {{ special_days | tojson }};
+const PLANNING_UNITS = {{ planning_units | tojson }};
+const TYPE_DEFAULTS = {
+  holiday:  {color:"#ef4444", volume:0.0},
+  half_day: {color:"#f59e0b", volume:0.5},
+  campaign: {color:"#3b82f6", volume:1.5},
+  custom:   {color:"#6b7280", volume:1.0},
+};
+const TYPE_LABELS = {holiday:"Holiday",half_day:"Half Day",campaign:"Campaign",custom:"Custom"};
+
+let curYear, curMonth, sortDir = 1;
+
+/* ── Calendar ── */
+function initCal() {
+  const now = new Date();
+  curYear = now.getFullYear();
+  curMonth = now.getMonth();
+  renderCal();
+}
+
+function changeMonth(d) {
+  curMonth += d;
+  if (curMonth < 0) { curMonth = 11; curYear--; }
+  if (curMonth > 11) { curMonth = 0; curYear++; }
+  renderCal();
+}
+
+function renderCal() {
+  const title = document.getElementById("calTitle");
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  title.textContent = `${months[curMonth]} ${curYear}`;
+
+  const grid = document.getElementById("calGrid");
+  // Keep headers
+  while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+
+  const first = new Date(curYear, curMonth, 1);
+  let startDay = first.getDay() - 1; // Mon=0
+  if (startDay < 0) startDay = 6;
+
+  const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Map special days by date
+  const sdMap = {};
+  SPECIAL_DAYS.forEach(sd => {
+    if (!sdMap[sd.date]) sdMap[sd.date] = [];
+    sdMap[sd.date].push(sd);
+  });
+
+  // Leading blanks
+  for (let i = 0; i < startDay; i++) {
+    const el = document.createElement("div");
+    el.className = "cal-day outside";
+    grid.appendChild(el);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${curYear}-${String(curMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const el = document.createElement("div");
+    const dayOfWeek = (startDay + d - 1) % 7; // 0=Mon
+    let cls = "cal-day";
+    if (dateStr === todayStr) cls += " today";
+    if (dayOfWeek >= 5) cls += " weekend";
+    el.className = cls;
+
+    let html = `<div class="day-num">${d}</div>`;
+    const items = sdMap[dateStr];
+    if (items && items.length) {
+      html += '<div class="cal-dots">';
+      items.forEach(sd => {
+        html += `<div class="cal-dot" style="background:${sd.color};" title="${sd.name}"></div>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+
+    el.onclick = () => {
+      if (items && items.length === 1) {
+        openModal(items[0]);
+      } else if (items && items.length > 1) {
+        openModal(items[0]); // edit first
+      } else {
+        openModal(null, dateStr);
+      }
+    };
+
+    grid.appendChild(el);
+  }
+}
+
+/* ── List ── */
+function renderList() {
+  const tb = document.getElementById("sdBody");
+  tb.innerHTML = "";
+  const sorted = [...SPECIAL_DAYS].sort((a, b) => sortDir * a.date.localeCompare(b.date));
+  if (!sorted.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No special days yet — add one above or prepopulate Ontario holidays.</td></tr>';
+    return;
+  }
+  sorted.forEach(sd => {
+    const tr = document.createElement("tr");
+    const puNames = sd.applies_to_all ? "All LOBs" : (sd.planning_unit_ids.length
+      ? sd.planning_unit_ids.map(id => { const pu = PLANNING_UNITS.find(p => p.id === id); return pu ? pu.name : "?"; }).join(", ")
+      : "All LOBs");
+    const typeLabel = TYPE_LABELS[sd.day_type] || sd.day_type;
+    const typeColor = sd.color || "#6b7280";
+    tr.innerHTML = `
+      <td style="white-space:nowrap;">${sd.date}</td>
+      <td style="font-weight:600;">${sd.name}</td>
+      <td><span class="type-pill" style="background:${typeColor};">${typeLabel}</span></td>
+      <td>${sd.volume_factor}</td>
+      <td>${puNames}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm" onclick='openModal(${JSON.stringify(sd).replace(/'/g,"&#39;")})'>Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSD(${sd.id})">×</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function sortTable(col) {
+  sortDir *= -1;
+  renderList();
+}
+
+/* ── Modal ── */
+function openModal(sd, prefillDate) {
+  document.getElementById("sdModalTitle").textContent = sd ? "Edit Special Day" : "Add Special Day";
+  document.getElementById("sd_id").value = sd ? sd.id : "";
+  document.getElementById("sd_name").value = sd ? sd.name : "";
+  document.getElementById("sd_date").value = sd ? sd.date : (prefillDate || "");
+  document.getElementById("sd_type").value = sd ? sd.day_type : "holiday";
+  document.getElementById("sd_color").value = sd ? sd.color : "#ef4444";
+  document.getElementById("sd_volume").value = sd ? sd.volume_factor : 0;
+  document.getElementById("sd_recurring").checked = sd ? sd.is_recurring : false;
+  document.getElementById("sd_notes").value = sd ? sd.notes : "";
+
+  // Applies-to
+  const allRadio = document.querySelector('input[name="applies"][value="all"]');
+  const specRadio = document.querySelector('input[name="applies"][value="specific"]');
+  if (sd && !sd.applies_to_all) {
+    specRadio.checked = true;
+  } else {
+    allRadio.checked = true;
+  }
+
+  // PU checkboxes
+  const puList = document.getElementById("puList");
+  puList.innerHTML = "";
+  PLANNING_UNITS.forEach(pu => {
+    const checked = sd && sd.planning_unit_ids && sd.planning_unit_ids.includes(pu.id) ? "checked" : "";
+    puList.innerHTML += `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <input type="checkbox" class="pu-cb" value="${pu.id}" ${checked}> ${pu.name}
+    </label>`;
+  });
+  togglePUList();
+
+  document.getElementById("sdModal").showModal();
+}
+
+function togglePUList() {
+  const specific = document.querySelector('input[name="applies"][value="specific"]').checked;
+  document.getElementById("puList").style.display = specific ? "" : "none";
+}
+
+function applyTypeDefaults() {
+  const t = document.getElementById("sd_type").value;
+  const def = TYPE_DEFAULTS[t];
+  if (def) {
+    document.getElementById("sd_color").value = def.color;
+    document.getElementById("sd_volume").value = def.volume;
+  }
+}
+
+async function saveSD() {
+  const appliesToAll = document.querySelector('input[name="applies"][value="all"]').checked;
+  const puIds = appliesToAll ? [] : [...document.querySelectorAll(".pu-cb:checked")].map(cb => parseInt(cb.value));
+
+  const body = {
+    id: document.getElementById("sd_id").value || null,
+    name: document.getElementById("sd_name").value,
+    date: document.getElementById("sd_date").value,
+    day_type: document.getElementById("sd_type").value,
+    color: document.getElementById("sd_color").value,
+    volume_factor: parseFloat(document.getElementById("sd_volume").value) || 0,
+    is_recurring: document.getElementById("sd_recurring").checked,
+    applies_to_all: appliesToAll,
+    planning_unit_ids: puIds,
+    notes: document.getElementById("sd_notes").value,
+  };
+
+  if (!body.name || !body.date) { alert("Name and date are required."); return; }
+
+  const res = await fetch("/settings/special-days/save", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error || "Save failed");
+}
+
+async function deleteSD(id) {
+  if (!confirm("Delete this special day?")) return;
+  const res = await fetch("/settings/special-days/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id})});
+  const data = await res.json();
+  if (data.success) location.reload(); else alert(data.error || "Delete failed");
+}
+
+async function prepopulateOntario() {
+  if (!confirm("Add Ontario statutory holidays (2025–2028)? Existing dates will be skipped.")) return;
+  const res = await fetch("/settings/special-days/prepopulate-ontario", {method:"POST", headers:{"Content-Type":"application/json"}});
+  const data = await res.json();
+  if (data.success) { alert(data.message); location.reload(); }
+  else alert(data.error || "Failed");
+}
+
+initCal();
+renderList();
+</script>
+{% endblock %}

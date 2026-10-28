@@ -489,7 +489,164 @@ def shift_sequence_save_rows():
 
 
 # ═══════════════════════════════════════════════════════════════
-# PLANNING CALENDARS & DAY TYPES
+# SPECIAL DAYS (unified holiday / campaign / special day management)
+# ═══════════════════════════════════════════════════════════════
+
+@settings_bp.route("/special-days")
+@admin_required
+def special_days_page():
+    """Render the Special Days management page."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    try:
+        from app.models import SpecialDay, PlanningUnit
+        special_days = [sd.to_dict() for sd in SpecialDay.query.order_by(SpecialDay.date).all()]
+        planning_units = [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.get_all_active(include_children=False)]
+    except Exception as e:
+        log.warning(f"special_days query failed: {e}")
+        special_days, planning_units = [], []
+    return render_template("settings/special_days.html",
+                           special_days=special_days, planning_units=planning_units)
+
+
+@settings_bp.route("/special-days/save", methods=["POST"])
+@admin_required
+def special_days_save():
+    """Create or update a special day."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import SpecialDay, PlanningUnit, db
+    from datetime import date as _date
+    data = request.get_json(force=True)
+    try:
+        sd_id = data.get("id")
+        if sd_id:
+            sd = SpecialDay.query.get(sd_id)
+            if not sd:
+                return jsonify(success=False, error="Not found")
+        else:
+            sd = SpecialDay()
+            db.session.add(sd)
+
+        sd.name = data["name"].strip()
+        sd.date = _date.fromisoformat(data["date"])
+        sd.day_type = data.get("day_type", "holiday")
+        sd.color = data.get("color", "#ef4444")
+        sd.volume_factor = float(data.get("volume_factor", 0.0))
+        sd.is_recurring = bool(data.get("is_recurring", False))
+        sd.applies_to_all = bool(data.get("applies_to_all", True))
+        sd.notes = (data.get("notes") or "").strip() or None
+
+        # M2M planning units
+        pu_ids = data.get("planning_unit_ids", [])
+        if sd.applies_to_all or not pu_ids:
+            sd.planning_units = []
+        else:
+            sd.planning_units = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all()
+
+        db.session.commit()
+        return jsonify(success=True, id=sd.id)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@settings_bp.route("/special-days/delete", methods=["POST"])
+@admin_required
+def special_days_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import SpecialDay, db
+    data = request.get_json(force=True)
+    sd = SpecialDay.query.get(data.get("id"))
+    if not sd:
+        return jsonify(success=False, error="Not found")
+    db.session.delete(sd)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@settings_bp.route("/special-days/prepopulate-ontario", methods=["POST"])
+@admin_required
+def special_days_prepopulate_ontario():
+    """Bulk-add Ontario statutory holidays for 2025-2028."""
+    dg = _demo_guard()
+    if dg:
+        return dg
+    from app.models import SpecialDay, db
+    from datetime import date as _date
+
+    ontario = [
+        # 2025
+        ("New Year's Day", _date(2025, 1, 1)),
+        ("Family Day", _date(2025, 2, 17)),
+        ("Good Friday", _date(2025, 4, 18)),
+        ("Victoria Day", _date(2025, 5, 19)),
+        ("Canada Day", _date(2025, 7, 1)),
+        ("Civic Holiday", _date(2025, 8, 4)),
+        ("Labour Day", _date(2025, 9, 1)),
+        ("Thanksgiving", _date(2025, 10, 13)),
+        ("Christmas Day", _date(2025, 12, 25)),
+        ("Boxing Day", _date(2025, 12, 26)),
+        # 2026
+        ("New Year's Day", _date(2026, 1, 1)),
+        ("Family Day", _date(2026, 2, 16)),
+        ("Good Friday", _date(2026, 4, 3)),
+        ("Victoria Day", _date(2026, 5, 18)),
+        ("Canada Day", _date(2026, 7, 1)),
+        ("Civic Holiday", _date(2026, 8, 3)),
+        ("Labour Day", _date(2026, 9, 7)),
+        ("Thanksgiving", _date(2026, 10, 12)),
+        ("Christmas Day", _date(2026, 12, 25)),
+        ("Boxing Day", _date(2026, 12, 26)),
+        # 2027
+        ("New Year's Day", _date(2027, 1, 1)),
+        ("Family Day", _date(2027, 2, 15)),
+        ("Good Friday", _date(2027, 3, 26)),
+        ("Victoria Day", _date(2027, 5, 24)),
+        ("Canada Day", _date(2027, 7, 1)),
+        ("Civic Holiday", _date(2027, 8, 2)),
+        ("Labour Day", _date(2027, 9, 6)),
+        ("Thanksgiving", _date(2027, 10, 11)),
+        ("Christmas Day", _date(2027, 12, 25)),
+        ("Boxing Day", _date(2027, 12, 26)),
+        # 2028
+        ("New Year's Day", _date(2028, 1, 1)),
+        ("Family Day", _date(2028, 2, 21)),
+        ("Good Friday", _date(2028, 4, 14)),
+        ("Victoria Day", _date(2028, 5, 22)),
+        ("Canada Day", _date(2028, 7, 1)),
+        ("Civic Holiday", _date(2028, 8, 7)),
+        ("Labour Day", _date(2028, 9, 4)),
+        ("Thanksgiving", _date(2028, 10, 9)),
+        ("Christmas Day", _date(2028, 12, 25)),
+        ("Boxing Day", _date(2028, 12, 26)),
+    ]
+
+    added = 0
+    skipped = 0
+    for name, dt in ontario:
+        existing = SpecialDay.query.filter_by(date=dt, name=name).first()
+        if existing:
+            skipped += 1
+            continue
+        sd = SpecialDay(
+            name=name, date=dt, day_type="holiday",
+            color="#ef4444", volume_factor=0.0,
+            is_recurring=True, applies_to_all=True,
+        )
+        db.session.add(sd)
+        added += 1
+
+    db.session.commit()
+    return jsonify(success=True, message=f"Added {added} holidays ({skipped} already existed).")
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING CALENDARS & DAY TYPES (legacy)
 # ═══════════════════════════════════════════════════════════════
 
 @settings_bp.route("/planning-calendars")

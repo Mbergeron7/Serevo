@@ -2359,7 +2359,54 @@ class ShiftSequenceRow(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
-# PLANNING CALENDARS & DAY TYPES
+# SPECIAL DAYS (unified holiday / campaign / special day management)
+# ═══════════════════════════════════════════════════════════════
+
+# Association table for SpecialDay ↔ PlanningUnit many-to-many
+special_day_planning_units = db.Table(
+    "special_day_planning_units",
+    db.Column("special_day_id", db.Integer, db.ForeignKey("special_days.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("planning_unit_id", db.Integer, db.ForeignKey("planning_units.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class SpecialDay(db.Model):
+    """A holiday, campaign day, or other special day that affects scheduling and forecasting."""
+    __tablename__ = "special_days"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    name           = db.Column(db.String(120), nullable=False)
+    date           = db.Column(db.Date, nullable=False, index=True)
+    day_type       = db.Column(db.String(20), nullable=False, default="holiday")  # holiday, half_day, campaign, custom
+    color          = db.Column(db.String(10), default="#ef4444")
+    volume_factor  = db.Column(db.Float, default=0.0)       # 0=closed, 0.5=half, 1.0=normal
+    is_recurring   = db.Column(db.Boolean, default=False)    # auto-create for next year
+    applies_to_all = db.Column(db.Boolean, default=True)     # True = all LOBs
+    notes          = db.Column(db.String(255), nullable=True)
+    created_at     = db.Column(db.DateTime, default=_utcnow)
+
+    planning_units = db.relationship("PlanningUnit", secondary=special_day_planning_units,
+                                     backref="special_days", lazy="select")
+
+    __table_args__ = (
+        db.UniqueConstraint("name", "date", name="uq_special_day_name_date"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name,
+            "date": self.date.isoformat() if self.date else "",
+            "day_type": self.day_type, "color": self.color,
+            "volume_factor": self.volume_factor if self.volume_factor is not None else 0.0,
+            "is_recurring": self.is_recurring,
+            "applies_to_all": self.applies_to_all,
+            "notes": self.notes or "",
+            "planning_unit_ids": [pu.id for pu in self.planning_units],
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# PLANNING CALENDARS & DAY TYPES (legacy — kept for migration)
 # ═══════════════════════════════════════════════════════════════
 
 class DayType(db.Model):
