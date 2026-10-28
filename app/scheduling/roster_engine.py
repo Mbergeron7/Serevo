@@ -142,7 +142,16 @@ def generate_roster(group_id, start_date, end_date):
 
 
 def publish_roster(group_id, start_date, end_date):
-    """Publish draft roster schedules (change status from 'draft' to 'scheduled')."""
+    """Publish draft roster schedules and generate break/lunch segments.
+
+    Changes status from 'draft' to 'scheduled' and creates ShiftSegment
+    rows for each schedule that doesn't already have them.  Segment
+    generation was removed from the generate step (too slow for large
+    ranges) and deferred to here where the batch is typically much smaller.
+    """
+    from app.scheduling.engine import _generate_segments
+    from app.models import ShiftSegment
+
     group = RosterGroup.query.get(group_id)
     if not group:
         return {"error": "Group not found"}
@@ -156,11 +165,56 @@ def publish_roster(group_id, start_date, end_date):
         Schedule.status == "draft",
     ).all()
 
+    # --- Generate segments for rows that don't have any yet ---
+    # Group by date so we can stagger breaks across employees on the same day
+    from collections import defaultdict
+    by_date = defaultdict(list)
+    for row in rows:
+        by_date[row.schedule_date].append(row)
+
+    seg_count = 0
+    all_segments = []
+    for day_date in sorted(by_date.keys()):
+        day_rows = by_date[day_date]
+        total_on_day = len(day_rows)
+        for stagger_idx, row in enumerate(day_rows):
+            if row.segments:          # already has segments, skip
+                continue
+            try:
+                segs = _generate_segments(
+                    row.shift_start.strftime("%H:%M"),
+                    row.shift_end.strftime("%H:%M"),
+                    row.shift_type or "",
+                    stagger_index=stagger_idx,
+                    total_employees=total_on_day,
+                    planning_unit_id=group.planning_unit_id,
+                )
+                for sort_i, seg in enumerate(segs):
+                    all_segments.append(dict(
+                        schedule_id=row.id,
+                        activity_type=seg["type"],
+                        start_time=datetime.strptime(seg["start"], "%H:%M").time(),
+                        end_time=datetime.strptime(seg["end"], "%H:%M").time(),
+                        duration_mins=seg["duration_mins"],
+                        sort_order=sort_i,
+                    ))
+                seg_count += len(segs)
+            except Exception as seg_err:
+                log.warning("Segment gen failed for schedule %s: %s", row.id, seg_err)
+
+    # Bulk insert segments
+    if all_segments:
+        seg_tbl = ShiftSegment.__table__
+        CHUNK = 500
+        for i in range(0, len(all_segments), CHUNK):
+            db.session.execute(seg_tbl.insert(), all_segments[i:i + CHUNK])
+
+    # --- Publish: draft → scheduled ---
     for row in rows:
         row.status = "scheduled"
 
     db.session.commit()
-    return {"published": len(rows)}
+    return {"published": len(rows), "segments_created": seg_count}
 
 
 def clear_roster_drafts(group_id, start_date, end_date):

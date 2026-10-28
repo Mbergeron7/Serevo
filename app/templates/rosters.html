@@ -1368,7 +1368,8 @@ async function publishRoster() {
     const data = await r.json();
     hideLoading();
     if (data.error) { showToast('Error: ' + data.error, 'error'); return; }
-    showToast(`Published ${data.published} schedules.`, 'success');
+    const segMsg = data.segments_created ? ` (${data.segments_created} break/lunch segments added)` : '';
+    showToast(`Published ${data.published} schedules${segMsg}.`, 'success');
     loadCalendar();
   } catch (e) { hideLoading(); showToast('Publish failed: ' + e, 'error'); }
 }
