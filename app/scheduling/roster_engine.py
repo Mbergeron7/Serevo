@@ -1516,6 +1516,9 @@ def _write_schedule_rows(assignments, group):
     db.session.flush()
 
     # --- Pass 2: generate segments now that all row.id values exist ---
+    # Build all segment objects in memory, then bulk-insert to minimize
+    # round-trips to PostgreSQL (a year of schedules = thousands of rows).
+    all_segments = []
     for row, shift_type, start_str, end_str, stagger_idx, total_on_day in segment_info:
         try:
             segments = _generate_segments(
@@ -1525,17 +1528,19 @@ def _write_schedule_rows(assignments, group):
                 planning_unit_id=group.planning_unit_id,
             )
             for sort_i, seg in enumerate(segments):
-                seg_row = ShiftSegment(
+                all_segments.append(dict(
                     schedule_id=row.id,
                     activity_type=seg["type"],
                     start_time=datetime.strptime(seg["start"], "%H:%M").time(),
                     end_time=datetime.strptime(seg["end"], "%H:%M").time(),
                     duration_mins=seg["duration_mins"],
                     sort_order=sort_i,
-                )
-                db.session.add(seg_row)
+                ))
         except Exception as seg_err:
             log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
+
+    if all_segments:
+        db.session.execute(ShiftSegment.__table__.insert(), all_segments)
 
     return rows
 
