@@ -623,18 +623,20 @@
     <div class="toolbar-main-row">
       <div class="config-group">
         <label>LOB</label>
-        <div class="ms-picker" id="cfgLOB" style="min-width:140px">
-          <button type="button" class="ms-picker-btn" onclick="MSPicker.toggle('cfgLOB')">All LOBs ▾</button>
+        <div class="ms-picker" id="cfgLOB" data-placeholder="All LOBs" style="min-width:140px">
+          <div class="ms-picker-btn" onclick="MSPicker.toggle('cfgLOB')">
+            <span class="ms-label">All LOBs</span>
+          </div>
           <div class="ms-dropdown">
             <input type="text" class="ms-search" placeholder="Search…" oninput="MSPicker.filter('cfgLOB',this.value)">
+            <div class="ms-actions">
+              <a href="#" onclick="MSPicker.all('cfgLOB',true);return false">Select All</a>
+              <a href="#" onclick="MSPicker.all('cfgLOB',false);return false">Clear All</a>
+            </div>
             <div class="ms-items">
               {% for lob in lobs %}
               <label><input type="checkbox" value="{{ lob }}" checked> {{ lob }}</label>
               {% endfor %}
-            </div>
-            <div class="ms-actions">
-              <a href="#" onclick="MSPicker.all('cfgLOB',true);return false">All</a>
-              <a href="#" onclick="MSPicker.all('cfgLOB',false);return false">None</a>
             </div>
           </div>
         </div>
@@ -1362,16 +1364,7 @@ function getCfgLob() {
   if (sel.length === 1) return sel[0];
   return sel.join(',');
 }
-function getCfgLobLabel() {
-  const sel = MSPicker.selected('cfgLOB');
-  const allBoxes = document.querySelectorAll('#cfgLOB .ms-items input[type=checkbox]');
-  if (!sel.length || sel.length === allBoxes.length) return 'All LOBs';
-  if (sel.length === 1) return sel[0];
-  return sel.length + ' LOBs';
-}
 MSPicker.bind('cfgLOB', function() {
-  const btn = document.querySelector('#cfgLOB .ms-picker-btn');
-  btn.textContent = getCfgLobLabel() + ' ▾';
   const lob = getCfgLob();
   updateFilterDropdowns(lob);
   loadEmployeesForLOB(lob);
