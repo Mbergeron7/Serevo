@@ -693,6 +693,11 @@ class Schedule(db.Model):
     def to_dict(self):
         emp = self.employee
         pu = self.planning_unit
+        segs = self.segments
+        # Lazy-generate segments if none exist yet (roster engine skips
+        # them during bulk generation for performance).
+        if not segs and self.shift_start and self.shift_end:
+            segs = self._generate_segments_lazy()
         return {
             "id": self.id,
             "employee": emp.full_name if emp else "",
@@ -704,10 +709,34 @@ class Schedule(db.Model):
             "hours": self.hours or 0,
             "status": self.status or "scheduled",
             "source": self.source,
-            "segments": [seg.to_dict() for seg in self.segments],
+            "segments": [seg.to_dict() for seg in segs],
             "team_lead": emp.team_lead if emp and emp.team_lead else "",
             "lob": pu.name if pu else "",
         }
+
+    def _generate_segments_lazy(self):
+        """Generate and persist segments for this schedule on first access."""
+        try:
+            from app.scheduling.engine import _generate_segments
+            raw_segs = _generate_segments(
+                self.shift_start.strftime("%H:%M"),
+                self.shift_end.strftime("%H:%M"),
+                self.shift_type or "",
+                planning_unit_id=self.planning_unit_id,
+            )
+            from datetime import datetime as _dt
+            for sort_i, seg in enumerate(raw_segs):
+                self.segments.append(ShiftSegment(
+                    activity_type=seg["type"],
+                    start_time=_dt.strptime(seg["start"], "%H:%M").time(),
+                    end_time=_dt.strptime(seg["end"], "%H:%M").time(),
+                    duration_mins=seg["duration_mins"],
+                    sort_order=sort_i,
+                ))
+            db.session.flush()
+            return self.segments
+        except Exception:
+            return []
 
 
 class ShiftSegment(db.Model):
