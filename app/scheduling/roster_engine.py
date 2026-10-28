@@ -661,7 +661,12 @@ def _process_week(week_days, group, members, slots_by_day_type,
             _track_day(m.id, day_date, slot)
             _update_state_for_assignment(states[m.id], day_date, slot)
             if slot.role == "closer":
-                week_closings[m.id] = week_closings.get(m.id, 0) + 1
+                # NOTE: Do NOT increment week_closings for parity weekend
+                # closers — the weekly cap (max_closings_per_week) is meant
+                # to distribute weekday closings fairly.  A weekend parity
+                # closer is a separate obligation and should not consume a
+                # member's weekday closing quota, otherwise groups with few
+                # members run out of eligible closers by Friday.
                 closer_days.setdefault(m.id, []).append(day_date)
                 if closer_dow_counts is not None:
                     closer_dow_counts[m.id][day_date.weekday()] += 1
