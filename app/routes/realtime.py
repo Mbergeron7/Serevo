@@ -566,7 +566,7 @@ def api_bundle():
                                       get_service_level_intraday)
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
+        lob, lob_filter = _parse_lob_param(payload)
         date_str = payload.get("date", "")
         if not lob:
             return jsonify({"success": False, "error": "LOB is required"})
@@ -579,7 +579,7 @@ def api_bundle():
 
         # Snapshot
         if lob == LOB_ALL_LABEL:
-            snap = _aggregate_snapshots(user, date_obj)
+            snap = _aggregate_snapshots(user, date_obj, lob_filter)
         elif is_demo:
             from app.demo_data import get_demo_realtime_snapshot
             snap = get_demo_realtime_snapshot(lob, date_obj)
@@ -589,7 +589,7 @@ def api_bundle():
 
         # Adherence (generate_shifts is cached from snapshot call)
         if lob == LOB_ALL_LABEL:
-            adh = _aggregate_adherence(user, date_obj)
+            adh = _aggregate_adherence(user, date_obj, lob_filter)
         elif is_demo:
             from app.demo_data import get_demo_adherence
             adh = get_demo_adherence(lob, date_obj)
@@ -637,7 +637,7 @@ def snapshot():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
+        lob, lob_filter = _parse_lob_param(payload)
         date_str = payload.get("date", "")
 
         if not lob:
@@ -649,7 +649,7 @@ def snapshot():
         user = get_current_user()
 
         if lob == LOB_ALL_LABEL:
-            result = _aggregate_snapshots(user, date_obj)
+            result = _aggregate_snapshots(user, date_obj, lob_filter)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_realtime_snapshot
             result = get_demo_realtime_snapshot(lob, date_obj)
@@ -676,7 +676,7 @@ def adherence():
 
     try:
         payload = request.get_json(silent=True) or {}
-        lob = payload.get("lob", "").strip() or LOB_ALL_LABEL
+        lob, lob_filter = _parse_lob_param(payload)
         date_str = payload.get("date", "")
 
         if not lob:
@@ -688,7 +688,7 @@ def adherence():
         user = get_current_user()
 
         if lob == LOB_ALL_LABEL:
-            result = _aggregate_adherence(user, date_obj)
+            result = _aggregate_adherence(user, date_obj, lob_filter)
         elif user and user.get("is_demo"):
             from app.demo_data import get_demo_adherence
             result = get_demo_adherence(lob, date_obj)
