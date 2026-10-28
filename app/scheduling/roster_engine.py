@@ -82,7 +82,7 @@ def generate_roster(group_id, start_date, end_date):
             _s_hrs = (_s_end - _s_start).total_seconds() / 3600
             if _s_hrs < 0:
                 _s_hrs += 24
-            log.info("  SLOT-INFO id=%s day_type=%s role='%s' label=%s start=%s end=%s hours=%.1f", s.id, dt, s.role, s.label, s.shift_start, s.shift_end, _s_hrs)
+            log.debug("  SLOT-INFO id=%s day_type=%s role='%s' label=%s start=%s end=%s hours=%.1f", s.id, dt, s.role, s.label, s.shift_start, s.shift_end, _s_hrs)
 
     # Load holiday dates for the planning unit's date range
     stat_dates = _get_stat_dates(start_date, end_date, planning_unit_id=group.planning_unit_id)
@@ -429,7 +429,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
         if slot is not None:
             _record_consistent_start(member_id, slot, the_date)
             week_hours[member_id] = week_hours.get(member_id, 0) + _slot_hours(slot)
-            log.info("ASSIGN-TRACE m%d %s role=%s hrs=%.1f total_wk_hrs=%.1f days=%d",
+            log.debug("ASSIGN-TRACE m%d %s role=%s hrs=%.1f total_wk_hrs=%.1f days=%d",
                       member_id, the_date, slot.role, _slot_hours(slot), week_hours[member_id],
                       week_day_counts.get(member_id, 0))
             # Record slot times for split shift gap checking
@@ -1063,7 +1063,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
         # ── P5 TRACE (first 2 weeks only) ──
         _p5_trace = (day_date - week_days[0]).days < 14
         if _p5_trace:
-            log.info("P5-TRACE %s: eligible_by_any=%s daily_assigned=%s",
+            log.debug("P5-TRACE %s: eligible_by_any=%s daily_assigned=%s",
                      day_date, sorted(eligible_by_any_slot), sorted(daily_assigned.get(day_date, set())))
             for _mid in sorted(eligible_by_any_slot):
                 _reasons = []
@@ -1083,9 +1083,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
                     if not any(_hours_ok(_mobj, _bs) for _bs in backfill_slots_p5 if _mid in slot_eligible.get(_bs, set())):
                         _reasons.append(f"hours_fail(wk_hrs={week_hours.get(_mid,0)},max={getattr(_mobj,'max_hours_per_week',None)})")
                 if _reasons:
-                    log.info("P5-TRACE   m%d SKIP: %s", _mid, ", ".join(_reasons))
+                    log.debug("P5-TRACE   m%d SKIP: %s", _mid, ", ".join(_reasons))
                 else:
-                    log.info("P5-TRACE   m%d PASS (deficit=%d)", _mid, _contract_deficit(_mid))
+                    log.debug("P5-TRACE   m%d PASS (deficit=%d)", _mid, _contract_deficit(_mid))
 
         # Check if ANY eligible non-closer slot fits the member's hours
         def _any_slot_fits(m):
@@ -1105,7 +1105,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
             and _any_slot_fits(m)
         ]
         if _p5_trace:
-            log.info("P5-TRACE %s: unassigned_today=%s", day_date, [(m.id, _contract_deficit(m.id)) for m in unassigned_today])
+            log.debug("P5-TRACE %s: unassigned_today=%s", day_date, [(m.id, _contract_deficit(m.id)) for m in unassigned_today])
         if not unassigned_today:
             continue
 
@@ -1527,31 +1527,43 @@ def _write_schedule_rows(assignments, group):
                 stagger_idx, total_on_day,
             ))
 
-    # Single bulk INSERT for all Schedule rows
+    # Single bulk INSERT for all Schedule rows — use RETURNING on
+    # PostgreSQL to get IDs back without a second round-trip.
     sched_tbl = Schedule.__table__
-    db.session.execute(sched_tbl.insert(), schedule_dicts)
+    dialect = db.session.bind.dialect.name if db.session.bind else "sqlite"
 
-    # Query back the inserted rows to get their IDs (ordered consistently)
-    emp_ids = list({d["employee_id"] for d in schedule_dicts})
-    date_min = min(d["schedule_date"] for d in schedule_dicts)
-    date_max = max(d["schedule_date"] for d in schedule_dicts)
-
-    inserted = db.session.execute(
-        sched_tbl.select().where(
-            sched_tbl.c.employee_id.in_(emp_ids),
-            sched_tbl.c.schedule_date >= date_min,
-            sched_tbl.c.schedule_date <= date_max,
-            sched_tbl.c.source == "roster",
-            sched_tbl.c.status == "draft",
-            sched_tbl.c.planning_unit_id == group.planning_unit_id,
-        )
-    ).fetchall()
-
-    # Build a lookup: (employee_id, date, shift_start) → row id
     id_lookup = {}
-    for row in inserted:
-        key = (row.employee_id, row.schedule_date, row.shift_start)
-        id_lookup[key] = row.id
+    if dialect == "postgresql":
+        # INSERT … RETURNING id, employee_id, schedule_date, shift_start
+        result = db.session.execute(
+            sched_tbl.insert().returning(
+                sched_tbl.c.id,
+                sched_tbl.c.employee_id,
+                sched_tbl.c.schedule_date,
+                sched_tbl.c.shift_start,
+            ),
+            schedule_dicts,
+        )
+        for row in result:
+            id_lookup[(row.employee_id, row.schedule_date, row.shift_start)] = row.id
+    else:
+        # SQLite fallback: insert then query back
+        db.session.execute(sched_tbl.insert(), schedule_dicts)
+        emp_ids = list({d["employee_id"] for d in schedule_dicts})
+        date_min = min(d["schedule_date"] for d in schedule_dicts)
+        date_max = max(d["schedule_date"] for d in schedule_dicts)
+        inserted = db.session.execute(
+            sched_tbl.select().where(
+                sched_tbl.c.employee_id.in_(emp_ids),
+                sched_tbl.c.schedule_date >= date_min,
+                sched_tbl.c.schedule_date <= date_max,
+                sched_tbl.c.source == "roster",
+                sched_tbl.c.status == "draft",
+                sched_tbl.c.planning_unit_id == group.planning_unit_id,
+            )
+        ).fetchall()
+        for row in inserted:
+            id_lookup[(row.employee_id, row.schedule_date, row.shift_start)] = row.id
 
     # --- Pass 2: generate segments now that we have IDs ---
     all_segments = []
@@ -1581,14 +1593,13 @@ def _write_schedule_rows(assignments, group):
 
     if all_segments:
         try:
-            # Use a savepoint so a segment failure doesn't abort the whole
-            # transaction (Schedule rows are already inserted and must survive).
-            nested = db.session.begin_nested()
-            db.session.execute(ShiftSegment.__table__.insert(), all_segments)
-            nested.commit()
+            seg_tbl = ShiftSegment.__table__
+            # Insert in chunks of 500 to keep individual statements fast
+            CHUNK = 500
+            for i in range(0, len(all_segments), CHUNK):
+                db.session.execute(seg_tbl.insert(), all_segments[i:i + CHUNK])
         except Exception as seg_err:
             log.warning("Bulk segment insert failed (table may not exist yet): %s", seg_err)
-            # Savepoint rollback keeps the outer transaction intact
 
     # Return lightweight result (no ORM objects loaded)
     return schedule_dicts
