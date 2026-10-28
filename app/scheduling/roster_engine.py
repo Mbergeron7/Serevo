@@ -191,14 +191,15 @@ def get_roster_calendar(group_id, start_date, end_date):
         return {"error": "Group not found"}
 
     emp_ids = [m.employee_id for m in group.members if m.active]
-    rows = Schedule.query.filter(
+    from sqlalchemy.orm import lazyload
+    rows = Schedule.query.options(lazyload(Schedule.segments)).filter(
         Schedule.employee_id.in_(emp_ids),
         Schedule.schedule_date >= start_date,
         Schedule.schedule_date <= end_date,
         Schedule.source == "roster",
     ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
-    return {"rows": [r.to_dict() for r in rows]}
+    return {"rows": [r.to_dict(include_segments=False) for r in rows]}
 
 
 # ── Internal helpers ────────────────────────────────────────────

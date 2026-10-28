@@ -690,15 +690,10 @@ class Schedule(db.Model):
         db.Index("ix_sched_date_unit", "schedule_date", "planning_unit_id"),
     )
 
-    def to_dict(self):
+    def to_dict(self, include_segments=True):
         emp = self.employee
         pu = self.planning_unit
-        segs = self.segments
-        # Lazy-generate segments if none exist yet (roster engine skips
-        # them during bulk generation for performance).
-        if not segs and self.shift_start and self.shift_end:
-            segs = self._generate_segments_lazy()
-        return {
+        result = {
             "id": self.id,
             "employee": emp.full_name if emp else "",
             "employee_id": emp.employee_id if emp else "",
@@ -709,10 +704,18 @@ class Schedule(db.Model):
             "hours": self.hours or 0,
             "status": self.status or "scheduled",
             "source": self.source,
-            "segments": [seg.to_dict() for seg in segs],
+            "segments": [],
             "team_lead": emp.team_lead if emp and emp.team_lead else "",
             "lob": pu.name if pu else "",
         }
+        if include_segments:
+            segs = self.segments
+            # Lazy-generate segments if none exist yet (roster engine skips
+            # them during bulk generation for performance).
+            if not segs and self.shift_start and self.shift_end:
+                segs = self._generate_segments_lazy()
+            result["segments"] = [seg.to_dict() for seg in segs]
+        return result
 
     def _generate_segments_lazy(self):
         """Generate and persist segments for this schedule on first access."""
