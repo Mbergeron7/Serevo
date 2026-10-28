@@ -1237,10 +1237,16 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
     s_min = _time_to_minutes(start_time)
     e_min = _time_to_minutes(end_time)
 
-    # Prefer day model activity windows, fall back to segment code rules
+    # Prefer day model activity windows, fall back to segment code rules.
+    # When falling back, use shift duration (not label) to pick full vs half
+    # rules — labels like "Closer"/"Opener" aren't "full"/"half".
     rules = _get_day_model_rules(start_time, end_time, planning_unit_id)
     if rules is None:
-        rules = _get_segment_rules(shift_type)
+        shift_dur = e_min - s_min
+        if shift_dur < 0:
+            shift_dur += 1440  # overnight
+        effective_type = "full" if shift_dur >= 360 else "half"  # 6+ hrs = full
+        rules = _get_segment_rules(effective_type)
 
     # Collect break/lunch windows that fit within the shift
     pauses = []
