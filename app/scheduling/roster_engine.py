@@ -124,11 +124,12 @@ def generate_roster(group_id, start_date, end_date):
         )
         assignments.extend(week_assignments)
 
-    # Persist updated states
+    # Persist updated states (flush before bulk inserts below)
     for state in states.values():
         db.session.add(state)
+    db.session.flush()
 
-    # Write Schedule rows
+    # Write Schedule rows (bulk insert — no ORM objects)
     schedule_rows = _write_schedule_rows(assignments, group)
 
     db.session.commit()
@@ -335,17 +336,27 @@ def _get_or_create_states(members, period_start):
 
 
 def _clear_draft_rosters(group, start_date, end_date):
-    """Delete draft roster Schedule rows for this group's members."""
+    """Delete draft roster Schedule rows for this group's members.
+
+    Uses raw DELETE to avoid loading thousands of ORM objects (each with
+    joined ShiftSegments) into memory — the DB-level ON DELETE CASCADE on
+    shift_segments.schedule_id handles child rows automatically.
+    """
     emp_ids = [m.employee_id for m in group.members if m.active]
     if not emp_ids:
         return
-    Schedule.query.filter(
-        Schedule.employee_id.in_(emp_ids),
-        Schedule.schedule_date >= start_date,
-        Schedule.schedule_date <= end_date,
-        Schedule.source == "roster",
-        Schedule.status == "draft",
-    ).delete(synchronize_session="fetch")
+    # Raw DELETE avoids ORM object-loading overhead; ON DELETE CASCADE
+    # on shift_segments handles child rows at the DB level.
+    tbl = Schedule.__table__
+    db.session.execute(
+        tbl.delete().where(
+            tbl.c.employee_id.in_(emp_ids),
+            tbl.c.schedule_date >= start_date,
+            tbl.c.schedule_date <= end_date,
+            tbl.c.source == "roster",
+            tbl.c.status == "draft",
+        )
+    )
 
 
 def _detect_day_type(dt, stat_dates):
@@ -1460,20 +1471,25 @@ def _update_state_for_assignment(state, day_date, slot):
 
 
 def _write_schedule_rows(assignments, group):
-    """Create Schedule rows (with break/lunch segments) for all assignments."""
+    """Create Schedule rows (with break/lunch segments) for all assignments.
+
+    Uses bulk INSERT for both Schedule and ShiftSegment rows to avoid
+    individual round-trips to PostgreSQL (a year = ~1500+ Schedule rows
+    + ~6000 segments; individual adds caused gunicorn worker timeouts).
+    """
     from app.scheduling.engine import _generate_segments
-
-    rows = []
-
-    # Group assignments by date so we can stagger breaks
     from collections import defaultdict
+
+    if not assignments:
+        return []
+
     by_date = defaultdict(list)
     for a in assignments:
         by_date[a["date"]].append(a)
 
-    # --- Pass 1: create all Schedule rows, then flush ONCE to get IDs ---
-    # Store metadata needed for segment generation alongside each row
-    segment_info = []  # list of (row, shift_type, start_str, end_str, stagger_idx, total_on_day)
+    # --- Pass 1: bulk-insert all Schedule rows at once ---
+    schedule_dicts = []   # dicts for the bulk INSERT
+    seg_meta = []         # (index, shift_type, start_str, end_str, stagger_idx, total_on_day)
 
     for day_date in sorted(by_date.keys()):
         day_assignments = by_date[day_date]
@@ -1487,11 +1503,12 @@ def _write_schedule_rows(assignments, group):
             end_dt = datetime.combine(day_date, slot.shift_end)
             hours = (end_dt - start_dt).total_seconds() / 3600
             if hours < 0:
-                hours += 24  # overnight shift
+                hours += 24
 
             shift_type = slot.label or slot.role
+            idx = len(schedule_dicts)
 
-            row = Schedule(
+            schedule_dicts.append(dict(
                 employee_id=member.employee_id,
                 planning_unit_id=group.planning_unit_id,
                 schedule_date=day_date,
@@ -1501,25 +1518,48 @@ def _write_schedule_rows(assignments, group):
                 hours=round(hours, 2),
                 status="draft",
                 source="roster",
-            )
-            db.session.add(row)
-            rows.append(row)
+            ))
 
-            segment_info.append((
-                row, shift_type,
+            seg_meta.append((
+                idx, shift_type,
                 slot.shift_start.strftime("%H:%M"),
                 slot.shift_end.strftime("%H:%M"),
                 stagger_idx, total_on_day,
             ))
 
-    # Single flush to assign IDs to all Schedule rows at once
-    db.session.flush()
+    # Single bulk INSERT for all Schedule rows
+    sched_tbl = Schedule.__table__
+    db.session.execute(sched_tbl.insert(), schedule_dicts)
 
-    # --- Pass 2: generate segments now that all row.id values exist ---
-    # Build all segment objects in memory, then bulk-insert to minimize
-    # round-trips to PostgreSQL (a year of schedules = thousands of rows).
+    # Query back the inserted rows to get their IDs (ordered consistently)
+    emp_ids = list({d["employee_id"] for d in schedule_dicts})
+    date_min = min(d["schedule_date"] for d in schedule_dicts)
+    date_max = max(d["schedule_date"] for d in schedule_dicts)
+
+    inserted = db.session.execute(
+        sched_tbl.select().where(
+            sched_tbl.c.employee_id.in_(emp_ids),
+            sched_tbl.c.schedule_date >= date_min,
+            sched_tbl.c.schedule_date <= date_max,
+            sched_tbl.c.source == "roster",
+            sched_tbl.c.status == "draft",
+            sched_tbl.c.planning_unit_id == group.planning_unit_id,
+        )
+    ).fetchall()
+
+    # Build a lookup: (employee_id, date, shift_start) → row id
+    id_lookup = {}
+    for row in inserted:
+        key = (row.employee_id, row.schedule_date, row.shift_start)
+        id_lookup[key] = row.id
+
+    # --- Pass 2: generate segments now that we have IDs ---
     all_segments = []
-    for row, shift_type, start_str, end_str, stagger_idx, total_on_day in segment_info:
+    for idx, shift_type, start_str, end_str, stagger_idx, total_on_day in seg_meta:
+        d = schedule_dicts[idx]
+        sched_id = id_lookup.get((d["employee_id"], d["schedule_date"], d["shift_start"]))
+        if not sched_id:
+            continue
         try:
             segments = _generate_segments(
                 start_str, end_str, shift_type,
@@ -1529,7 +1569,7 @@ def _write_schedule_rows(assignments, group):
             )
             for sort_i, seg in enumerate(segments):
                 all_segments.append(dict(
-                    schedule_id=row.id,
+                    schedule_id=sched_id,
                     activity_type=seg["type"],
                     start_time=datetime.strptime(seg["start"], "%H:%M").time(),
                     end_time=datetime.strptime(seg["end"], "%H:%M").time(),
@@ -1537,20 +1577,21 @@ def _write_schedule_rows(assignments, group):
                     sort_order=sort_i,
                 ))
         except Exception as seg_err:
-            log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
+            log.warning("Failed to generate segments for schedule %s: %s", sched_id, seg_err)
 
     if all_segments:
         try:
+            # Use a savepoint so a segment failure doesn't abort the whole
+            # transaction (Schedule rows are already inserted and must survive).
+            nested = db.session.begin_nested()
             db.session.execute(ShiftSegment.__table__.insert(), all_segments)
+            nested.commit()
         except Exception as seg_err:
             log.warning("Bulk segment insert failed (table may not exist yet): %s", seg_err)
-            db.session.rollback()
-            # Re-add the Schedule rows that were lost by the rollback
-            for row in rows:
-                db.session.merge(row)
-            db.session.flush()
+            # Savepoint rollback keeps the outer transaction intact
 
-    return rows
+    # Return lightweight result (no ORM objects loaded)
+    return schedule_dicts
 
 
 def _assignment_to_dict(a):
