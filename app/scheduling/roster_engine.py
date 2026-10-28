@@ -1504,25 +1504,28 @@ def _write_schedule_rows(assignments, group):
             db.session.flush()  # get row.id for segments
 
             # Generate break/lunch segments using the main engine's logic
-            start_str = slot.shift_start.strftime("%H:%M")
-            end_str = slot.shift_end.strftime("%H:%M")
-            segments = _generate_segments(
-                start_str, end_str, shift_type,
-                stagger_index=stagger_idx,
-                total_employees=total_on_day,
-                planning_unit_id=group.planning_unit_id,
-            )
-
-            for sort_i, seg in enumerate(segments):
-                seg_row = ShiftSegment(
-                    schedule_id=row.id,
-                    activity_type=seg["type"],
-                    start_time=datetime.strptime(seg["start"], "%H:%M").time(),
-                    end_time=datetime.strptime(seg["end"], "%H:%M").time(),
-                    duration_mins=seg["duration_mins"],
-                    sort_order=sort_i,
+            try:
+                start_str = slot.shift_start.strftime("%H:%M")
+                end_str = slot.shift_end.strftime("%H:%M")
+                segments = _generate_segments(
+                    start_str, end_str, shift_type,
+                    stagger_index=stagger_idx,
+                    total_employees=total_on_day,
+                    planning_unit_id=group.planning_unit_id,
                 )
-                db.session.add(seg_row)
+
+                for sort_i, seg in enumerate(segments):
+                    seg_row = ShiftSegment(
+                        schedule_id=row.id,
+                        activity_type=seg["type"],
+                        start_time=datetime.strptime(seg["start"], "%H:%M").time(),
+                        end_time=datetime.strptime(seg["end"], "%H:%M").time(),
+                        duration_mins=seg["duration_mins"],
+                        sort_order=sort_i,
+                    )
+                    db.session.add(seg_row)
+            except Exception as seg_err:
+                log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
 
             rows.append(row)
 

@@ -286,7 +286,11 @@ def api_generate():
         return jsonify({"error": "group_id, start_date, and end_date required"}), 400
     if end < start:
         return jsonify({"error": "end_date must be >= start_date"}), 400
-    result = generate_roster(group_id, start, end)
+    try:
+        result = generate_roster(group_id, start, end)
+    except Exception as e:
+        log.exception("Roster generation failed: %s", e)
+        return jsonify({"error": f"Generation failed: {e}"}), 500
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
