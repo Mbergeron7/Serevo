@@ -623,12 +623,21 @@
     <div class="toolbar-main-row">
       <div class="config-group">
         <label>LOB</label>
-        <select id="cfgLOB" style="min-width:120px">
-          <option value="All">All LOBs</option>
-          {% for lob in lobs %}
-            <option value="{{ lob }}">{{ lob }}</option>
-          {% endfor %}
-        </select>
+        <div class="ms-picker" id="cfgLOB" style="min-width:140px">
+          <button type="button" class="ms-picker-btn" onclick="MSPicker.toggle('cfgLOB')">All LOBs ▾</button>
+          <div class="ms-dropdown">
+            <input type="text" class="ms-search" placeholder="Search…" oninput="MSPicker.filter('cfgLOB',this.value)">
+            <div class="ms-items">
+              {% for lob in lobs %}
+              <label><input type="checkbox" value="{{ lob }}" checked> {{ lob }}</label>
+              {% endfor %}
+            </div>
+            <div class="ms-actions">
+              <a href="#" onclick="MSPicker.all('cfgLOB',true);return false">All</a>
+              <a href="#" onclick="MSPicker.all('cfgLOB',false);return false">None</a>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="config-group">
         <label>Start</label>
@@ -1344,12 +1353,34 @@ function hideLoading() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// LOB MULTI-SELECT HELPER
+// ═══════════════════════════════════════════════════════════
+function getCfgLob() {
+  const sel = MSPicker.selected('cfgLOB');
+  const allBoxes = document.querySelectorAll('#cfgLOB .ms-items input[type=checkbox]');
+  if (!sel.length || sel.length === allBoxes.length) return 'All';
+  if (sel.length === 1) return sel[0];
+  return sel.join(',');
+}
+function getCfgLobLabel() {
+  const sel = MSPicker.selected('cfgLOB');
+  const allBoxes = document.querySelectorAll('#cfgLOB .ms-items input[type=checkbox]');
+  if (!sel.length || sel.length === allBoxes.length) return 'All LOBs';
+  if (sel.length === 1) return sel[0];
+  return sel.length + ' LOBs';
+}
+MSPicker.bind('cfgLOB', function() {
+  const btn = document.querySelector('#cfgLOB .ms-picker-btn');
+  btn.textContent = getCfgLobLabel() + ' ▾';
+  const lob = getCfgLob();
+  updateFilterDropdowns(lob);
+  loadEmployeesForLOB(lob);
+  loadDemandHeatmap();
+});
+
+// ═══════════════════════════════════════════════════════════
 // EMPLOYEE PICKER
 // ═══════════════════════════════════════════════════════════
-document.getElementById('cfgLOB').addEventListener('change', function() {
-  updateFilterDropdowns(this.value);
-  loadEmployeesForLOB(this.value);
-});
 
 function updateFilterDropdowns(lob) {
   fetch('/scheduling/filter-options', {
@@ -1421,7 +1452,7 @@ function loadEmployeesForLOB(lob) {
 }
 
 function applyFilters() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   if (lob) loadEmployeesForLOB(lob);
 }
 
@@ -1509,7 +1540,7 @@ function empDeselectAll() {
 // IMPORT FROM CONNECTED WFM SYSTEM
 // ═══════════════════════════════════════════════════════════
 function importFromWFM() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
   if (!start || !end) { showToast('Please set start and end dates.', 'error'); return; }
@@ -1546,7 +1577,7 @@ function importFromWFM() {
 let _generateInFlight = false;
 function generateSchedule() {
   if (_generateInFlight) return;
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
   const shiftHrs = parseFloat(document.getElementById('cfgShiftHrs').value) || 8;
@@ -1640,7 +1671,7 @@ function _pollGenerateJob(jobId, attempt) {
 // LOAD FROM DB
 // ═══════════════════════════════════════════════════════════
 function loadSchedule() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
 
@@ -1794,7 +1825,7 @@ function saveSchedule() {
 // CLEAR SAVED SCHEDULES
 // ═══════════════════════════════════════════════════════════
 function clearSchedule() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
   if (!lob || !start || !end) { showToast('Select LOB and date range first.', 'error'); return; }
@@ -1822,7 +1853,7 @@ function clearSchedule() {
 // EXPORT CSV
 // ═══════════════════════════════════════════════════════════
 function exportSchedule() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
 
@@ -2254,7 +2285,7 @@ function openAddModal(dayIdx) {
   const onDay = new Set(day.shifts.map(s => String(s.employee_id)));
   const sel = document.getElementById('addEmployee');
   const options = empList.filter(e => !onDay.has(String(e.employee_id)));
-  const lobName = scheduleData.lob || document.getElementById('cfgLOB').value;
+  const lobName = scheduleData.lob || getCfgLob();
   sel.innerHTML = `<optgroup label="${lobName}">` + (options.length
     ? options.map(e => `<option value="${e.employee_id}">${e.name}</option>`).join('')
     : '<option value="" disabled>(everyone already has a shift)</option>') + '</optgroup>';
@@ -4330,7 +4361,7 @@ function bulkApply() {
   const dayIdx = scheduleData.days.findIndex(d => d.shifts && d.shifts.length > 0);
   const date = scheduleData.days[dayIdx >= 0 ? dayIdx : 0].date;
 
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const empNames = selected.map(e => e.name);
 
   // Collect shift IDs from scheduleData for selected employees
@@ -4435,7 +4466,7 @@ function closeCopyWeekModal() {
   document.getElementById('copyWeekOverlay').classList.remove('show');
 }
 function submitCopyWeek() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const sourceStart = document.getElementById('copySourceStart').value;
   const targetStart = document.getElementById('copyTargetStart').value;
   if (!lob) { showToast('Please select a LOB first.', 'error'); return; }
@@ -4497,7 +4528,7 @@ function switchDemandTab(tab) {
 }
 
 function loadDemandHeatmap() {
-  const lob = document.getElementById('cfgLOB').value;
+  const lob = getCfgLob();
   const startStr = document.getElementById('cfgStart').value;
   const endStr = document.getElementById('cfgEnd').value;
   const zone = document.getElementById('demandHeatmapZone');
@@ -4723,10 +4754,9 @@ function demandCellClass(val, max) {
 
 // Hook into LOB / date changes to auto-load demand heat map
 (function hookDemandHeatmap() {
-  const lobEl = document.getElementById('cfgLOB');
   const startEl = document.getElementById('cfgStart');
   const endEl = document.getElementById('cfgEnd');
-  if (lobEl) lobEl.addEventListener('change', loadDemandHeatmap);
+  // LOB change already calls loadDemandHeatmap via MSPicker.bind onChange
   if (startEl) startEl.addEventListener('change', loadDemandHeatmap);
   if (endEl) endEl.addEventListener('change', loadDemandHeatmap);
   // Auto-load on page ready if LOB and dates are already set
