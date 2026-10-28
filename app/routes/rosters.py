@@ -287,8 +287,12 @@ def api_generate():
     if end < start:
         return jsonify({"error": "end_date must be >= start_date"}), 400
     try:
+        # Ensure a clean session (previous timed-out request may have
+        # left the connection in a bad state on this worker).
+        db.session.rollback()
         result = generate_roster(group_id, start, end)
     except Exception as e:
+        db.session.rollback()
         log.exception("Roster generation failed: %s", e)
         return jsonify({"error": f"Generation failed: {e}"}), 500
     if "error" in result:

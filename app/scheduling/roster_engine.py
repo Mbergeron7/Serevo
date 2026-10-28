@@ -1540,7 +1540,15 @@ def _write_schedule_rows(assignments, group):
             log.warning("Failed to generate segments for schedule %s: %s", row.id, seg_err)
 
     if all_segments:
-        db.session.execute(ShiftSegment.__table__.insert(), all_segments)
+        try:
+            db.session.execute(ShiftSegment.__table__.insert(), all_segments)
+        except Exception as seg_err:
+            log.warning("Bulk segment insert failed (table may not exist yet): %s", seg_err)
+            db.session.rollback()
+            # Re-add the Schedule rows that were lost by the rollback
+            for row in rows:
+                db.session.merge(row)
+            db.session.flush()
 
     return rows
 
