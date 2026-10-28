@@ -1048,9 +1048,17 @@
       </div>
       <div class="form-group">
         <label>Filter by LOB</label>
-        <select id="massFilterLob" onchange="massApplyFilters()" style="font-size:.82rem">
-          <option value="All">All LOBs</option>
-        </select>
+        <div class="ms-picker" id="massFilterLob" data-placeholder="All LOBs">
+          <div class="ms-picker-btn" onclick="MSPicker.toggle('massFilterLob')"><span class="ms-label">All LOBs</span></div>
+          <div class="ms-dropdown">
+            <input class="ms-search" placeholder="Search LOBs…" oninput="MSPicker.filter('massFilterLob', this.value)">
+            <div class="ms-actions">
+              <a onclick="MSPicker.all('massFilterLob', true)">Select All</a>
+              <a onclick="MSPicker.all('massFilterLob', false)">Clear All</a>
+            </div>
+            <div class="ms-items"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2780,7 +2788,7 @@ function openMassModal() {
   _massCrossLobCoverage = [];
   _massAllShifts = [];
   document.getElementById('massFilterTL').innerHTML = '<option value="">All Team Leads</option>';
-  document.getElementById('massFilterLob').innerHTML = '<option value="All">All LOBs</option>';
+  document.querySelector('#massFilterLob .ms-items').innerHTML = '';
   massToggleScope();
 
   // Set date to current config date
@@ -2892,16 +2900,16 @@ function _massPopulateFilters() {
   const tlSel = document.getElementById('massFilterTL');
   tlSel.innerHTML = '<option value="">All Team Leads</option>';
   [...tls].sort().forEach(tl => { tlSel.innerHTML += `<option value="${tl}">${tl}</option>`; });
-  const lobSel = document.getElementById('massFilterLob');
-  lobSel.innerHTML = '<option value="All">All LOBs</option>';
-  [...lobs].sort().forEach(l => { lobSel.innerHTML += `<option value="${l}">${l}</option>`; });
+  MSPicker.init('massFilterLob', [...lobs].sort(), () => _massRenderEmpList(), true);
 }
 
 function _massRenderEmpList() {
   const filterTL = document.getElementById('massFilterTL').value;
-  const filterLob = document.getElementById('massFilterLob').value;
+  const filterLobs = MSPicker.selected('massFilterLob');
+  const allLobs = document.querySelectorAll('#massFilterLob .ms-items input').length;
+  const lobAll = filterLobs.length === allLobs || filterLobs.length === 0;
   const filtered = _massAllShifts.filter(s =>
-    (!filterTL || filterTL === 'All' || s.team_lead === filterTL) && (!filterLob || filterLob === 'All' || s.lob === filterLob)
+    (!filterTL || filterTL === 'All' || s.team_lead === filterTL) && (lobAll || filterLobs.includes(s.lob))
   );
   const list = document.getElementById('massEmpList');
   if (!filtered.length) {

@@ -186,9 +186,17 @@
 <div id="panel-eq" class="tab-panel">
   <div class="filter-bar">
     <label>Planning Unit</label>
-    <select id="eq-pu-filter" onchange="eq_render()">
-      <option value="">All</option>
-    </select>
+    <div class="ms-picker" id="eq-pu-filter" data-placeholder="All PUs">
+      <div class="ms-picker-btn" onclick="MSPicker.toggle('eq-pu-filter')"><span class="ms-label">All PUs</span></div>
+      <div class="ms-dropdown">
+        <input class="ms-search" placeholder="Search…" oninput="MSPicker.filter('eq-pu-filter', this.value)">
+        <div class="ms-actions">
+          <a onclick="MSPicker.all('eq-pu-filter', true)">Select All</a>
+          <a onclick="MSPicker.all('eq-pu-filter', false)">Clear All</a>
+        </div>
+        <div class="ms-items"></div>
+      </div>
+    </div>
     <div style="flex:1;"></div>
     <button class="btn btn-primary" onclick="eq_openBulkModal()">Bulk Assign</button>
     <button class="btn btn-primary" onclick="eq_openModal()">+ Add Assignment</button>
@@ -643,12 +651,14 @@ async function wtpm_delete(id) {
 function eq_render() {
   const tb = document.querySelector('#eq-table tbody');
   tb.innerHTML = '';
-  const puFilter = document.getElementById('eq-pu-filter').value;
-  const filtered = puFilter ? eqData.filter(r => {
-    // Filter by the quartile entity's planning unit
+  const puSelNames = MSPicker.selected('eq-pu-filter');
+  const puAllCount = document.querySelectorAll('#eq-pu-filter .ms-items input').length;
+  const puAll = puSelNames.length === puAllCount || puSelNames.length === 0;
+  const puSelIds = puAll ? null : (supportData.planning_units||[]).filter(p => puSelNames.includes(p.name)).map(p => p.id);
+  const filtered = puAll ? eqData : eqData.filter(r => {
     const sq = wtpData.find(w => w.id == r.schedule_quartile_id);
-    return sq && sq.planning_unit_id == puFilter;
-  }) : eqData;
+    return sq && puSelIds.includes(sq.planning_unit_id);
+  });
   if (!filtered.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">No quartile assignments yet. Click "+ Add Assignment" or "Bulk Assign" to get started.</td></tr>'; return; }
   filtered.forEach(r => {
     const dmChips = (r.day_models||[]).map(dm =>
@@ -766,8 +776,8 @@ async function loadSupportData() {
         activities: data.activities||[],
         employees: (data.employees||[]).map(e => ({...e, name: e.name || `${e.first_name||''} ${e.last_name||''}`.trim()})),
       };
-      /* Populate PU filter on quartiles tab */
-      populateSelect('eq-pu-filter', supportData.planning_units, 'id', 'name', 'All');
+      /* Populate PU filter on quartiles tab (multi-select) */
+      MSPicker.init('eq-pu-filter', supportData.planning_units.map(p => p.name), () => eq_render(), true);
     }
   } catch(e) { console.error('Failed to load supporting data', e); }
 }

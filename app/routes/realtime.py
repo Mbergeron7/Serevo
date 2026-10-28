@@ -16,6 +16,28 @@ from app.utils.timezone import get_app_timezone
 
 log = logging.getLogger("serevo.realtime")
 
+
+def _parse_lob_param(payload):
+    """Parse lob/lobs from request payload.  Returns (lob_label, lob_list_or_none).
+    lob_label is a single LOB name or LOB_ALL_LABEL.
+    lob_list_or_none is a list of specific LOBs when multi-select, else None."""
+    lobs_arr = payload.get("lobs")
+    lob_str = (payload.get("lob", "") or "").strip()
+    # If lobs array provided (multi-select), use it
+    if isinstance(lobs_arr, list) and lobs_arr:
+        lobs_arr = [l.strip() for l in lobs_arr if isinstance(l, str) and l.strip()]
+        if len(lobs_arr) == 1:
+            return lobs_arr[0], None
+        if lobs_arr:
+            return LOB_ALL_LABEL, lobs_arr
+    # Comma-separated in lob param
+    if lob_str and "," in lob_str:
+        parts = [p.strip() for p in lob_str.split(",") if p.strip()]
+        if len(parts) == 1:
+            return parts[0], None
+        return LOB_ALL_LABEL, parts
+    return lob_str or LOB_ALL_LABEL, None
+
 realtime_bp = Blueprint("realtime", __name__, url_prefix="/realtime")
 
 # ── Dismissed unscheduled agents (in-memory, resets on restart/new day) ──
@@ -320,9 +342,11 @@ def _get_live_agents_from_sheet():
 
 # ── "All LOBs" aggregation helpers ─────────────────────────
 
-def _aggregate_snapshots(user, date_obj):
-    """Merge intraday snapshots across all LOBs."""
+def _aggregate_snapshots(user, date_obj, lob_filter=None):
+    """Merge intraday snapshots across LOBs. lob_filter: optional list to restrict."""
     lobs = _all_lobs(user)
+    if lob_filter:
+        lobs = [l for l in lobs if l in lob_filter]
     is_demo = user and user.get("is_demo")
     sheet = None if is_demo else _get_sheet()
 
@@ -424,9 +448,11 @@ def _aggregate_snapshots(user, date_obj):
     }
 
 
-def _aggregate_adherence(user, date_obj):
-    """Merge adherence across all LOBs."""
+def _aggregate_adherence(user, date_obj, lob_filter=None):
+    """Merge adherence across LOBs. lob_filter: optional list to restrict."""
     lobs = _all_lobs(user)
+    if lob_filter:
+        lobs = [l for l in lobs if l in lob_filter]
     is_demo = user and user.get("is_demo")
     sheet = None if is_demo else _get_sheet()
 

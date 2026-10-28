@@ -368,6 +368,7 @@
   })();
   </script>
   {% endif %}
+  <script src="{{ url_for('static', filename='js/ms-picker.js') }}"></script>
   {% block scripts %}{% endblock %}
   <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js')}</script>
 </body>

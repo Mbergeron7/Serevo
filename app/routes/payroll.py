@@ -104,7 +104,8 @@ def payroll_summary():
 
     # Optional filters
     filter_employee = data.get("employee_id")       # DB id
-    filter_pu = data.get("planning_unit_id")         # planning unit id
+    filter_pu = data.get("planning_unit_id")         # planning unit id (single or comma-sep)
+    filter_pu_ids = data.get("planning_unit_ids")    # list of ids (multi-select)
 
     # Get all completed time entries in range
     q = (
@@ -118,8 +119,13 @@ def payroll_summary():
 
     # If planning unit filter, restrict employee set
     pu_emp_ids = None
-    if filter_pu:
-        pu_emp_ids = {e.id for e in Employee.query.filter_by(planning_unit_id=int(filter_pu)).all()}
+    pu_id_list = []
+    if filter_pu_ids and isinstance(filter_pu_ids, list):
+        pu_id_list = [int(x) for x in filter_pu_ids if x]
+    elif filter_pu:
+        pu_id_list = [int(filter_pu)]
+    if pu_id_list:
+        pu_emp_ids = {e.id for e in Employee.query.filter(Employee.planning_unit_id.in_(pu_id_list)).all()}
 
     # Aggregate by employee
     emp_data = {}

@@ -193,12 +193,21 @@
 
 <div class="filter-bar">
   <input type="text" id="filterName" placeholder="Search by name…" oninput="currentPage=1;filterTable()">
-  <select id="filterLOB" onchange="currentPage=1;filterTable()">
-    <option value="All">All LOBs</option>
-    {% for lob in all_pu_names %}
-      <option value="{{ lob }}">{{ lob }}</option>
-    {% endfor %}
-  </select>
+  <div class="ms-picker" id="filterLOB" data-placeholder="All LOBs">
+    <div class="ms-picker-btn" onclick="MSPicker.toggle('filterLOB')"><span class="ms-label">All LOBs</span></div>
+    <div class="ms-dropdown">
+      <input class="ms-search" placeholder="Search LOBs…" oninput="MSPicker.filter('filterLOB', this.value)">
+      <div class="ms-actions">
+        <a onclick="MSPicker.all('filterLOB', true)">Select All</a>
+        <a onclick="MSPicker.all('filterLOB', false)">Clear All</a>
+      </div>
+      <div class="ms-items">
+        {% for lob in all_pu_names %}
+          <label><input type="checkbox" value="{{ lob }}" checked onchange="currentPage=1;filterTable()"> {{ lob }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
   <select id="filterStatus" onchange="currentPage=1;filterTable()">
     <option value="">All Statuses</option>
     <option value="active">Active</option>
@@ -538,7 +547,7 @@ let pageSize = 50;
 function syncStateToURL() {
   const params = new URLSearchParams();
   const name = document.getElementById('filterName').value;
-  const lob = document.getElementById('filterLOB').value;
+  const lob = MSPicker.selected('filterLOB').join(',');
   const status = document.getElementById('filterStatus').value;
   const tl = document.getElementById('filterTL') ? document.getElementById('filterTL').value : '';
   if (name) params.set('name', name);
@@ -555,7 +564,12 @@ function syncStateToURL() {
 function restoreStateFromURL() {
   const params = new URLSearchParams(location.search);
   if (params.get('name')) document.getElementById('filterName').value = params.get('name');
-  if (params.get('lob')) document.getElementById('filterLOB').value = params.get('lob');
+  if (params.get('lob')) {
+    const lobVals = params.get('lob').split(',');
+    document.querySelectorAll('#filterLOB .ms-items input').forEach(cb => {
+      cb.checked = lobVals.includes(cb.value);
+    });
+  }
   if (params.get('status')) document.getElementById('filterStatus').value = params.get('status');
   if (params.get('tl') && document.getElementById('filterTL')) document.getElementById('filterTL').value = params.get('tl');
   if (params.get('page')) currentPage = parseInt(params.get('page')) || 1;
@@ -586,7 +600,8 @@ function restoreStateFromURL() {
 
 function filterTable() {
   const nameQ   = document.getElementById('filterName').value.toLowerCase();
-  const lobQ    = document.getElementById('filterLOB').value === 'All' ? '' : document.getElementById('filterLOB').value.toLowerCase();
+  const lobSel  = MSPicker.selected('filterLOB');
+  const lobAll  = lobSel.length === document.querySelectorAll('#filterLOB .ms-items input').length;
   const statusQ = document.getElementById('filterStatus').value.toLowerCase();
   const tlQ     = document.getElementById('filterTL') ? document.getElementById('filterTL').value.toLowerCase() : '';
   const rows = document.querySelectorAll('#rosterTable tbody tr');
@@ -599,7 +614,7 @@ function filterTable() {
     const tl     = row.dataset.tl || '';
     const match = (
       (!nameQ || name.includes(nameQ)) &&
-      (!lobQ || lob === lobQ) &&
+      (lobAll || lobSel.map(l=>l.toLowerCase()).includes(lob)) &&
       (!statusQ || status === statusQ) &&
       (!tlQ || tl === tlQ)
     );

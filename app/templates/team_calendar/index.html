@@ -45,12 +45,20 @@
 <p style="color:#666; margin-bottom:1rem;">Weekly roster view — see who's working, off, or on PTO at a glance.</p>
 
 <div class="cal-controls">
-  <label>LOB:
-    <select id="lobSelect">
-      <option value="All">All</option>
-      {% for l in lobs %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
-    </select>
-  </label>
+  <label>LOB:</label>
+  <div class="ms-picker" id="lobSelect" data-placeholder="All LOBs" style="vertical-align:middle;">
+    <div class="ms-picker-btn" onclick="MSPicker.toggle('lobSelect')"><span class="ms-label">All LOBs</span></div>
+    <div class="ms-dropdown">
+      <input class="ms-search" placeholder="Search…" oninput="MSPicker.filter('lobSelect', this.value)">
+      <div class="ms-actions">
+        <a onclick="MSPicker.all('lobSelect', true)">Select All</a>
+        <a onclick="MSPicker.all('lobSelect', false)">Clear All</a>
+      </div>
+      <div class="ms-items">
+        {% for l in lobs %}<label><input type="checkbox" value="{{ l }}" checked> {{ l }}</label>{% endfor %}
+      </div>
+    </div>
+  </div>
   <button onclick="changeWeek(-1)">&larr; Prev</button>
   <span class="week-label" id="weekLabel">Loading...</span>
   <button onclick="changeWeek(1)">Next &rarr;</button>
@@ -92,11 +100,12 @@
   };
 
   function loadData() {
-    const lob = document.getElementById('lobSelect').value;
+    const lobs = MSPicker.selected('lobSelect');
+    const lob = lobs.length === document.querySelectorAll('#lobSelect .ms-items input').length ? 'All' : lobs.join(',');
     fetch('/team-calendar/api/data', {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
-      body: JSON.stringify({lob, week_start: fmt(weekStart)})
+      body: JSON.stringify({lob, lobs, week_start: fmt(weekStart)})
     })
     .then(r => r.json())
     .then(data => {
@@ -154,7 +163,7 @@
     const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
   }
 
-  document.getElementById('lobSelect').addEventListener('change', loadData);
+  MSPicker.bind('lobSelect', loadData);
   loadData();
 })();
 </script>

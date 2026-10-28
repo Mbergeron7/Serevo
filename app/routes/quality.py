@@ -32,19 +32,20 @@ def index():
 def api_evaluations():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", LOB_ALL_LABEL)
+    lob_raw = data.get("lob", LOB_ALL_LABEL)
+    lob_list = [l.strip() for l in lob_raw.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL] if lob_raw and lob_raw != LOB_ALL_LABEL else []
     date_from = data.get("date_from")
     date_to = data.get("date_to")
 
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_quality_evaluations
-        evals = get_demo_quality_evaluations(lob=lob, date_from=date_from, date_to=date_to)
+        evals = get_demo_quality_evaluations(lob=lob_raw, date_from=date_from, date_to=date_to)
         return jsonify({"evaluations": evals})
 
     try:
         q = QualityEvaluation.query
-        if lob and lob != LOB_ALL_LABEL:
-            q = q.filter(QualityEvaluation.lob == lob)
+        if lob_list:
+            q = q.filter(QualityEvaluation.lob.in_(lob_list))
         if date_from:
             q = q.filter(QualityEvaluation.eval_date >= _dt.date.fromisoformat(date_from))
         if date_to:
@@ -68,16 +69,17 @@ def api_evaluations():
 def api_dashboard():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", LOB_ALL_LABEL)
+    lob_raw = data.get("lob", LOB_ALL_LABEL)
+    lob_list = [l.strip() for l in lob_raw.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL] if lob_raw and lob_raw != LOB_ALL_LABEL else []
 
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_quality_dashboard
-        return jsonify(get_demo_quality_dashboard(lob))
+        return jsonify(get_demo_quality_dashboard(lob_raw))
 
     try:
         q = QualityEvaluation.query
-        if lob and lob != LOB_ALL_LABEL:
-            q = q.filter(QualityEvaluation.lob == lob)
+        if lob_list:
+            q = q.filter(QualityEvaluation.lob.in_(lob_list))
 
         evals = q.order_by(QualityEvaluation.eval_date.desc()).limit(500).all()
         if not evals:
@@ -401,14 +403,15 @@ def api_agent_performance():
     """
     user = get_current_user()
     data = request.get_json(silent=True) or {}
-    lob = data.get("lob", LOB_ALL_LABEL)
+    lob_raw = data.get("lob", LOB_ALL_LABEL)
+    lob_list = [l.strip() for l in lob_raw.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL] if lob_raw and lob_raw != LOB_ALL_LABEL else []
     date_from = data.get("date_from")
     date_to = data.get("date_to")
 
     if user and user.get("is_demo"):
         from app.demo_data import (get_demo_quality_evaluations,
                                     get_demo_adherence)
-        evals = get_demo_quality_evaluations(lob=lob, date_from=date_from, date_to=date_to)
+        evals = get_demo_quality_evaluations(lob=lob_raw, date_from=date_from, date_to=date_to)
         from datetime import date
         adh = get_demo_adherence(lob=lob, date_obj=date.today())
 
@@ -461,8 +464,8 @@ def api_agent_performance():
         ).join(QualityEvaluation).group_by(
             Employee.id, Employee.first_name, Employee.last_name, Employee.lob
         )
-        if lob and lob != LOB_ALL_LABEL:
-            q = q.filter(QualityEvaluation.lob == lob)
+        if lob_list:
+            q = q.filter(QualityEvaluation.lob.in_(lob_list))
         if date_from:
             q = q.filter(QualityEvaluation.eval_date >= date_from)
         if date_to:

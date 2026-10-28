@@ -192,10 +192,19 @@
 <div class="top-bar">
   <div class="config-group">
     <label>Line of Business</label>
-    <select id="selLob" style="min-width:180px;">
-      <option value="All" selected>All LOBs</option>
-      {% for lob in lobs %}<option value="{{ lob }}">{{ lob }}</option>{% endfor %}
-    </select>
+    <div class="ms-picker" id="selLob" data-placeholder="All LOBs" style="min-width:180px;">
+      <div class="ms-picker-btn" onclick="MSPicker.toggle('selLob')"><span class="ms-label">All LOBs</span></div>
+      <div class="ms-dropdown">
+        <input class="ms-search" placeholder="Search LOBs…" oninput="MSPicker.filter('selLob', this.value)">
+        <div class="ms-actions">
+          <a onclick="MSPicker.all('selLob', true)">Select All</a>
+          <a onclick="MSPicker.all('selLob', false)">Clear All</a>
+        </div>
+        <div class="ms-items">
+          {% for lob in lobs %}<label><input type="checkbox" value="{{ lob }}" checked> {{ lob }}</label>{% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
   <div class="config-group">
     <label>Date</label>
@@ -554,7 +563,18 @@ async function api(url, body) {
   }
   return r.json();
 }
-function selectedLobs() { return [$('selLob').value || 'All']; }
+const ALL_LOBS = [{% for lob in lobs %}'{{ lob }}',{% endfor %}];
+function selectedLobs() {
+  const sel = MSPicker.selected('selLob');
+  return sel.length ? sel : ALL_LOBS.slice();
+}
+/** Backend-compatible single lob value — send single LOB or "All" for aggregation */
+function selectedLobParam() {
+  const sel = MSPicker.selected('selLob');
+  if (!sel.length || sel.length === ALL_LOBS.length) return 'All';
+  if (sel.length === 1) return sel[0];
+  return 'All';  // multiple LOBs: fetch all, filter client-side
+}
 let _activeView = 'liveagents';
 const _loaded = {};  // track which tabs have data loaded
 
@@ -608,39 +628,39 @@ const IMPORT_HINT = 'Upload <em>Call Actuals</em> and <em>Agent Status Events</e
    ══════════════════════════════════════════════════ */
 const TAB_LOADERS = {
   async dashboard() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.dashboard = await api('/realtime/reports/dashboard', body).catch(e => ({success:false, error:e.message}));
     renderDashboard(DATA.dashboard);
     const asOf = (DATA.dashboard && DATA.dashboard.as_of) || '';
     $('asOf').textContent = asOf ? `As of ${asOf}` : '';
   },
   async forecast() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.forecast = await api('/realtime/reports/forecast', body).catch(e => ({success:false, error:e.message}));
     renderForecast(DATA.forecast);
   },
   async interval() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.interval = await api('/realtime/reports/interval', body).catch(e => ({success:false, error:e.message}));
     renderInterval(DATA.interval);
   },
   async svl() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.svl = await api('/realtime/reports/svl', body).catch(e => ({success:false, error:e.message}));
     renderSvl(DATA.svl);
   },
   async absent() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.absenteeism = await api('/realtime/reports/absenteeism', body).catch(e => ({success:false, error:e.message}));
     renderAbsent(DATA.absenteeism);
   },
   async status() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA['agent-status'] = await api('/realtime/reports/agent-status', body).catch(e => ({success:false, error:e.message}));
     renderStatus(DATA['agent-status']);
   },
   async eff() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: $('selLob').value };
+    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
     DATA.efficiency = await api('/realtime/reports/efficiency', body).catch(e => ({success:false, error:e.message}));
     renderEff(DATA.efficiency);
   },
@@ -659,7 +679,7 @@ async function loadTab(name) {
    LOAD ALL  (core intraday only — other tabs lazy-load)
    ══════════════════════════════════════════════════ */
 async function loadAll(silent) {
-  const lob = $('selLob').value;
+  const lob = selectedLobParam();
   const date = $('inpDate').value;
   if (!silent) showLoading('Loading real-time data…');
 
@@ -697,7 +717,7 @@ $('chkAuto').addEventListener('change', function(){ clearInterval(timer); if (th
 
 async function refreshActive() {
   // Silently refresh only the active tab's data
-  const lob = $('selLob').value, date = $('inpDate').value;
+  const lob = selectedLobParam(), date = $('inpDate').value;
   try {
     const bundle = await api('/realtime/api/bundle', { lob, date });
     if (bundle.success) {
@@ -1144,7 +1164,7 @@ function renderEff(d) {
    NET STAFFING
    ══════════════════════════════════════════════════ */
 function renderNetStaffing() {
-  const lob = $('selLob').value;
+  const lob = selectedLobParam();
   const date = $('inpDate').value;
   api('/realtime/net-staffing', { lob, date }).then(d => {
     if (!d || !d.success) { $('nsEmpty').innerHTML = '<strong>Net staffing unavailable</strong>' + (d && d.error ? '<br><small style="color:#c00">' + esc(d.error) + '</small>' : ''); return; }
@@ -1203,7 +1223,7 @@ function renderNetStaffing() {
    INTRADAY OPTIMIZER
    ══════════════════════════════════════════════════ */
 function renderOptimizer() {
-  const lob = $('selLob').value;
+  const lob = selectedLobParam();
   const date = $('inpDate').value;
   api('/realtime/optimize', { lob, date }).then(d => {
     if (!d || !d.success) { $('optEmpty').innerHTML = '<strong>Optimizer unavailable</strong>' + (d && d.error ? '<br><small style="color:#c00">' + esc(d.error) + '</small>' : ''); return; }
@@ -1265,7 +1285,7 @@ function applyRec(id) {
    LEADERBOARD / GAMIFICATION
    ══════════════════════════════════════════════════ */
 function renderGamify() {
-  const lob = $('selLob').value;
+  const lob = selectedLobParam();
   const date = $('inpDate').value;
   api('/realtime/leaderboard', { lob, date }).then(d => {
     if (!d || !d.success) { $('gamifyEmpty').innerHTML = '<strong>Leaderboard unavailable</strong>' + (d && d.error ? '<br><small style="color:#c00">' + esc(d.error) + '</small>' : ''); return; }
@@ -1316,7 +1336,7 @@ function renderGamify() {
    ADHERENCE TIMELINE DRILL-DOWN
    ══════════════════════════════════════════════════ */
 function openTimeline(empName, empId) {
-  const lob = $('selLob').value;
+  const lob = selectedLobParam();
   const date = $('inpDate').value;
   $('tlEmpName').textContent = empName;
   $('tlShiftInfo').textContent = 'Loading…';

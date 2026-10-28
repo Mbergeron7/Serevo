@@ -47,9 +47,12 @@ def api_data():
         return jsonify(success=True, **data)
 
     payload = request.get_json(silent=True) or {}
-    lob = payload.get("lob", "")
-    if lob == LOB_ALL_LABEL:
-        lob = ""
+    lob_raw = payload.get("lob", "")
+    if lob_raw == LOB_ALL_LABEL or not lob_raw:
+        lob_list = []
+    else:
+        lob_list = [l.strip() for l in lob_raw.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
+    lob = lob_list[0] if len(lob_list) == 1 else ""  # backward compat: single or all
     week_start_str = payload.get("week_start")
 
     try:
@@ -64,13 +67,16 @@ def api_data():
     week_end = week_start + timedelta(days=6)
     dates = [week_start + timedelta(days=i) for i in range(7)]
 
-    # Get employees for this LOB (date-aware: uses junction table history)
-    if lob:
-        pu = PlanningUnit.query.filter_by(name=lob).first()
-        if pu:
-            employees = Employee.employees_for_planning_unit(pu.id, week_start)
-        else:
-            employees = []
+    # Get employees for selected LOBs (date-aware: uses junction table history)
+    if lob_list:
+        employees = []
+        for _lname in lob_list:
+            pu = PlanningUnit.query.filter_by(name=_lname).first()
+            if pu:
+                employees.extend(Employee.employees_for_planning_unit(pu.id, week_start))
+        # deduplicate by id
+        seen = set()
+        employees = [e for e in employees if e.id not in seen and not seen.add(e.id)]
     else:
         employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
 
@@ -79,10 +85,10 @@ def api_data():
         Schedule.schedule_date >= week_start,
         Schedule.schedule_date <= week_end,
     )
-    if lob:
-        pu = PlanningUnit.query.filter_by(name=lob).first()
-        if pu:
-            sched_q = sched_q.filter_by(planning_unit_id=pu.id)
+    if lob_list:
+        pu_ids = [pu.id for _lname in lob_list for pu in [PlanningUnit.query.filter_by(name=_lname).first()] if pu]
+        if pu_ids:
+            sched_q = sched_q.filter(Schedule.planning_unit_id.in_(pu_ids))
 
     schedules = sched_q.all()
     sched_map = {}  # (emp_id, date_str) -> schedule info

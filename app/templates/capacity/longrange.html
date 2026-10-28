@@ -135,10 +135,19 @@
   </div>
   <div class="fg">
     <label>LOB</label>
-    <select id="lobFilter">
-      <option value="All">All LOBs</option>
-      {% for l in all_lobs %}<option value="{{ l }}" {% if sel_lob == l %}selected{% endif %}>{{ l }}</option>{% endfor %}
-    </select>
+    <div class="ms-picker" id="lobFilter" data-placeholder="All LOBs">
+      <div class="ms-picker-btn" onclick="MSPicker.toggle('lobFilter')"><span class="ms-label">All LOBs</span></div>
+      <div class="ms-dropdown">
+        <input class="ms-search" placeholder="Search LOBs…" oninput="MSPicker.filter('lobFilter', this.value)">
+        <div class="ms-actions">
+          <a onclick="MSPicker.all('lobFilter', true)">Select All</a>
+          <a onclick="MSPicker.all('lobFilter', false)">Clear All</a>
+        </div>
+        <div class="ms-items">
+          {% for l in all_lobs %}<label><input type="checkbox" value="{{ l }}" {{ 'checked' if not sel_lobs or l in sel_lobs }}> {{ l }}</label>{% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
   <button class="btn-apply" onclick="applyFilters()">Apply</button>
 </div>
@@ -213,7 +222,7 @@ function applyFilters() {
     growth_rate: document.getElementById('growthRate').value,
     attrition_rate: document.getElementById('attritionRate').value,
     shrinkage: document.getElementById('shrinkage').value,
-    lob: document.getElementById('lobFilter').value,
+    lob: MSPicker.selected('lobFilter').join(','),
   });
   window.location.href = '/capacity/longrange?' + params.toString();
 }

@@ -150,10 +150,17 @@
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);">
     <input type="text" id="filterName" placeholder="Search by name…" oninput="filterAccom()"
            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);min-width:0;flex:1;">
-    <select id="filterLOB" onchange="filterAccom()"
-            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);color:var(--text);">
-      <option value="All">All LOBs</option>
-    </select>
+    <div class="ms-picker" id="filterLOB" data-placeholder="All LOBs">
+      <div class="ms-picker-btn" onclick="MSPicker.toggle('filterLOB')"><span class="ms-label">All LOBs</span></div>
+      <div class="ms-dropdown">
+        <input class="ms-search" placeholder="Search LOBs…" oninput="MSPicker.filter('filterLOB', this.value)">
+        <div class="ms-actions">
+          <a onclick="MSPicker.all('filterLOB', true)">Select All</a>
+          <a onclick="MSPicker.all('filterLOB', false)">Clear All</a>
+        </div>
+        <div class="ms-items"></div>
+      </div>
+    </div>
   </div>
   <div class="accom-table-wrap">
     <table class="accom-table sortable" id="accomTable">
@@ -367,20 +374,22 @@ overlay.addEventListener('click', e => { if (e.target === overlay) closeModal();
     const l = row.dataset.lob;
     if (l) lobs.add(l);
   });
-  const sel = document.getElementById('filterLOB');
+  const box = document.querySelector('#filterLOB .ms-items');
   [...lobs].sort().forEach(l => {
-    const o = document.createElement('option');
-    o.value = l; o.textContent = l.charAt(0).toUpperCase() + l.slice(1);
-    sel.appendChild(o);
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `<input type="checkbox" value="${l}" checked onchange="filterAccom()"> ${l.charAt(0).toUpperCase() + l.slice(1)}`;
+    box.appendChild(lbl);
   });
+  MSPicker.bind('filterLOB');
 })();
 
 function filterAccom() {
   const q = (document.getElementById('filterName').value || '').toLowerCase();
-  const lob = document.getElementById('filterLOB').value === 'All' ? '' : (document.getElementById('filterLOB').value || '').toLowerCase();
+  const lobSel = MSPicker.selected('filterLOB').map(v => v.toLowerCase());
+  const lobAll = lobSel.length === document.querySelectorAll('#filterLOB .ms-items input').length;
   document.querySelectorAll('#accomTable tbody tr').forEach(row => {
     const nameOk = !q || (row.dataset.name || '').includes(q);
-    const lobOk = !lob || (row.dataset.lob || '') === lob;
+    const lobOk = lobAll || lobSel.includes((row.dataset.lob || ''));
     row.style.display = (nameOk && lobOk) ? '' : 'none';
   });
 }

@@ -772,3 +772,34 @@ main > *, main > * > * { max-width: 100%; }
 @media (max-width: 768px) {
   .table-scroll { margin: 0 -20px; padding: 0 20px; }
 }
+
+/* ---------- multi-select LOB/PU picker ---------- */
+.ms-picker { position: relative; display: inline-block; }
+.ms-picker-btn {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: .85rem; background: var(--bg); color: var(--text);
+  cursor: pointer; min-width: 180px; text-align: left;
+  display: flex; justify-content: space-between; align-items: center;
+  white-space: nowrap;
+}
+.ms-picker-btn::after { content: "▾"; margin-left: 8px; font-size: .7rem; }
+.ms-dropdown {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 200;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+  max-height: 300px; overflow-y: auto; min-width: 240px; padding: 6px;
+  margin-top: 2px;
+}
+.ms-dropdown.open { display: block; }
+.ms-dropdown .ms-search {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: .82rem; margin-bottom: 4px;
+  background: var(--bg); color: var(--text);
+}
+.ms-dropdown label {
+  display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+  font-size: .82rem; cursor: pointer; border-radius: 4px;
+}
+.ms-dropdown label:hover { background: var(--brand-accent-light, #edf2ff); }
+.ms-actions { display: flex; gap: 8px; padding: 4px 6px; font-size: .75rem; }
+.ms-actions a { cursor: pointer; color: var(--brand-accent, #3b82f6); text-decoration: none; }

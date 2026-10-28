@@ -886,7 +886,8 @@ def longrange_view():
     growth_rate = int(request.args.get("growth_rate", 8))
     attrition_rate = int(request.args.get("attrition_rate", 20))
     shrinkage = int(request.args.get("shrinkage", 30))
-    sel_lob = request.args.get("lob", LOB_ALL_LABEL)
+    sel_lobs_raw = request.args.get("lob", "")
+    sel_lobs = [l.strip() for l in sel_lobs_raw.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL] if sel_lobs_raw else []
 
     years_range = list(range(2024, now.year + 6))
 
@@ -894,8 +895,8 @@ def longrange_view():
     base_plan = _build_plan(user, start_year, shrinkage / 100.0, 0.85, 0.92)
     all_lobs = [p["lob"] for p in base_plan]
 
-    if sel_lob and sel_lob != LOB_ALL_LABEL:
-        base_plan = [p for p in base_plan if p["lob"] == sel_lob]
+    if sel_lobs:
+        base_plan = [p for p in base_plan if p["lob"] in sel_lobs]
 
     projection = _build_longrange_projection(
         base_plan, start_year, horizon,
@@ -906,7 +907,7 @@ def longrange_view():
         user=user, projection=projection,
         start_year=start_year, horizon=horizon,
         growth_rate=growth_rate, attrition_rate=attrition_rate,
-        shrinkage_pct=shrinkage, sel_lob=sel_lob,
+        shrinkage_pct=shrinkage, sel_lobs=sel_lobs,
         all_lobs=all_lobs, years=years_range,
         current_year=now.year)
 
