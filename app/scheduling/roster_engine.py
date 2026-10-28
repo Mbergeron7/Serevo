@@ -1527,26 +1527,29 @@ def _write_schedule_rows(assignments, group):
                 stagger_idx, total_on_day,
             ))
 
-    # Single bulk INSERT for all Schedule rows — use RETURNING on
-    # PostgreSQL to get IDs back without a second round-trip.
+    # Single bulk INSERT for all Schedule rows.
+    # Use INSERT … RETURNING with .values() on PostgreSQL to get IDs
+    # in one round-trip.  SQLAlchemy's executemany (list-of-dicts as 2nd
+    # arg) does NOT support RETURNING, so we must use .values() instead.
     sched_tbl = Schedule.__table__
     dialect = db.session.bind.dialect.name if db.session.bind else "sqlite"
 
     id_lookup = {}
-    if dialect == "postgresql":
-        # INSERT … RETURNING id, employee_id, schedule_date, shift_start
+    if dialect == "postgresql" and schedule_dicts:
+        # .values() with a list builds a single multi-row INSERT
         result = db.session.execute(
-            sched_tbl.insert().returning(
+            sched_tbl.insert()
+            .values(schedule_dicts)
+            .returning(
                 sched_tbl.c.id,
                 sched_tbl.c.employee_id,
                 sched_tbl.c.schedule_date,
                 sched_tbl.c.shift_start,
-            ),
-            schedule_dicts,
+            )
         )
         for row in result:
             id_lookup[(row.employee_id, row.schedule_date, row.shift_start)] = row.id
-    else:
+    elif schedule_dicts:
         # SQLite fallback: insert then query back
         db.session.execute(sched_tbl.insert(), schedule_dicts)
         emp_ids = list({d["employee_id"] for d in schedule_dicts})
