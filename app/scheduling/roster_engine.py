@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta
 
 from app.models import (
     db, RosterGroup, RosterMember, RosterSlot,
-    RosterRotationState, Schedule, Holiday, Employee,
+    RosterRotationState, Schedule, ShiftSegment, Holiday, Employee,
 )
 
 log = logging.getLogger("serevo.roster_engine")
@@ -1460,35 +1460,71 @@ def _update_state_for_assignment(state, day_date, slot):
 
 
 def _write_schedule_rows(assignments, group):
-    """Create Schedule rows for all assignments."""
+    """Create Schedule rows (with break/lunch segments) for all assignments."""
+    from app.scheduling.engine import _generate_segments
+
     rows = []
+
+    # Group assignments by date so we can stagger breaks
+    from collections import defaultdict
+    by_date = defaultdict(list)
     for a in assignments:
-        member = a["member"]
-        slot = a["slot"]
+        by_date[a["date"]].append(a)
 
-        # Calculate hours
-        start_dt = datetime.combine(a["date"], slot.shift_start)
-        end_dt = datetime.combine(a["date"], slot.shift_end)
-        hours = (end_dt - start_dt).total_seconds() / 3600
-        if hours < 0:
-            hours += 24  # overnight shift
+    for day_date in sorted(by_date.keys()):
+        day_assignments = by_date[day_date]
+        total_on_day = len(day_assignments)
 
-        # Use label if available, otherwise role
-        shift_type = slot.label or slot.role
+        for stagger_idx, a in enumerate(day_assignments):
+            member = a["member"]
+            slot = a["slot"]
 
-        row = Schedule(
-            employee_id=member.employee_id,
-            planning_unit_id=group.planning_unit_id,
-            schedule_date=a["date"],
-            shift_start=slot.shift_start,
-            shift_end=slot.shift_end,
-            shift_type=shift_type,
-            hours=round(hours, 2),
-            status="draft",
-            source="roster",
-        )
-        db.session.add(row)
-        rows.append(row)
+            # Calculate hours
+            start_dt = datetime.combine(day_date, slot.shift_start)
+            end_dt = datetime.combine(day_date, slot.shift_end)
+            hours = (end_dt - start_dt).total_seconds() / 3600
+            if hours < 0:
+                hours += 24  # overnight shift
+
+            # Use label if available, otherwise role
+            shift_type = slot.label or slot.role
+
+            row = Schedule(
+                employee_id=member.employee_id,
+                planning_unit_id=group.planning_unit_id,
+                schedule_date=day_date,
+                shift_start=slot.shift_start,
+                shift_end=slot.shift_end,
+                shift_type=shift_type,
+                hours=round(hours, 2),
+                status="draft",
+                source="roster",
+            )
+            db.session.add(row)
+            db.session.flush()  # get row.id for segments
+
+            # Generate break/lunch segments using the main engine's logic
+            start_str = slot.shift_start.strftime("%H:%M")
+            end_str = slot.shift_end.strftime("%H:%M")
+            segments = _generate_segments(
+                start_str, end_str, shift_type,
+                stagger_index=stagger_idx,
+                total_employees=total_on_day,
+                planning_unit_id=group.planning_unit_id,
+            )
+
+            for sort_i, seg in enumerate(segments):
+                seg_row = ShiftSegment(
+                    schedule_id=row.id,
+                    activity_type=seg["type"],
+                    start_time=datetime.strptime(seg["start"], "%H:%M").time(),
+                    end_time=datetime.strptime(seg["end"], "%H:%M").time(),
+                    duration_mins=seg["duration_mins"],
+                    sort_order=sort_i,
+                )
+                db.session.add(seg_row)
+
+            rows.append(row)
 
     return rows
 

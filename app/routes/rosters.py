@@ -13,7 +13,8 @@ import datetime
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, RosterGroup, RosterMember, RosterSlot,
-                         RosterRotationState, Employee, PlanningUnit, Schedule)
+                         RosterRotationState, Employee, PlanningUnit, Schedule,
+                         SpecialDay)
 from app.scheduling.roster_engine import (
     generate_roster, publish_roster, clear_roster_drafts, get_roster_calendar,
 )
@@ -863,7 +864,124 @@ def api_export_xlsx():
             widths=[20] + [max(10, len(r) + 4) for r in all_roles] + [8],
             section_title="Role Totals")
 
-    # ── Sheet 3: Info ─────────────────────────────────────────
+    # ── Sheet 3: Stat Day Summary ─────────────────────────────
+    # Find all special days (holidays / half-days) in the date range
+    from sqlalchemy import and_
+    special_days = SpecialDay.query.filter(
+        SpecialDay.date >= start,
+        SpecialDay.date <= end,
+        SpecialDay.day_type.in_(["holiday", "half_day"]),
+    ).order_by(SpecialDay.date).all()
+
+    # Filter to ones that apply to this planning unit
+    pu_id = group.planning_unit_id if group else None
+    applicable_days = []
+    for sd in special_days:
+        if sd.applies_to_all:
+            applicable_days.append(sd)
+        elif pu_id and any(pu.id == pu_id for pu in sd.planning_units):
+            applicable_days.append(sd)
+
+    if applicable_days:
+        ws_stat = wb.create_sheet("Stat Day Summary")
+        # Build a lookup: date -> list of employee names working that day
+        from collections import defaultdict
+        stat_workers = defaultdict(list)
+        for r in rows:
+            try:
+                dt = datetime.date.fromisoformat(r["date"])
+            except (ValueError, AttributeError):
+                continue
+            stat_workers[dt].append({
+                "employee": r.get("employee", "Unknown"),
+                "role": r.get("type", ""),
+                "start": r.get("start", ""),
+                "end": r.get("end", ""),
+            })
+
+        # Header
+        stat_headers = ["Stat Day", "Date", "Day", "Type", "Employee", "Role",
+                        "Shift Start", "Shift End"]
+        _write_header(ws_stat, stat_headers, "B91C1C")
+
+        stat_alt = _fill("FEF2F2")
+        ri = 2
+        for sd in applicable_days:
+            workers = stat_workers.get(sd.date, [])
+            if workers:
+                for w in workers:
+                    bg = stat_alt if ri % 2 == 0 else white_fill
+                    vals = [sd.name, sd.date.isoformat(),
+                            sd.date.strftime("%a"), sd.day_type.title(),
+                            w["employee"], w["role"], w["start"], w["end"]]
+                    for ci, v in enumerate(vals, 1):
+                        c = ws_stat.cell(ri, ci, v or "")
+                        c.fill = bg
+                        c.border = border
+                        c.font = normal_font
+                        c.alignment = center if ci != 5 else left
+                    ws_stat.row_dimensions[ri].height = 20
+                    ri += 1
+            else:
+                # Show the stat day with "No one scheduled"
+                bg = stat_alt if ri % 2 == 0 else white_fill
+                vals = [sd.name, sd.date.isoformat(),
+                        sd.date.strftime("%a"), sd.day_type.title(),
+                        "— No one scheduled —", "", "", ""]
+                for ci, v in enumerate(vals, 1):
+                    c = ws_stat.cell(ri, ci, v or "")
+                    c.fill = bg
+                    c.border = border
+                    c.font = Font(name="Arial", size=10, italic=True, color="999999") if ci == 5 else normal_font
+                    c.alignment = center if ci != 5 else left
+                ws_stat.row_dimensions[ri].height = 20
+                ri += 1
+
+        # Add a per-employee stat day count summary below
+        ri += 1
+        tc = ws_stat.cell(ri, 1, "Employee Stat Day Counts")
+        tc.font = Font(name="Arial", size=12, bold=True, color="B91C1C")
+        tc.alignment = left
+        ws_stat.row_dimensions[ri].height = 28
+        ri += 1
+
+        count_headers = ["Employee"] + [sd.name for sd in applicable_days] + ["Total"]
+        for ci, h in enumerate(count_headers, 1):
+            c = ws_stat.cell(ri, ci, h)
+            c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            c.fill = _fill("B91C1C")
+            c.border = border
+            c.alignment = center if ci > 1 else left
+        ws_stat.row_dimensions[ri].height = 22
+        ri += 1
+
+        # Count per employee per stat day
+        emp_stat_counts = {}
+        for sd in applicable_days:
+            for w in stat_workers.get(sd.date, []):
+                name = w["employee"]
+                if name not in emp_stat_counts:
+                    emp_stat_counts[name] = {}
+                emp_stat_counts[name][sd.name] = emp_stat_counts[name].get(sd.name, 0) + 1
+
+        for emp_name in sorted(emp_stat_counts.keys()):
+            bg = stat_alt if ri % 2 == 0 else white_fill
+            counts = emp_stat_counts[emp_name]
+            vals = [emp_name] + [counts.get(sd.name, 0) for sd in applicable_days]
+            total = sum(v for v in vals[1:])
+            vals.append(total)
+            for ci, v in enumerate(vals, 1):
+                c = ws_stat.cell(ri, ci, v)
+                c.fill = bg
+                c.border = border
+                c.font = bold_font if ci == 1 else normal_font
+                c.alignment = left if ci == 1 else center
+            ws_stat.row_dimensions[ri].height = 20
+            ri += 1
+
+        _set_widths(ws_stat, [20, 12, 6, 10, 20, 10, 12, 12])
+
+    # ── Sheet 4: Info ─────────────────────────────────────────
     ws_info = wb.create_sheet("Info")
     _write_header(ws_info, ["Field", "Value"], "6B4C9A")
     info_rows = [
