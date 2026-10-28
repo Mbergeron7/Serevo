@@ -16,7 +16,7 @@ from app.models import (db, RosterGroup, RosterMember, RosterSlot,
                          RosterRotationState, Employee, PlanningUnit, Schedule,
                          SpecialDay)
 from app.scheduling.roster_engine import (
-    generate_roster, publish_roster, clear_roster_drafts, get_roster_calendar,
+    generate_roster, publish_roster, clear_roster_schedules, get_roster_calendar,
 )
 
 log = logging.getLogger("serevo.rosters")
@@ -378,7 +378,7 @@ def api_clear():
     end = _parse_date(d.get("end_date"))
     if not group_id or not start or not end:
         return jsonify({"error": "group_id, start_date, and end_date required"}), 400
-    result = clear_roster_drafts(group_id, start, end)
+    result = clear_roster_schedules(group_id, start, end)
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)

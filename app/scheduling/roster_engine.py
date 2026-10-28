@@ -96,7 +96,7 @@ def generate_roster(group_id, start_date, end_date):
     states = _get_or_create_states(active_members, period_start)
 
     # Clear any existing draft roster schedules for this group's members in date range
-    _clear_draft_rosters(group, start_date, end_date)
+    _clear_roster_schedules(group, start_date, end_date)
 
     # Weekend close week parity: "odd" or "even" ISO week numbers
     wk_parity = group.weekend_close_week_parity  # None = every weekend
@@ -173,13 +173,13 @@ def publish_roster(group_id, start_date, end_date):
     return {"published": count}
 
 
-def clear_roster_drafts(group_id, start_date, end_date):
-    """Remove unpublished draft roster schedules."""
+def clear_roster_schedules(group_id, start_date, end_date):
+    """Remove all roster schedules (draft and published) for the date range."""
     group = RosterGroup.query.get(group_id)
     if not group:
         return {"error": "Group not found"}
 
-    _clear_draft_rosters(group, start_date, end_date)
+    _clear_roster_schedules(group, start_date, end_date)
     db.session.commit()
     return {"ok": True}
 
@@ -346,8 +346,8 @@ def _get_or_create_states(members, period_start):
     return states
 
 
-def _clear_draft_rosters(group, start_date, end_date):
-    """Delete draft roster Schedule rows for this group's members.
+def _clear_roster_schedules(group, start_date, end_date):
+    """Delete ALL roster Schedule rows (draft and published) for this group's members.
 
     Uses raw DELETE to avoid loading thousands of ORM objects (each with
     joined ShiftSegments) into memory — the DB-level ON DELETE CASCADE on
@@ -356,8 +356,6 @@ def _clear_draft_rosters(group, start_date, end_date):
     emp_ids = [m.employee_id for m in group.members if m.active]
     if not emp_ids:
         return
-    # Raw DELETE avoids ORM object-loading overhead; ON DELETE CASCADE
-    # on shift_segments handles child rows at the DB level.
     tbl = Schedule.__table__
     db.session.execute(
         tbl.delete().where(
@@ -365,7 +363,6 @@ def _clear_draft_rosters(group, start_date, end_date):
             tbl.c.schedule_date >= start_date,
             tbl.c.schedule_date <= end_date,
             tbl.c.source == "roster",
-            tbl.c.status == "draft",
         )
     )
 

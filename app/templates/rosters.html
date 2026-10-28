@@ -236,7 +236,7 @@
       <button class="btn-action btn-generate" onclick="generateRoster()">⚡ Generate</button>
       <button class="btn-action btn-refresh" onclick="loadCalendar()">↻ Refresh</button>
       <button class="btn-action btn-publish" onclick="publishRoster()" id="btn-publish" style="display:none;">✓ Publish</button>
-      <button class="btn-action btn-clear-drafts" onclick="clearDrafts()" id="btn-clear" style="display:none;">✕ Clear Drafts</button>
+      <button class="btn-action btn-clear-drafts" onclick="clearDrafts()" id="btn-clear" style="display:none;">✕ Clear Roster</button>
       <button class="btn-action btn-export" onclick="exportRosterCSV()" id="btn-export-csv" style="display:none;">Export CSV</button>
       <button class="btn-action btn-export" onclick="exportRosterXlsx()" id="btn-export-xlsx" style="display:none;">Export Excel</button>
     </div>
@@ -1374,7 +1374,7 @@ async function publishRoster() {
 }
 
 async function clearDrafts() {
-  if (!confirm('Delete all unpublished draft roster schedules for this date range?')) return;
+  if (!confirm('Delete all roster schedules (draft and published) for this date range?')) return;
   const gid = document.getElementById('cal-group').value;
   const d = _calDates();
   showLoading('Clearing drafts…');
