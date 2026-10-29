@@ -1340,11 +1340,10 @@ def generate_forecast_ensemble(lob, historical_days=90, forecast_days=7,
             actual_data, _ = get_forecast_data(lob, holdout_start, holdout_end, sheet)
 
         if actual_data:
-            actual_daily = defaultdict(float)
+            # Build interval-level actuals: (date, time) -> offered
+            actual_intervals = {}
             for row in actual_data:
-                actual_daily[row["date"]] += row["offered"]
-            holdout_dates = sorted(actual_daily.keys())
-            actual_values = [actual_daily[d] for d in holdout_dates]
+                actual_intervals[(row["date"], row["time"])] = row["offered"]
 
             for name, fn in method_fns.items():
                 try:
@@ -1352,11 +1351,17 @@ def generate_forecast_ensemble(lob, historical_days=90, forecast_days=7,
                     fc = result.get("forecast", [])
                     if not fc:
                         continue
-                    fc_daily = defaultdict(float)
+                    # Compare at interval level
+                    actual_vals = []
+                    predicted_vals = []
                     for row in fc:
-                        fc_daily[row["date"]] += row["offered"]
-                    predicted = [fc_daily.get(d, 0) for d in holdout_dates]
-                    mape = _mape(actual_values, predicted)
+                        key = (row["date"], row["time"])
+                        if key in actual_intervals:
+                            actual_vals.append(actual_intervals[key])
+                            predicted_vals.append(row["offered"])
+                    if not actual_vals:
+                        continue
+                    mape = _mape(actual_vals, predicted_vals)
                     if mape < float('inf') and mape > 0:
                         weights[name] = 1.0 / mape  # Inverse MAPE = weight
                 except Exception as e:
@@ -1700,13 +1705,14 @@ def auto_select_method(lob, historical_days=90, sheet=None):
         return {"best_method": "weighted_trend",
                 "results": {"note": f"No holdout data: {err}"}}
 
-    # Daily totals for holdout
-    actual_daily = defaultdict(float)
+    # Build interval-level actuals lookup: (date, time) -> offered
+    actual_intervals = {}
     for row in actual_data:
-        actual_daily[row["date"]] += row["offered"]
+        actual_intervals[(row["date"], row["time"])] = row["offered"]
 
-    holdout_dates = sorted(actual_daily.keys())
-    actual_values = [actual_daily[d] for d in holdout_dates]
+    if not actual_intervals:
+        return {"best_method": "weighted_trend",
+                "results": {"note": "No interval-level holdout data"}}
 
     methods = {
         "moving_average": lambda: generate_forecast_moving_avg(
@@ -1749,14 +1755,16 @@ def auto_select_method(lob, historical_days=90, sheet=None):
                 results[method_name] = float('inf')
                 continue
 
-            # Aggregate forecast to daily totals
-            fc_daily = defaultdict(float)
+            # Compare at interval level: match each (date, time) pair
+            actual_vals = []
+            predicted_vals = []
             for row in fc:
-                fc_daily[row["date"]] += row["offered"]
+                key = (row["date"], row["time"])
+                if key in actual_intervals:
+                    actual_vals.append(actual_intervals[key])
+                    predicted_vals.append(row["offered"])
 
-            # Match to holdout dates
-            predicted_values = [fc_daily.get(d, 0) for d in holdout_dates]
-            results[method_name] = round(_mape(actual_values, predicted_values), 2)
+            results[method_name] = round(_mape(actual_vals, predicted_vals), 2)
         except Exception as e:
             log.warning(f"Auto-select {method_name} failed: {e}")
             results[method_name] = float('inf')
