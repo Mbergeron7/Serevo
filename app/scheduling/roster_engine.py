@@ -85,7 +85,7 @@ def generate_roster(group_id, start_date, end_date):
             log.debug("  SLOT-INFO id=%s day_type=%s role='%s' label=%s start=%s end=%s hours=%.1f", s.id, dt, s.role, s.label, s.shift_start, s.shift_end, _s_hrs)
 
     # Load holiday dates for the planning unit's date range
-    stat_dates = _get_stat_dates(start_date, end_date, planning_unit_id=group.planning_unit_id)
+    special_dates = _get_special_dates(start_date, end_date, planning_unit_id=group.planning_unit_id)
 
     # Load existing PTO for all members in the date range
     member_employee_ids = {m.id: m.employee_id for m in active_members}
@@ -119,7 +119,7 @@ def generate_roster(group_id, start_date, end_date):
         week_days = _date_range(max(week_start, start_date), min(week_end, end_date))
         week_assignments = _process_week(
             week_days, group, active_members, slots_by_day_type,
-            stat_dates, pto_dates, states, wk_parity,
+            special_dates, pto_dates, states, wk_parity,
             closer_dow_counts, opener_dow_counts, role_counts
         )
         assignments.extend(week_assignments)
@@ -231,11 +231,13 @@ def _index_slots(slots):
     return out
 
 
-def _get_stat_dates(start, end, planning_unit_id=None):
-    """Return set of dates that are statutory holidays in the range.
+def _get_special_dates(start, end, planning_unit_id=None):
+    """Return dict of date → SpecialDay info for all special days in range.
 
-    Primary source: SpecialDay table (day_type='holiday').
+    Primary source: SpecialDay table (all types: holiday, half_day, campaign, custom).
     Falls back to legacy PlanningCalendar → Holiday table chain.
+
+    Returns: dict {date: {"day_type": str, "volume_factor": float, "name": str}}
     """
     try:
         # ── Primary: SpecialDay table ──
@@ -243,17 +245,23 @@ def _get_stat_dates(start, end, planning_unit_id=None):
         specials = SpecialDay.query.filter(
             SpecialDay.date >= start,
             SpecialDay.date <= end,
-            SpecialDay.day_type == "holiday",
         ).all()
         if specials:
-            result = set()
+            result = {}
             for sd in specials:
+                applies = False
                 if sd.applies_to_all:
-                    result.add(sd.date)
+                    applies = True
                 elif planning_unit_id:
                     pu_ids = [pu.id for pu in sd.planning_units]
                     if planning_unit_id in pu_ids:
-                        result.add(sd.date)
+                        applies = True
+                if applies:
+                    result[sd.date] = {
+                        "day_type": sd.day_type,
+                        "volume_factor": sd.volume_factor if sd.volume_factor is not None else (0.0 if sd.day_type == "holiday" else 1.0),
+                        "name": sd.name,
+                    }
             if result:
                 return result
     except Exception:
@@ -275,14 +283,14 @@ def _get_stat_dates(start, end, planning_unit_id=None):
                 )
                 .all()
             )
-            return {e.date for e in entries}
+            return {e.date: {"day_type": "holiday", "volume_factor": 0.0, "name": "Holiday"} for e in entries}
 
     # ── Fallback: legacy Holiday table ──
     holidays = Holiday.query.filter(
         Holiday.date >= start,
         Holiday.date <= end,
     ).all()
-    return {h.date for h in holidays}
+    return {h.date: {"day_type": "holiday", "volume_factor": 0.0, "name": h.name if hasattr(h, 'name') else "Holiday"} for h in holidays}
 
 
 def _get_pto_dates(employee_ids, start, end):
@@ -367,10 +375,19 @@ def _clear_roster_schedules(group, start_date, end_date):
     )
 
 
-def _detect_day_type(dt, stat_dates):
-    """Determine day type: 'stat', 'saturday', 'sunday', or 'weekday'."""
-    if dt in stat_dates:
-        return "stat"
+def _detect_day_type(dt, special_dates):
+    """Determine day type: 'stat', 'saturday', 'sunday', or 'weekday'.
+
+    Also returns True for skip if the special day has volume_factor == 0
+    (closed day — no scheduling needed).
+    """
+    if dt in special_dates:
+        info = special_dates[dt]
+        # Holidays and half-days use stat slot template
+        if info["day_type"] in ("holiday", "half_day"):
+            return "stat"
+        # Campaign/custom days keep their normal day type but are still
+        # tracked as special (volume_factor may adjust staffing in future)
     dow = dt.weekday()  # 0=Mon, 6=Sun
     if dow == 5:
         return "saturday"
@@ -403,7 +420,7 @@ def _date_range(start, end):
 # ── Week-level planning ────────────────────────────────────────
 
 def _process_week(week_days, group, members, slots_by_day_type,
-                  stat_dates, pto_dates, states, wk_parity=None,
+                  special_dates, pto_dates, states, wk_parity=None,
                   closer_dow_counts=None, opener_dow_counts=None, role_counts=None):
     """Process one week: assign closings first, then day shifts, then Sunday rule.
 
@@ -427,6 +444,12 @@ def _process_week(week_days, group, members, slots_by_day_type,
     consistent_start_times = {}  # member_id → shift_start (time obj)
     # Track assigned slot times per member per day for split shift gap checking
     daily_slots = {d: {} for d in week_days}  # day_date → {member_id: [(start, end), ...]}
+    # Dates where the business is closed (volume_factor == 0) — skip scheduling
+    closed_dates = set()
+    for d in week_days:
+        if d in special_dates and special_dates[d].get("volume_factor", 1.0) == 0.0:
+            closed_dates.add(d)
+            log.debug("CLOSED day %s (%s) — skipping scheduling", d, special_dates[d].get("name", ""))
 
     def _track_day(member_id, the_date, slot=None):
         """Increment week_day_counts when a member is first assigned on a new day, and mark them assigned."""
@@ -558,12 +581,16 @@ def _process_week(week_days, group, members, slots_by_day_type,
         """Check if assigning this slot would exceed max_hours_per_week."""
         max_h = member.max_hours_per_week
         if max_h is None:
+            max_h = member.contracted_hours  # fallback to contracted hours
+        if max_h is None:
             return True
         return week_hours.get(member.id, 0) + _slot_hours(slot) <= max_h + 0.01
 
     def _hours_deficit(member):
         """How many more hours this member needs to hit min_hours. Higher = more urgently needs shifts."""
         min_h = member.min_hours_per_week
+        if min_h is None:
+            min_h = member.contracted_hours  # fallback to contracted hours
         if min_h is None:
             return 0
         return max(0, min_h - week_hours.get(member.id, 0))
@@ -640,7 +667,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
     parity_weekend_days = set()  # dates handled by parity logic (skip in later phases)
     if wk_parity:
         for day_date in week_days:
-            day_type = _detect_day_type(day_date, stat_dates)
+            if day_date in closed_dates:
+                continue
+            day_type = _detect_day_type(day_date, special_dates)
             if day_type not in ("saturday", "sunday"):
                 continue
             parity_weekend_days.add(day_date)
@@ -695,9 +724,11 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # slot must be placed first, otherwise other phases fill that slot and
     # the accommodated member gets nothing.
     for day_date in week_days:
+        if day_date in closed_dates:
+            continue
         if day_date in parity_weekend_days:
             continue
-        day_type = _detect_day_type(day_date, stat_dates)
+        day_type = _detect_day_type(day_date, special_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         if not applicable_slots:
             continue
@@ -730,9 +761,11 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 1: Assign closing slots across the week ──────────
     for day_date in week_days:
+        if day_date in closed_dates:
+            continue
         if day_date in parity_weekend_days:
             continue  # already handled above
-        day_type = _detect_day_type(day_date, stat_dates)
+        day_type = _detect_day_type(day_date, special_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         closer_slots = [s for s in applicable_slots if s.role == "closer"]
 
@@ -844,7 +877,7 @@ def _process_week(week_days, group, members, slots_by_day_type,
         non_closers = [m for m in members if m.id not in closers_this_week]
 
         for sun_date in sunday_dates:
-            day_type = _detect_day_type(sun_date, stat_dates)
+            day_type = _detect_day_type(sun_date, special_dates)
             applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
             non_closer_slots = [s for s in applicable_slots if s.role != "closer"]
 
@@ -887,9 +920,11 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 3: Assign opener slots ───────────────────────────
     for day_date in week_days:
+        if day_date in closed_dates:
+            continue
         if day_date in parity_weekend_days:
             continue  # already handled by parity logic
-        day_type = _detect_day_type(day_date, stat_dates)
+        day_type = _detect_day_type(day_date, special_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         opener_slots = [s for s in applicable_slots if s.role == "opener"]
 
@@ -965,9 +1000,11 @@ def _process_week(week_days, group, members, slots_by_day_type,
 
     # ── Phase 4: Assign day shift slots (everything else) ──────
     for day_date in week_days:
+        if day_date in closed_dates:
+            continue
         if day_date in parity_weekend_days:
             continue  # parity weekends = single person, no day shifts from this group
-        day_type = _detect_day_type(day_date, stat_dates)
+        day_type = _detect_day_type(day_date, special_dates)
         applicable_slots = _get_applicable_slots(slots_by_day_type, day_type)
         day_slots = [s for s in applicable_slots
                      if s.role not in ("closer", "opener")]
@@ -1045,7 +1082,9 @@ def _process_week(week_days, group, members, slots_by_day_type,
     # weekday non-closer slots (opener / mid shifts).  Weekend and
     # closer slots are never doubled.
     for day_date in week_days:
-        day_type = _detect_day_type(day_date, stat_dates)
+        if day_date in closed_dates:
+            continue
+        day_type = _detect_day_type(day_date, special_dates)
         if day_type in ("saturday", "sunday"):
             continue  # no doubling on weekends
 

@@ -945,7 +945,6 @@ def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
         query = SpecialDay.query.filter(
             SpecialDay.date >= start_date,
             SpecialDay.date <= end_date,
-            SpecialDay.day_type.in_(["holiday", "half_day"]),
         )
         all_special = query.all()
         if all_special:
@@ -1072,7 +1071,6 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
         specials = SpecialDay.query.filter(
             SpecialDay.date >= start,
             SpecialDay.date <= end,
-            SpecialDay.day_type.in_(["holiday", "half_day"]),
         ).all()
         for sd in specials:
             ds = sd.date.isoformat()
