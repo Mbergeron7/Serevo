@@ -1064,8 +1064,12 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
     if not holidays_set:
         return forecast
 
-    # Try to get per-date volume factors from SpecialDay table
-    volume_factors = {}
+    # Try to get per-date volume factors from SpecialDay table.
+    # Only treat a volume_factor as an explicit user override when it is
+    # greater than 0.  A value of 0.0 (the default for holidays) means
+    # "use historical data" — many operations are open 365 days and still
+    # receive volume on stat holidays.
+    volume_factor_overrides = {}
     try:
         from app.models import SpecialDay
         specials = SpecialDay.query.filter(
@@ -1074,12 +1078,14 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
         ).all()
         for sd in specials:
             ds = sd.date.isoformat()
-            if ds in holidays_set and sd.volume_factor is not None:
-                volume_factors[ds] = sd.volume_factor
+            if ds in holidays_set and sd.volume_factor is not None and sd.volume_factor > 0:
+                volume_factor_overrides[ds] = sd.volume_factor
     except Exception:
         pass
 
-    # Compute fallback factor from historical data if available
+    # Compute a data-driven factor from historical holiday vs non-holiday volume.
+    # This is the primary signal — if historical data shows volume on holidays
+    # (e.g. Christmas Day calls), the forecast should reflect that.
     if historical:
         hist_dates = [r["date"] for r in historical]
         try:
@@ -1089,17 +1095,17 @@ def apply_holiday_adjustments(forecast, historical=None, planning_unit_name=None
             hist_start = start - datetime.timedelta(days=90)
             hist_end = start - datetime.timedelta(days=1)
         hist_holidays = _get_holidays_in_range(hist_start, hist_end, planning_unit_name=planning_unit_name)
-        fallback_factor = _compute_holiday_factor(historical, hist_holidays)
+        historical_factor = _compute_holiday_factor(historical, hist_holidays)
     else:
-        fallback_factor = 0.5  # default: holidays get ~50% of normal volume
+        historical_factor = 0.5  # default: holidays get ~50% of normal volume
 
-    # Apply factor to forecast intervals on holiday dates
+    # Apply factor to forecast intervals on holiday dates.
+    # Priority: explicit user override (volume_factor > 0) → historical factor.
     adjusted = []
     for row in forecast:
         if row["date"] in holidays_set:
             row = dict(row)
-            # Use SpecialDay's volume_factor if set, otherwise fallback
-            factor = volume_factors.get(row["date"], fallback_factor)
+            factor = volume_factor_overrides.get(row["date"], historical_factor)
             row["offered"] = round(row["offered"] * factor, 2)
             row["is_holiday"] = True
         adjusted.append(row)
