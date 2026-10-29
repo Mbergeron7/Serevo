@@ -199,6 +199,15 @@ def generate():
 
             if method == "ml_gradient_boosting":
                 result = generate_forecast_ml(lob, hist_days, fc_days, sheet)
+            elif method == "prophet":
+                from app.forecasting.engine import generate_forecast_prophet
+                result = generate_forecast_prophet(lob, hist_days, fc_days, sheet)
+            elif method == "sarima":
+                from app.forecasting.engine import generate_forecast_sarima
+                result = generate_forecast_sarima(lob, hist_days, fc_days, sheet)
+            elif method == "ensemble":
+                from app.forecasting.engine import generate_forecast_ensemble
+                result = generate_forecast_ensemble(lob, hist_days, fc_days, sheet)
             elif method == "holt_winters":
                 result = generate_forecast_holt_winters(lob, hist_days, fc_days, sheet)
             elif method == "weighted_trend":

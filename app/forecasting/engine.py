@@ -587,47 +587,51 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
             "error": err or "No historical data found",
         }
 
-    # Group by (day_of_week, time) for pattern recognition
-    # Simple approach: average each time slot across the last `window` days
-    by_time = defaultdict(list)
-    dates_seen = sorted(set(r["date"] for r in historical))
-
-    # Use only the last `window` days
-    recent_dates = dates_seen[-window:] if len(dates_seen) >= window else dates_seen
-    recent_set = set(recent_dates)
-
+    # Group by (day_of_week, time) for DOW-aware pattern recognition
+    by_dow_time = defaultdict(list)
     for row in historical:
-        if row["date"] in recent_set:
-            by_time[row["time"]].append(row)
-
-    # Build averaged profile per time slot
-    avg_profile = {}
-    for time_str, rows in by_time.items():
-        avg_offered = sum(r["offered"] for r in rows) / len(rows)
-        total_weight = sum(r["offered"] for r in rows)
-        avg_aht = (sum(r["offered"] * r["aht"] for r in rows) / total_weight
-                   if total_weight > 0 else 0)
-        avg_profile[time_str] = {
-            "offered": round(avg_offered, 2),
-            "aht": round(avg_aht, 1),
-        }
+        try:
+            d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+            dow = d.weekday()
+            by_dow_time[(dow, row["time"])].append((row, d))
+        except Exception:
+            continue
 
     # Look up LOB operating hours
     lob_setting, _pu = _get_lob_setting(lob)
 
-    # Project forward
+    # Project forward using DOW-matched averages over the last `window` same-DOW days
     forecast = []
+    all_times = set(ts for (_, ts) in by_dow_time.keys())
     for d in range(1, forecast_days + 1):
         fc_date = today + datetime.timedelta(days=d - 1)
         date_str = fc_date.strftime("%Y-%m-%d")
+        dow = fc_date.weekday()
+
         day_rows = []
-        for time_str in sorted(avg_profile.keys()):
-            prof = avg_profile[time_str]
+        for time_str in sorted(all_times):
+            entries = by_dow_time.get((dow, time_str), [])
+            if not entries:
+                # Fall back to any DOW for that time
+                for dw in range(7):
+                    entries = by_dow_time.get((dw, time_str), [])
+                    if entries:
+                        break
+            if not entries:
+                continue
+
+            # Use most recent `window` entries for this DOW + time
+            recent = sorted(entries, key=lambda x: x[1], reverse=True)[:window]
+            avg_offered = sum(r[0]["offered"] for r in recent) / len(recent)
+            total_weight = sum(r[0]["offered"] for r in recent)
+            avg_aht = (sum(r[0]["offered"] * r[0]["aht"] for r in recent) / total_weight
+                       if total_weight > 0 else 0)
+
             day_rows.append({
                 "date": date_str,
                 "time": time_str,
-                "offered": prof["offered"],
-                "aht": prof["aht"],
+                "offered": round(avg_offered, 2),
+                "aht": round(avg_aht, 1),
             })
         # Fill all operating-hour intervals
         day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
@@ -678,11 +682,14 @@ def generate_forecast_weighted(lob, historical_days, forecast_days,
             continue
 
     # Weight function: more recent = higher weight
+    # Use slower decay for long windows (>180 days) so older data still contributes
+    decay_rate = 0.01 if historical_days > 180 else 0.1
+
     def calc_weight(row_date, ref_date):
         delta = (ref_date - row_date).days
         if delta <= 0:
             return 1.0
-        return 1.0 / (1.0 + 0.1 * delta)
+        return 1.0 / (1.0 + decay_rate * delta)
 
     # Look up LOB operating hours
     lob_setting, _pu = _get_lob_setting(lob)
@@ -864,11 +871,16 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
         for d in sorted_dates
     ]
 
-    # Run Holt-Winters on daily offered volumes
+    # Auto-tune Holt-Winters parameters via holdout grid search
+    alpha, beta, gamma = _auto_tune_holt_winters(daily_offered, season_length=7)
+
+    # Run Holt-Winters on daily offered volumes with tuned params
     hw_offered = _holt_winters_forecast(daily_offered, season_length=7,
-                                         forecast_steps=forecast_days)
+                                         forecast_steps=forecast_days,
+                                         alpha=alpha, beta=beta, gamma=gamma)
     hw_aht = _holt_winters_forecast(daily_aht, season_length=7,
-                                     forecast_steps=forecast_days)
+                                     forecast_steps=forecast_days,
+                                     alpha=alpha, beta=beta, gamma=gamma)
 
     # Build intraday distribution shape by DOW
     # (average fraction of daily volume in each time slot)
@@ -926,6 +938,534 @@ def generate_forecast_holt_winters(lob, historical_days, forecast_days,
         "historical": historical,
         "forecast": forecast,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# FACEBOOK PROPHET
+# ═══════════════════════════════════════════════════════════════
+
+def generate_forecast_prophet(lob, historical_days=90, forecast_days=7,
+                               sheet=None):
+    """
+    Generate a forecast using Facebook Prophet.
+
+    Prophet handles holidays natively (via a holiday dataframe from
+    SpecialDay), multiple seasonalities, and trend changepoints.
+    Runs on daily totals then distributes across intraday intervals
+    using DOW-based shape (same as Holt-Winters).
+    """
+    try:
+        from prophet import Prophet
+    except ImportError:
+        return {
+            "method": "prophet",
+            "historical": [],
+            "forecast": [],
+            "error": "Prophet package not installed. Run: pip install prophet",
+        }
+
+    today = datetime.date.today()
+    hist_start = today - datetime.timedelta(days=historical_days)
+    hist_end = today - datetime.timedelta(days=1)
+
+    historical, err = get_historical_actuals(lob, hist_start, hist_end)
+    if not historical:
+        historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    if err or not historical:
+        return {
+            "method": "prophet",
+            "historical": [],
+            "forecast": [],
+            "error": err or "No historical data found",
+        }
+
+    # Aggregate to daily totals
+    daily_totals = defaultdict(lambda: {"offered": 0, "aht_sum": 0, "count": 0})
+    for row in historical:
+        d = row["date"]
+        daily_totals[d]["offered"] += row["offered"]
+        daily_totals[d]["aht_sum"] += row["offered"] * row["aht"]
+        daily_totals[d]["count"] += 1
+
+    sorted_dates = sorted(daily_totals.keys())
+    if len(sorted_dates) < 14:
+        return {
+            "method": "prophet",
+            "historical": historical,
+            "forecast": [],
+            "error": "Need at least 14 days of history for Prophet",
+        }
+
+    # Build Prophet dataframe (ds, y)
+    import pandas as pd
+    df = pd.DataFrame([
+        {"ds": d, "y": daily_totals[d]["offered"]}
+        for d in sorted_dates
+    ])
+    df["ds"] = pd.to_datetime(df["ds"])
+
+    # Build AHT series for separate forecast
+    df_aht = pd.DataFrame([
+        {"ds": d, "y": daily_totals[d]["aht_sum"] / daily_totals[d]["offered"]
+         if daily_totals[d]["offered"] > 0 else 0}
+        for d in sorted_dates
+    ])
+    df_aht["ds"] = pd.to_datetime(df_aht["ds"])
+
+    # Build holiday dataframe from SpecialDay
+    holidays_df = None
+    try:
+        hol_start = hist_start
+        hol_end = today + datetime.timedelta(days=forecast_days)
+        holiday_dates = _get_holidays_in_range(hol_start, hol_end)
+        if holiday_dates:
+            holidays_df = pd.DataFrame([
+                {"holiday": "special_day", "ds": pd.Timestamp(d)}
+                for d in sorted(holiday_dates)
+            ])
+    except Exception:
+        pass
+
+    # Fit Prophet — offered volume
+    try:
+        import logging as _logging
+        _logging.getLogger("prophet").setLevel(_logging.WARNING)
+        _logging.getLogger("cmdstanpy").setLevel(_logging.WARNING)
+
+        model = Prophet(
+            yearly_seasonality=len(sorted_dates) >= 60,
+            weekly_seasonality=True,
+            daily_seasonality=False,
+            holidays=holidays_df,
+            changepoint_prior_scale=0.05,
+        )
+        model.fit(df)
+
+        future = model.make_future_dataframe(periods=forecast_days)
+        pred = model.predict(future)
+
+        # AHT model
+        model_aht = Prophet(
+            yearly_seasonality=False,
+            weekly_seasonality=True,
+            daily_seasonality=False,
+            changepoint_prior_scale=0.1,
+        )
+        model_aht.fit(df_aht)
+        pred_aht = model_aht.predict(future)
+
+    except Exception as e:
+        return {
+            "method": "prophet",
+            "historical": historical,
+            "forecast": [],
+            "error": f"Prophet fitting failed: {e}",
+        }
+
+    # Extract forecast values for future dates
+    fc_offered = {}
+    fc_aht = {}
+    for _, row in pred.iterrows():
+        d_str = row["ds"].strftime("%Y-%m-%d")
+        if d_str >= today.strftime("%Y-%m-%d"):
+            fc_offered[d_str] = max(0, float(row["yhat"]))
+    for _, row in pred_aht.iterrows():
+        d_str = row["ds"].strftime("%Y-%m-%d")
+        if d_str >= today.strftime("%Y-%m-%d"):
+            fc_aht[d_str] = max(0, float(row["yhat"]))
+
+    # Build intraday distribution shape by DOW (same as Holt-Winters)
+    dow_shape = defaultdict(lambda: defaultdict(list))
+    for row in historical:
+        try:
+            d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+            dow = d.weekday()
+            day_total = daily_totals[row["date"]]["offered"]
+            if day_total > 0:
+                dow_shape[dow][row["time"]].append(row["offered"] / day_total)
+        except Exception:
+            continue
+
+    avg_shape = {}
+    all_times = set()
+    for dow in range(7):
+        for time_str, fracs in dow_shape[dow].items():
+            avg_shape[(dow, time_str)] = sum(fracs) / len(fracs)
+            all_times.add(time_str)
+
+    lob_setting, _pu = _get_lob_setting(lob)
+
+    # Distribute daily forecasts across time slots
+    forecast = []
+    for d_offset in range(forecast_days):
+        fc_date = today + datetime.timedelta(days=d_offset)
+        date_str = fc_date.strftime("%Y-%m-%d")
+        dow = fc_date.weekday()
+
+        day_offered = fc_offered.get(date_str, 0)
+        day_aht = fc_aht.get(date_str, 0)
+
+        day_rows = []
+        shape_for_day = {t: avg_shape.get((dow, t), 0) for t in all_times}
+        shape_total = sum(shape_for_day.values())
+
+        for time_str in sorted(all_times):
+            frac = shape_for_day[time_str] / shape_total if shape_total > 0 else 1.0 / max(1, len(all_times))
+            day_rows.append({
+                "date": date_str,
+                "time": time_str,
+                "offered": round(day_offered * frac, 2),
+                "aht": round(day_aht, 1),
+            })
+
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
+        forecast.extend(day_rows)
+
+    return {
+        "method": "prophet",
+        "historical_days_used": len(sorted_dates),
+        "historical": historical,
+        "forecast": forecast,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SARIMA (Seasonal ARIMA)
+# ═══════════════════════════════════════════════════════════════
+
+def generate_forecast_sarima(lob, historical_days=90, forecast_days=7,
+                              sheet=None):
+    """
+    Generate a forecast using SARIMA (Seasonal ARIMA).
+
+    Uses order (1,1,1) x (1,1,1,7) for weekly seasonality on daily totals,
+    then distributes across intraday intervals using DOW-based shape.
+    """
+    try:
+        from statsmodels.tsa.statespace.sarimax import SARIMAX
+    except ImportError:
+        return {
+            "method": "sarima",
+            "historical": [],
+            "forecast": [],
+            "error": "statsmodels not installed. Run: pip install statsmodels",
+        }
+
+    today = datetime.date.today()
+    hist_start = today - datetime.timedelta(days=historical_days)
+    hist_end = today - datetime.timedelta(days=1)
+
+    historical, err = get_historical_actuals(lob, hist_start, hist_end)
+    if not historical:
+        historical, err = get_forecast_data(lob, hist_start, hist_end, sheet)
+    if err or not historical:
+        return {
+            "method": "sarima",
+            "historical": [],
+            "forecast": [],
+            "error": err or "No historical data found",
+        }
+
+    # Aggregate to daily totals
+    daily_totals = defaultdict(lambda: {"offered": 0, "aht_sum": 0, "count": 0})
+    for row in historical:
+        d = row["date"]
+        daily_totals[d]["offered"] += row["offered"]
+        daily_totals[d]["aht_sum"] += row["offered"] * row["aht"]
+        daily_totals[d]["count"] += 1
+
+    sorted_dates = sorted(daily_totals.keys())
+    if len(sorted_dates) < 21:
+        return {
+            "method": "sarima",
+            "historical": historical,
+            "forecast": [],
+            "error": "Need at least 21 days of history for SARIMA (3 full weeks)",
+        }
+
+    import pandas as pd
+    import numpy as np
+
+    daily_offered = [daily_totals[d]["offered"] for d in sorted_dates]
+    daily_aht = [
+        daily_totals[d]["aht_sum"] / daily_totals[d]["offered"]
+        if daily_totals[d]["offered"] > 0 else 0
+        for d in sorted_dates
+    ]
+
+    # Fit SARIMA on offered volumes
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = SARIMAX(
+                daily_offered,
+                order=(1, 1, 1),
+                seasonal_order=(1, 1, 1, 7),
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
+            fit = model.fit(disp=False, maxiter=200)
+            fc_offered = fit.forecast(steps=forecast_days)
+            fc_offered = [max(0, float(v)) for v in fc_offered]
+
+            # AHT model — simpler, no seasonal differencing
+            model_aht = SARIMAX(
+                daily_aht,
+                order=(1, 0, 1),
+                seasonal_order=(0, 0, 0, 0),
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
+            fit_aht = model_aht.fit(disp=False, maxiter=100)
+            fc_aht_vals = fit_aht.forecast(steps=forecast_days)
+            fc_aht_vals = [max(0, float(v)) for v in fc_aht_vals]
+
+    except Exception as e:
+        return {
+            "method": "sarima",
+            "historical": historical,
+            "forecast": [],
+            "error": f"SARIMA fitting failed: {e}",
+        }
+
+    # Build intraday distribution shape by DOW
+    dow_shape = defaultdict(lambda: defaultdict(list))
+    for row in historical:
+        try:
+            d = datetime.datetime.strptime(row["date"], "%Y-%m-%d").date()
+            dow = d.weekday()
+            day_total = daily_totals[row["date"]]["offered"]
+            if day_total > 0:
+                dow_shape[dow][row["time"]].append(row["offered"] / day_total)
+        except Exception:
+            continue
+
+    avg_shape = {}
+    all_times = set()
+    for dow in range(7):
+        for time_str, fracs in dow_shape[dow].items():
+            avg_shape[(dow, time_str)] = sum(fracs) / len(fracs)
+            all_times.add(time_str)
+
+    lob_setting, _pu = _get_lob_setting(lob)
+
+    # Distribute daily forecasts across time slots
+    forecast = []
+    for d_offset in range(forecast_days):
+        fc_date = today + datetime.timedelta(days=d_offset)
+        date_str = fc_date.strftime("%Y-%m-%d")
+        dow = fc_date.weekday()
+
+        day_offered = fc_offered[d_offset]
+        day_aht = fc_aht_vals[d_offset]
+
+        day_rows = []
+        shape_for_day = {t: avg_shape.get((dow, t), 0) for t in all_times}
+        shape_total = sum(shape_for_day.values())
+
+        for time_str in sorted(all_times):
+            frac = shape_for_day[time_str] / shape_total if shape_total > 0 else 1.0 / max(1, len(all_times))
+            day_rows.append({
+                "date": date_str,
+                "time": time_str,
+                "offered": round(day_offered * frac, 2),
+                "aht": round(day_aht, 1),
+            })
+
+        day_rows = _fill_operating_hours(day_rows, lob_setting, fc_date, planning_unit=_pu)
+        forecast.extend(day_rows)
+
+    return {
+        "method": "sarima",
+        "historical_days_used": len(sorted_dates),
+        "historical": historical,
+        "forecast": forecast,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# ENSEMBLE BLENDING
+# ═══════════════════════════════════════════════════════════════
+
+def generate_forecast_ensemble(lob, historical_days=90, forecast_days=7,
+                                sheet=None):
+    """
+    Generate an ensemble forecast by blending multiple methods weighted
+    by their recent accuracy (inverse MAPE).
+
+    Uses a 7-day holdout to compute weights, then generates full forecasts
+    from each method and blends them.
+    """
+    holdout_days = 7
+    train_days = historical_days - holdout_days
+
+    # Methods to blend (excluding ensemble itself to avoid recursion)
+    method_fns = {
+        "weighted_trend": lambda d: generate_forecast_weighted(lob, d, forecast_days, sheet),
+        "holt_winters": lambda d: generate_forecast_holt_winters(lob, d, forecast_days, sheet),
+        "moving_average": lambda d: generate_forecast_moving_avg(lob, d, forecast_days, 7, sheet),
+    }
+
+    # Try to add ML
+    try:
+        from app.forecasting.ml_engine import generate_forecast_ml
+        method_fns["ml_gradient_boosting"] = lambda d: generate_forecast_ml(lob, d, forecast_days, sheet)
+    except ImportError:
+        pass
+
+    # Try to add Prophet
+    try:
+        from prophet import Prophet as _P
+        method_fns["prophet"] = lambda d: generate_forecast_prophet(lob, d, forecast_days, sheet)
+    except ImportError:
+        pass
+
+    # Try to add SARIMA
+    try:
+        from statsmodels.tsa.statespace.sarimax import SARIMAX as _S
+        method_fns["sarima"] = lambda d: generate_forecast_sarima(lob, d, forecast_days, sheet)
+    except ImportError:
+        pass
+
+    # Compute weights from holdout accuracy
+    weights = {}
+    if train_days >= 14:
+        today = datetime.date.today()
+        holdout_start = today - datetime.timedelta(days=holdout_days)
+        holdout_end = today - datetime.timedelta(days=1)
+
+        actual_data, _ = get_historical_actuals(lob, holdout_start, holdout_end)
+        if not actual_data:
+            actual_data, _ = get_forecast_data(lob, holdout_start, holdout_end, sheet)
+
+        if actual_data:
+            actual_daily = defaultdict(float)
+            for row in actual_data:
+                actual_daily[row["date"]] += row["offered"]
+            holdout_dates = sorted(actual_daily.keys())
+            actual_values = [actual_daily[d] for d in holdout_dates]
+
+            for name, fn in method_fns.items():
+                try:
+                    result = fn(train_days)
+                    fc = result.get("forecast", [])
+                    if not fc:
+                        continue
+                    fc_daily = defaultdict(float)
+                    for row in fc:
+                        fc_daily[row["date"]] += row["offered"]
+                    predicted = [fc_daily.get(d, 0) for d in holdout_dates]
+                    mape = _mape(actual_values, predicted)
+                    if mape < float('inf') and mape > 0:
+                        weights[name] = 1.0 / mape  # Inverse MAPE = weight
+                except Exception as e:
+                    log.warning(f"Ensemble holdout for {name} failed: {e}")
+
+    # If no weights computed, use equal weights
+    if not weights:
+        weights = {name: 1.0 for name in method_fns}
+
+    # Normalize weights
+    total_w = sum(weights.values())
+    if total_w > 0:
+        weights = {k: v / total_w for k, v in weights.items()}
+
+    # Generate full forecasts from each method and blend
+    all_forecasts = {}
+    historical_out = []
+    for name in weights:
+        try:
+            result = method_fns[name](historical_days)
+            fc = result.get("forecast", [])
+            if fc:
+                all_forecasts[name] = fc
+            if not historical_out and result.get("historical"):
+                historical_out = result["historical"]
+        except Exception as e:
+            log.warning(f"Ensemble generation for {name} failed: {e}")
+
+    if not all_forecasts:
+        return {
+            "method": "ensemble",
+            "historical": [],
+            "forecast": [],
+            "error": "No methods produced forecasts for ensemble",
+        }
+
+    # Recalculate weights for only the methods that succeeded
+    active_weights = {k: weights.get(k, 0) for k in all_forecasts}
+    total_w = sum(active_weights.values())
+    if total_w > 0:
+        active_weights = {k: v / total_w for k, v in active_weights.items()}
+    else:
+        active_weights = {k: 1.0 / len(all_forecasts) for k in all_forecasts}
+
+    # Build blended forecast — index by (date, time)
+    blended = defaultdict(lambda: {"offered": 0, "aht": 0})
+    for name, fc in all_forecasts.items():
+        w = active_weights[name]
+        for row in fc:
+            key = (row["date"], row["time"])
+            blended[key]["offered"] += w * row["offered"]
+            blended[key]["aht"] += w * row["aht"]
+
+    forecast = []
+    for (date_str, time_str), vals in sorted(blended.items()):
+        forecast.append({
+            "date": date_str,
+            "time": time_str,
+            "offered": round(vals["offered"], 2),
+            "aht": round(vals["aht"], 1),
+        })
+
+    return {
+        "method": "ensemble",
+        "historical_days_used": historical_days,
+        "weights": {k: round(v, 3) for k, v in active_weights.items()},
+        "historical": historical_out,
+        "forecast": forecast,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# AUTO-TUNED HOLT-WINTERS
+# ═══════════════════════════════════════════════════════════════
+
+def _auto_tune_holt_winters(series, season_length=7):
+    """
+    Grid search for best Holt-Winters parameters using a holdout of the
+    last `season_length` observations.
+
+    Returns (alpha, beta, gamma) with the lowest MAPE on the holdout.
+    """
+    if len(series) < season_length * 3:
+        return 0.3, 0.05, 0.15  # Default if not enough data
+
+    train = series[:-season_length]
+    holdout = series[-season_length:]
+
+    best_params = (0.3, 0.05, 0.15)
+    best_mape = float('inf')
+
+    # Coarse grid search
+    for alpha in [0.1, 0.2, 0.3, 0.4, 0.5]:
+        for beta in [0.01, 0.05, 0.1, 0.15]:
+            for gamma in [0.05, 0.1, 0.15, 0.2, 0.3]:
+                try:
+                    pred = _holt_winters_forecast(
+                        train, season_length=season_length,
+                        forecast_steps=season_length,
+                        alpha=alpha, beta=beta, gamma=gamma,
+                    )
+                    mape = _mape(holdout, pred)
+                    if mape < best_mape:
+                        best_mape = mape
+                        best_params = (alpha, beta, gamma)
+                except Exception:
+                    continue
+
+    return best_params
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1151,8 +1691,11 @@ def auto_select_method(lob, historical_days=90, sheet=None):
     holdout_start = today - datetime.timedelta(days=holdout_days)
     holdout_end = today - datetime.timedelta(days=1)
 
-    # Get holdout actuals
-    actual_data, err = get_forecast_data(lob, holdout_start, holdout_end, sheet)
+    # Get holdout actuals — use real actuals (IntervalActual), not stored forecasts
+    actual_data, err = get_historical_actuals(lob, holdout_start, holdout_end)
+    if not actual_data:
+        # Fall back to forecast data if no actuals available
+        actual_data, err = get_forecast_data(lob, holdout_start, holdout_end, sheet)
     if err or not actual_data:
         return {"best_method": "weighted_trend",
                 "results": {"note": f"No holdout data: {err}"}}
@@ -1177,6 +1720,22 @@ def auto_select_method(lob, historical_days=90, sheet=None):
     try:
         from app.forecasting.ml_engine import generate_forecast_ml
         methods["ml_gradient_boosting"] = lambda: generate_forecast_ml(
+            lob, train_days, holdout_days, sheet)
+    except ImportError:
+        pass
+
+    # Include Prophet if available
+    try:
+        from prophet import Prophet as _P
+        methods["prophet"] = lambda: generate_forecast_prophet(
+            lob, train_days, holdout_days, sheet)
+    except ImportError:
+        pass
+
+    # Include SARIMA if available
+    try:
+        from statsmodels.tsa.statespace.sarimax import SARIMAX as _S
+        methods["sarima"] = lambda: generate_forecast_sarima(
             lob, train_days, holdout_days, sheet)
     except ImportError:
         pass
@@ -1666,6 +2225,45 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             "forecast": forecast,
         }
 
+    if method == "prophet":
+        pr_result = generate_forecast_prophet(lob, historical_days, forecast_days)
+        if pr_result.get("error"):
+            return pr_result
+        forecast = pr_result.get("forecast", [])
+        forecast = apply_holiday_adjustments(forecast, historical, planning_unit_name=lob)
+        return {
+            "method": "prophet",
+            "historical_days_used": historical_days,
+            "historical": historical,
+            "forecast": forecast,
+        }
+
+    if method == "sarima":
+        sa_result = generate_forecast_sarima(lob, historical_days, forecast_days)
+        if sa_result.get("error"):
+            return sa_result
+        forecast = sa_result.get("forecast", [])
+        forecast = apply_holiday_adjustments(forecast, historical, planning_unit_name=lob)
+        return {
+            "method": "sarima",
+            "historical_days_used": historical_days,
+            "historical": historical,
+            "forecast": forecast,
+        }
+
+    if method == "ensemble":
+        en_result = generate_forecast_ensemble(lob, historical_days, forecast_days)
+        if en_result.get("error"):
+            return en_result
+        forecast = en_result.get("forecast", [])
+        forecast = apply_holiday_adjustments(forecast, historical, planning_unit_name=lob)
+        return {
+            "method": "ensemble",
+            "historical_days_used": historical_days,
+            "historical": historical,
+            "forecast": forecast,
+        }
+
     if method == "moving_average":
         # Simple moving average over the last `window` entries per timeslot
         forecast = []
@@ -1701,9 +2299,12 @@ def _generate_from_db_history(lob, method, historical_days, forecast_days,
             forecast.extend(day_rows)
     else:
         # Weighted trend (default) — same logic as generate_forecast_weighted
+        # Use slower decay for long windows (>180 days)
+        decay_rate = 0.01 if historical_days > 180 else 0.1
+
         def calc_weight(row_date, ref_date):
             delta = (ref_date - row_date).days
-            return 1.0 / (1.0 + 0.1 * max(delta, 0))
+            return 1.0 / (1.0 + decay_rate * max(delta, 0))
 
         forecast = []
         for d_offset in range(forecast_days):

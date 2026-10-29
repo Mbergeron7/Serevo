@@ -97,7 +97,7 @@ def _load_actuals(lob, historical_days):
 
 def _build_features(df):
     """
-    Add lag and rolling features per time slot.
+    Add lag, rolling, and holiday features per time slot.
     Expects df sorted by timestamp with columns: offered, day_of_week,
     is_weekend, week_of_year, month, slot_index.
     """
@@ -120,12 +120,27 @@ def _build_features(df):
         df.loc[mask, "rolling_7d_std"] = slot_series.shift(1).rolling(7, min_periods=3).std()
 
     df["rolling_7d_std"] = df["rolling_7d_std"].fillna(0)
+
+    # Add holiday feature — whether this date is a special day
+    df["is_holiday"] = 0
+    try:
+        from app.forecasting.engine import _get_holidays_in_range
+        dates = df["date"].unique()
+        if len(dates) > 0:
+            start = datetime.datetime.strptime(min(dates), "%Y-%m-%d").date()
+            end = datetime.datetime.strptime(max(dates), "%Y-%m-%d").date()
+            holidays_set = _get_holidays_in_range(start, end)
+            if holidays_set:
+                df["is_holiday"] = df["date"].isin(holidays_set).astype(int)
+    except Exception:
+        pass
+
     return df
 
 
 FEATURE_COLS = [
     "slot_index", "day_of_week", "is_weekend",
-    "week_of_year", "month",
+    "week_of_year", "month", "is_holiday",
     "lag_1d", "lag_7d", "rolling_7d_mean", "rolling_7d_std",
 ]
 
@@ -216,6 +231,15 @@ def generate_forecast_ml(lob, historical_days=90, forecast_days=7,
     if not last_day_slots:
         last_day_slots = sorted(df["time"].unique())
 
+    # Pre-fetch holidays for the forecast range
+    future_holidays = set()
+    try:
+        from app.forecasting.engine import _get_holidays_in_range
+        fc_end = today + datetime.timedelta(days=forecast_days)
+        future_holidays = _get_holidays_in_range(today, fc_end)
+    except Exception:
+        pass
+
     # Look up LOB operating hours for slot coverage
     from app.forecasting.engine import _get_lob_setting, _operating_slots
     lob_setting, _pu = _get_lob_setting(lob)
@@ -245,8 +269,10 @@ def generate_forecast_ml(lob, historical_days=90, forecast_days=7,
             roll_mean = float(np.mean(recent_7)) if recent_7 else 0
             roll_std = float(np.std(recent_7)) if len(recent_7) > 1 else 0
 
+            is_hol = 1 if date_str in future_holidays else 0
+
             features = np.array([[
-                slot_idx, dow, is_wknd, woy, mon,
+                slot_idx, dow, is_wknd, woy, mon, is_hol,
                 lag_1d, lag_7d, roll_mean, roll_std,
             ]])
 
