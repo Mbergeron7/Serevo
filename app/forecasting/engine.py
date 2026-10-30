@@ -477,18 +477,29 @@ def get_historical_actuals(lob, start_date, end_date):
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = end_date.strftime("%Y-%m-%d")
         rows = _build_actuals_query(unit, start_str, end_str).all()
-        results = []
+
+        # Deduplicate: the OR-based query can return multiple rows for the
+        # same (date, time) when data exists with both a route_id AND a NULL
+        # route_id for the same planning unit.  Collapse to one row per
+        # interval by keeping the MAX of each metric (duplicates are
+        # typically exact copies; max picks the real value over zeros).
+        from collections import defaultdict
+        buckets = defaultdict(lambda: {"offered": 0, "answered": 0,
+                                        "abandoned": 0, "aht": 0, "asa": 0})
         for r in rows:
             ts = r.timestamp
-            results.append({
-                "date": ts.strftime("%Y-%m-%d"),
-                "time": ts.strftime("%H:%M"),
-                "offered": float(r.offered or 0),
-                "answered": float(r.answered or 0),
-                "abandoned": float(r.abandoned or 0),
-                "aht": float(r.aht_secs or 0),
-                "asa": float(r.asa_secs or 0),
-            })
+            key = (ts.strftime("%Y-%m-%d"), ts.strftime("%H:%M"))
+            b = buckets[key]
+            b["offered"]   = max(b["offered"],   float(r.offered or 0))
+            b["answered"]  = max(b["answered"],  float(r.answered or 0))
+            b["abandoned"] = max(b["abandoned"], float(r.abandoned or 0))
+            b["aht"]       = max(b["aht"],       float(r.aht_secs or 0))
+            b["asa"]       = max(b["asa"],       float(r.asa_secs or 0))
+
+        results = []
+        for (date_s, time_s), vals in sorted(buckets.items()):
+            results.append({"date": date_s, "time": time_s, **vals})
+
         return results, None
     except Exception as e:
         return [], str(e)
