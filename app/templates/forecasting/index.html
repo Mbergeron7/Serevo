@@ -443,12 +443,12 @@
 <!-- ═══ Summary cards ═══ -->
 <div class="summary-cards" id="summaryCards" style="display:none;">
   <div class="scard highlight">
-    <div class="label">Total Historical Volume</div>
+    <div class="label" id="labelOffered">Total Historical Volume</div>
     <div class="value" id="totalOffered">—</div>
     <div class="detail" id="totalOfferedDetail"></div>
   </div>
   <div class="scard highlight">
-    <div class="label">Total Forecasted Volume</div>
+    <div class="label" id="labelForecasted">Total Forecasted Volume</div>
     <div class="value" id="totalForecasted">—</div>
     <div class="detail" id="totalForecastedDetail"></div>
   </div>
@@ -500,12 +500,12 @@
 <!-- ═══ Forecast Stats Bar ═══ -->
 <div class="forecast-stats-bar" id="forecastStatsBar" style="display:none;">
   <div class="fstat">
-    <span class="fstat-label">Total Historical Volume</span>
+    <span class="fstat-label" id="statLabelHist">Total Historical Volume</span>
     <span class="fstat-value" id="statHistVol">—</span>
   </div>
   <div class="fstat-divider"></div>
   <div class="fstat">
-    <span class="fstat-label">Total Forecasted Volume</span>
+    <span class="fstat-label" id="statLabelFc">Total Forecasted Volume</span>
     <span class="fstat-value" id="statFcVol">—</span>
   </div>
   <div class="fstat-divider"></div>
@@ -866,6 +866,7 @@ async function loadIntervalData() {
     is_historic: iv.h_any,
   }));
 
+  updateSummaryCards();   // refresh summary cards with interval data
   renderCharts();
   renderHeatmap();
 }
@@ -1065,7 +1066,7 @@ function renderDashboard() {
   }
 
   // Show summary cards
-  document.getElementById('summaryCards').style.display = 'flex';
+  document.getElementById('summaryCards').style.display = 'grid';
   updateSummaryCards();
 
   activeLob = null;
@@ -1079,6 +1080,15 @@ function renderDashboard() {
 
 
 function updateSummaryCards() {
+  // Update labels based on view
+  if (currentView === 'daily') {
+    document.getElementById('labelOffered').textContent = "Today's Actual Volume";
+    document.getElementById('labelForecasted').textContent = "Today's Forecast Volume";
+  } else {
+    document.getElementById('labelOffered').textContent = 'Total Historical Volume';
+    document.getElementById('labelForecasted').textContent = 'Total Forecasted Volume';
+  }
+
   // For daily view with interval data, compute from intervals
   if (currentView === 'daily' && intervalData && intervalData.length) {
     let totalOff = 0, totalFc = 0, totalAhtW = 0, totalReq = 0, fcCount = 0;
@@ -1196,6 +1206,8 @@ function updateSummaryCards() {
   const totalVol = histVol + fcVol;
   const aht2 = ahtOff2 > 0 ? Math.round(ahtW2 / ahtOff2) : 0;
 
+  document.getElementById('statLabelHist').textContent = currentView === 'daily' ? "Today's Actual Volume" : 'Total Historical Volume';
+  document.getElementById('statLabelFc').textContent = currentView === 'daily' ? "Today's Forecast Volume" : 'Total Forecasted Volume';
   document.getElementById('statHistVol').textContent = Math.round(histVol).toLocaleString();
   document.getElementById('statFcVol').textContent = fcVol > 0 ? Math.round(fcVol).toLocaleString() : '—';
   document.getElementById('statAvgDaily').textContent = countLabel;
