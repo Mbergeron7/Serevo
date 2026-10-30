@@ -1094,35 +1094,35 @@ function updateSummaryCards() {
 
   // For daily view with interval data, compute from intervals
   if (currentView === 'daily' && intervalData && intervalData.length) {
-    let totalOff = 0, totalFc = 0, totalAhtW = 0, totalReq = 0, fcCount = 0;
+    let totalHist = 0, totalFc = 0, totalAhtW = 0, totalAhtN = 0, totalReq = 0, fcCount = 0, histCount = 0;
     let peakVol = 0, peakLabel = '';
     for (const iv of intervalData) {
-      totalOff += iv.offered;
-      totalAhtW += iv.offered * iv.aht;
+      if (iv.hist_offered != null) { totalHist += iv.hist_offered; histCount++; totalAhtW += iv.hist_offered * (iv.hist_aht || 0); totalAhtN += iv.hist_offered; }
+      if (iv.fc_offered != null) { totalFc += iv.fc_offered; fcCount++; if (!iv.hist_offered) { totalAhtW += iv.fc_offered * (iv.fc_aht || 0); totalAhtN += iv.fc_offered; } }
       totalReq += iv.agents_required;
-      if (iv.offered > peakVol) { peakVol = iv.offered; peakLabel = iv.interval_start || ''; }
-      if (iv.fc_offered != null) { totalFc += iv.fc_offered; fcCount++; }
+      const vol = iv.hist_offered || 0;
+      if (vol > peakVol) { peakVol = vol; peakLabel = iv.time || ''; }
     }
-    const combinedAht = totalOff > 0 ? totalAhtW / totalOff : 0;
+    const combinedAht = totalAhtN > 0 ? totalAhtW / totalAhtN : 0;
     const intervalMins = parseInt(document.getElementById('intervalSelect').value) || 30;
     const personHours = totalReq * intervalMins / 60;
-    const avgPerInterval = intervalData.length > 0 ? Math.round(totalOff / intervalData.length) : 0;
+    const avgPerInterval = histCount > 0 ? Math.round(totalHist / histCount) : 0;
 
-    document.getElementById('totalOffered').textContent = totalOff.toLocaleString();
-    document.getElementById('totalOfferedDetail').textContent = `${intervalData.length} intervals`;
+    document.getElementById('totalOffered').textContent = Math.round(totalHist).toLocaleString();
+    document.getElementById('totalOfferedDetail').textContent = `${histCount} intervals`;
     document.getElementById('totalForecasted').textContent = fcCount ? Math.round(totalFc).toLocaleString() : '—';
     document.getElementById('totalForecastedDetail').textContent = fcCount ? `${fcCount} intervals` : 'No forecast';
     if (fcCount && totalFc > 0) {
-      const otf = (totalOff / totalFc) * 100;
+      const otf = (totalHist / totalFc) * 100;
       document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
-      const diff = totalFc - totalOff;
+      const diff = totalFc - totalHist;
       document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(Math.abs(diff)).toLocaleString()} under`;
     } else {
       document.getElementById('otfCard').textContent = '—';
       document.getElementById('otfDetail').textContent = '';
     }
     document.getElementById('peakDayVolume').textContent = peakVol.toLocaleString();
-    document.getElementById('peakDayDetail').textContent = peakLabel ? `at ${peakLabel.substring(11,16)}` : '';
+    document.getElementById('peakDayDetail').textContent = peakLabel ? `at ${peakLabel.length > 5 ? peakLabel.substring(11,16) : peakLabel}` : '';
     document.getElementById('avgDailyVolume').textContent = avgPerInterval.toLocaleString();
     document.getElementById('avgDailyDetail').textContent = 'per interval';
     document.getElementById('avgAht').textContent = Math.round(combinedAht) + 's';
