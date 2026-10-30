@@ -1080,6 +1080,9 @@ function renderDashboard() {
 
 
 function updateSummaryCards() {
+  // Ensure summary cards are visible
+  document.getElementById('summaryCards').style.display = 'grid';
+
   // Update labels based on view
   if (currentView === 'daily') {
     document.getElementById('labelOffered').textContent = "Today's Actual Volume";
