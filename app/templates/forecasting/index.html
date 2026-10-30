@@ -1069,7 +1069,11 @@ function renderDashboard() {
   updateSummaryCards();
 
   activeLob = null;
-  renderCharts();
+  if (currentView === 'daily') {
+    loadIntervalData();  // fetches interval data then renders charts
+  } else {
+    renderCharts();
+  }
   renderHeatmap();
 }
 
@@ -1098,8 +1102,8 @@ function updateSummaryCards() {
     if (fcCount && totalFc > 0) {
       const otf = (totalOff / totalFc) * 100;
       document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
-      const diff = totalOff - totalFc;
-      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(diff).toLocaleString()} under`;
+      const diff = totalFc - totalOff;
+      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(Math.abs(diff)).toLocaleString()} under`;
     } else {
       document.getElementById('otfCard').textContent = '—';
       document.getElementById('otfDetail').textContent = '';
@@ -1133,8 +1137,8 @@ function updateSummaryCards() {
     if (fcDays && totalFc > 0) {
       const otf = (totalOff / totalFc) * 100;
       document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
-      const diff = totalOff - totalFc;
-      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(diff).toLocaleString()} under`;
+      const diff = totalFc - totalOff;
+      document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(Math.abs(diff)).toLocaleString()} under`;
     } else {
       document.getElementById('otfCard').textContent = '—';
       document.getElementById('otfDetail').textContent = '';
