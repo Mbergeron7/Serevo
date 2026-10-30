@@ -640,7 +640,7 @@ def generate_forecast_moving_avg(lob, historical_days, forecast_days,
     return {
         "method": "moving_average",
         "window": window,
-        "historical_days_used": len(recent_dates),
+        "historical_days_used": len(set(r["date"] for r in historical)),
         "historical": historical,
         "forecast": forecast,
     }

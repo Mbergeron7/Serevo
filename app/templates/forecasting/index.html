@@ -1416,6 +1416,7 @@ function renderCharts() {
 
 // ── Render interval-level charts for Daily view ──
 function renderIntervalCharts() {
+  if (typeof Chart === 'undefined') { console.warn('Chart.js not loaded yet, retrying...'); setTimeout(renderIntervalCharts, 200); return; }
   const labels = intervalData.map(iv => iv.time);
   const hasHist = intervalData.some(iv => iv.hist_offered != null);
   const hasFc = intervalData.some(iv => iv.fc_offered != null);
