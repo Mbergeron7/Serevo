@@ -2237,22 +2237,37 @@ function renderTimelineView(container) {
 }
 
 // Map variants like "break1", "break_2", "lunch-b" onto their base type for colours/labels
+// Map saved status values to attendance categories
+const _statusToAttn = {off:'absent', pto:'absent', sick:'absent', personal:'absent',
+                       late:'was_late', early_leave:'left_early'};
+function _effectiveAttn(shift) {
+  // Live attendance (today) takes priority, then persisted status
+  if (shift.attendance) return shift.attendance;
+  const st = shift.status;
+  if (st && st !== 'scheduled') return _statusToAttn[st] || null;
+  return null;
+}
+const _statusLabels = {off:'Day Off', pto:'PTO', sick:'Sick', personal:'Personal',
+                       late:'Late', early_leave:'Left Early'};
 function attnBadge(shift) {
-  const a = shift.attendance;
-  if (a === 'absent')     return '<span class="attn-badge attn-absent">Absent</span>';
-  if (a === 'was_late')   return '<span class="attn-badge attn-late">Late</span>';
-  if (a === 'left_early') return '<span class="attn-badge attn-left">Left Early</span>';
-  return '';
+  const a = _effectiveAttn(shift);
+  if (!a) return '';
+  // Use specific label from saved status when available
+  const st = shift.status;
+  const label = (st && _statusLabels[st]) ? _statusLabels[st] :
+    a === 'absent' ? 'Absent' : a === 'was_late' ? 'Late' : a === 'left_early' ? 'Left Early' : '';
+  const cls = a === 'absent' ? 'attn-absent' : a === 'was_late' ? 'attn-late' : a === 'left_early' ? 'attn-left' : '';
+  return `<span class="attn-badge ${cls}">${label}</span>`;
 }
 function attnRowClass(shift) {
-  const a = shift.attendance;
+  const a = _effectiveAttn(shift);
   if (a === 'absent')     return 'attn-row-absent';
   if (a === 'was_late')   return 'attn-row-late';
   if (a === 'left_early') return 'attn-row-left';
   return '';
 }
 function attnTlClass(shift) {
-  const a = shift.attendance;
+  const a = _effectiveAttn(shift);
   if (a === 'absent')     return 'attn-tl-absent';
   if (a === 'was_late')   return 'attn-tl-late';
   if (a === 'left_early') return 'attn-tl-left';
