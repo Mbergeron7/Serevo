@@ -1447,6 +1447,39 @@ function loadEmployeesForLOB(lob) {
 function applyFilters() {
   const lob = getCfgLob();
   if (lob) loadEmployeesForLOB(lob);
+  // Re-render the schedule view with the new filters applied
+  if (scheduleData) {
+    switchView(currentView);
+    updateStats();
+  }
+}
+
+// Return a filtered copy of scheduleData based on selectedEmpIds.
+// Each shift gets _origIdx so edit/delete target the right shift in the original array.
+function getFilteredData() {
+  if (!scheduleData) return null;
+  // Tag every shift with its original index
+  const tagged = {
+    ...scheduleData,
+    days: scheduleData.days.map(d => ({
+      ...d,
+      shifts: d.shifts.map((s, i) => ({ ...s, _origIdx: i }))
+    }))
+  };
+  // No filter active — return tagged data
+  if (selectedEmpIds.length === 0) return tagged;
+  // Sentinel for "nobody selected"
+  if (selectedEmpIds.length === 1 && selectedEmpIds[0] === '__none__') {
+    return { ...tagged, days: tagged.days.map(d => ({ ...d, shifts: [] })) };
+  }
+  const idSet = new Set(selectedEmpIds.map(String));
+  return {
+    ...tagged,
+    days: tagged.days.map(d => ({
+      ...d,
+      shifts: d.shifts.filter(s => idSet.has(String(s.employee_id)))
+    }))
+  };
 }
 
 function renderEmpPicker() {
@@ -1513,6 +1546,7 @@ function toggleEmp(id, checked) {
   // If all are selected, reset to empty (meaning "all")
   if (selectedEmpIds.length === empList.length) selectedEmpIds = [];
   renderEmpPicker();
+  refreshFilteredView();
 }
 
 function removeEmp(id) {
@@ -1522,11 +1556,20 @@ function removeEmp(id) {
 function empSelectAll() {
   selectedEmpIds = [];
   renderEmpPicker();
+  refreshFilteredView();
 }
 
 function empDeselectAll() {
   selectedEmpIds = ['__none__']; // sentinel: nobody selected
   renderEmpPicker();
+  refreshFilteredView();
+}
+
+function refreshFilteredView() {
+  if (scheduleData) {
+    switchView(currentView);
+    updateStats();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1988,12 +2031,28 @@ function toggleDemandCollapse() {
 
 function updateStats() {
   if (!scheduleData) return;
-  const t = scheduleData.totals || {};
-  document.getElementById('statShifts').textContent = t.total_shifts ?? '—';
-  document.getElementById('statHours').textContent = t.total_hours ?? '—';
-  document.getElementById('statDays').textContent = t.total_days ?? '—';
+  const filteredData = getFilteredData();
+  if (!filteredData) return;
+
+  // If filters are active, compute stats from filtered data
+  if (selectedEmpIds.length > 0 && selectedEmpIds[0] !== '__none__') {
+    let totalShifts = 0, totalHours = 0;
+    filteredData.days.forEach(d => {
+      totalShifts += d.shifts.length;
+      d.shifts.forEach(s => { totalHours += (s.hours || 0); });
+    });
+    document.getElementById('statShifts').textContent = totalShifts;
+    document.getElementById('statHours').textContent = totalHours.toFixed(1);
+    document.getElementById('statDays').textContent = filteredData.days.length;
+  } else {
+    const t = scheduleData.totals || {};
+    document.getElementById('statShifts').textContent = t.total_shifts ?? '—';
+    document.getElementById('statHours').textContent = t.total_hours ?? '—';
+    document.getElementById('statDays').textContent = t.total_days ?? '—';
+  }
 
   const covEl = document.getElementById('statCoverage');
+  const t = scheduleData.totals || {};
   const cov = t.avg_coverage_pct ?? 0;
   covEl.textContent = cov + '%';
   covEl.className = 'stat-num ' + (cov >= 95 ? 'good' :
@@ -2019,13 +2078,14 @@ function switchView(view) {
 // TIMELINE VIEW
 // ═══════════════════════════════════════════════════════════
 function renderTimelineView(container) {
-  if (!scheduleData || !scheduleData.days.length) {
+  const filteredData = getFilteredData();
+  if (!filteredData || !filteredData.days.length) {
     container.innerHTML = '<div class="no-data">No schedule data.</div>';
     return;
   }
 
   let html = '';
-  scheduleData.days.forEach((day, dayIdx) => {
+  filteredData.days.forEach((day, dayIdx) => {
     // Determine visible hour range for this day
     let minH = 24, maxH = 0;
     day.shifts.forEach(s => {
@@ -2074,15 +2134,16 @@ function renderTimelineView(container) {
     // Employee rows
     html += `<div class="timeline-body">`;
     day.shifts.forEach((shift, shiftIdx) => {
-      html += `<div class="tl-row ${attnTlClass(shift)}" data-day="${dayIdx}" data-shift="${shiftIdx}">
+      const origIdx = shift._origIdx != null ? shift._origIdx : shiftIdx;
+      html += `<div class="tl-row ${attnTlClass(shift)}" data-day="${dayIdx}" data-shift="${origIdx}">
         <div class="tl-emp-name">
           <span>${shift.employee}${attnBadge(shift)}</span>
           <span class="emp-actions">
-            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${shiftIdx})">&#9998;</button>
-            <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${shiftIdx})" style="color:#dc2626">✕</button>
+            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${origIdx})">&#9998;</button>
+            <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${origIdx})" style="color:#dc2626">✕</button>
           </span>
         </div>
-        <div class="tl-bar-area" data-day="${dayIdx}" data-shift="${shiftIdx}" style="width:${numHours * TL_PX_PER_HOUR}px">`;
+        <div class="tl-bar-area" data-day="${dayIdx}" data-shift="${origIdx}" style="width:${numHours * TL_PX_PER_HOUR}px">`;
 
       // Grid lines
       for (let h = minH; h < maxH; h++) {
@@ -2112,9 +2173,9 @@ function renderTimelineView(container) {
         const label = seg.duration_mins >= 25 ? segLabel(seg.type) : '';
         html += `<div class="tl-segment tl-seg-overlay" style="left:${left}px;width:${Math.max(width,2)}px;background:${segColor(seg.type)}"
           title="${seg.type}: ${seg.start}–${seg.end} (${seg.duration_mins}m)"
-          data-day="${dayIdx}" data-shift="${shiftIdx}" data-seg="${segIdx}"
-          onmousedown="segMouseDown(event,${dayIdx},${shiftIdx},${segIdx})"
-          oncontextmenu="segContextMenu(event,${dayIdx},${shiftIdx},${segIdx})"><span class="seg-handle seg-handle-l" data-handle="l"></span>${label}<span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
+          data-day="${dayIdx}" data-shift="${origIdx}" data-seg="${segIdx}"
+          onmousedown="segMouseDown(event,${dayIdx},${origIdx},${segIdx})"
+          oncontextmenu="segContextMenu(event,${dayIdx},${origIdx},${segIdx})"><span class="seg-handle seg-handle-l" data-handle="l"></span>${label}<span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
       });
 
       html += `</div></div>`; // tl-bar-area, tl-row
@@ -2598,12 +2659,13 @@ function applyAbsence(dayIdx, shiftIdx, absenceType) {
 // DAY LIST VIEW (table fallback)
 // ═══════════════════════════════════════════════════════════
 function renderDayView(container) {
-  if (!scheduleData.days.length) {
+  const filteredData = getFilteredData();
+  if (!filteredData || !filteredData.days.length) {
     container.innerHTML = '<div class="no-data">No schedule data.</div>';
     return;
   }
   let html = '';
-  scheduleData.days.forEach((day, idx) => {
+  filteredData.days.forEach((day, idx) => {
     html += `<div class="sched-card">
       <div class="day-header-row" onclick="toggleDay(${idx})">
         <span>${day.date_label} — ${day.shifts.length} shifts</span>
@@ -2621,14 +2683,15 @@ function renderDayView(container) {
         <thead><tr><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Actions</th></tr></thead>
         <tbody>`;
       day.shifts.forEach((s, si) => {
+        const origSi = s._origIdx != null ? s._origIdx : si;
         const badge = s.type === 'half' ? '<span style="color:#d97706;font-weight:600">Half</span>' :
                       '<span style="color:#059669;font-weight:600">Full</span>';
         html += `<tr class="${attnRowClass(s)}">
           <td style="font-weight:600">${s.employee}${attnBadge(s)}</td>
           <td>${s.start}</td><td>${s.end}</td>
           <td>${s.hours}</td><td>${badge}</td>
-          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${si})" title="Edit">&#9998; Edit</button>
-          <button class="emp-action-btn" onclick="showAbsencePopup(event,${idx},${si})" title="Mark absent" style="color:#dc2626;margin-left:4px">✕</button></td></tr>`;
+          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${origSi})" title="Edit">&#9998; Edit</button>
+          <button class="emp-action-btn" onclick="showAbsencePopup(event,${idx},${origSi})" title="Mark absent" style="color:#dc2626;margin-left:4px">✕</button></td></tr>`;
       });
       html += '</tbody></table></div>';
     }
@@ -2677,7 +2740,9 @@ function renderCoverageStrip(coverage) {
 // WEEK VIEW
 // ═══════════════════════════════════════════════════════════
 function renderWeekView(container) {
-  const weeks = groupByWeek(scheduleData.days);
+  const filteredData = getFilteredData();
+  if (!filteredData) return;
+  const weeks = groupByWeek(filteredData.days);
   let html = '';
   weeks.forEach(week => {
     const totalShifts = week.reduce((s, d) => s + d.shifts.length, 0);
@@ -2712,7 +2777,9 @@ function renderWeekView(container) {
 // MONTH VIEW
 // ═══════════════════════════════════════════════════════════
 function renderMonthView(container) {
-  const months = groupByMonth(scheduleData.days);
+  const filteredData = getFilteredData();
+  if (!filteredData) return;
+  const months = groupByMonth(filteredData.days);
   let html = '';
   Object.keys(months).sort().forEach(key => {
     const days = months[key];
