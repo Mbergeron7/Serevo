@@ -1620,6 +1620,8 @@ def vto_ot_save():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     from app.models import db, VTOOTPost, PlanningUnit
     from datetime import datetime as dt
 
@@ -1687,6 +1689,8 @@ def vto_ot_cancel():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     from app.models import db, VTOOTPost
 
     payload = request.get_json(silent=True) or {}
@@ -1966,6 +1970,8 @@ def api_dismiss_unsched():
     user = get_current_user()
     if not user:
         return jsonify(error="Not authenticated"), 401
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     uid = (request.json or {}).get("uid", "").strip()
     if not uid:
         return jsonify(error="Missing uid"), 400
@@ -2094,6 +2100,8 @@ def vto_ot_delete():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     from app.models import db, VTOOTPost, VTOOTSignup
 
     payload = request.get_json(silent=True) or {}

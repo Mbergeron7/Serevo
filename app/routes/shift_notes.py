@@ -75,6 +75,8 @@ def save_note():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     body = (data.get("body") or "").strip()
@@ -111,6 +113,8 @@ def resolve_note():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     note = ShiftNote.query.get(data.get("id"))
@@ -129,6 +133,8 @@ def delete_note():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     note = ShiftNote.query.get(data.get("id"))

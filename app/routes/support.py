@@ -62,6 +62,8 @@ def list_tickets():
 @login_required
 def create_ticket():
     user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     data = request.get_json(silent=True) or {}
 
     subject = (data.get("subject") or "").strip()
@@ -127,6 +129,8 @@ def get_ticket(ticket_id):
 @login_required
 def update_ticket():
     user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     data = request.get_json(silent=True) or {}
     ticket_id = data.get("id")
 
@@ -166,6 +170,8 @@ def update_ticket():
 @login_required
 def add_comment():
     user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     data = request.get_json(silent=True) or {}
     ticket_id = data.get("ticket_id")
     body = (data.get("body") or "").strip()

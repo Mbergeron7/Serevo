@@ -50,18 +50,21 @@ DEMO_EMPLOYEES = [
 ]
 
 # ── Accommodations (a few sample entries) ─────────────────────
-DEMO_ACCOMMODATIONS = [
-    {"Employee": "Casey Chen",   "Group": "Sales", "LOB": "Sales Support",  "Mon": "fill", "Tue": "fill", "Wed": "off", "Thu": "fill", "Fri": "fill", "Sat": "off", "Sun": "off", "Shift Start": "09:00", "Shift End": "17:00", "Notes": "Reduced schedule — Wednesdays off", "Updated": "2026-08-15 10:00"},
-    {"Employee": "Drew Campbell","Group": "Tech",  "LOB": "Tech Help Desk", "Mon": "fill", "Tue": "fill", "Wed": "fill", "Thu": "fill", "Fri": "fill", "Sat": "off", "Sun": "off", "Shift Start": "10:00", "Shift End": "18:00", "Notes": "Late start accommodation",          "Updated": "2026-07-20 14:30"},
-]
+def _demo_accommodations():
+    today = datetime.date.today()
+    return [
+        {"Employee": "Casey Chen",   "Group": "Sales", "LOB": "Sales Support",  "Mon": "fill", "Tue": "fill", "Wed": "off", "Thu": "fill", "Fri": "fill", "Sat": "off", "Sun": "off", "Shift Start": "09:00", "Shift End": "17:00", "Notes": "Reduced schedule — Wednesdays off", "Updated": (today - datetime.timedelta(days=45)).strftime("%Y-%m-%d") + " 10:00"},
+        {"Employee": "Drew Campbell","Group": "Tech",  "LOB": "Tech Help Desk", "Mon": "fill", "Tue": "fill", "Wed": "fill", "Thu": "fill", "Fri": "fill", "Sat": "off", "Sun": "off", "Shift Start": "10:00", "Shift End": "18:00", "Notes": "Late start accommodation",          "Updated": (today - datetime.timedelta(days=70)).strftime("%Y-%m-%d") + " 14:30"},
+    ]
+DEMO_ACCOMMODATIONS = _demo_accommodations()
 
 # ── PTO (a few sample entries relative to today) ──────────────
 def _demo_pto():
     today = datetime.date.today()
     return [
-        {"Employee": "Sam Patel",     "Group": "Sales",   "LOB": "Sales Support",  "Start Date": (today + datetime.timedelta(days=2)).strftime("%Y-%m-%d"), "End Date": (today + datetime.timedelta(days=4)).strftime("%Y-%m-%d"), "Type": "full", "Note": "Vacation", "Updated": "2026-09-01 09:00"},
-        {"Employee": "Reese Martin",  "Group": "Tech",    "LOB": "Tech Help Desk", "Start Date": today.strftime("%Y-%m-%d"), "End Date": today.strftime("%Y-%m-%d"), "Type": "full", "Note": "Personal day", "Updated": "2026-09-20 08:00"},
-        {"Employee": "Sage Anderson", "Group": "Billing", "LOB": "Billing",        "Start Date": (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d"), "End Date": (today + datetime.timedelta(days=1)).strftime("%Y-%m-%d"), "Type": "full", "Note": "Medical",  "Updated": "2026-09-18 11:00"},
+        {"Employee": "Sam Patel",     "Group": "Sales",   "LOB": "Sales Support",  "Start Date": (today + datetime.timedelta(days=2)).strftime("%Y-%m-%d"), "End Date": (today + datetime.timedelta(days=4)).strftime("%Y-%m-%d"), "Type": "full", "Note": "Vacation", "Updated": (today - datetime.timedelta(days=5)).strftime("%Y-%m-%d") + " 09:00"},
+        {"Employee": "Reese Martin",  "Group": "Tech",    "LOB": "Tech Help Desk", "Start Date": today.strftime("%Y-%m-%d"), "End Date": today.strftime("%Y-%m-%d"), "Type": "full", "Note": "Personal day", "Updated": (today - datetime.timedelta(days=3)).strftime("%Y-%m-%d") + " 08:00"},
+        {"Employee": "Sage Anderson", "Group": "Billing", "LOB": "Billing",        "Start Date": (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d"), "End Date": (today + datetime.timedelta(days=1)).strftime("%Y-%m-%d"), "Type": "full", "Note": "Medical",  "Updated": (today - datetime.timedelta(days=4)).strftime("%Y-%m-%d") + " 11:00"},
     ]
 
 
@@ -425,7 +428,7 @@ def _demo_holiday_for_date(day):
 
 def plan_demo_day(schedule_date, lob=None):
     """Apply the demo rules for one date. Returns (schedules, warnings).
-    schedules: full list (status scheduled | off | pto), each with a 'reason' for non-working days."""
+    schedules: full list (status scheduled | off | pto)."""
     if isinstance(schedule_date, str):
         schedule_date = datetime.datetime.strptime(schedule_date[:10], "%Y-%m-%d").date()
     day = schedule_date
@@ -447,10 +450,10 @@ def plan_demo_day(schedule_date, lob=None):
                 "employee_id": emp["Employee ID"],
                 "date": day.isoformat(),
                 "start": "", "end": "", "type": "full", "hours": 0,
+                "status": "off", "source": "generated",
                 "segments": [],
                 "team_lead": emp.get("Team Lead", ""),
-                "status": "off",
-                "reason": holiday["name"],
+                "lob": emp_lob,
             })
         return schedules, [f"Holiday: {holiday['name']} — centre closed"]
 
@@ -466,10 +469,11 @@ def plan_demo_day(schedule_date, lob=None):
         name = f"{emp['First Name']} {emp['Last Name']}"
         base = {"id": 8000 + i + day.toordinal() % 1000, "employee": name, "employee_id": ext,
                 "date": day.isoformat(), "start": "", "end": "", "type": "full", "hours": 0,
+                "status": "scheduled", "source": "generated",
                 "segments": [], "lob": emp_lob, "team_lead": emp.get("Team Lead", "")}
 
         def off(status, reason):
-            schedules.append({**base, "status": status, "reason": reason})
+            schedules.append({**base, "status": status})
             skipped.append(f"{name}: {reason}")
 
         if name in pto_names:
@@ -498,7 +502,7 @@ def plan_demo_day(schedule_date, lob=None):
         hours = round(((eh * 60 + em) - (sh * 60 + sm)) / 60, 2)
         idx = scheduled_by_lob.get(emp_lob, 0); scheduled_by_lob[emp_lob] = idx + 1
         schedules.append({**base, "start": start_str, "end": end_str, "hours": hours,
-                          "status": "scheduled", "reason": "",
+                          "status": "scheduled",
                           "segments": _build_demo_segments(start_str, end_str, idx, 7)})
 
     # ── Partial-holiday reduction ────────────────────────────────
@@ -514,7 +518,6 @@ def plan_demo_day(schedule_date, lob=None):
             keep = max(1, math.ceil(len(sched_list) * vf))
             for s in sched_list[keep:]:
                 s["status"] = "off"
-                s["reason"] = holiday["name"]
                 s["start"] = ""
                 s["end"] = ""
                 s["hours"] = 0
@@ -547,8 +550,6 @@ def plan_demo_day(schedule_date, lob=None):
 
     if skipped:
         warnings.append(f"Skipped {len(skipped)} employee(s): " + "; ".join(skipped))
-    for s in schedules:
-        s.pop("lob", None)
     return schedules, warnings
 
 
@@ -1652,12 +1653,12 @@ def get_demo_coaching_sessions(employee_id=None):
          "session_time": "11:00", "duration_mins": 30, "topic": "New product training follow-up",
          "category": "general", "quality_score": None, "notes": "",
          "outcome": "", "follow_up": ""},
-        {"id": 5, "employee_id": "E1008", "employee_name": "Sam Patel",
-         "coach_name": "Marcus Johnson", "session_date": (today - _dt.timedelta(days=5)).isoformat(),
+        {"id": 5, "employee_id": "E2001", "employee_name": "Jamie Torres",
+         "coach_name": "Marco Ruiz", "session_date": (today - _dt.timedelta(days=5)).isoformat(),
          "session_time": "13:00", "duration_mins": 30, "topic": "Troubleshooting process review",
          "category": "quality", "quality_score": 78.0, "notes": "Needs to follow diagnostic tree more consistently. Skipping steps leads to repeat calls.",
          "outcome": "completed", "follow_up": "Side-by-side session next Tuesday"},
-        {"id": 6, "employee_id": "E1015", "employee_name": "Morgan Bailey",
+        {"id": 6, "employee_id": "E3001", "employee_name": "Harper Wilson",
          "coach_name": "Priya Sharma", "session_date": (today - _dt.timedelta(days=10)).isoformat(),
          "session_time": "15:00", "duration_mins": 30, "topic": "Billing accuracy",
          "category": "quality", "quality_score": 88.0, "notes": "Good overall. Two credits issued incorrectly — reviewed policy.",
@@ -1677,13 +1678,13 @@ def get_demo_quality_evaluations(lob="All", date_from=None, date_to=None):
         ("E1001", "Alex Morgan", "Sales Support"),
         ("E1002", "Jordan Rivera", "Sales Support"),
         ("E1003", "Casey Chen", "Sales Support"),
-        ("E1008", "Sam Patel", "Tech Help Desk"),
-        ("E1009", "Avery Kim", "Tech Help Desk"),
-        ("E1010", "Drew Foster", "Tech Help Desk"),
-        ("E1015", "Morgan Bailey", "Billing"),
-        ("E1016", "Riley Scott", "Billing"),
+        ("E2001", "Jamie Torres", "Tech Help Desk"),
+        ("E2002", "Avery Nguyen", "Tech Help Desk"),
+        ("E2003", "Drew Campbell", "Tech Help Desk"),
+        ("E3001", "Harper Wilson", "Billing"),
+        ("E3002", "Rowan Garcia", "Billing"),
     ]
-    evaluators = ["Lisa Tran", "Marcus Johnson", "Priya Sharma"]
+    evaluators = ["Lisa Tran", "Marco Ruiz", "Priya Sharma"]
     channels = ["voice", "voice", "voice", "chat", "email"]
     dispositions = ["resolved", "resolved", "resolved", "escalated", "callback", "transfer"]
     evals = []
@@ -1805,7 +1806,7 @@ def get_demo_shift_notes():
 def get_demo_employee_docs():
     """Return list of demo employee documents."""
     today = datetime.date.today()
-    agents = ["Alex Morgan", "Jordan Rivera", "Casey Chen", "Sam Patel", "Taylor Kim"]
+    agents = ["Alex Morgan", "Jordan Rivera", "Casey Chen", "Sam Patel", "Taylor Brooks"]
     categories = ["Contract", "Certification", "ID Copy", "Performance Review", "Training Certificate"]
     docs = []
     for i, (agent, cat) in enumerate(zip(agents, categories)):
@@ -1840,7 +1841,7 @@ def get_demo_training_assignments():
     """Return list of demo training assignments."""
     today = datetime.date.today()
     agents = [("Alex Morgan", 1), ("Jordan Rivera", 2), ("Casey Chen", 3),
-              ("Sam Patel", 4), ("Taylor Kim", 5)]
+              ("Sam Patel", 4), ("Taylor Brooks", 5)]
     assignments = []
     aid = 1
     for agent_name, emp_id in agents:
@@ -1871,7 +1872,7 @@ def get_demo_support_tickets():
         {"id": 1, "subject": "Headset not working", "description": "Left ear cup has no audio. Tried restarting.", "category": "equipment", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
         {"id": 2, "subject": "VPN disconnects frequently", "description": "VPN drops every 20 minutes when working from home.", "category": "it", "priority": "high", "status": "in_progress", "submitted_by": 3, "submitter_name": "Casey Chen", "assigned_to": 99, "assignee_name": "IT Support", "resolution": None, "created_at": (today - datetime.timedelta(days=3)).isoformat(), "updated_at": (today - datetime.timedelta(days=2)).isoformat()},
         {"id": 3, "subject": "Request for standing desk", "description": "Would like to switch to a standing desk setup.", "category": "facilities", "priority": "low", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "Facilities", "resolution": "Approved — desk arriving next week.", "created_at": (today - datetime.timedelta(days=10)).isoformat(), "updated_at": (today - datetime.timedelta(days=7)).isoformat()},
-        {"id": 4, "subject": "CRM password reset", "description": "Locked out of CRM after too many failed attempts.", "category": "it", "priority": "high", "status": "resolved", "submitted_by": 5, "submitter_name": "Taylor Kim", "assigned_to": 99, "assignee_name": "IT Support", "resolution": "Password reset and account unlocked.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=5)).isoformat()},
+        {"id": 4, "subject": "CRM password reset", "description": "Locked out of CRM after too many failed attempts.", "category": "it", "priority": "high", "status": "resolved", "submitted_by": 5, "submitter_name": "Taylor Brooks", "assigned_to": 99, "assignee_name": "IT Support", "resolution": "Password reset and account unlocked.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=5)).isoformat()},
     ]
 
 
@@ -1880,11 +1881,11 @@ def get_demo_wfm_tickets():
     today = datetime.date.today()
     return [
         {"id": 1, "subject": "Schedule Change for Alex Morgan", "description": "Need to move from morning to afternoon shift on the 15th for a doctor's appointment.", "category": "schedule_change", "priority": "medium", "status": "open", "submitted_by": 1, "submitter_name": "Alex Morgan", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Alex Morgan", "affected_date": (today + datetime.timedelta(days=5)).isoformat(), "affected_date_end": None, "lob": "Sales Support", "shift_time": "1:00 PM - 9:00 PM", "overtime_hours": None, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=1)).isoformat(), "updated_at": (today - datetime.timedelta(days=1)).isoformat()},
-        {"id": 2, "subject": "Time Off Exception for Sam Patel", "description": "Starting next month, I'm no longer available on Fridays due to school. Requesting an ongoing exception.", "category": "time_off_exception", "priority": "low", "status": "in_progress", "submitted_by": 4, "submitter_name": "Sam Patel", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "Sam Patel", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=40)).isoformat(), "lob": "Customer Service", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Need to adjust rotation.", "created_at": (today - datetime.timedelta(days=4)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
+        {"id": 2, "subject": "Time Off Exception for Sam Patel", "description": "Starting next month, I'm no longer available on Fridays due to school. Requesting an ongoing exception.", "category": "time_off_exception", "priority": "low", "status": "in_progress", "submitted_by": 4, "submitter_name": "Sam Patel", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "Sam Patel", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=40)).isoformat(), "lob": "Sales Support", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Need to adjust rotation.", "created_at": (today - datetime.timedelta(days=4)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
         {"id": 3, "subject": "Overtime for Jordan Rivera", "description": "Willing to pick up extra hours during peak week to help with volume.", "category": "overtime", "priority": "medium", "status": "resolved", "submitted_by": 2, "submitter_name": "Jordan Rivera", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved for 10 extra hours.", "affected_agents": "Jordan Rivera", "affected_date": (today + datetime.timedelta(days=10)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=14)).isoformat(), "lob": "Sales Support", "shift_time": "8:00 AM - 4:00 PM", "overtime_hours": 10.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=8)).isoformat(), "updated_at": (today - datetime.timedelta(days=6)).isoformat()},
-        {"id": 4, "subject": "Shift Swap for Casey Chen, Drew Nguyen", "description": "Casey and Drew would like to swap shifts on the 20th. Casey takes the closer and Drew takes the opener.", "category": "shift_swap", "priority": "medium", "status": "open", "submitted_by": 3, "submitter_name": "Casey Chen", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Casey Chen, Drew Nguyen", "affected_date": (today + datetime.timedelta(days=8)).isoformat(), "affected_date_end": None, "lob": "PS Sales", "shift_time": "6:00 AM - 2:00 PM", "overtime_hours": None, "swap_with": "Drew Nguyen", "internal_note": None, "created_at": (today - datetime.timedelta(days=2)).isoformat(), "updated_at": (today - datetime.timedelta(days=2)).isoformat()},
-        {"id": 5, "subject": "Headcount for PS Service", "description": "Requesting 2 additional FTEs for PS Service to handle Q4 volume increase based on forecast.", "category": "headcount", "priority": "high", "status": "in_progress", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "", "affected_date": (today + datetime.timedelta(days=14)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=90)).isoformat(), "lob": "PS Service", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Pending leadership approval.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
-        {"id": 6, "subject": "Overtime for Taylor Kim, Riley Brooks", "description": "Both agents approved for weekend overtime to cover increased call volume.", "category": "overtime", "priority": "high", "status": "resolved", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved — 8 hours each on Saturday.", "affected_agents": "Taylor Kim, Riley Brooks", "affected_date": (today + datetime.timedelta(days=3)).isoformat(), "affected_date_end": None, "lob": "Customer Service", "shift_time": "9:00 AM - 5:00 PM", "overtime_hours": 8.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=6)).isoformat(), "updated_at": (today - datetime.timedelta(days=4)).isoformat()},
+        {"id": 4, "subject": "Shift Swap for Casey Chen, Drew Campbell", "description": "Casey and Drew would like to swap shifts on the 20th. Casey takes the closer and Drew takes the opener.", "category": "shift_swap", "priority": "medium", "status": "open", "submitted_by": 3, "submitter_name": "Casey Chen", "assigned_to": None, "assignee_name": None, "resolution": None, "affected_agents": "Casey Chen, Drew Campbell", "affected_date": (today + datetime.timedelta(days=8)).isoformat(), "affected_date_end": None, "lob": "Sales Support", "shift_time": "6:00 AM - 2:00 PM", "overtime_hours": None, "swap_with": "Drew Campbell", "internal_note": None, "created_at": (today - datetime.timedelta(days=2)).isoformat(), "updated_at": (today - datetime.timedelta(days=2)).isoformat()},
+        {"id": 5, "subject": "Headcount for Tech Help Desk", "description": "Requesting 2 additional FTEs for Tech Help Desk to handle Q4 volume increase based on forecast.", "category": "headcount", "priority": "high", "status": "in_progress", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": None, "affected_agents": "", "affected_date": (today + datetime.timedelta(days=14)).isoformat(), "affected_date_end": (today + datetime.timedelta(days=90)).isoformat(), "lob": "Tech Help Desk", "shift_time": None, "overtime_hours": None, "swap_with": None, "internal_note": "Pending leadership approval.", "created_at": (today - datetime.timedelta(days=5)).isoformat(), "updated_at": (today - datetime.timedelta(days=3)).isoformat()},
+        {"id": 6, "subject": "Overtime for Taylor Brooks, Riley Kim", "description": "Both agents approved for weekend overtime to cover increased call volume.", "category": "overtime", "priority": "high", "status": "resolved", "submitted_by": 99, "submitter_name": "WFM Analyst", "assigned_to": 99, "assignee_name": "WFM Analyst", "resolution": "Approved — 8 hours each on Saturday.", "affected_agents": "Taylor Brooks, Riley Kim", "affected_date": (today + datetime.timedelta(days=3)).isoformat(), "affected_date_end": None, "lob": "Sales Support", "shift_time": "9:00 AM - 5:00 PM", "overtime_hours": 8.0, "swap_with": None, "internal_note": None, "created_at": (today - datetime.timedelta(days=6)).isoformat(), "updated_at": (today - datetime.timedelta(days=4)).isoformat()},
     ]
 
 
@@ -1896,9 +1897,9 @@ def get_demo_attendance_dashboard(date_str=None):
         day = datetime.date.today()
     agents = [
         ("Alex Morgan", "E1001"), ("Jordan Rivera", "E1002"), ("Casey Chen", "E1003"),
-        ("Sam Patel", "E1004"), ("Taylor Kim", "E1005"), ("Drew Nguyen", "E1006"),
-        ("Riley Brooks", "E1007"), ("Priya Sharma", "E1008"), ("Marcus Johnson", "E1009"),
-        ("Ava Williams", "E1010"),
+        ("Taylor Brooks", "E1004"), ("Sam Patel", "E1005"), ("Riley Kim", "E1006"),
+        ("Jamie Torres", "E2001"), ("Avery Nguyen", "E2002"), ("Drew Campbell", "E2003"),
+        ("Harper Wilson", "E3001"),
     ]
     rows = []
     for i, (name, eid) in enumerate(agents):
@@ -1953,7 +1954,7 @@ def get_demo_audit_log():
     today = datetime.date.today()
     entries = [
         {"id": 1, "user_id": 1, "user_name": "Admin", "action": "schedule_published", "detail": "Published schedule for Sales Support, week of Oct 7.", "entity_type": "schedule", "entity_id": "1", "created_at": today.isoformat() + "T08:00:00"},
-        {"id": 2, "user_id": 1, "user_name": "Admin", "action": "employee_added", "detail": "Added new employee: Taylor Kim (E1005).", "entity_type": "employee", "entity_id": "5", "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T10:30:00"},
+        {"id": 2, "user_id": 1, "user_name": "Admin", "action": "employee_added", "detail": "Added new employee: Sam Patel (E1005).", "entity_type": "employee", "entity_id": "5", "created_at": (today - datetime.timedelta(days=1)).isoformat() + "T10:30:00"},
         {"id": 3, "user_id": 2, "user_name": "Lisa Tran", "action": "pto_approved", "detail": "Approved PTO for Alex Morgan on Oct 15.", "entity_type": "pto", "entity_id": "10", "created_at": (today - datetime.timedelta(days=2)).isoformat() + "T14:00:00"},
         {"id": 4, "user_id": 1, "user_name": "Admin", "action": "settings_changed", "detail": "Updated brand accent color.", "entity_type": "settings", "entity_id": None, "created_at": (today - datetime.timedelta(days=3)).isoformat() + "T09:15:00"},
         {"id": 5, "user_id": 1, "user_name": "Admin", "action": "data_imported", "detail": "Imported 18 forecast intervals for Billing.", "entity_type": "forecast", "entity_id": None, "created_at": (today - datetime.timedelta(days=4)).isoformat() + "T11:45:00"},

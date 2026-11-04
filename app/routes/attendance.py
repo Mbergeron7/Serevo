@@ -39,6 +39,8 @@ def clock_in():
     user = get_current_user()
     if not user:
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     emp = _resolve_employee(user)
     if not emp:
@@ -75,6 +77,8 @@ def clock_out():
     user = get_current_user()
     if not user:
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     emp = _resolve_employee(user)
     if not emp:
@@ -133,6 +137,8 @@ def clock_history():
     user = get_current_user()
     if not user:
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, entries=[], message="Demo mode")
 
     emp = _resolve_employee(user)
     if not emp:

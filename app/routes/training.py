@@ -67,6 +67,8 @@ def save_module():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
@@ -103,6 +105,8 @@ def delete_module():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     mod = TrainingModule.query.get(data.get("id"))
@@ -167,6 +171,8 @@ def assign_training():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     module_id = data.get("module_id")
@@ -234,6 +240,8 @@ def update_assignment():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     a = TrainingAssignment.query.get(data.get("id"))
@@ -264,6 +272,8 @@ def delete_assignment():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     a = TrainingAssignment.query.get(data.get("id"))

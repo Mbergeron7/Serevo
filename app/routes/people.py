@@ -71,6 +71,9 @@ def _sync_planning_units():
 @people_bp.route("/api/sync-planning-units", methods=["POST"])
 @login_required
 def sync_planning_units():
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     updated = _sync_planning_units()
     db.session.commit()
     return jsonify({"success": True, "updated": updated})
@@ -339,6 +342,9 @@ def loa():
 @people_bp.route("/accommodations/save", methods=["POST"])
 @login_required
 def save_accommodation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.people.manager import save_accommodation as _save
     try:
         payload = request.get_json(silent=True) or {}
@@ -353,6 +359,9 @@ def save_accommodation():
 @people_bp.route("/accommodations/delete", methods=["POST"])
 @login_required
 def delete_accommodation():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.people.manager import delete_accommodation as _delete
     try:
         payload = request.get_json(silent=True) or {}
@@ -376,6 +385,9 @@ def pto():
 @people_bp.route("/pto/save", methods=["POST"])
 @login_required
 def save_pto():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.people.manager import save_pto as _save
     try:
         payload = request.get_json(silent=True) or {}
@@ -390,6 +402,9 @@ def save_pto():
 @people_bp.route("/pto/delete", methods=["POST"])
 @login_required
 def delete_pto():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.people.manager import delete_pto as _delete
     try:
         payload = request.get_json(silent=True) or {}
@@ -1352,6 +1367,8 @@ def save_attendance_event():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     event_id = payload.get("id")
@@ -1410,6 +1427,8 @@ def delete_attendance_event():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     event_id = payload.get("id")
@@ -1490,6 +1509,8 @@ def save_pto_entry():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     employee_id = payload.get("employee_id")
@@ -1536,6 +1557,8 @@ def delete_pto_entry():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     entry_id = payload.get("id")

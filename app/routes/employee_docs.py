@@ -89,6 +89,9 @@ def upload_doc():
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
 
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
     file = request.files.get("file")
     if not file or not file.filename:
         return jsonify(success=False, error="No file selected")
@@ -155,6 +158,9 @@ def delete_doc():
     user = get_current_user()
     if not _check_role(user):
         return jsonify(error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     doc = EmployeeDocument.query.get(data.get("id"))

@@ -55,6 +55,9 @@ def planning_units_page():
 @settings_bp.route("/planning-units/save", methods=["POST"])
 @admin_required
 def planning_units_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import PlanningUnit, PlanningUnitBusinessHours, PlanningUnitActivity, PlanningUnitParameter, CallRoute, LOBSetting, db
     d = request.json or {}
     try:
@@ -197,6 +200,9 @@ def planning_units_save():
 @settings_bp.route("/planning-units/delete", methods=["POST"])
 @admin_required
 def planning_units_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import PlanningUnit, db
     d = request.json or {}
     try:
@@ -267,6 +273,9 @@ def skills_page():
 @settings_bp.route("/skills/save", methods=["POST"])
 @admin_required
 def skills_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import SkillGroup, db
     d = request.json or {}
     try:
@@ -286,6 +295,9 @@ def skills_save():
 @settings_bp.route("/skills/delete", methods=["POST"])
 @admin_required
 def skills_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import SkillGroup, db
     d = request.json or {}
     try:
@@ -332,6 +344,9 @@ def selections_page():
 @settings_bp.route("/selections/save", methods=["POST"])
 @admin_required
 def selections_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import Selection, db
     d = request.json or {}
     try:
@@ -351,6 +366,9 @@ def selections_save():
 @settings_bp.route("/selections/delete", methods=["POST"])
 @admin_required
 def selections_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import Selection, db
     d = request.json or {}
     try:
@@ -408,6 +426,9 @@ def shift_sequences_page():
 @settings_bp.route("/shift-sequences/save", methods=["POST"])
 @admin_required
 def shift_sequences_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     import json as _json
     from app.models import ShiftSequence, ShiftSequenceRow, db
     d = request.json or {}
@@ -440,6 +461,9 @@ def shift_sequences_save():
 @settings_bp.route("/shift-sequences/delete", methods=["POST"])
 @admin_required
 def shift_sequences_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import ShiftSequence, db
     d = request.json or {}
     try:
@@ -465,6 +489,9 @@ def shift_sequence_rows(seq_id):
 @settings_bp.route("/shift-sequences/save-rows", methods=["POST"])
 @admin_required
 def shift_sequence_save_rows():
+    dg = _demo_guard()
+    if dg:
+        return dg
     import json as _json
     from app.models import ShiftSequenceRow, db
     d = request.json or {}
@@ -673,6 +700,9 @@ def planning_calendars_page():
 @settings_bp.route("/planning-calendars/day-types/save", methods=["POST"])
 @admin_required
 def day_types_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import DayType, db
     d = request.json or {}
     try:
@@ -693,6 +723,9 @@ def day_types_save():
 @settings_bp.route("/planning-calendars/day-types/delete", methods=["POST"])
 @admin_required
 def day_types_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import DayType, db
     d = request.json or {}
     try:
@@ -709,6 +742,9 @@ def day_types_delete():
 @settings_bp.route("/planning-calendars/save", methods=["POST"])
 @admin_required
 def planning_calendars_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import PlanningCalendar, db
     d = request.json or {}
     try:
@@ -726,6 +762,9 @@ def planning_calendars_save():
 @settings_bp.route("/planning-calendars/delete", methods=["POST"])
 @admin_required
 def planning_calendars_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import PlanningCalendar, db
     d = request.json or {}
     try:
@@ -751,6 +790,9 @@ def calendar_entries_list(cal_id):
 @settings_bp.route("/planning-calendars/entries/save", methods=["POST"])
 @admin_required
 def calendar_entries_save():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from datetime import date as _date
     from app.models import CalendarEntry, db
     d = request.json or {}
@@ -771,6 +813,9 @@ def calendar_entries_save():
 @settings_bp.route("/planning-calendars/entries/delete", methods=["POST"])
 @admin_required
 def calendar_entries_delete():
+    dg = _demo_guard()
+    if dg:
+        return dg
     from app.models import CalendarEntry, db
     d = request.json or {}
     try:

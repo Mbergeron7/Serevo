@@ -1547,6 +1547,10 @@ def _require_admin():
 def trigger_sync():
     """Manual trigger for the sync.
     Can be called by admins or by the scheduler endpoint."""
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "feeds": [], "message": "Demo mode — sync skipped"})
+
     auth_err = _require_admin()
     if auth_err:
         # Also allow scheduler secret key
@@ -1564,6 +1568,10 @@ def trigger_sync():
 def resync_feed(feed_id):
     """Clear all data for a feed and re-sync from scratch.
     Useful after changing timezone or column mapping."""
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "cleared": 0, "sync": "Demo mode — resync skipped"})
+
     auth_err = _require_admin()
     if auth_err:
         return auth_err
@@ -1661,6 +1669,10 @@ def sync_status():
 @login_required
 def configure_sync():
     """Save sheet keys to AppSettings."""
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "message": "Demo mode — configuration saved (simulated)"})
+
     auth_err = _require_admin()
     if auth_err:
         return auth_err

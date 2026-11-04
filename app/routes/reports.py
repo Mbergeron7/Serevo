@@ -247,6 +247,8 @@ def attendance_csv():
     user = _require_admin_or_sup()
     if not user:
         return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     days = int(payload.get("days", 7))
@@ -294,6 +296,8 @@ def summary_csv():
     user = _require_admin_or_sup()
     if not user:
         return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
     days = int(payload.get("days", 30))

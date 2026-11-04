@@ -99,6 +99,8 @@ def save_announcement():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
@@ -157,6 +159,8 @@ def delete_announcement():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     ann = Announcement.query.get(data.get("id"))

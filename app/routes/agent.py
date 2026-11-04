@@ -270,6 +270,8 @@ def submit_time_off():
 def cancel_time_off(entry_id):
     """Agent cancels a pending time-off request."""
     user = get_current_user()
+    if user and user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     emp = _get_agent_employee(user)
     if not emp:
         return jsonify({"error": "Employee not found"}), 404

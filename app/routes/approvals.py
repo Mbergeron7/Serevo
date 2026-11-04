@@ -107,6 +107,8 @@ def decide_pto():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     try:
         payload = request.get_json(silent=True) or {}
         entry_id = payload.get("id")
@@ -175,6 +177,8 @@ def decide_bid():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     try:
         payload = request.get_json(silent=True) or {}
         bid_id = payload.get("id")
@@ -253,6 +257,8 @@ def decide_swap():
     user = _require_manager()
     if not user:
         return jsonify({"success": False, "error": "Forbidden"}), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
     try:
         payload = request.get_json(silent=True) or {}
         swap_id = payload.get("id")

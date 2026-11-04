@@ -69,6 +69,13 @@ def api_groups():
 @rosters_bp.route("/api/groups", methods=["POST"])
 @login_required
 def api_create_group():
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"id": 999, "name": "Demo Group", "planning_unit_id": 1,
+                        "closers_required_weekday": 1, "closers_required_weekend": 1,
+                        "weekend_mode": "rotate", "stat_role": None,
+                        "sunday_non_closer": False, "weekend_close_week_parity": None,
+                        "active": True}), 201
     d = request.get_json(force=True)
     g = RosterGroup(
         planning_unit_id=d["planning_unit_id"],
@@ -88,6 +95,10 @@ def api_create_group():
 @rosters_bp.route("/api/groups/<int:gid>", methods=["PUT"])
 @login_required
 def api_update_group(gid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        d = request.get_json(force=True)
+        return jsonify({"id": gid, "name": d.get("name", "Demo Group"), "active": True})
     g = RosterGroup.query.get_or_404(gid)
     d = request.get_json(force=True)
     for k in ("name", "planning_unit_id", "closers_required_weekday",
@@ -105,6 +116,9 @@ def api_update_group(gid):
 @rosters_bp.route("/api/groups/<int:gid>", methods=["DELETE"])
 @login_required
 def api_delete_group(gid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True})
     g = RosterGroup.query.get_or_404(gid)
     g.active = False
     db.session.commit()
@@ -116,6 +130,9 @@ def api_delete_group(gid):
 @rosters_bp.route("/api/groups/<int:gid>/members", methods=["POST"])
 @login_required
 def api_add_member(gid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"id": 999, "roster_group_id": gid, "employee_id": 1, "active": True}), 201
     g = RosterGroup.query.get_or_404(gid)
     d = request.get_json(force=True)
     m = RosterMember(
@@ -162,6 +179,9 @@ def api_add_member(gid):
 @rosters_bp.route("/api/members/<int:mid>", methods=["PUT"])
 @login_required
 def api_update_member(mid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"id": mid, "active": True})
     m = RosterMember.query.get_or_404(mid)
     d = request.get_json(force=True)
     for k in ("is_display_only", "is_weekend_primary", "is_fill_in",
@@ -192,6 +212,9 @@ def api_update_member(mid):
 @rosters_bp.route("/api/members/<int:mid>", methods=["DELETE"])
 @login_required
 def api_delete_member(mid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True})
     m = RosterMember.query.get_or_404(mid)
     m.active = False
     db.session.commit()
@@ -203,6 +226,9 @@ def api_delete_member(mid):
 @rosters_bp.route("/api/groups/<int:gid>/slots", methods=["POST"])
 @login_required
 def api_add_slot(gid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"id": 999, "roster_group_id": gid, "day_type": "weekday", "role": "mid"}), 201
     g = RosterGroup.query.get_or_404(gid)
     d = request.get_json(force=True)
     s = RosterSlot(
@@ -222,6 +248,9 @@ def api_add_slot(gid):
 @rosters_bp.route("/api/slots/<int:sid>", methods=["PUT"])
 @login_required
 def api_update_slot(sid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"id": sid, "day_type": "weekday", "role": "mid"})
     s = RosterSlot.query.get_or_404(sid)
     d = request.get_json(force=True)
     if "day_type" in d:
@@ -243,6 +272,9 @@ def api_update_slot(sid):
 @rosters_bp.route("/api/slots/<int:sid>", methods=["DELETE"])
 @login_required
 def api_delete_slot(sid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True})
     s = RosterSlot.query.get_or_404(sid)
     db.session.delete(s)
     db.session.commit()
@@ -254,6 +286,10 @@ def api_delete_slot(sid):
 @rosters_bp.route("/api/groups/<int:gid>/slots/bulk", methods=["POST"])
 @login_required
 def api_bulk_save_slots(gid):
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        data = request.get_json(force=True)
+        return jsonify({"ok": True, "count": len(data.get("slots", []))})
     g = RosterGroup.query.get_or_404(gid)
     data = request.get_json(force=True)
     slots = data.get("slots", [])
@@ -278,6 +314,9 @@ def api_bulk_save_slots(gid):
 @rosters_bp.route("/api/generate", methods=["POST"])
 @login_required
 def api_generate():
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "message": "Demo roster generated", "assignments": 0, "warnings": []})
     d = request.get_json(force=True)
     group_id = d.get("group_id")
     start = _parse_date(d.get("start_date"))
@@ -303,6 +342,9 @@ def api_generate():
 @rosters_bp.route("/api/publish", methods=["POST"])
 @login_required
 def api_publish():
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "message": "Demo roster published", "published": 0})
     d = request.get_json(force=True)
     group_id = d.get("group_id")
     start = _parse_date(d.get("start_date"))
@@ -372,6 +414,9 @@ def api_debug_slots(gid):
 @rosters_bp.route("/api/clear", methods=["POST"])
 @login_required
 def api_clear():
+    user = get_current_user()
+    if getattr(user, 'is_demo', False):
+        return jsonify({"ok": True, "message": "Demo roster cleared", "deleted": 0})
     d = request.get_json(force=True)
     group_id = d.get("group_id")
     start = _parse_date(d.get("start_date"))

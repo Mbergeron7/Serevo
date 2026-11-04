@@ -246,6 +246,8 @@ def export_csv():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     try:
@@ -431,6 +433,8 @@ def adjust_punch(punch_id):
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     entry = TimeClock.query.get(punch_id)
     if not entry:
@@ -484,6 +488,8 @@ def approve_punch(punch_id):
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     entry = TimeClock.query.get(punch_id)
     if not entry:
@@ -511,6 +517,8 @@ def bulk_approve():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
 
     data = request.get_json(silent=True) or {}
     ids = data.get("ids", [])
