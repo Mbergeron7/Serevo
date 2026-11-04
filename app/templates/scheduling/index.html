@@ -2739,12 +2739,15 @@ function renderCoverageStrip(coverage) {
       else if (c.coverage_pct >= 90) cls = 'cov-met';
       else if (c.coverage_pct >= 70) cls = 'cov-under';
       else cls = 'cov-crit';
-      html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled}/${c.required} (${c.coverage_pct}%)">
-        <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}/${c.required}</div></div>`;
+      const sched = Math.round(c.scheduled * 10) / 10;
+      const req = Math.round(c.required * 10) / 10;
+      const pct = Math.round(c.coverage_pct);
+      html += `<div class="cov-cell ${cls}" title="${c.time}: ${sched}/${req} (${pct}%)">
+        <div style="font-size:.65rem">${c.time}</div><div>${sched}/${req}</div></div>`;
     } else {
       cls = c.scheduled > 0 ? 'cov-met' : 'cov-zero';
-      html += `<div class="cov-cell ${cls}" title="${c.time}: ${c.scheduled} scheduled">
-        <div style="font-size:.65rem">${c.time}</div><div>${c.scheduled}</div></div>`;
+      html += `<div class="cov-cell ${cls}" title="${c.time}: ${Math.round(c.scheduled * 10) / 10} scheduled">
+        <div style="font-size:.65rem">${c.time}</div><div>${Math.round(c.scheduled * 10) / 10}</div></div>`;
     }
   });
   html += '</div></div>';
