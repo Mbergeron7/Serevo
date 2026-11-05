@@ -1990,6 +1990,8 @@ if (_origShowView) {
 
 // Deep link (#interval etc.) + auto-load
 (function(){
+  // Bind LOB picker so label updates on individual checkbox changes
+  MSPicker.bind('selLob');
   try {
     const h = (location.hash || '').replace('#','');
     if (h) showView(h); else showView('dashboard');
