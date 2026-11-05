@@ -242,7 +242,7 @@
     <span class="live-dot" id="liveDot"></span>
     <span id="clockLabel">--:--:--</span>
   </div>
-  <label class="auto-refresh"><input type="checkbox" id="chkAuto" checked> Auto-refresh (60s)</label>
+  <label class="auto-refresh"><input type="checkbox" id="chkAuto" checked> Auto-refresh <span id="autoCountdown" style="min-width:42px;display:inline-block">(60s)</span></label>
   <span class="as-of" id="asOf"></span>
 </div>
 
@@ -800,10 +800,33 @@ async function loadAll(silent) {
     if (!silent) { hideLoading(); }
     renderIntraday();
   }
-  clearInterval(timer);
-  if ($('chkAuto').checked) timer = setInterval(() => loadAll(true), 60000);
+  startAutoCountdown();
 }
-$('chkAuto').addEventListener('change', function(){ clearInterval(timer); if (this.checked && (DATA.dashboard || INTRA.snapshot)) timer = setInterval(() => refreshActive(), 60000); });
+
+let _autoSecs = 60, _autoInterval = null;
+function startAutoCountdown() {
+  stopAutoCountdown();
+  if (!$('chkAuto').checked) return;
+  _autoSecs = 60;
+  const cd = $('autoCountdown');
+  cd.textContent = '(60s)';
+  _autoInterval = setInterval(() => {
+    _autoSecs--;
+    if (_autoSecs <= 0) {
+      cd.textContent = '(refreshing…)';
+      stopAutoCountdown();
+      refreshActive().finally(() => startAutoCountdown());
+    } else {
+      cd.textContent = '(' + _autoSecs + 's)';
+    }
+  }, 1000);
+}
+function stopAutoCountdown() {
+  if (_autoInterval) { clearInterval(_autoInterval); _autoInterval = null; }
+}
+$('chkAuto').addEventListener('change', function() {
+  if (this.checked) startAutoCountdown(); else { stopAutoCountdown(); $('autoCountdown').textContent = '(off)'; }
+});
 
 async function refreshActive() {
   // Silently refresh only the active tab's data
