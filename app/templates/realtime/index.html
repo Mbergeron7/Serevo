@@ -28,6 +28,21 @@
   .view-tab { padding:7px 16px; border-radius:6px; border:none; background:transparent;
     color:var(--text-muted); font-size:.82rem; font-weight:600; cursor:pointer; }
   .view-tab.active { background:var(--brand-accent); color:#fff; }
+  .view-tab { position:relative; }
+  .tab-badge { display:inline-block; font-size:.65rem; font-weight:700; min-width:16px; text-align:center;
+    padding:1px 5px; border-radius:10px; margin-left:4px; line-height:1.3; vertical-align:middle; }
+  .tab-badge.red { background:#fee2e2; color:#991b1b; }
+  .tab-badge.green { background:#d1fae5; color:#065f46; }
+  .tab-badge.blue { background:#dbeafe; color:#1e40af; }
+  .tab-badge.orange { background:#fef3c7; color:#92400e; }
+  .view-tab.active .tab-badge.red { background:rgba(255,255,255,.25); color:#fff; }
+  .view-tab.active .tab-badge.green { background:rgba(255,255,255,.25); color:#fff; }
+  .view-tab.active .tab-badge.blue { background:rgba(255,255,255,.25); color:#fff; }
+  .view-tab.active .tab-badge.orange { background:rgba(255,255,255,.25); color:#fff; }
+  :root:not([data-theme="light"]) .tab-badge.red { background:#7f1d1d; color:#fecaca; }
+  :root:not([data-theme="light"]) .tab-badge.green { background:#064e3b; color:#a7f3d0; }
+  :root:not([data-theme="light"]) .tab-badge.blue { background:#1e3a5f; color:#93c5fd; }
+  :root:not([data-theme="light"]) .tab-badge.orange { background:#78350f; color:#fde68a; }
   .view-panel { display:none; }
   .view-panel.active { display:block; }
 
@@ -174,6 +189,14 @@
   #tblAdherence tbody tr:hover td { background:color-mix(in srgb, var(--brand-accent) 10%, transparent); }
 
   .loading-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:999; justify-content:center; align-items:center; }
+  .data-status-bar { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px; font-size:.76rem; font-weight:600; }
+  .ds-item { padding:3px 10px; border-radius:12px; background:var(--bg); color:var(--text-muted); }
+  .ds-item.ok { background:#d1fae5; color:#065f46; }
+  .ds-item.warn { background:#fef3c7; color:#92400e; }
+  .ds-item.off { background:var(--bg); color:var(--text-muted); }
+  :root:not([data-theme="light"]) .ds-item.ok { background:#064e3b; color:#a7f3d0; }
+  :root:not([data-theme="light"]) .ds-item.warn { background:#78350f; color:#fde68a; }
+
   .loading-overlay.show { display:flex; }
   .loading-box { background:var(--surface); padding:30px 40px; border-radius:12px; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,.2); }
   .spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--brand-accent);
@@ -210,6 +233,10 @@
     <label>Date</label>
     <input type="date" id="inpDate" value="{{ today }}">
   </div>
+  <div class="config-group">
+    <label>Employee</label>
+    <input type="text" id="globalEmpSearch" placeholder="Search by name…" style="min-width:160px;" oninput="globalEmployeeFilter(this.value)">
+  </div>
   <button class="btn-action" onclick="loadAll()">Load</button>
   <div class="live-badge">
     <span class="live-dot" id="liveDot"></span>
@@ -219,24 +246,31 @@
   <span class="as-of" id="asOf"></span>
 </div>
 
+<div id="dataStatusBar" class="data-status-bar" style="display:none;">
+  <span class="ds-item" id="dsActuals">◻ Actuals</span>
+  <span class="ds-item" id="dsAdherence">◻ Adherence</span>
+  <span class="ds-item" id="dsForecast">◻ Forecast</span>
+  <span class="ds-item" id="dsAgentStatus">◻ Agent Status</span>
+</div>
+
 <div class="view-tabs">
   <button class="view-tab" data-view="intraday" onclick="showView('intraday')">Intraday</button>
-  <button class="view-tab" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+  <button class="view-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
   <button class="view-tab" data-view="forecast" onclick="showView('forecast')">Forecast &amp; OTF</button>
   <button class="view-tab" data-view="interval" onclick="showView('interval')">Interval Report</button>
   <button class="view-tab" data-view="svl" onclick="showView('svl')">SVL Calculator</button>
-  <button class="view-tab" data-view="absent" onclick="showView('absent')">Absenteeism</button>
-  <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status</button>
+  <button class="view-tab" data-view="absent" onclick="showView('absent')">Absenteeism <span id="badgeAbsent" class="tab-badge red" style="display:none"></span></button>
+  <button class="view-tab" data-view="status" onclick="showView('status')">Agent Status <span id="badgeStatus" class="tab-badge blue" style="display:none"></span></button>
   <button class="view-tab" data-view="eff" onclick="showView('eff')">Efficiency</button>
-  <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing</button>
+  <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing <span id="badgeNetStaff" class="tab-badge orange" style="display:none"></span></button>
   <button class="view-tab" data-view="optimizer" onclick="showView('optimizer')">⚡ Optimizer</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
-  <button class="view-tab active" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents</button>
+  <button class="view-tab" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents <span id="badgeLive" class="tab-badge green" style="display:none"></span></button>
 </div>
 
 <!-- ═══════════ INTRADAY (live monitor) ═══════════ -->
 <div id="view-intraday" class="view-panel">
-  <div id="intradayEmpty" class="empty"><strong>Click Load to see real-time status</strong></div>
+  <div id="intradayEmpty" class="empty"><strong>📡 Intraday Monitor</strong><br>Live coverage heatmap, staffing gaps, service level estimates, and agent adherence.<br><small style="color:var(--text-muted)">Select a date and click <strong>Load</strong>, or wait for auto-refresh.</small></div>
   <div id="intradayContent" style="display:none;">
     <div class="stats-row" id="currentStats"></div>
     <div id="alertsPanel"></div>
@@ -285,17 +319,17 @@
 </div>
 
 <!-- ═══════════ REPORTS PANELS ═══════════ -->
-<div id="view-dashboard" class="view-panel"><div class="empty">Click <strong>Load</strong> to run the reports.</div></div>
-<div id="view-forecast" class="view-panel"></div>
-<div id="view-interval" class="view-panel"></div>
-<div id="view-svl" class="view-panel"></div>
-<div id="view-absent" class="view-panel"></div>
-<div id="view-status" class="view-panel"></div>
-<div id="view-eff" class="view-panel"></div>
+<div id="view-dashboard" class="view-panel"><div class="empty"><strong>📊 Dashboard</strong><br>Overview of service levels, staffing, absenteeism and efficiency across all LOBs.<br><small style="color:var(--text-muted)">Select a date and click <strong>Load</strong>, or wait for auto-refresh.</small></div></div>
+<div id="view-forecast" class="view-panel"><div class="empty"><strong>📈 Forecast &amp; OTF</strong><br>Compares actual call volume against forecast to track on-the-floor performance.<br><small style="color:var(--text-muted)">Requires call actuals data — upload via Data Import or connect a Google Sheet.</small></div></div>
+<div id="view-interval" class="view-panel"><div class="empty"><strong>📋 Interval Report</strong><br>Detailed interval-by-interval breakdown of calls, service level, AHT, and abandonment.<br><small style="color:var(--text-muted)">Requires call actuals data — upload via Data Import or connect a Google Sheet.</small></div></div>
+<div id="view-svl" class="view-panel"><div class="empty"><strong>🎯 SVL Calculator</strong><br>Calculates what it takes to finish the day on your service level target.<br><small style="color:var(--text-muted)">Needs call actuals and a forecast. Upload actuals via Data Import or Google Sheet.</small></div></div>
+<div id="view-absent" class="view-panel"><div class="empty"><strong>🚫 Absenteeism</strong><br>Tracks who is absent, late, or left early against their scheduled shifts.<br><small style="color:var(--text-muted)">Requires agent status events — upload via Data Import or connect a Google Sheet.</small></div></div>
+<div id="view-status" class="view-panel"><div class="empty"><strong>👤 Agent Status</strong><br>Shows each agent's current and historical status (Ready, On-call, Break, etc.).<br><small style="color:var(--text-muted)">Requires agent status events — upload via Data Import or connect a Google Sheet.</small></div></div>
+<div id="view-eff" class="view-panel"><div class="empty"><strong>⚡ Efficiency</strong><br>Measures production efficiency — productive hours vs. paid hours by LOB and agent.<br><small style="color:var(--text-muted)">Requires agent status events — upload via Data Import or connect a Google Sheet.</small></div></div>
 
 <!-- ═══════════ NET STAFFING ═══════════ -->
 <div id="view-netstaffing" class="view-panel">
-  <div id="nsEmpty" class="empty"><strong>Click Load to see net staffing</strong></div>
+  <div id="nsEmpty" class="empty"><strong>📊 Net Staffing</strong><br>Shows scheduled vs. required staffing gap by interval, with estimated service level impact.<br><small style="color:var(--text-muted)">Select a date and click <strong>Load</strong> to view net staffing data.</small></div>
   <div id="nsContent" style="display:none;">
     <div class="stats-row" id="nsStats"></div>
     <div id="nsLobs"></div>
@@ -304,8 +338,7 @@
 
 <!-- ═══════════ INTRADAY OPTIMIZER ═══════════ -->
 <div id="view-optimizer" class="view-panel">
-  <div id="optEmpty" class="empty"><strong>Click Load to generate optimization recommendations</strong>
-    <br>Analyzes staffing gaps and suggests break moves, VTO offers, and skill reassignments.</div>
+  <div id="optEmpty" class="empty"><strong>⚡ Optimizer</strong><br>Analyzes staffing gaps and suggests break moves, VTO offers, and skill reassignments.<br><small style="color:var(--text-muted)">Select a date and click <strong>Load</strong> to generate recommendations.</small></div>
   <div id="optContent" style="display:none;">
     <div class="stats-row" id="optStats"></div>
     <div id="optRecs"></div>
@@ -314,7 +347,7 @@
 
 <!-- ═══════════ LEADERBOARD / GAMIFICATION ═══════════ -->
 <div id="view-gamify" class="view-panel">
-  <div id="gamifyEmpty" class="empty"><strong>Click Load to see leaderboard</strong></div>
+  <div id="gamifyEmpty" class="empty"><strong>🏆 Leaderboard</strong><br>Ranks agents by adherence score with badges for top performers.<br><small style="color:var(--text-muted)">Requires agent status events. Select a date and click <strong>Load</strong>.</small></div>
   <div id="gamifyContent" style="display:none;">
     <div class="stats-row" id="gamifyStats"></div>
     <div class="grid-2">
@@ -575,7 +608,7 @@ function selectedLobParam() {
   if (sel.length === 1) return sel[0];
   return 'All';  // multiple LOBs: fetch all, filter client-side
 }
-let _activeView = 'liveagents';
+let _activeView = 'dashboard';
 const _loaded = {};  // track which tabs have data loaded
 
 function showView(name) {
@@ -672,7 +705,62 @@ const TAB_LOADERS = {
 
 async function loadTab(name) {
   const loader = TAB_LOADERS[name];
-  if (loader) { await loader(); _loaded[name] = true; }
+  if (loader) { await loader(); _loaded[name] = true; updateBadges(); updateDataStatus(); }
+}
+
+function updateBadges() {
+  // Absenteeism badge — total absent count
+  const ab = DATA.absenteeism;
+  const bAbsent = $('badgeAbsent');
+  if (ab && ab.success && ab.total) {
+    const cnt = ab.total.absent || 0;
+    if (cnt > 0) { bAbsent.textContent = cnt; bAbsent.style.display = ''; }
+    else bAbsent.style.display = 'none';
+  }
+  // Agent Status badge — count of currently active agents
+  const st = DATA['agent-status'];
+  const bStatus = $('badgeStatus');
+  if (st && st.success && st.current) {
+    const live = st.current.filter(r => r.is_live).length;
+    if (live > 0) { bStatus.textContent = live; bStatus.style.display = ''; }
+    else bStatus.style.display = 'none';
+  }
+  // Live Agents badge — count from adherence data
+  const bLive = $('badgeLive');
+  if (INTRA.adherence && INTRA.adherence.agents) {
+    const n = INTRA.adherence.agents.length;
+    if (n > 0) { bLive.textContent = n; bLive.style.display = ''; }
+    else bLive.style.display = 'none';
+  }
+  // Net Staffing badge — understaffed intervals from snapshot
+  const bNet = $('badgeNetStaff');
+  if (INTRA.snapshot && INTRA.snapshot.intervals) {
+    const under = INTRA.snapshot.intervals.filter(i => (i.net_staffing || 0) < 0).length;
+    if (under > 0) { bNet.textContent = under + ' ⚠'; bNet.style.display = ''; }
+    else bNet.style.display = 'none';
+  }
+}
+
+function updateDataStatus() {
+  const bar = $('dataStatusBar');
+  bar.style.display = 'flex';
+  function setStatus(id, ok, label) {
+    const el = $(id);
+    el.className = 'ds-item ' + (ok === true ? 'ok' : ok === false ? 'off' : 'warn');
+    el.textContent = (ok === true ? '✓ ' : ok === false ? '✗ ' : '⏳ ') + label;
+  }
+  // Actuals — from intraday snapshot
+  const hasActuals = INTRA.snapshot && INTRA.snapshot.intervals && INTRA.snapshot.intervals.length > 0;
+  setStatus('dsActuals', hasActuals === true ? true : INTRA.snapshot === null ? false : false, 'Actuals');
+  // Adherence
+  const hasAdh = INTRA.adherence && INTRA.adherence.agents && INTRA.adherence.agents.length > 0;
+  setStatus('dsAdherence', hasAdh ? true : false, 'Adherence');
+  // Forecast
+  const hasFc = DATA.forecast && DATA.forecast.success && DATA.forecast.intervals && DATA.forecast.intervals.length > 0;
+  setStatus('dsForecast', hasFc ? true : DATA.forecast === undefined ? null : false, 'Forecast');
+  // Agent Status
+  const hasSt = DATA['agent-status'] && DATA['agent-status'].success && DATA['agent-status'].has_events;
+  setStatus('dsAgentStatus', hasSt ? true : DATA['agent-status'] === undefined ? null : false, 'Agent Status');
 }
 
 /* ══════════════════════════════════════════════════
@@ -702,6 +790,8 @@ async function loadAll(silent) {
     }
     renderIntraday();
     _loaded.intraday = true;
+    updateBadges();
+    updateDataStatus();
 
     // If the user is on a different tab, load that tab's data too
     if (_activeView !== 'intraday') loadTab(_activeView);
@@ -926,6 +1016,30 @@ function renderInterval(d) {
 function renderSvl(d) {
   const el = $('view-svl');
   if (!d || !d.success) return noData(el, 'SVL calculator unavailable', d && d.error);
+  // If no actuals but we have estimates, show estimates-only view
+  if (!d.rows.length || !d.rows.some(r => r.has_actuals)) {
+    if (d.estimates && d.estimates.length) {
+      let h = `<div class="report-card"><div class="empty"><strong>No call actuals yet</strong><br>Showing estimated service levels from forecast + scheduled staffing below.</div></div>`;
+      h += `<div class="report-card"><h3>📊 Estimated Service Levels <span class="hint">Erlang C model · forecast demand vs scheduled staffing</span></h3>`;
+      h += `<div class="stats-row">${d.estimates.map(e => {
+        const cls = e.avg_estimated_sl >= e.target ? 'cell-good' : (e.avg_estimated_sl >= e.target * 0.9 ? 'cell-warn' : 'cell-bad');
+        return `<div class="stat-card"><div class="stat-val ${cls}" style="padding:4px 12px;border-radius:6px;">${e.avg_estimated_sl != null ? e.avg_estimated_sl + '%' : 'N/A'}</div><div class="stat-label">${esc(e.lob)} est. SL (target ${e.target}%)</div></div>`;
+      }).join('')}</div>`;
+      d.estimates.forEach(e => {
+        h += `<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:600;font-size:.85rem;padding:6px 0;">▸ ${esc(e.lob)} — ${e.intervals.length} intervals · Peak ${e.total_agents_peak} agents · ${fmt(e.total_forecast)} forecast calls</summary>`;
+        h += `<div class="wrap"><table class="rt sortable"><thead><tr><th>Interval</th><th>Agents</th><th>Forecast calls</th><th>AHT (s)</th><th>Est. SL</th><th>Target</th></tr></thead><tbody>`;
+        e.intervals.forEach(iv => {
+          const cls = iv.est_service_level >= iv.target ? 'cell-good' : (iv.est_service_level >= iv.target * 0.9 ? 'cell-warn' : 'cell-bad');
+          h += `<tr><td>${iv.time}</td><td>${fmt(iv.agents)}</td><td>${fmt(iv.forecast_calls)}</td><td>${fmt(iv.aht)}</td><td class="${cls}">${iv.est_service_level}%</td><td>${iv.target}%</td></tr>`;
+        });
+        h += `</tbody></table></div></details>`;
+      });
+      h += `<p style="padding:10px 16px; font-size:.78rem; color:var(--text-muted); margin:0;">Estimated using Erlang C model. Upload call actuals for real-time SVL tracking.</p></div>`;
+      el.innerHTML = h;
+      el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+      return;
+    }
+  }
   const outlook = o => ({'on track':'good','at risk':'warn','unreachable':'bad','final':'','n/a':''}[o] || '');
   el.innerHTML = `<div class="report-card"><h3>SVL Calculator <span class="hint">what it takes to end the day on target</span></h3>
     <div class="wrap"><table class="rt sortable"><thead><tr><th>LOB</th><th>Target</th><th>Offered so far</th><th>Answered within</th><th>SVL so far</th><th>Remaining forecast</th><th>Projected total</th><th>Need within (remaining)</th><th>Required rate</th><th>Cushion (calls)</th><th>Outlook</th></tr></thead><tbody>` +
@@ -936,6 +1050,29 @@ function renderSvl(d) {
     `<tr class="total"><td>All LOBs</td><td></td><td>${fmt(d.total.actual_offered)}</td><td>${fmt(d.total.answered_within)}</td><td>${pct(d.total.service_level)}</td><td>${fmt(d.total.remaining_forecast)}</td><td colspan="5"></td></tr>
     </tbody></table></div>
     <p style="padding:10px 16px; font-size:.78rem; color:var(--text-muted); margin:0;">Required rate = share of the remaining forecast calls that must be answered within threshold to finish at target. Cushion = calls you can still miss and stay on target.</p></div>`;
+
+  // Erlang C estimated service levels from forecast + scheduled staffing
+  if (d.estimates && d.estimates.length) {
+    let eh = `<div class="report-card"><h3>📊 Estimated Service Levels <span class="hint">Erlang C model · forecast demand vs scheduled staffing</span></h3>`;
+    // Summary row per LOB
+    eh += `<div class="stats-row">${d.estimates.map(e => {
+      const cls = e.avg_estimated_sl >= e.target ? 'cell-good' : (e.avg_estimated_sl >= e.target * 0.9 ? 'cell-warn' : 'cell-bad');
+      return `<div class="stat-card"><div class="stat-val ${cls}" style="padding:4px 12px;border-radius:6px;">${e.avg_estimated_sl != null ? e.avg_estimated_sl + '%' : 'N/A'}</div><div class="stat-label">${esc(e.lob)} est. SL (target ${e.target}%)</div></div>`;
+    }).join('')}</div>`;
+    // Interval detail table per LOB
+    d.estimates.forEach(e => {
+      eh += `<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:600;font-size:.85rem;padding:6px 0;">▸ ${esc(e.lob)} — ${e.intervals.length} intervals · Peak ${e.total_agents_peak} agents · ${fmt(e.total_forecast)} forecast calls</summary>`;
+      eh += `<div class="wrap"><table class="rt sortable"><thead><tr><th>Interval</th><th>Agents</th><th>Forecast calls</th><th>AHT (s)</th><th>Est. SL</th><th>Target</th></tr></thead><tbody>`;
+      e.intervals.forEach(iv => {
+        const cls = iv.est_service_level >= iv.target ? 'cell-good' : (iv.est_service_level >= iv.target * 0.9 ? 'cell-warn' : 'cell-bad');
+        eh += `<tr><td>${iv.time}</td><td>${fmt(iv.agents)}</td><td>${fmt(iv.forecast_calls)}</td><td>${fmt(iv.aht)}</td><td class="${cls}">${iv.est_service_level}%</td><td>${iv.target}%</td></tr>`;
+      });
+      eh += `</tbody></table></div></details>`;
+    });
+    eh += `<p style="padding:10px 16px; font-size:.78rem; color:var(--text-muted); margin:0;">Estimated using Erlang C model with scheduled staffing counts and forecast call volume. Actual results will vary based on shrinkage, adherence, and call pattern.</p></div>`;
+    el.innerHTML += eh;
+  }
+
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
 }
 
@@ -1145,6 +1282,20 @@ function renderStatus(d) {
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
 }
 function filterRows(tableId, q) { q = q.toLowerCase(); document.querySelectorAll('#' + tableId + ' tbody tr').forEach(tr => tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none'); }
+
+function globalEmployeeFilter(q) {
+  q = q.toLowerCase().trim();
+  // Filter all visible sortable tables in the active view panel
+  const panel = document.getElementById('view-' + _activeView);
+  if (!panel) return;
+  panel.querySelectorAll('table.rt tbody tr, table.sortable tbody tr').forEach(tr => {
+    if (!q) { tr.style.display = ''; return; }
+    // Check first column (usually employee name) and all text
+    const firstCell = tr.querySelector('td');
+    const name = firstCell ? firstCell.textContent.toLowerCase() : '';
+    tr.style.display = name.includes(q) || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
 
 /* ── Efficiency ──────────────────────────────── */
 function renderEff(d) {
@@ -1841,11 +1992,10 @@ if (_origShowView) {
 (function(){
   try {
     const h = (location.hash || '').replace('#','');
-    if (h) showView(h); else showView('liveagents');
+    if (h) showView(h); else showView('dashboard');
   } catch(e) { console.error("showView init error:", e); }
-  // Skip the heavy bundle fetch when landing on Live Agents (default).
-  // The bundle is fetched on-demand when switching to another tab.
-  if (_activeView !== 'liveagents') loadAll();
+  // Load data for the landing tab
+  loadAll();
 })();
 </script>
 {% endblock %}

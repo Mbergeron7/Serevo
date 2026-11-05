@@ -311,6 +311,135 @@ def interval_report(lobs, date_obj, user=None, sheet=None):
 # 3. SERVICE LEVEL CALCULATOR
 # ═════════════════════════════════════════════════════════════
 
+def _erlang_c(agents, intensity):
+    """Erlang C probability (chance a call must wait).
+    agents: integer number of agents, intensity: traffic intensity (A = calls * AHT / interval_secs).
+    Returns probability 0..1, or 1.0 if agents <= intensity."""
+    import math
+    n = int(agents)
+    a = float(intensity)
+    if n <= 0 or a <= 0:
+        return 0.0
+    if n <= a:
+        return 1.0
+    # Compute B(n, a) iteratively to avoid overflow
+    inv_b = 1.0
+    for i in range(1, n + 1):
+        inv_b = 1.0 + inv_b * i / a
+    b = 1.0 / inv_b
+    # Erlang C = B / (1 - rho + rho*B) where rho = a/n
+    rho = a / n
+    return b / (1.0 - rho + rho * b) if rho < 1.0 else 1.0
+
+
+def _erlang_c_sl(agents, calls, aht, threshold, interval_secs=1800):
+    """Estimated service level % using Erlang C.
+    agents: number of agents available, calls: expected calls in interval,
+    aht: average handle time in seconds, threshold: SL threshold in seconds."""
+    if calls <= 0 or agents <= 0:
+        return 100.0
+    intensity = calls * aht / interval_secs
+    if agents <= intensity:
+        return 0.0
+    ec = _erlang_c(agents, intensity)
+    import math
+    mu = 1.0 / aht if aht > 0 else 0
+    sl = 1.0 - ec * math.exp(-(agents - intensity) * mu * threshold)
+    return round(max(0.0, min(100.0, sl * 100)), 1)
+
+
+def _staffing_per_interval(shifts, date_obj):
+    """Count scheduled agents per 30-min interval from shift data.
+    Returns dict {HH:MM -> agent_count}."""
+    counts = {}
+    for h in range(24):
+        for m in (0, 30):
+            key = f"{h:02d}:{m:02d}"
+            counts[key] = 0
+
+    for s in shifts:
+        try:
+            sh_start = s.get("start", s.get("shift_start", ""))
+            sh_end = s.get("end", s.get("shift_end", ""))
+            if not sh_start or not sh_end:
+                continue
+            # Parse HH:MM
+            sh, sm = int(sh_start[:2]), int(sh_start[3:5])
+            eh, em = int(sh_end[:2]), int(sh_end[3:5])
+            start_mins = sh * 60 + sm
+            end_mins = eh * 60 + em
+            if end_mins <= start_mins:
+                end_mins += 1440  # overnight
+
+            # Skip break/lunch segments
+            segments = s.get("segments", [])
+            break_intervals = set()
+            for seg in segments:
+                seg_type = seg.get("type", "").lower()
+                if seg_type in ("break", "lunch"):
+                    bs = seg.get("start", "")
+                    be = seg.get("end", "")
+                    if bs and be:
+                        bsh, bsm = int(bs[:2]), int(bs[3:5])
+                        beh, bem = int(be[:2]), int(be[3:5])
+                        b_start = bsh * 60 + bsm
+                        b_end = beh * 60 + bem
+                        # Mark every 30-min interval that overlaps the break
+                        for t in range(0, 1440, 30):
+                            if t < b_end and t + 30 > b_start:
+                                break_intervals.add(t)
+
+            for t in range(0, 1440, 30):
+                key = f"{t // 60:02d}:{t % 60:02d}"
+                adj_t = t if t >= start_mins else t + 1440
+                if adj_t >= start_mins and adj_t < end_mins and t not in break_intervals:
+                    counts[key] = counts.get(key, 0) + 1
+        except Exception:
+            continue
+    return counts
+
+
+def _svl_estimates(lobs, date_obj, user, sheet=None):
+    """Erlang C service level estimates per interval using forecast + scheduled staffing."""
+    results = []
+    for lob in lobs:
+        fc = _forecast(lob, date_obj, user)
+        if not fc:
+            continue
+        shifts = _shifts(lob, date_obj, user, sheet)
+        staffing = _staffing_per_interval(shifts, date_obj)
+        sl_target, threshold = _lob_targets(lob)
+
+        intervals = []
+        for f in fc:
+            t = f["time"]
+            agents = staffing.get(t, 0)
+            calls = f["offered"]
+            aht = f["aht"] or 180  # default 3 min AHT
+            est_sl = _erlang_c_sl(agents, calls, aht, threshold)
+            intervals.append({
+                "time": t,
+                "agents": agents,
+                "forecast_calls": round(calls, 1),
+                "aht": round(aht),
+                "est_service_level": est_sl,
+                "target": round(sl_target * 100),
+            })
+        if intervals:
+            total_calls = sum(i["forecast_calls"] for i in intervals)
+            weighted_sl = sum(i["est_service_level"] * i["forecast_calls"] for i in intervals)
+            avg_sl = round(weighted_sl / total_calls, 1) if total_calls > 0 else None
+            results.append({
+                "lob": lob,
+                "intervals": intervals,
+                "avg_estimated_sl": avg_sl,
+                "target": round(sl_target * 100),
+                "total_agents_peak": max((i["agents"] for i in intervals), default=0),
+                "total_forecast": round(total_calls),
+            })
+    return results
+
+
 def service_level_report(lobs, date_obj, user=None, sheet=None):
     """Per-LOB SL so far, plus what it takes to finish the day on target."""
     base = forecast_otf_report(lobs, date_obj, user, sheet)
@@ -343,7 +472,14 @@ def service_level_report(lobs, date_obj, user=None, sheet=None):
                      "required_rate_remaining_pct": required_rate,
                      "cushion_calls": cushion,
                      "outlook": outlook})
-    return {"date": base["date"], "as_of": base["as_of"], "rows": rows, "total": base["total"]}
+    # Add Erlang C estimates from forecast + scheduled staffing
+    try:
+        estimates = _svl_estimates(lobs, date_obj, user, sheet)
+    except Exception as e:
+        log.debug(f"SVL estimates error: {e}")
+        estimates = []
+    return {"date": base["date"], "as_of": base["as_of"], "rows": rows, "total": base["total"],
+            "estimates": estimates}
 
 
 # ═════════════════════════════════════════════════════════════
