@@ -254,8 +254,8 @@
 </div>
 
 <div class="view-tabs">
-  <button class="view-tab" data-view="intraday" onclick="showView('intraday')">Intraday</button>
-  <button class="view-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+  <button class="view-tab active" data-view="intraday" onclick="showView('intraday')">Intraday</button>
+  <button class="view-tab" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
   <button class="view-tab" data-view="forecast" onclick="showView('forecast')">Forecast &amp; OTF</button>
   <button class="view-tab" data-view="interval" onclick="showView('interval')">Interval Report</button>
   <button class="view-tab" data-view="svl" onclick="showView('svl')">SVL Calculator</button>
@@ -608,7 +608,7 @@ function selectedLobParam() {
   if (sel.length === 1) return sel[0];
   return 'All';  // multiple LOBs: fetch all, filter client-side
 }
-let _activeView = 'dashboard';
+let _activeView = 'intraday';
 const _loaded = {};  // track which tabs have data loaded
 
 function showView(name) {
@@ -2017,7 +2017,7 @@ if (_origShowView) {
   MSPicker.bind('selLob');
   try {
     const h = (location.hash || '').replace('#','');
-    if (h) showView(h); else showView('dashboard');
+    if (h) showView(h); else showView('intraday');
   } catch(e) { console.error("showView init error:", e); }
   // Load data for the landing tab
   loadAll();
