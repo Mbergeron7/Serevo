@@ -34,7 +34,7 @@ _scheduler_started = False
 
 def _start_scheduler(app):
     """Start APScheduler for the periodic realtime data sync.
-    Only runs on the main Gunicorn worker (not in reloader or testing)."""
+    Uses a file lock so only one Gunicorn worker runs the scheduler."""
     global _scheduler_started
     if _scheduler_started:
         return
@@ -45,6 +45,18 @@ def _start_scheduler(app):
         return
     if os.environ.get("REALTIME_SYNC_ENABLED", os.environ.get("CALLPOTENTIAL_SYNC_ENABLED", "true")).lower() != "true":
         log.info("Realtime sync disabled (REALTIME_SYNC_ENABLED=false)")
+        return
+
+    # File-lock guard: only one worker should run the scheduler
+    import fcntl
+    lock_path = os.path.join(os.environ.get("TMPDIR", "/tmp"), ".serevo_scheduler.lock")
+    try:
+        _lock_fd = open(lock_path, "w")
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Keep fd open — lock released when process dies
+        app._scheduler_lock_fd = _lock_fd
+    except (IOError, OSError):
+        log.info("Scheduler lock held by another worker — skipping")
         return
 
     try:
