@@ -254,7 +254,7 @@
 </div>
 
 <div class="view-tabs">
-  <button class="view-tab active" data-view="intraday" onclick="showView('intraday')">Intraday</button>
+  <button class="view-tab" data-view="intraday" onclick="showView('intraday')">Intraday</button>
   <button class="view-tab" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
   <button class="view-tab" data-view="forecast" onclick="showView('forecast')">Forecast &amp; OTF</button>
   <button class="view-tab" data-view="interval" onclick="showView('interval')">Interval Report</button>
@@ -265,7 +265,7 @@
   <button class="view-tab" data-view="netstaffing" onclick="showView('netstaffing')">Net Staffing <span id="badgeNetStaff" class="tab-badge orange" style="display:none"></span></button>
   <button class="view-tab" data-view="optimizer" onclick="showView('optimizer')">⚡ Optimizer</button>
   <button class="view-tab" data-view="gamify" onclick="showView('gamify')">Leaderboard</button>
-  <button class="view-tab" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents <span id="badgeLive" class="tab-badge green" style="display:none"></span></button>
+  <button class="view-tab active" data-view="liveagents" onclick="showView('liveagents')">🟢 Live Agents <span id="badgeLive" class="tab-badge green" style="display:none"></span></button>
 </div>
 
 <!-- ═══════════ INTRADAY (live monitor) ═══════════ -->
@@ -608,7 +608,7 @@ function selectedLobParam() {
   if (sel.length === 1) return sel[0];
   return 'All';  // multiple LOBs: fetch all, filter client-side
 }
-let _activeView = 'intraday';
+let _activeView = 'liveagents';
 const _loaded = {};  // track which tabs have data loaded
 
 function showView(name) {
@@ -2017,7 +2017,7 @@ if (_origShowView) {
   MSPicker.bind('selLob');
   try {
     const h = (location.hash || '').replace('#','');
-    if (h) showView(h); else showView('intraday');
+    if (h) showView(h); else showView('liveagents');
   } catch(e) { console.error("showView init error:", e); }
   // Load data for the landing tab
   loadAll();
