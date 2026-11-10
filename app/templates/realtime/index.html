@@ -1280,12 +1280,142 @@ function renderAbsent(d) {
   h += `</div>`;
 
   h += `</div>`;
+
+  // Manually coded attendance events
+  h += `<div class="report-card" style="margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">📋 Coded Attendance Events</h3>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" onclick="absAutoDetect()" title="Scan schedule vs logins and create absence records for anyone missing">🔍 Auto-detect Absences</button>
+        <button class="btn btn-sm btn-accent" onclick="absOpenCoder()">+ Code Event</button>
+      </div>
+    </div>`;
+  const coded = d.coded || [];
+  if (coded.length) {
+    h += `<div class="wrap" style="margin-top:8px"><table class="rt sortable" id="_absTblCoded"><thead><tr><th>Employee</th><th style="text-align:left">Code</th><th style="text-align:left">Category</th><th>Excused</th><th style="text-align:left">Note</th><th>Coded by</th><th></th></tr></thead><tbody>`;
+    coded.forEach(c => {
+      h += `<tr>
+        <td>${esc(c.employee_name)}</td>
+        <td style="text-align:left"><span style="background:${esc(c.color)};color:#fff;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:600">${esc(c.code)}</span> ${esc(c.label)}</td>
+        <td style="text-align:left">${esc(c.category)}</td>
+        <td>${c.is_excused ? '✅ Yes' : '❌ No'}</td>
+        <td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.note)}</td>
+        <td>${esc(c.coded_by)}</td>
+        <td><button class="btn btn-xs" onclick="absDeleteEvent(${c.id})" title="Remove">🗑</button></td>
+      </tr>`;
+    });
+    h += `</tbody></table></div>`;
+  } else {
+    h += `<div class="empty" style="margin-top:8px">No coded events for this date. Use <strong>Auto-detect</strong> to scan or <strong>Code Event</strong> to add manually.</div>`;
+  }
+  h += `</div>`;
+
+  // Hidden coding modal
+  h += `<div id="absCoderModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:12px;padding:24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <h3 style="margin:0 0 16px">Code Attendance Event</h3>
+      <label style="display:block;margin-bottom:8px;font-weight:600;font-size:.85rem">Employee</label>
+      <select id="absCoderEmp" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;background:var(--surface);color:var(--text)"><option value="">Select…</option></select>
+      <label style="display:block;margin-bottom:8px;font-weight:600;font-size:.85rem">Exception Code</label>
+      <select id="absCoderCode" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;background:var(--surface);color:var(--text)"><option value="">Select…</option></select>
+      <label style="display:block;margin-bottom:8px;font-weight:600;font-size:.85rem">Note <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <input id="absCoderNote" type="text" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:16px;background:var(--surface);color:var(--text)" placeholder="e.g. called in sick">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-sm" onclick="absCloseCoder()">Cancel</button>
+        <button class="btn btn-sm btn-accent" onclick="absSaveEvent()">Save</button>
+      </div>
+    </div>
+  </div>`;
+
   el.innerHTML = h;
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
   // Re-apply saved filters after DOM rebuild
   ['absSummary','absNotLogged','absNotLogged_lob','absLate','absLate_lob','absEarly','absEarly_lob'].forEach(id => {
     if (_absFilter[id]) _absApplyFilter(id);
   });
+}
+
+/* ── Attendance Coding helpers ─────────────────── */
+let _absCodes = null;
+async function _loadAbsCodes() {
+  if (_absCodes) return _absCodes;
+  try { const r = await fetch('/attendance/api/codes'); _absCodes = await r.json(); } catch(e) { _absCodes = []; }
+  return _absCodes;
+}
+async function absOpenCoder() {
+  const modal = $('absCoderModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // Load employees
+  const empSel = $('absCoderEmp');
+  if (empSel.options.length <= 1) {
+    try {
+      const r = await fetch('/rosters/api/employees');
+      const data = await r.json();
+      const emps = (data || []);
+      emps.forEach(e => {
+        const o = document.createElement('option');
+        o.value = e.id;
+        o.textContent = e.name || `Employee #${e.id}`;
+        empSel.appendChild(o);
+      });
+    } catch(e) { console.error('Load employees error:', e); }
+  }
+  // Load codes
+  const codeSel = $('absCoderCode');
+  if (codeSel.options.length <= 1) {
+    const codes = await _loadAbsCodes();
+    codes.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = `${c.code} — ${c.label}`;
+      codeSel.appendChild(o);
+    });
+  }
+}
+function absCloseCoder() { const m = $('absCoderModal'); if (m) m.style.display = 'none'; }
+async function absSaveEvent() {
+  const emp = $('absCoderEmp').value;
+  const code = $('absCoderCode').value;
+  const note = $('absCoderNote').value;
+  const dt = $('inpDate').value;
+  if (!emp || !code) return alert('Select an employee and code.');
+  try {
+    const r = await fetch('/attendance/api/events/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({employee_id: parseInt(emp), date: dt, adherence_exception_id: parseInt(code), note})
+    });
+    const data = await r.json();
+    if (data.success) { absCloseCoder(); loadTab('absent'); }
+    else alert(data.error || 'Save failed');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+async function absDeleteEvent(id) {
+  if (!confirm('Remove this coded event?')) return;
+  try {
+    const r = await fetch('/attendance/api/events/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    const data = await r.json();
+    if (data.success) loadTab('absent');
+    else alert(data.error || 'Delete failed');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+async function absAutoDetect() {
+  const dt = $('inpDate').value;
+  if (!confirm(`Auto-detect absences for ${dt}?\nThis will create records for anyone scheduled but not logged in.`)) return;
+  try {
+    const r = await fetch('/attendance/api/events/auto-detect', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({date: dt})
+    });
+    const data = await r.json();
+    if (data.success) {
+      alert(`${data.created} absence(s) detected and coded.`);
+      loadTab('absent');
+    } else alert(data.error || 'Auto-detect failed');
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 /* ── Agent Status ────────────────────────────── */

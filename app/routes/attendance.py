@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
-from app.models import db, Employee, TimeClock, Schedule
+from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException
 from app.constants import DEFAULT_TIMEZONE
 
 log = logging.getLogger("serevo.attendance")
@@ -322,3 +322,257 @@ def weekly_hours():
         total_hours=round(total, 1),
         week_start=monday.isoformat(),
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# MANUAL ATTENDANCE CODING — exception codes + supervisor coding
+# ═══════════════════════════════════════════════════════════════
+
+_DEFAULT_CODES = [
+    ("ABS",   "Absent",           "#ef4444", False, "absence",  True,  1),
+    ("NCNS",  "No Call / No Show", "#dc2626", False, "absence",  False, 2),
+    ("LATE",  "Late",             "#f59e0b", False, "late",     True,  3),
+    ("EOUT",  "Early Out",        "#f97316", False, "early_out", True,  4),
+    ("SICK",  "Sick",             "#a855f7", True,  "absence",  False, 5),
+    ("VAC",   "Vacation",         "#3b82f6", True,  "absence",  False, 6),
+    ("PER",   "Personal Day",     "#6366f1", True,  "absence",  False, 7),
+    ("BRKV",  "Break Overrun",    "#fb923c", False, "break_overrun", False, 8),
+    ("APPR",  "Approved Absence", "#10b981", True,  "absence",  False, 9),
+    ("OTHER", "Other",            "#6b7280", False, "other",    False, 10),
+]
+
+
+def seed_adherence_codes(app=None):
+    """Ensure the default AdherenceException codes exist."""
+    try:
+        existing = {c.code for c in AdherenceException.query.all()}
+        for code, label, color, excused, cat, is_default, order in _DEFAULT_CODES:
+            if code not in existing:
+                db.session.add(AdherenceException(
+                    code=code, label=label, color=color,
+                    is_excused=excused, category=cat,
+                    is_default=is_default, sort_order=order,
+                ))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f"seed_adherence_codes: {e}")
+
+
+# ── API: list exception codes ─────────────────────────────────
+
+@attendance_bp.route("/api/codes", methods=["GET"])
+@login_required
+def list_codes():
+    """Return active adherence exception codes."""
+    codes = AdherenceException.query.filter_by(is_active=True)\
+        .order_by(AdherenceException.sort_order).all()
+    if not codes:
+        seed_adherence_codes()
+        codes = AdherenceException.query.filter_by(is_active=True)\
+            .order_by(AdherenceException.sort_order).all()
+    return jsonify([c.to_dict() for c in codes])
+
+
+# ── API: list coded attendance events for a date ──────────────
+
+@attendance_bp.route("/api/events", methods=["POST"])
+@login_required
+def list_events():
+    """Return manually coded attendance events for a date (and optionally LOB)."""
+    data = request.get_json(silent=True) or {}
+    date_str = data.get("date", date.today().isoformat())
+    try:
+        d = date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid date"), 400
+
+    q = db.session.query(AttendanceEvent).join(Employee)\
+        .filter(AttendanceEvent.event_date == d)
+
+    lob = data.get("lob")
+    if lob and lob != "all":
+        from app.models import LobMapping
+        emp_ids = db.session.query(LobMapping.employee_id)\
+            .filter(LobMapping.lob_name == lob).subquery()
+        q = q.filter(AttendanceEvent.employee_id.in_(emp_ids))
+
+    events = q.order_by(Employee.last_name, Employee.first_name).all()
+    return jsonify([e.to_dict() for e in events])
+
+
+# ── API: create / update / delete attendance event ────────────
+
+@attendance_bp.route("/api/events/save", methods=["POST"])
+@login_required
+def save_event():
+    """Create or update an attendance event."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    data = request.get_json(silent=True) or {}
+    emp_id = data.get("employee_id")
+    date_str = data.get("date")
+    code_id = data.get("adherence_exception_id")
+
+    if not all([emp_id, date_str, code_id]):
+        return jsonify(error="employee_id, date, and adherence_exception_id are required"), 400
+
+    try:
+        d = date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid date"), 400
+
+    emp = Employee.query.get(emp_id)
+    if not emp:
+        return jsonify(error="Employee not found"), 404
+
+    code = AdherenceException.query.get(code_id)
+    if not code:
+        return jsonify(error="Code not found"), 404
+
+    event_id = data.get("id")
+    if event_id:
+        evt = AttendanceEvent.query.get(event_id)
+        if not evt:
+            return jsonify(error="Event not found"), 404
+    else:
+        # Check for duplicate: same employee + date + code
+        evt = AttendanceEvent.query.filter_by(
+            employee_id=emp_id, event_date=d, adherence_exception_id=code_id
+        ).first()
+        if not evt:
+            evt = AttendanceEvent(employee_id=emp_id, event_date=d)
+            db.session.add(evt)
+
+    evt.adherence_exception_id = code_id
+    evt.is_excused = data.get("is_excused", code.is_excused)
+    evt.note = data.get("note", "")
+    evt.coded_by = user.get("id")
+
+    try:
+        db.session.commit()
+        return jsonify(success=True, event=evt.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(error=str(e)), 500
+
+
+@attendance_bp.route("/api/events/delete", methods=["POST"])
+@login_required
+def delete_event():
+    """Delete an attendance event."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    data = request.get_json(silent=True) or {}
+    event_id = data.get("id")
+    if not event_id:
+        return jsonify(error="id required"), 400
+
+    evt = AttendanceEvent.query.get(event_id)
+    if not evt:
+        return jsonify(error="Not found"), 404
+
+    db.session.delete(evt)
+    db.session.commit()
+    return jsonify(success=True)
+
+
+# ── API: bulk auto-detect + code from schedule ────────────────
+
+@attendance_bp.route("/api/events/auto-detect", methods=["POST"])
+@login_required
+def auto_detect():
+    """Auto-detect absences from schedule vs agent status for a date.
+    Creates AttendanceEvent records for anyone scheduled but not logged in."""
+    user = get_current_user()
+    if not user:
+        return jsonify(error="Not authenticated"), 401
+    if user.get("is_demo"):
+        return jsonify(success=True, created=0, message="Demo mode")
+
+    data = request.get_json(silent=True) or {}
+    date_str = data.get("date")
+    if not date_str:
+        return jsonify(error="date required"), 400
+
+    try:
+        d = date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid date"), 400
+
+    # Don't auto-detect for future dates
+    if d > date.today():
+        return jsonify(error="Cannot auto-detect for future dates"), 400
+
+    # Get default absence code
+    abs_code = AdherenceException.query.filter_by(code="ABS", is_active=True).first()
+    if not abs_code:
+        seed_adherence_codes()
+        abs_code = AdherenceException.query.filter_by(code="ABS", is_active=True).first()
+    if not abs_code:
+        return jsonify(error="No absence code configured"), 500
+
+    # Find all scheduled employees for this date
+    schedules = Schedule.query.filter(
+        Schedule.schedule_date == d,
+        Schedule.status == "scheduled",
+    ).all()
+
+    # Get agent status events for this date to see who logged in
+    from app.realtime.actuals import get_agent_events
+    from app.models import AgentStatusEvent
+    day_start = datetime.combine(d, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+    logged_in_emps = set()
+    try:
+        events = AgentStatusEvent.query.filter(
+            AgentStatusEvent.start_ts >= day_start,
+            AgentStatusEvent.start_ts < day_end,
+        ).all()
+        for evt in events:
+            logged_in_emps.add(evt.employee_id)
+    except Exception:
+        pass
+
+    # Also check TimeClock entries
+    try:
+        clocks = TimeClock.query.filter(
+            TimeClock.date == d,
+        ).all()
+        for tc in clocks:
+            logged_in_emps.add(tc.employee_id)
+    except Exception:
+        pass
+
+    created = 0
+    for sched in schedules:
+        if sched.employee_id in logged_in_emps:
+            continue
+        # Check if already coded for this date
+        existing = AttendanceEvent.query.filter_by(
+            employee_id=sched.employee_id, event_date=d
+        ).first()
+        if existing:
+            continue
+
+        evt = AttendanceEvent(
+            employee_id=sched.employee_id,
+            event_date=d,
+            adherence_exception_id=abs_code.id,
+            is_excused=False,
+            note="Auto-detected: scheduled but no login found",
+            coded_by=user.get("id"),
+        )
+        db.session.add(evt)
+        created += 1
+
+    db.session.commit()
+    return jsonify(success=True, created=created)

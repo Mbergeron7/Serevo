@@ -138,6 +138,13 @@ def create_app():
     except Exception as e:
         log.warning(f"seed_demo_user() failed (may be expected on first run): {e}")
 
+    # Seed default adherence exception codes
+    try:
+        from app.routes.attendance import seed_adherence_codes
+        seed_adherence_codes(app)
+    except Exception as e:
+        log.warning(f"seed_adherence_codes() failed: {e}")
+
     # ---- inject brand variables into every template ----
     @app.context_processor
     def inject_brand():

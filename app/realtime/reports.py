@@ -596,6 +596,15 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
     tot_a = sum(r["absent"] for r in by_lob)
     tot_l = sum(r["late"] for r in by_lob)
     tot_e = sum(r["early_leave"] for r in by_lob)
+    # Include manually coded attendance events
+    coded = []
+    try:
+        from app.models import AttendanceEvent
+        coded_rows = AttendanceEvent.query.filter_by(event_date=date_obj).all()
+        coded = [e.to_dict() for e in coded_rows]
+    except Exception:
+        pass
+
     return {"date": date_obj.isoformat(), "by_lob": by_lob,
             "total": {"lob": "All LOBs", "scheduled": tot_s, "absent": tot_a,
                       "absence_pct": _pct(tot_a, tot_s), "late": tot_l,
@@ -604,7 +613,8 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
             "late": sorted(late_rows, key=lambda r: -r["minutes_late"]),
             "absent": absent_rows,
             "early_leave": sorted(early_rows, key=lambda r: -r["minutes_early"]),
-            "has_events": bool(events_all)}
+            "has_events": bool(events_all),
+            "coded": coded}
 
 
 # ═════════════════════════════════════════════════════════════
