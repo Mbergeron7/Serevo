@@ -954,8 +954,9 @@
         <input type="text" id="newSegNotes" placeholder="Optional">
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
+        <input type="hidden" id="editSegIdx" value="-1">
         <button class="btn-modal btn-modal-secondary" onclick="cancelAddSegment()">Cancel</button>
-        <button class="btn-modal btn-modal-primary" onclick="confirmAddSegment()">Add</button>
+        <button class="btn-modal btn-modal-primary" id="segSaveBtn" onclick="confirmAddSegment()">Add</button>
       </div>
     </div>
 
@@ -2453,10 +2454,10 @@ function renderSegmentList(segments) {
   let html = '';
   segments.forEach((seg, idx) => {
     const c = segColor(seg.type);
-    html += `<div class="seg-list-item">
+    html += `<div class="seg-list-item" style="cursor:pointer" onclick="editSegment(${idx})" title="Click to edit">
       <span class="seg-type-dot" style="background:${c}"></span>
       <span class="seg-info"><strong>${segLabel(seg.type)}</strong> ${seg.start}–${seg.end} (${seg.duration_mins}m)${seg.notes ? ' — ' + seg.notes : ''}</span>
-      <button class="seg-del-btn" onclick="removeSegment(${idx})" title="Remove">✕</button>
+      <button class="seg-del-btn" onclick="event.stopPropagation();removeSegment(${idx})" title="Remove">✕</button>
     </div>`;
   });
   el.innerHTML = html;
@@ -2486,21 +2487,39 @@ function openAddSegment() {
   const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
   const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
 
+  document.getElementById('editSegIdx').value = '-1';
   document.getElementById('newSegStart').value = shift.start;
   document.getElementById('newSegEnd').value = shift.end;
   document.getElementById('newSegType').value = 'meeting';
   document.getElementById('newSegNotes').value = '';
+  document.getElementById('segSaveBtn').textContent = 'Add';
+  document.getElementById('addSegForm').style.display = 'block';
+}
+
+function editSegment(segIdx) {
+  const dayIdx = parseInt(document.getElementById('editDayIdx').value);
+  const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
+  const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
+
+  document.getElementById('editSegIdx').value = segIdx;
+  document.getElementById('newSegType').value = seg.type || '';
+  document.getElementById('newSegStart').value = seg.start;
+  document.getElementById('newSegEnd').value = seg.end;
+  document.getElementById('newSegNotes').value = seg.notes || '';
+  document.getElementById('segSaveBtn').textContent = 'Save';
   document.getElementById('addSegForm').style.display = 'block';
 }
 
 function cancelAddSegment() {
   document.getElementById('addSegForm').style.display = 'none';
+  document.getElementById('editSegIdx').value = '-1';
 }
 
 function confirmAddSegment() {
   const dayIdx = parseInt(document.getElementById('editDayIdx').value);
   const shiftIdx = parseInt(document.getElementById('editShiftIdx').value);
   const shift = scheduleData.days[dayIdx].shifts[shiftIdx];
+  const editIdx = parseInt(document.getElementById('editSegIdx').value);
 
   const type = document.getElementById('newSegType').value;
   const start = document.getElementById('newSegStart').value;
@@ -2512,30 +2531,51 @@ function confirmAddSegment() {
   const dur = timeToMins(end) - timeToMins(start);
   if (dur <= 0) { showToast('End must be after start', 'error'); return; }
 
-  const newSeg = { type, start, end, duration_mins: dur, notes, sort_order: shift.segments.length };
+  if (editIdx >= 0 && editIdx < shift.segments.length) {
+    // ── Editing existing segment ──
+    const seg = shift.segments[editIdx];
+    seg.type = type;
+    seg.start = start;
+    seg.end = end;
+    seg.duration_mins = dur;
+    seg.notes = notes;
 
-  // If schedule is saved to DB, persist via API
-  if (!IS_DEMO && shift.id != null) {
-    fetch('/scheduling/shift/' + shift.id + '/segment', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(newSeg),
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success && data.segment) {
-        newSeg.id = data.segment.id;
-      }
-    });
+    if (!IS_DEMO && seg.id != null) {
+      fetch('/scheduling/segment/' + seg.id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ type, start, end, duration_mins: dur, notes }),
+      })
+      .then(r => r.json())
+      .then(data => { if (!data.success) showToast('Update failed', 'error'); });
+    }
+  } else {
+    // ── Adding new segment ──
+    const newSeg = { type, start, end, duration_mins: dur, notes, sort_order: shift.segments.length };
+
+    if (!IS_DEMO && shift.id != null) {
+      fetch('/scheduling/shift/' + shift.id + '/segment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(newSeg),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.segment) {
+          newSeg.id = data.segment.id;
+        }
+      });
+    }
+
+    shift.segments.push(newSeg);
   }
 
-  shift.segments.push(newSeg);
   recalcOncallClient(shift);
-  // Re-sort by start time
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
 
   renderSegmentList(shift.segments);
   document.getElementById('addSegForm').style.display = 'none';
+  document.getElementById('editSegIdx').value = '-1';
   switchView(currentView);
 }
 
