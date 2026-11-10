@@ -1286,7 +1286,8 @@ function renderAbsent(d) {
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h3 style="margin:0">📋 Coded Attendance Events</h3>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-sm" onclick="absAutoDetect()" title="Scan schedule vs logins and create absence records for anyone missing">🔍 Auto-detect Absences</button>
+        <button class="btn btn-sm" onclick="absAutoDetect(false)" title="Scan schedule vs logins and create records for absences, lates, and early leaves">🔍 Auto-detect</button>
+        <button class="btn btn-sm" onclick="absAutoDetect(true)" title="Clear previous auto-detected entries and re-scan fresh">🔄 Re-detect</button>
         <button class="btn btn-sm btn-accent" onclick="absOpenCoder()">+ Code Event</button>
       </div>
     </div>`;
@@ -1402,22 +1403,33 @@ async function absDeleteEvent(id) {
     else alert(data.error || 'Delete failed');
   } catch(e) { alert('Error: ' + e.message); }
 }
-async function absAutoDetect() {
+async function absAutoDetect(clearFirst) {
   const dt = $('inpDate').value;
-  if (!confirm(`Auto-detect absences for ${dt}?\nThis will create records for anyone scheduled but not logged in.`)) return;
+  const msg = clearFirst
+    ? `Re-detect for ${dt}?\nThis will clear previous auto-detected entries and scan fresh.`
+    : `Auto-detect absences, lates & early leaves for ${dt}?`;
+  if (!confirm(msg)) return;
   try {
     const r = await fetch('/attendance/api/events/auto-detect', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({date: dt})
+      body: JSON.stringify({date: dt, clear: !!clearFirst})
     });
     const data = await r.json();
     if (data.success) {
-      const dt = data.detail || {};
-      alert(`Auto-detect complete: ${data.created} event(s) coded.\n` +
-        (dt.absent ? `• ${dt.absent} absent\n` : '') +
-        (dt.late ? `• ${dt.late} late\n` : '') +
-        (dt.early_leave ? `• ${dt.early_leave} early leave\n` : '') +
-        (!data.created ? 'No new issues found.' : ''));
+      const d = data.detail || {};
+      const rc = data.report_counts || {};
+      let msg = `Auto-detect complete: ${data.created} event(s) coded.\n`;
+      if (data.cleared) msg += `(Cleared ${data.cleared} previous auto entries)\n`;
+      msg += `\nDetected in report:\n`;
+      msg += `• ${rc.absent || 0} absent\n`;
+      msg += `• ${rc.late || 0} late\n`;
+      msg += `• ${rc.early_leave || 0} early leave\n`;
+      msg += `• Agent events: ${rc.has_events ? 'Yes' : 'No'}\n`;
+      msg += `\nNewly coded:\n`;
+      msg += `• ${d.absent || 0} absent\n`;
+      msg += `• ${d.late || 0} late\n`;
+      msg += `• ${d.early_leave || 0} early leave`;
+      alert(msg);
       loadTab('absent');
     } else alert(data.error || 'Auto-detect failed');
   } catch(e) { alert('Error: ' + e.message); }

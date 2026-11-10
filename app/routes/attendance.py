@@ -500,6 +500,7 @@ def auto_detect():
 
     data = request.get_json(silent=True) or {}
     date_str = data.get("date")
+    clear_first = data.get("clear", False)
     if not date_str:
         return jsonify(error="date required"), 400
 
@@ -511,6 +512,18 @@ def auto_detect():
     # Don't auto-detect for future dates
     if d > date.today():
         return jsonify(error="Cannot auto-detect for future dates"), 400
+
+    # If clear mode, remove all auto-coded events for this date first
+    cleared = 0
+    if clear_first:
+        auto_events = AttendanceEvent.query.filter(
+            AttendanceEvent.event_date == d,
+            AttendanceEvent.note.like("Auto:%"),
+        ).all()
+        for evt in auto_events:
+            db.session.delete(evt)
+        cleared = len(auto_events)
+        db.session.flush()
 
     # Ensure codes exist
     seed_adherence_codes()
@@ -528,7 +541,16 @@ def auto_detect():
     lobs = get_available_lobs()
     if not lobs:
         return jsonify(error="No LOBs configured"), 400
-    report = absenteeism_report(lobs, d, user=user)
+
+    try:
+        report = absenteeism_report(lobs, d, user=user)
+    except Exception as e:
+        log.error(f"Auto-detect absenteeism_report error: {e}", exc_info=True)
+        return jsonify(error=f"Report failed: {str(e)[:200]}"), 500
+
+    log.info(f"Auto-detect for {d}: absent={len(report.get('absent', []))}, "
+             f"late={len(report.get('late', []))}, early={len(report.get('early_leave', []))}, "
+             f"has_events={report.get('has_events')}")
 
     # Build employee name → DB id lookup
     emp_lookup = {}
@@ -605,5 +627,9 @@ def auto_detect():
 
     db.session.commit()
     total = created_abs + created_late + created_early
-    return jsonify(success=True, created=total,
-                   detail={"absent": created_abs, "late": created_late, "early_leave": created_early})
+    return jsonify(success=True, created=total, cleared=cleared,
+                   detail={"absent": created_abs, "late": created_late, "early_leave": created_early},
+                   report_counts={"absent": len(report.get("absent", [])),
+                                  "late": len(report.get("late", [])),
+                                  "early_leave": len(report.get("early_leave", [])),
+                                  "has_events": report.get("has_events", False)})
