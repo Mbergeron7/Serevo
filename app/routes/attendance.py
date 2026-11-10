@@ -512,13 +512,15 @@ def auto_detect():
     if d > date.today():
         return jsonify(error="Cannot auto-detect for future dates"), 400
 
-    # Get default absence code
+    # Ensure codes exist
+    seed_adherence_codes()
     abs_code = AdherenceException.query.filter_by(code="ABS", is_active=True).first()
-    if not abs_code:
-        seed_adherence_codes()
-        abs_code = AdherenceException.query.filter_by(code="ABS", is_active=True).first()
+    late_code = AdherenceException.query.filter_by(code="LATE", is_active=True).first()
+    early_code = AdherenceException.query.filter_by(code="EOUT", is_active=True).first()
     if not abs_code:
         return jsonify(error="No absence code configured"), 500
+
+    late_grace = int(data.get("late_grace_mins", 5))
 
     # Find all scheduled employees for this date
     schedules = Schedule.query.filter(
@@ -526,53 +528,117 @@ def auto_detect():
         Schedule.status == "scheduled",
     ).all()
 
-    # Get agent status events for this date to see who logged in
-    from app.realtime.actuals import get_agent_events
-    from app.models import AgentStatusEvent
+    # Get agent status events for this date
+    from app.models import AgentStatusEvent, ShiftSegment
     day_start = datetime.combine(d, datetime.min.time())
     day_end = day_start + timedelta(days=1)
-    logged_in_emps = set()
+
+    # Build per-employee event list
+    from collections import defaultdict
+    events_by_emp = defaultdict(list)
     try:
         events = AgentStatusEvent.query.filter(
             AgentStatusEvent.start_ts >= day_start,
             AgentStatusEvent.start_ts < day_end,
         ).all()
         for evt in events:
-            logged_in_emps.add(evt.employee_id)
+            events_by_emp[evt.employee_id].append(evt)
     except Exception:
         pass
 
     # Also check TimeClock entries
+    clock_by_emp = {}
     try:
-        clocks = TimeClock.query.filter(
-            TimeClock.date == d,
-        ).all()
+        clocks = TimeClock.query.filter(TimeClock.date == d).all()
         for tc in clocks:
-            logged_in_emps.add(tc.employee_id)
+            if tc.employee_id not in clock_by_emp or (tc.clock_in and tc.clock_in < clock_by_emp[tc.employee_id].clock_in):
+                clock_by_emp[tc.employee_id] = tc
     except Exception:
         pass
 
-    created = 0
+    created_abs = 0
+    created_late = 0
+    created_early = 0
+
     for sched in schedules:
-        if sched.employee_id in logged_in_emps:
-            continue
-        # Check if already coded for this date
-        existing = AttendanceEvent.query.filter_by(
-            employee_id=sched.employee_id, event_date=d
-        ).first()
-        if existing:
+        emp_id = sched.employee_id
+        has_events = emp_id in events_by_emp
+        has_clock = emp_id in clock_by_emp
+
+        # Parse schedule start/end times (db.Time objects)
+        try:
+            if not sched.start_time or not sched.end_time:
+                continue
+            sh_start = datetime.combine(d, sched.start_time)
+            sh_end = datetime.combine(d, sched.end_time)
+            if sh_end <= sh_start:
+                sh_end += timedelta(days=1)
+            sh_start_str = sched.start_time.strftime("%H:%M")
+            sh_end_str = sched.end_time.strftime("%H:%M")
+        except Exception:
             continue
 
-        evt = AttendanceEvent(
-            employee_id=sched.employee_id,
-            event_date=d,
-            adherence_exception_id=abs_code.id,
-            is_excused=False,
-            note="Auto-detected: scheduled but no login found",
-            coded_by=user.get("id"),
-        )
-        db.session.add(evt)
-        created += 1
+        if not has_events and not has_clock:
+            # ── ABSENT: no login at all ──
+            existing = AttendanceEvent.query.filter_by(
+                employee_id=emp_id, event_date=d, adherence_exception_id=abs_code.id
+            ).first()
+            if not existing:
+                db.session.add(AttendanceEvent(
+                    employee_id=emp_id, event_date=d,
+                    adherence_exception_id=abs_code.id, is_excused=False,
+                    note=f"Auto: scheduled {sh_start_str}–{sh_end_str}, no login found",
+                    coded_by=user.get("id"),
+                ))
+                created_abs += 1
+            continue
+
+        # Find first login time
+        first_login = None
+        if has_events:
+            sorted_evts = sorted(events_by_emp[emp_id], key=lambda e: e.start_ts)
+            first_login = sorted_evts[0].start_ts
+        if has_clock:
+            ci = clock_by_emp[emp_id].clock_in
+            if ci and (first_login is None or ci < first_login):
+                first_login = ci
+
+        # ── LATE: first login well after shift start ──
+        if late_code and first_login:
+            mins_late = (first_login - sh_start).total_seconds() / 60
+            if mins_late > late_grace:
+                existing = AttendanceEvent.query.filter_by(
+                    employee_id=emp_id, event_date=d, adherence_exception_id=late_code.id
+                ).first()
+                if not existing:
+                    db.session.add(AttendanceEvent(
+                        employee_id=emp_id, event_date=d,
+                        adherence_exception_id=late_code.id, is_excused=False,
+                        note=f"Auto: {int(mins_late)}m late (scheduled {sh_start_str}, first seen {first_login.strftime('%H:%M')})",
+                        coded_by=user.get("id"),
+                    ))
+                    created_late += 1
+
+        # ── EARLY OUT: last activity ended before shift end ──
+        if early_code and has_events:
+            sorted_evts = sorted(events_by_emp[emp_id], key=lambda e: e.start_ts)
+            last_evt = sorted_evts[-1]
+            last_seen = last_evt.end_ts or last_evt.start_ts
+            if last_seen and last_seen < sh_end - timedelta(minutes=15):
+                mins_early = (sh_end - last_seen).total_seconds() / 60
+                existing = AttendanceEvent.query.filter_by(
+                    employee_id=emp_id, event_date=d, adherence_exception_id=early_code.id
+                ).first()
+                if not existing:
+                    db.session.add(AttendanceEvent(
+                        employee_id=emp_id, event_date=d,
+                        adherence_exception_id=early_code.id, is_excused=False,
+                        note=f"Auto: left {int(mins_early)}m early (last seen {last_seen.strftime('%H:%M')}, scheduled to {sh_end_str})",
+                        coded_by=user.get("id"),
+                    ))
+                    created_early += 1
 
     db.session.commit()
-    return jsonify(success=True, created=created)
+    total = created_abs + created_late + created_early
+    return jsonify(success=True, created=total,
+                   detail={"absent": created_abs, "late": created_late, "early_leave": created_early})

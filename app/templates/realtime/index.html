@@ -1412,7 +1412,12 @@ async function absAutoDetect() {
     });
     const data = await r.json();
     if (data.success) {
-      alert(`${data.created} absence(s) detected and coded.`);
+      const dt = data.detail || {};
+      alert(`Auto-detect complete: ${data.created} event(s) coded.\n` +
+        (dt.absent ? `• ${dt.absent} absent\n` : '') +
+        (dt.late ? `• ${dt.late} late\n` : '') +
+        (dt.early_leave ? `• ${dt.early_leave} early leave\n` : '') +
+        (!data.created ? 'No new issues found.' : ''));
       loadTab('absent');
     } else alert(data.error || 'Auto-detect failed');
   } catch(e) { alert('Error: ' + e.message); }
