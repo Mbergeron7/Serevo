@@ -2502,17 +2502,37 @@ function editSegment(segIdx) {
   const seg = scheduleData.days[dayIdx].shifts[shiftIdx].segments[segIdx];
 
   document.getElementById('editSegIdx').value = segIdx;
-  document.getElementById('newSegType').value = seg.type || '';
+  const typeSel = document.getElementById('newSegType');
+  typeSel.value = seg.type || '';
+  // If the type didn't match an option, try case-insensitive match
+  if (!typeSel.value && seg.type) {
+    const lower = seg.type.toLowerCase();
+    for (const opt of typeSel.options) {
+      if (opt.value.toLowerCase() === lower || opt.textContent.toLowerCase().includes(lower)) {
+        typeSel.value = opt.value; break;
+      }
+    }
+  }
   document.getElementById('newSegStart').value = seg.start;
   document.getElementById('newSegEnd').value = seg.end;
   document.getElementById('newSegNotes').value = seg.notes || '';
   document.getElementById('segSaveBtn').textContent = 'Save';
   document.getElementById('addSegForm').style.display = 'block';
+
+  // Highlight edited segment
+  document.querySelectorAll('#segmentList .seg-list-item').forEach((el, i) => {
+    el.style.outline = i === segIdx ? '2px solid var(--brand-accent)' : '';
+    el.style.borderRadius = i === segIdx ? '6px' : '';
+  });
+
+  // Scroll form into view
+  document.getElementById('addSegForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function cancelAddSegment() {
   document.getElementById('addSegForm').style.display = 'none';
   document.getElementById('editSegIdx').value = '-1';
+  document.querySelectorAll('#segmentList .seg-list-item').forEach(el => { el.style.outline = ''; el.style.borderRadius = ''; });
 }
 
 function confirmAddSegment() {
