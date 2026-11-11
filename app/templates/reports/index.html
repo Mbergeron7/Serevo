@@ -434,32 +434,49 @@ async function loadCoverage() {
 
   const kpi = d.kpi || {};
   renderKpis('covKpis', [
-    { val: pct(kpi.avg_coverage), lbl: 'Avg Coverage', cls: kpiCls(kpi.avg_coverage, 90, 70) },
-    { val: fmt(kpi.understaffed), lbl: 'Understaffed Intervals', cls: (kpi.understaffed||0) > 0 ? 'bad' : 'good' },
-    { val: fmt(kpi.overstaffed), lbl: 'Overstaffed Intervals' },
+    { val: pct(kpi.avg_coverage_pct), lbl: 'Avg Coverage', cls: kpiCls(kpi.avg_coverage_pct, 90, 70) },
+    { val: fmt(kpi.understaffed_days), lbl: 'Understaffed Days', cls: (kpi.understaffed_days||0) > 0 ? 'bad' : 'good' },
+    { val: fmt(kpi.overstaffed_days), lbl: 'Overstaffed Days' },
     { val: fmt(kpi.peak_gap), lbl: 'Peak Gap' },
   ]);
 
   // Chart: daily coverage bars color-coded
-  const trend = d.daily_trend || [];
+  const trend = d.daily_data || [];
   const labels = trend.map(t => { const dt = new Date(t.date+'T12:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
-  const colors = trend.map(t => (t.coverage||0) >= 90 ? '#059669' : (t.coverage||0) >= 70 ? '#d97706' : '#dc2626');
+  const colors = trend.map(t => (t.coverage_pct||0) >= 90 ? '#059669' : (t.coverage_pct||0) >= 70 ? '#d97706' : '#dc2626');
   destroyChart('cov');
   const ctx = document.getElementById('covChart').getContext('2d');
   _charts.cov = new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets: [{ label:'Coverage %', data:trend.map(t=>t.coverage||0), backgroundColor:colors, borderRadius:3 }] },
-    options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:Math.max(120,...trend.map(t=>t.coverage||0))}} },
+    data: { labels, datasets: [{ label:'Coverage %', data:trend.map(t=>t.coverage_pct||0), backgroundColor:colors, borderRadius:3 }] },
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:Math.max(120,...trend.map(t=>t.coverage_pct||0))}} },
   });
 
-  // Table
-  const rows = d.rows || [];
+  // Table — show daily data rows (date, required, scheduled, gap, coverage)
+  // plus LOB breakdown rows if available
+  const daily = d.daily_data || [];
+  const lobRows = d.rows || [];
   const tbl = document.getElementById('covTable');
-  tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th>Interval</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Coverage %</th></tr>';
-  tbl.querySelector('tbody').innerHTML = rows.length ? rows.map(r => {
-    const gCls = (r.gap||0) < 0 ? 'bad' : (r.gap||0) > 0 ? 'good' : '';
-    return `<tr><td>${esc(r.date)}</td><td>${esc(r.interval||'')}</td><td class="num">${fmt(r.required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num ${kpiCls(r.coverage,90,70)}">${pct(r.coverage)}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" class="rpt-empty">No coverage data for this period.</td></tr>';
+
+  if (lobRows.length) {
+    // Show by-LOB breakdown
+    tbl.querySelector('thead').innerHTML = '<tr><th>LOB</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Coverage %</th></tr>';
+    tbl.querySelector('tbody').innerHTML = lobRows.map(r => {
+      const gCls = (r.gap||0) < 0 ? 'bad' : (r.gap||0) > 0 ? 'good' : '';
+      return `<tr><td>${esc(r.lob)}</td><td class="num">${fmt(r.required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
+    }).join('');
+  } else if (daily.length) {
+    // Show daily breakdown
+    tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Hours</th><th class="num">Coverage %</th></tr>';
+    tbl.querySelector('tbody').innerHTML = daily.map(r => {
+      const gCls = (r.gap||0) < 0 ? 'bad' : (r.gap||0) > 0 ? 'good' : '';
+      const dt = new Date(r.date+'T12:00:00');
+      return `<tr><td>${dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td><td class="num">${fmt(r.required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num">${r.hours ? r.hours.toFixed(1) + 'h' : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
+    }).join('');
+  } else {
+    tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Coverage %</th></tr>';
+    tbl.querySelector('tbody').innerHTML = '<tr><td colspan="5" class="rpt-empty">No coverage data for this period.</td></tr>';
+  }
   sortTable(tbl);
 }
 

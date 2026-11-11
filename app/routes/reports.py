@@ -412,7 +412,7 @@ def report_filters():
         return jsonify(get_demo_report_filters())
 
     lobs = [{"id": pu.id, "name": pu.name}
-            for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+            for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
 
     tls = [r[0] for r in db.session.query(Employee.team_lead).filter(
         Employee.status == "Active",
