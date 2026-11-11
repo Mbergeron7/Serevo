@@ -772,7 +772,17 @@
       <p><strong>Erlang C Estimates:</strong> When no call actuals are available (e.g., before the day starts or for future intervals), {{ brand_name }} calculates estimated service levels using the <strong>Erlang C</strong> model based on forecast demand and scheduled staffing. These appear as supplementary estimates below the actuals table when present, or as the primary view when actuals are absent.</p>
 
       <h3>Absenteeism</h3>
-      <p>Tracks unplanned absences and their impact on staffing for the selected date. Shows which agents are absent, the reason (if provided), and how their absence affects coverage for each interval.</p>
+      <p>Tracks unplanned absences and their impact on staffing for the selected date. Shows absence, late, and early leave breakdowns by LOB, plus detail tables for each category.</p>
+
+      <h4>Attendance Coding</h4>
+      <p>At the bottom of the Absenteeism tab is the <strong>Coded Attendance Events</strong> section where you can permanently record attendance issues:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>🔍 Auto-detect</strong> — scans the schedule versus agent logins and creates coded events for absences, lates (first login &gt; 5 min after shift start), and early leaves (last activity &gt; 15 min before shift end). Skips employees who already have a coded event.</li>
+        <li><strong>🔄 Re-detect</strong> — clears all previously auto-detected entries for the date, then scans fresh. Use this after importing updated schedules from PeopleWare or correcting shifts.</li>
+        <li><strong>+ Code Event</strong> — manually create an attendance record. Pick an employee, select an exception code, and add an optional note.</li>
+      </ul>
+      <p><strong>Exception codes:</strong> ABS (Absent), NCNS (No Call/No Show), LATE, EOUT (Early Out), SICK, VAC (Vacation), PER (Personal Day), BRKV (Break Overrun), APPR (Approved Absence), OTHER. Each has a category (absence, late, early_out, break_overrun, other) and can be marked as excused or unexcused.</p>
+      <p>Coded events appear as <strong>badges on the Schedule page</strong> — see the Scheduling section above for details. They are stored permanently and survive schedule re-imports.</p>
 
       <h3>Agent Status</h3>
       <p>A snapshot of what each agent is currently doing versus what they are scheduled to do:</p>
@@ -853,6 +863,9 @@
         <li><strong>Adjusted</strong> — an admin has corrected the times (original timestamps are preserved)</li>
       </ul>
       <p>Admins can approve or adjust punches from the Attendance page or from the <strong>Payroll → View Punches</strong> screen. Adjusted punches always retain the original clock-in and clock-out times alongside the corrected values, ensuring a full audit trail.</p>
+
+      <h3>Attendance Coding</h3>
+      <p>For recording absences, lates, and early leaves that persist across days, use the <strong>Attendance Coding</strong> system on the <strong>Real-Time → Absenteeism</strong> tab. See the <strong>Real-Time Management → Absenteeism</strong> section above for full details on auto-detection and manual coding.</p>
     </div>
   </div>
 
