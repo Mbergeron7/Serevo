@@ -391,10 +391,10 @@ async function loadForecast() {
 
   const kpi = d.kpi || {};
   renderKpis('fcKpis', [
-    { val: pct(kpi.avg_accuracy), lbl: 'Avg Accuracy', cls: kpiCls(kpi.avg_accuracy, 90, 80) },
-    { val: fmt(kpi.total_forecast), lbl: 'Forecast Volume' },
-    { val: fmt(kpi.total_actual), lbl: 'Actual Volume' },
-    { val: pct(kpi.variance_pct), lbl: 'Variance', cls: Math.abs(kpi.variance_pct||0) <= 5 ? 'good' : Math.abs(kpi.variance_pct||0) <= 10 ? 'warn' : 'bad' },
+    { val: pct(kpi.avg_accuracy_pct), lbl: 'Avg Accuracy', cls: kpiCls(kpi.avg_accuracy_pct, 90, 80) },
+    { val: fmt(kpi.total_forecast_volume), lbl: 'Forecast Volume' },
+    { val: fmt(kpi.total_actual_volume), lbl: 'Actual Volume' },
+    { val: pct(kpi.volume_variance_pct), lbl: 'Variance', cls: Math.abs(kpi.volume_variance_pct||0) <= 5 ? 'good' : Math.abs(kpi.volume_variance_pct||0) <= 10 ? 'warn' : 'bad' },
   ]);
 
   // Chart: forecast vs actual lines
@@ -417,10 +417,10 @@ async function loadForecast() {
   // Table
   const rows = d.rows || [];
   const tbl = document.getElementById('fcTable');
-  tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th>LOB</th><th class="num">Forecast</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">Accuracy %</th></tr>';
+  tbl.querySelector('thead').innerHTML = '<tr><th>LOB</th><th class="num">Forecast</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">Variance %</th><th class="num">Accuracy %</th></tr>';
   tbl.querySelector('tbody').innerHTML = rows.length ? rows.map(r => {
     const vCls = Math.abs(r.variance_pct||0) <= 5 ? 'good' : Math.abs(r.variance_pct||0) <= 10 ? 'warn' : 'bad';
-    return `<tr><td>${esc(r.date)}</td><td>${esc(r.lob)}</td><td class="num">${fmt(r.forecast)}</td><td class="num">${fmt(r.actual)}</td><td class="num ${vCls}">${r.variance_pct != null ? (r.variance_pct > 0 ? '+' : '') + r.variance_pct.toFixed(1) + '%' : '—'}</td><td class="num ${kpiCls(r.accuracy,90,80)}">${pct(r.accuracy)}</td></tr>`;
+    return `<tr><td>${esc(r.lob)}</td><td class="num">${fmt(r.forecast)}</td><td class="num">${fmt(r.actual)}</td><td class="num">${fmt(r.variance)}</td><td class="num ${vCls}">${r.variance_pct != null ? (r.variance_pct > 0 ? '+' : '') + r.variance_pct.toFixed(1) + '%' : '—'}</td><td class="num ${kpiCls(r.accuracy_pct,90,80)}">${pct(r.accuracy_pct)}</td></tr>`;
   }).join('') : '<tr><td colspan="6" class="rpt-empty">No forecast data for this period.</td></tr>';
   sortTable(tbl);
 }
@@ -473,9 +473,9 @@ async function loadPerformance() {
   const kpi = d.kpi || {};
   renderKpis('perfKpis', [
     { val: kpi.avg_quality != null ? kpi.avg_quality.toFixed(1) + '%' : 'N/A', lbl: 'Avg Quality Score', cls: kpiCls(kpi.avg_quality, 85, 70) },
-    { val: pct(kpi.avg_attendance_rate), lbl: 'Avg Attendance Rate', cls: kpiCls(kpi.avg_attendance_rate, 95, 90) },
+    { val: pct(kpi.avg_attendance_rate), lbl: 'Avg Attendance', cls: kpiCls(kpi.avg_attendance_rate, 95, 90) },
     { val: fmt(kpi.total_agents), lbl: 'Agents' },
-    { val: fmt(kpi.total_hours), lbl: 'Total Hours' },
+    { val: kpi.total_hours != null ? kpi.total_hours.toLocaleString() + 'h' : '—', lbl: 'Total Hours' },
   ]);
 
   // Table (no chart — table is the focus)
@@ -588,10 +588,10 @@ async function loadSummary() {
   // Attendance hours
   const att = await api('/reports/api/attendance', {days});
   if (att.success && att.rows.length) {
-    let ah = '<table class="rpt-table sortable" id="sumAttTbl"><thead><tr><th>Employee</th><th class="num">Actual</th><th class="num">Scheduled</th><th class="num">Diff</th></tr></thead><tbody>';
+    let ah = '<table class="rpt-table sortable" id="sumAttTbl"><thead><tr><th>Employee</th><th>LOB</th><th class="num">Actual</th><th class="num">Scheduled</th><th class="num">Diff</th></tr></thead><tbody>';
     att.rows.forEach(r => {
       const dc = r.difference > 0 ? 'good' : r.difference < 0 ? 'bad' : '';
-      ah += `<tr><td>${esc(r.name)}</td><td class="num">${r.actual_hours}h</td><td class="num">${r.scheduled_hours}h</td><td class="num ${dc}">${r.difference > 0 ? '+' : ''}${r.difference}h</td></tr>`;
+      ah += `<tr><td>${esc(r.name)}</td><td>${esc(r.lob||'')}</td><td class="num">${r.actual_hours}h</td><td class="num">${r.scheduled_hours}h</td><td class="num ${dc}">${r.difference > 0 ? '+' : ''}${r.difference}h</td></tr>`;
     });
     ah += '</tbody></table>';
     document.getElementById('sumAtt').innerHTML = ah;

@@ -287,6 +287,7 @@ def attendance_report():
             rows.append({
                 "name": emp.full_name,
                 "employee_id": emp.employee_id,
+                "lob": _lob_name(emp),
                 "actual_hours": actual_f,
                 "scheduled_hours": scheduled_f,
                 "difference": diff,
@@ -592,8 +593,11 @@ def forecast_accuracy():
         # Build PU filter
         pu_ids = None
         if lob:
-            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
-            pu_ids = [pu.id] if pu else []
+            lob_names = [l.strip() for l in lob.split(",") if l.strip()]
+            pus = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
+            ).all()
+            pu_ids = [p.id for p in pus] if pus else []
 
         # Forecast by day
         fc_q = db.session.query(
@@ -972,17 +976,18 @@ def agent_performance():
                 "quality_avg": qual["avg"],
                 "quality_evals": qual["count"],
             })
-        rows.sort(key=lambda r: r["name"])
+        rows.sort(key=lambda r: r["employee_name"])
 
         # KPI averages
         att_rates = [r["attendance_rate"] for r in rows if r["total_shifts"] > 0]
         qual_scores = [r["quality_avg"] for r in rows if r["quality_avg"] is not None]
+        total_hrs = sum(r["total_hours"] for r in rows)
 
         return jsonify(success=True, kpi={
             "avg_attendance_rate": round(sum(att_rates) / len(att_rates), 1) if att_rates else None,
-            "avg_quality_score": round(sum(qual_scores) / len(qual_scores), 1) if qual_scores else None,
+            "avg_quality": round(sum(qual_scores) / len(qual_scores), 1) if qual_scores else None,
             "total_agents": len(rows),
-            "total_issues": sum(r["absent_count"] + r["late_count"] + r["early_count"] for r in rows),
+            "total_hours": round(total_hrs, 1),
         }, rows=rows)
     except Exception as e:
         log.exception("agent-performance error")
