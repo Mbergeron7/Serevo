@@ -2205,7 +2205,7 @@ function renderTimelineView(container) {
       const baseWidth = ((shiftEMin - shiftSMin) / 60) * TL_PX_PER_HOUR;
       html += `<div class="tl-segment tl-seg-oncall tl-seg-base" style="left:${baseLeft}px;width:${Math.max(baseWidth,2)}px"
         title="On-Call: ${shift.start}–${shift.end} (drag to move, edges to resize)"
-        onmousedown="shiftMouseDown(event,${dayIdx},${shiftIdx})"><span class="seg-handle seg-handle-l" data-handle="l"></span><span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
+        onmousedown="shiftMouseDown(event,${dayIdx},${origIdx},${shift.id||0})"><span class="seg-handle seg-handle-l" data-handle="l"></span><span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
 
       // Overlay segments: breaks, lunch, meetings rendered ON TOP of the base bar
       const segments = shift.segments || [];
@@ -3927,7 +3927,7 @@ function sepDelete(dayIdx, shiftIdx, segIdx) {
 // ── Whole-shift drag ─────────────────────────
 let _shiftDragState = null;
 
-function shiftMouseDown(e, dayIdx, shiftIdx) {
+function shiftMouseDown(e, dayIdx, shiftIdx, shiftDbId) {
   if (e.button === 2) return;
   e.preventDefault();
   e.stopPropagation();
@@ -3945,7 +3945,7 @@ function shiftMouseDown(e, dayIdx, shiftIdx) {
   const resizeEdge = handle ? handle.dataset.handle : null;
 
   _shiftDragState = {
-    dayIdx, shiftIdx,
+    dayIdx, shiftIdx, shiftDbId: shiftDbId || 0,
     origStart: shift.start, origEnd: shift.end,
     origLeft: parseFloat(segEl.style.left),
     origWidth: parseFloat(segEl.style.width),
@@ -4007,7 +4007,7 @@ function shiftMouseUp(e) {
   segs.forEach(s => delete s.dataset.origLeft);
 
   if (!ds.moved) {
-    openEditModal(ds.dayIdx, ds.shiftIdx);
+    openEditModal(ds.dayIdx, ds.shiftIdx, ds.shiftDbId);
     return;
   }
 
