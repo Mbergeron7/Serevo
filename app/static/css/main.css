@@ -797,9 +797,10 @@ main > *, main > * > * { max-width: 100%; }
   background: var(--bg); color: var(--text);
 }
 .ms-dropdown label {
-  display: flex; align-items: center; gap: 6px; padding: 4px 6px;
-  font-size: .82rem; cursor: pointer; border-radius: 4px;
+  display: flex !important; align-items: center; gap: 6px; padding: 4px 6px;
+  font-size: .82rem; cursor: pointer; border-radius: 4px; flex-direction: row !important;
 }
 .ms-dropdown label:hover { background: var(--brand-accent-light, #edf2ff); }
+.ms-dropdown label input[type="checkbox"] { width: auto !important; min-width: 14px; margin: 0; flex-shrink: 0; }
 .ms-actions { display: flex; gap: 8px; padding: 4px 6px; font-size: .75rem; }
 .ms-actions a { cursor: pointer; color: var(--brand-accent, #3b82f6); text-decoration: none; }
