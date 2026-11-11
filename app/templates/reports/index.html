@@ -481,10 +481,10 @@ async function loadPerformance() {
   // Table (no chart — table is the focus)
   const rows = d.rows || [];
   const tbl = document.getElementById('perfTable');
-  tbl.querySelector('thead').innerHTML = '<tr><th>Employee</th><th>LOB</th><th class="num">Quality Avg</th><th class="num">Attendance %</th><th class="num">Hours</th><th class="num">Absent</th><th class="num">Late</th></tr>';
+  tbl.querySelector('thead').innerHTML = '<tr><th>Employee</th><th>LOB</th><th class="num">Quality Avg</th><th class="num">Attendance %</th><th class="num">Hours</th><th class="num">Absent</th><th class="num">Late</th><th class="num">Early Leave</th></tr>';
   tbl.querySelector('tbody').innerHTML = rows.length ? rows.map(r => {
-    return `<tr><td>${esc(r.employee_name)}</td><td>${esc(r.lob)}</td><td class="num ${kpiCls(r.quality_avg,85,70)}">${r.quality_avg != null ? r.quality_avg.toFixed(1)+'%' : '—'}</td><td class="num ${kpiCls(r.attendance_rate,95,90)}">${pct(r.attendance_rate)}</td><td class="num">${fmt(r.total_hours)}</td><td class="num${(r.absent_count||0)?' bad':''}">${r.absent_count||0}</td><td class="num${(r.late_count||0)?' warn':''}">${r.late_count||0}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" class="rpt-empty">No agent data for this period.</td></tr>';
+    return `<tr><td>${esc(r.employee_name)}</td><td>${esc(r.lob)}</td><td class="num ${kpiCls(r.quality_avg,85,70)}">${r.quality_avg != null ? r.quality_avg.toFixed(1)+'%' : '—'}</td><td class="num ${kpiCls(r.attendance_rate,95,90)}">${pct(r.attendance_rate)}</td><td class="num">${fmt(r.total_hours)}</td><td class="num${(r.absent_count||0)?' bad':''}">${r.absent_count||0}</td><td class="num${(r.late_count||0)?' warn':''}">${r.late_count||0}</td><td class="num${(r.early_count||0)?' warn':''}">${r.early_count||0}</td></tr>`;
+  }).join('') : '<tr><td colspan="8" class="rpt-empty">No agent data for this period.</td></tr>';
   sortTable(tbl);
 }
 
