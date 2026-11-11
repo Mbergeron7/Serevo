@@ -2592,14 +2592,14 @@ def get_demo_report_attendance_coded(start_date=None, end_date=None):
         emp = data["emp"]
         evts = data["events"]
         rows.append({
-            "employee_id": eid, "name": f"{emp['First Name']} {emp['Last Name']}",
+            "employee_id": eid, "employee_name": f"{emp['First Name']} {emp['Last Name']}",
             "ext_id": eid, "lob": emp["Latest Skill Name"], "team_lead": emp.get("Team Lead", ""),
             "events": evts,
-            "absent": sum(1 for e in evts if e["category"] == "absence"),
-            "late": sum(1 for e in evts if e["category"] == "late"),
-            "early": sum(1 for e in evts if e["category"] == "early_out"),
+            "absent_count": sum(1 for e in evts if e["category"] == "absence"),
+            "late_count": sum(1 for e in evts if e["category"] == "late"),
+            "early_count": sum(1 for e in evts if e["category"] == "early_out"),
         })
-    rows.sort(key=lambda r: -(r["absent"] + r["late"] + r["early"]))
+    rows.sort(key=lambda r: -(r["absent_count"] + r["late_count"] + r["early_count"]))
 
     return {
         "success": True,
@@ -2708,7 +2708,7 @@ def get_demo_report_agent_performance(start_date=None, end_date=None):
         att_rate = round(100 - (absent / shifts * 100), 1) if shifts else 100
         qual = round(rng.uniform(72, 98), 1)
         rows.append({
-            "employee_id": i + 1, "name": f"{emp['First Name']} {emp['Last Name']}",
+            "employee_id": i + 1, "employee_name": f"{emp['First Name']} {emp['Last Name']}",
             "ext_id": emp["Employee ID"], "lob": emp["Latest Skill Name"],
             "team_lead": emp.get("Team Lead", ""),
             "total_hours": round(shifts * emp["Hours Per Day"], 1),
@@ -2716,7 +2716,7 @@ def get_demo_report_agent_performance(start_date=None, end_date=None):
             "early_count": early, "attendance_rate": att_rate,
             "quality_avg": qual, "quality_evals": rng.randint(3, 10),
         })
-    rows.sort(key=lambda r: r["name"])
+    rows.sort(key=lambda r: r["employee_name"])
     att_rates = [r["attendance_rate"] for r in rows]
     qual_scores = [r["quality_avg"] for r in rows]
     return {
@@ -2773,14 +2773,15 @@ def get_demo_report_pto_leave(start_date=None, end_date=None):
     for eid, data in emp_pto.items():
         emp = data["emp"]
         entries = data["entries"]
-        rows.append({
-            "employee_id": eid, "name": f"{emp['First Name']} {emp['Last Name']}",
-            "ext_id": eid, "lob": emp["Latest Skill Name"],
-            "entries": sorted(entries, key=lambda x: x["start"]),
-            "total_days": sum(e["days"] for e in entries if e["status"] == "approved"),
-            "total_requests": len(entries),
-        })
-    rows.sort(key=lambda r: -r["total_days"])
+        for entry in sorted(entries, key=lambda x: x["start"]):
+            rows.append({
+                "employee_id": eid, "employee_name": f"{emp['First Name']} {emp['Last Name']}",
+                "ext_id": eid, "lob": emp["Latest Skill Name"],
+                "type": entry["type"], "start_date": entry["start"],
+                "end_date": entry["end"], "days": entry["days"],
+                "status": entry["status"],
+            })
+    rows.sort(key=lambda r: r["start_date"], reverse=True)
 
     return {
         "success": True,

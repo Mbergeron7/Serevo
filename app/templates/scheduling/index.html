@@ -2487,18 +2487,14 @@ function openEditModal(dayIdx, shiftIdxHint, shiftDbId) {
   let shiftIdx = shiftIdxHint;
   let shift;
 
-  console.log('openEditModal called:', {dayIdx, shiftIdxHint, shiftDbId, sid, totalShifts: day.shifts.length});
-
   // Always prefer DB id lookup — index may be stale after filtering/sorting
   if (sid > 0) {
     const byId = day.shifts.findIndex(s => s.id == sid);
-    console.log('DB id lookup result:', {sid, byId, matchedEmployee: byId >= 0 ? day.shifts[byId].employee : 'NOT FOUND'});
     if (byId >= 0) { shiftIdx = byId; shift = day.shifts[byId]; }
   }
   // Fallback to index
   if (!shift) {
     shift = day.shifts[shiftIdx];
-    console.log('Fallback to index:', {shiftIdx, employee: shift ? shift.employee : 'NOT FOUND'});
   }
 
   if (!shift) {
