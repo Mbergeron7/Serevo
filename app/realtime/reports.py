@@ -549,6 +549,21 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
     for e in events_all:
         ev_by_emp[str(e["employee_id"])].append(e)
 
+    # Also check TimeClock as secondary presence data
+    clocked_in = {}  # ext employee_id → first clock_in datetime
+    try:
+        from app.models import TimeClock, Employee
+        clocks = TimeClock.query.filter(TimeClock.date == date_obj).all()
+        for tc in clocks:
+            emp = Employee.query.get(tc.employee_id)
+            if emp:
+                ext_id = str(emp.employee_id or emp.id)
+                ci = tc.clock_in
+                if ci and (ext_id not in clocked_in or ci < clocked_in[ext_id]):
+                    clocked_in[ext_id] = ci
+    except Exception:
+        pass
+
     for lob in lobs:
         shifts = _shifts(lob, date_obj, user, sheet)
         sched = len(shifts)
@@ -561,11 +576,22 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=5,
             if sh_end <= sh_start:
                 sh_end += datetime.timedelta(days=1)
             first, last_end, current = _first_last_login(ev_by_emp.get(ext, []))
+
+            # If no agent status events, check TimeClock
+            if first is None and ext in clocked_in:
+                ci = clocked_in[ext]
+                if not ci.tzinfo:
+                    first = ci
+                else:
+                    first = ci.replace(tzinfo=None)
+                last_end = None
+                current = "Clocked in (no ACD status)"
+
             base = {"employee": s.get("employee", ext), "employee_id": ext, "lob": lob,
                     "scheduled_from": s["start"], "scheduled_to": s["end"]}
 
             if first is None:
-                # No login at all
+                # No login at all — not in agent status AND not clocked in
                 if is_today and now < sh_start + datetime.timedelta(minutes=late_grace_mins):
                     continue  # shift hasn't started yet
                 absent += 1
