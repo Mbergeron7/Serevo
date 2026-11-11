@@ -645,8 +645,11 @@ def forecast_accuracy():
 
         # By LOB breakdown
         rows = []
-        if pu_ids is None:
+        if pu_ids is not None:
+            pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all()
+        else:
             pus = PlanningUnit.query.filter_by(is_active=True).all()
+        if pus:
             for pu in pus:
                 fc_vol = db.session.query(func.coalesce(func.sum(ForecastInterval.offered), 0)).filter(
                     ForecastInterval.planning_unit_id == pu.id,
@@ -755,8 +758,11 @@ def coverage_report():
 
         pu_ids = None
         if lob:
-            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
-            pu_ids = [pu.id] if pu else []
+            lob_names = [l.strip() for l in lob.split(",") if l.strip()]
+            pus_match = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
+            ).all()
+            pu_ids = [p.id for p in pus_match] if pus_match else []
 
         # Requirements by day
         req_q = db.session.query(
@@ -822,9 +828,12 @@ def coverage_report():
 
         # By LOB
         rows = []
-        if pu_ids is None:
-            pus = PlanningUnit.query.filter_by(is_active=True).all()
-            for pu in pus:
+        if pu_ids is not None:
+            lob_pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all()
+        else:
+            lob_pus = PlanningUnit.query.filter_by(is_active=True).all()
+        if lob_pus:
+            for pu in lob_pus:
                 req_v = db.session.query(func.coalesce(func.sum(RequirementInterval.agents_required), 0)).filter(
                     RequirementInterval.planning_unit_id == pu.id,
                     RequirementInterval.timestamp >= start_dt, RequirementInterval.timestamp < end_dt,
