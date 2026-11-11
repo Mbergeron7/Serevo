@@ -917,8 +917,15 @@ def load_schedule():
                     pu_ids.append(pu.id)
             if not pu_ids:
                 return jsonify({"success": True, "shifts": [], "message": "No planning unit found"})
+            # Include schedules assigned to the PU OR belonging to employees in the PU
+            emp_ids_in_pu = [e.id for e in Employee.query.filter(
+                Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
+            ).all()]
             schedules = Schedule.query.filter(
-                Schedule.planning_unit_id.in_(pu_ids),
+                db.or_(
+                    Schedule.planning_unit_id.in_(pu_ids),
+                    Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                ),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
