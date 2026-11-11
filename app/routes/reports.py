@@ -4,14 +4,16 @@ Reports & Analytics — cross-module dashboard with key workforce metrics.
 import csv
 import io
 import logging
-from datetime import date, timedelta
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from flask import Blueprint, jsonify, request, render_template, Response
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, ForecastInterval,
     QualityEvaluation, ShiftSwapRequest, ShiftBid, ShiftPost,
-    PlanningUnit, TimeClock,
+    PlanningUnit, TimeClock, AttendanceEvent, AdherenceException,
+    IntervalActual, RequirementInterval, LeaveOfAbsence,
 )
 
 log = logging.getLogger(__name__)
@@ -23,6 +25,54 @@ def _require_admin_or_sup():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return None
     return user
+
+
+def _parse_filters(payload):
+    """Parse shared filter fields from request payload."""
+    start_str = payload.get("start_date")
+    end_str = payload.get("end_date")
+    days = int(payload.get("days", 30))
+
+    if start_str and end_str:
+        try:
+            start_d = date.fromisoformat(start_str)
+            end_d = date.fromisoformat(end_str)
+        except (ValueError, TypeError):
+            start_d = date.today() - timedelta(days=days)
+            end_d = date.today()
+    else:
+        end_d = date.today()
+        start_d = end_d - timedelta(days=days)
+
+    lob = payload.get("lob", "").strip()
+    team_lead = payload.get("team_lead", "").strip()
+    employee_id = payload.get("employee_id")  # DB int id
+
+    return start_d, end_d, lob, team_lead, employee_id
+
+
+def _filter_employees(start_d, end_d, lob, team_lead, employee_id):
+    """Return filtered Employee query."""
+    q = Employee.query.filter_by(status="Active")
+    if employee_id:
+        q = q.filter(Employee.id == int(employee_id))
+    if lob:
+        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        if pu:
+            q = q.filter(Employee.planning_unit_id == pu.id)
+        else:
+            q = q.filter(db.false())
+    if team_lead:
+        q = q.filter(Employee.team_lead == team_lead)
+    return q.order_by(Employee.last_name, Employee.first_name)
+
+
+def _lob_name(emp):
+    """Get LOB name for an employee."""
+    if emp.planning_unit_id:
+        pu = PlanningUnit.query.get(emp.planning_unit_id)
+        return pu.name if pu else ""
+    return ""
 
 
 @reports_bp.route("/")
@@ -337,3 +387,735 @@ def summary_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=summary_{date.today().isoformat()}.csv"},
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# NEW REPORT ENDPOINTS — all share the filter payload pattern
+# ═══════════════════════════════════════════════════════════════
+
+@reports_bp.route("/api/filters", methods=["POST"])
+@login_required
+def report_filters():
+    """Return available filter options: LOBs, team leads, employees."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+
+    lobs = [{"id": pu.id, "name": pu.name}
+            for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+
+    tls = [r[0] for r in db.session.query(Employee.team_lead).filter(
+        Employee.status == "Active",
+        Employee.team_lead.isnot(None),
+        Employee.team_lead != "",
+    ).distinct().order_by(Employee.team_lead).all()]
+
+    emps = [{"id": e.id, "name": e.full_name, "employee_id": e.employee_id}
+            for e in Employee.query.filter_by(status="Active")
+            .order_by(Employee.last_name, Employee.first_name).all()]
+
+    return jsonify(success=True, lobs=lobs, team_leads=tls, employees=emps)
+
+
+# ── 1. Attendance (coded events) ──────────────────────────────
+
+@reports_bp.route("/api/attendance-coded", methods=["POST"])
+@login_required
+def attendance_coded():
+    """Attendance report from coded AttendanceEvent records."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, kpi={}, daily_trend=[], rows=[], message="Demo mode")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+        emp_ids = {e.id for e in emps}
+        emp_map = {e.id: e for e in emps}
+
+        # Total scheduled in range
+        total_scheduled = Schedule.query.filter(
+            Schedule.employee_id.in_(emp_ids),
+            Schedule.schedule_date >= start_d,
+            Schedule.schedule_date <= end_d,
+            Schedule.status == "scheduled",
+        ).count() if emp_ids else 0
+
+        # Coded events
+        events = AttendanceEvent.query.filter(
+            AttendanceEvent.employee_id.in_(emp_ids),
+            AttendanceEvent.event_date >= start_d,
+            AttendanceEvent.event_date <= end_d,
+        ).all() if emp_ids else []
+
+        absent_count = sum(1 for e in events if e.adherence_exception and e.adherence_exception.category == "absence")
+        late_count = sum(1 for e in events if e.adherence_exception and e.adherence_exception.category == "late")
+        early_count = sum(1 for e in events if e.adherence_exception and e.adherence_exception.category == "early_out")
+
+        absence_rate = round(absent_count / total_scheduled * 100, 1) if total_scheduled else 0
+
+        # Daily trend
+        daily = defaultdict(lambda: {"absent": 0, "late": 0, "early": 0})
+        for e in events:
+            d_key = e.event_date.isoformat()
+            cat = e.adherence_exception.category if e.adherence_exception else "other"
+            if cat == "absence":
+                daily[d_key]["absent"] += 1
+            elif cat == "late":
+                daily[d_key]["late"] += 1
+            elif cat == "early_out":
+                daily[d_key]["early"] += 1
+
+        trend = []
+        d = start_d
+        while d <= end_d:
+            k = d.isoformat()
+            trend.append({"date": k, **daily[k]})
+            d += timedelta(days=1)
+
+        # Per-employee rows
+        emp_events = defaultdict(list)
+        for e in events:
+            emp_events[e.employee_id].append(e.to_dict())
+
+        rows = []
+        for eid, evt_list in emp_events.items():
+            emp = emp_map.get(eid)
+            if not emp:
+                continue
+            rows.append({
+                "employee_id": eid,
+                "name": emp.full_name,
+                "ext_id": emp.employee_id,
+                "lob": _lob_name(emp),
+                "team_lead": emp.team_lead or "",
+                "events": sorted(evt_list, key=lambda x: x.get("event_date", "")),
+                "absent": sum(1 for ev in evt_list if ev.get("category") == "absence"),
+                "late": sum(1 for ev in evt_list if ev.get("category") == "late"),
+                "early": sum(1 for ev in evt_list if ev.get("category") == "early_out"),
+            })
+        rows.sort(key=lambda r: -(r["absent"] + r["late"] + r["early"]))
+
+        return jsonify(success=True, kpi={
+            "total_scheduled": total_scheduled,
+            "absent_count": absent_count,
+            "late_count": late_count,
+            "early_count": early_count,
+            "absence_rate": absence_rate,
+        }, daily_trend=trend, rows=rows)
+    except Exception as e:
+        log.exception("attendance-coded error")
+        return jsonify(success=False, error=str(e))
+
+
+@reports_bp.route("/api/attendance-coded/csv", methods=["POST"])
+@login_required
+def attendance_coded_csv():
+    """CSV export of coded attendance events."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    payload = request.get_json(silent=True) or {}
+    start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+    emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+    emp_ids = {e.id for e in emps}
+    emp_map = {e.id: e for e in emps}
+
+    events = AttendanceEvent.query.filter(
+        AttendanceEvent.employee_id.in_(emp_ids),
+        AttendanceEvent.event_date >= start_d,
+        AttendanceEvent.event_date <= end_d,
+    ).order_by(AttendanceEvent.event_date).all() if emp_ids else []
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Date", "Employee", "Employee ID", "LOB", "Team Lead", "Code", "Label", "Category", "Excused", "Note"])
+    for e in events:
+        emp = emp_map.get(e.employee_id)
+        exc = e.adherence_exception
+        writer.writerow([
+            e.event_date.isoformat(), emp.full_name if emp else "", emp.employee_id if emp else "",
+            _lob_name(emp) if emp else "", emp.team_lead if emp else "",
+            exc.code if exc else "", exc.label if exc else "", exc.category if exc else "",
+            "Yes" if e.is_excused else "No", e.note or "",
+        ])
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=attendance_coded_{date.today().isoformat()}.csv"})
+
+
+# ── 2. Forecast Accuracy ─────────────────────────────────────
+
+@reports_bp.route("/api/forecast-accuracy", methods=["POST"])
+@login_required
+def forecast_accuracy():
+    """Forecast vs actual volume comparison."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, kpi={}, daily_trend=[], rows=[], message="Demo mode")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        start_dt = datetime.combine(start_d, datetime.min.time())
+        end_dt = datetime.combine(end_d + timedelta(days=1), datetime.min.time())
+
+        # Build PU filter
+        pu_ids = None
+        if lob:
+            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+            pu_ids = [pu.id] if pu else []
+
+        # Forecast by day
+        fc_q = db.session.query(
+            func.date(ForecastInterval.timestamp).label("d"),
+            func.sum(ForecastInterval.offered).label("vol"),
+        ).filter(ForecastInterval.timestamp >= start_dt, ForecastInterval.timestamp < end_dt)
+        if pu_ids is not None:
+            fc_q = fc_q.filter(ForecastInterval.planning_unit_id.in_(pu_ids))
+        fc_q = fc_q.group_by(func.date(ForecastInterval.timestamp))
+        fc_by_day = {str(r.d): float(r.vol or 0) for r in fc_q.all()}
+
+        # Actuals by day
+        act_q = db.session.query(
+            func.date(IntervalActual.timestamp).label("d"),
+            func.sum(IntervalActual.offered).label("vol"),
+        ).filter(IntervalActual.timestamp >= start_dt, IntervalActual.timestamp < end_dt)
+        if pu_ids is not None:
+            act_q = act_q.filter(IntervalActual.planning_unit_id.in_(pu_ids))
+        act_q = act_q.group_by(func.date(IntervalActual.timestamp))
+        act_by_day = {str(r.d): float(r.vol or 0) for r in act_q.all()}
+
+        all_days = sorted(set(list(fc_by_day.keys()) + list(act_by_day.keys())))
+
+        total_fc = sum(fc_by_day.values())
+        total_act = sum(act_by_day.values())
+        variance_pct = round((total_act - total_fc) / total_fc * 100, 1) if total_fc else 0
+
+        # Per-day accuracy
+        accuracies = []
+        trend = []
+        for d_str in all_days:
+            fc = fc_by_day.get(d_str, 0)
+            act = act_by_day.get(d_str, 0)
+            acc = round(100 - abs(act - fc) / fc * 100, 1) if fc else None
+            if acc is not None:
+                accuracies.append(acc)
+            trend.append({
+                "date": d_str,
+                "forecast": round(fc, 1),
+                "actual": round(act, 1),
+                "accuracy_pct": acc,
+            })
+
+        avg_accuracy = round(sum(accuracies) / len(accuracies), 1) if accuracies else None
+
+        # By LOB breakdown
+        rows = []
+        if pu_ids is None:
+            pus = PlanningUnit.query.filter_by(is_active=True).all()
+            for pu in pus:
+                fc_vol = db.session.query(func.coalesce(func.sum(ForecastInterval.offered), 0)).filter(
+                    ForecastInterval.planning_unit_id == pu.id,
+                    ForecastInterval.timestamp >= start_dt, ForecastInterval.timestamp < end_dt,
+                ).scalar()
+                act_vol = db.session.query(func.coalesce(func.sum(IntervalActual.offered), 0)).filter(
+                    IntervalActual.planning_unit_id == pu.id,
+                    IntervalActual.timestamp >= start_dt, IntervalActual.timestamp < end_dt,
+                ).scalar()
+                fc_f = round(float(fc_vol), 1)
+                act_f = round(float(act_vol), 1)
+                if fc_f > 0 or act_f > 0:
+                    acc = round(100 - abs(act_f - fc_f) / fc_f * 100, 1) if fc_f else None
+                    rows.append({
+                        "lob": pu.name, "forecast": fc_f, "actual": act_f,
+                        "variance": round(act_f - fc_f, 1),
+                        "variance_pct": round((act_f - fc_f) / fc_f * 100, 1) if fc_f else 0,
+                        "accuracy_pct": acc,
+                    })
+
+        return jsonify(success=True, kpi={
+            "avg_accuracy_pct": avg_accuracy,
+            "total_forecast_volume": round(total_fc, 1),
+            "total_actual_volume": round(total_act, 1),
+            "volume_variance_pct": variance_pct,
+        }, daily_trend=trend, rows=rows)
+    except Exception as e:
+        log.exception("forecast-accuracy error")
+        return jsonify(success=False, error=str(e))
+
+
+@reports_bp.route("/api/forecast-accuracy/csv", methods=["POST"])
+@login_required
+def forecast_accuracy_csv():
+    """CSV export of forecast accuracy."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    payload = request.get_json(silent=True) or {}
+    start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+    start_dt = datetime.combine(start_d, datetime.min.time())
+    end_dt = datetime.combine(end_d + timedelta(days=1), datetime.min.time())
+
+    pu_ids = None
+    if lob:
+        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu_ids = [pu.id] if pu else []
+
+    fc_q = db.session.query(
+        func.date(ForecastInterval.timestamp).label("d"),
+        func.sum(ForecastInterval.offered).label("vol"),
+    ).filter(ForecastInterval.timestamp >= start_dt, ForecastInterval.timestamp < end_dt)
+    if pu_ids is not None:
+        fc_q = fc_q.filter(ForecastInterval.planning_unit_id.in_(pu_ids))
+    fc_by_day = {str(r.d): float(r.vol or 0) for r in fc_q.group_by(func.date(ForecastInterval.timestamp)).all()}
+
+    act_q = db.session.query(
+        func.date(IntervalActual.timestamp).label("d"),
+        func.sum(IntervalActual.offered).label("vol"),
+    ).filter(IntervalActual.timestamp >= start_dt, IntervalActual.timestamp < end_dt)
+    if pu_ids is not None:
+        act_q = act_q.filter(IntervalActual.planning_unit_id.in_(pu_ids))
+    act_by_day = {str(r.d): float(r.vol or 0) for r in act_q.group_by(func.date(IntervalActual.timestamp)).all()}
+
+    all_days = sorted(set(list(fc_by_day.keys()) + list(act_by_day.keys())))
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Date", "Forecast Volume", "Actual Volume", "Variance", "Accuracy %"])
+    for d_str in all_days:
+        fc = fc_by_day.get(d_str, 0)
+        act = act_by_day.get(d_str, 0)
+        acc = round(100 - abs(act - fc) / fc * 100, 1) if fc else ""
+        writer.writerow([d_str, round(fc, 1), round(act, 1), round(act - fc, 1), acc])
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=forecast_accuracy_{date.today().isoformat()}.csv"})
+
+
+# ── 3. Schedule Coverage ─────────────────────────────────────
+
+@reports_bp.route("/api/coverage", methods=["POST"])
+@login_required
+def coverage_report():
+    """Schedule coverage: required vs scheduled staffing."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, kpi={}, daily_data=[], rows=[], message="Demo mode")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        start_dt = datetime.combine(start_d, datetime.min.time())
+        end_dt = datetime.combine(end_d + timedelta(days=1), datetime.min.time())
+
+        pu_ids = None
+        if lob:
+            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+            pu_ids = [pu.id] if pu else []
+
+        # Requirements by day
+        req_q = db.session.query(
+            func.date(RequirementInterval.timestamp).label("d"),
+            func.sum(RequirementInterval.agents_required).label("req"),
+            func.count().label("intervals"),
+        ).filter(RequirementInterval.timestamp >= start_dt, RequirementInterval.timestamp < end_dt)
+        if pu_ids is not None:
+            req_q = req_q.filter(RequirementInterval.planning_unit_id.in_(pu_ids))
+        req_by_day = {str(r.d): {"required": float(r.req or 0), "intervals": r.intervals}
+                      for r in req_q.group_by(func.date(RequirementInterval.timestamp)).all()}
+
+        # Scheduled count by day
+        sched_q = db.session.query(
+            Schedule.schedule_date,
+            func.count().label("cnt"),
+            func.coalesce(func.sum(Schedule.hours), 0).label("hrs"),
+        ).filter(
+            Schedule.schedule_date >= start_d,
+            Schedule.schedule_date <= end_d,
+            Schedule.status == "scheduled",
+        )
+        if pu_ids is not None:
+            sched_q = sched_q.filter(Schedule.planning_unit_id.in_(pu_ids))
+        sched_q = sched_q.group_by(Schedule.schedule_date)
+        sched_by_day = {r.schedule_date.isoformat(): {"scheduled": r.cnt, "hours": float(r.hrs)}
+                        for r in sched_q.all()}
+
+        all_days = sorted(set(list(req_by_day.keys()) + list(sched_by_day.keys())))
+
+        daily_data = []
+        total_understaffed = 0
+        total_overstaffed = 0
+        coverages = []
+        peak_gap = 0
+
+        for d_str in all_days:
+            req_info = req_by_day.get(d_str, {"required": 0, "intervals": 0})
+            sched_info = sched_by_day.get(d_str, {"scheduled": 0, "hours": 0})
+            req_total = req_info["required"]
+            sched_total = sched_info["scheduled"]
+            gap = sched_total - req_total
+            cov_pct = round(sched_total / req_total * 100, 1) if req_total else 100
+
+            if gap < 0:
+                total_understaffed += 1
+            elif gap > 0:
+                total_overstaffed += 1
+            if abs(gap) > abs(peak_gap):
+                peak_gap = gap
+            coverages.append(cov_pct)
+
+            daily_data.append({
+                "date": d_str,
+                "required": round(req_total, 1),
+                "scheduled": sched_total,
+                "gap": round(gap, 1),
+                "coverage_pct": cov_pct,
+                "hours": sched_info["hours"],
+            })
+
+        avg_cov = round(sum(coverages) / len(coverages), 1) if coverages else 0
+
+        # By LOB
+        rows = []
+        if pu_ids is None:
+            pus = PlanningUnit.query.filter_by(is_active=True).all()
+            for pu in pus:
+                req_v = db.session.query(func.coalesce(func.sum(RequirementInterval.agents_required), 0)).filter(
+                    RequirementInterval.planning_unit_id == pu.id,
+                    RequirementInterval.timestamp >= start_dt, RequirementInterval.timestamp < end_dt,
+                ).scalar()
+                sched_v = Schedule.query.filter(
+                    Schedule.planning_unit_id == pu.id,
+                    Schedule.schedule_date >= start_d, Schedule.schedule_date <= end_d,
+                    Schedule.status == "scheduled",
+                ).count()
+                req_f = float(req_v or 0)
+                if req_f > 0 or sched_v > 0:
+                    rows.append({
+                        "lob": pu.name,
+                        "required": round(req_f, 1),
+                        "scheduled": sched_v,
+                        "gap": round(sched_v - req_f, 1),
+                        "coverage_pct": round(sched_v / req_f * 100, 1) if req_f else 100,
+                    })
+
+        return jsonify(success=True, kpi={
+            "avg_coverage_pct": avg_cov,
+            "understaffed_days": total_understaffed,
+            "overstaffed_days": total_overstaffed,
+            "peak_gap": round(peak_gap, 1),
+        }, daily_data=daily_data, rows=rows)
+    except Exception as e:
+        log.exception("coverage error")
+        return jsonify(success=False, error=str(e))
+
+
+@reports_bp.route("/api/coverage/csv", methods=["POST"])
+@login_required
+def coverage_csv():
+    """CSV export of coverage report."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    payload = request.get_json(silent=True) or {}
+    # Reuse the coverage endpoint logic
+    resp = coverage_report()
+    data = resp.get_json() if hasattr(resp, 'get_json') else {}
+    daily = data.get("daily_data", [])
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Date", "Required", "Scheduled", "Gap", "Coverage %", "Hours"])
+    for d in daily:
+        writer.writerow([d["date"], d["required"], d["scheduled"], d["gap"], d["coverage_pct"], d.get("hours", "")])
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=coverage_{date.today().isoformat()}.csv"})
+
+
+# ── 4. Agent Performance ─────────────────────────────────────
+
+@reports_bp.route("/api/agent-performance", methods=["POST"])
+@login_required
+def agent_performance():
+    """Agent scorecard: attendance + quality + hours."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, kpi={}, rows=[], message="Demo mode")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+        emp_ids = {e.id for e in emps}
+
+        # Attendance events per employee
+        att_events = AttendanceEvent.query.filter(
+            AttendanceEvent.employee_id.in_(emp_ids),
+            AttendanceEvent.event_date >= start_d,
+            AttendanceEvent.event_date <= end_d,
+        ).all() if emp_ids else []
+
+        att_by_emp = defaultdict(lambda: {"absent": 0, "late": 0, "early": 0})
+        for e in att_events:
+            cat = e.adherence_exception.category if e.adherence_exception else "other"
+            if cat == "absence":
+                att_by_emp[e.employee_id]["absent"] += 1
+            elif cat == "late":
+                att_by_emp[e.employee_id]["late"] += 1
+            elif cat == "early_out":
+                att_by_emp[e.employee_id]["early"] += 1
+
+        # Quality per employee
+        qual_by_emp = {}
+        try:
+            qual_rows = db.session.query(
+                QualityEvaluation.employee_id,
+                func.avg(QualityEvaluation.overall_score).label("avg"),
+                func.count().label("cnt"),
+            ).filter(
+                QualityEvaluation.employee_id.in_(emp_ids),
+                QualityEvaluation.eval_date >= start_d,
+                QualityEvaluation.eval_date <= end_d,
+            ).group_by(QualityEvaluation.employee_id).all()
+            for r in qual_rows:
+                qual_by_emp[r.employee_id] = {"avg": round(float(r.avg), 1), "count": r.cnt}
+        except Exception:
+            pass
+
+        # Hours per employee
+        hours_by_emp = {}
+        try:
+            hrs_rows = db.session.query(
+                Schedule.employee_id,
+                func.coalesce(func.sum(Schedule.hours), 0).label("hrs"),
+                func.count().label("shifts"),
+            ).filter(
+                Schedule.employee_id.in_(emp_ids),
+                Schedule.schedule_date >= start_d,
+                Schedule.schedule_date <= end_d,
+                Schedule.status == "scheduled",
+            ).group_by(Schedule.employee_id).all()
+            for r in hrs_rows:
+                hours_by_emp[r.employee_id] = {"hours": round(float(r.hrs), 1), "shifts": r.shifts}
+        except Exception:
+            pass
+
+        rows = []
+        for emp in emps:
+            att = att_by_emp.get(emp.id, {"absent": 0, "late": 0, "early": 0})
+            qual = qual_by_emp.get(emp.id, {"avg": None, "count": 0})
+            hrs = hours_by_emp.get(emp.id, {"hours": 0, "shifts": 0})
+            total_issues = att["absent"] + att["late"] + att["early"]
+            attendance_rate = round(100 - (att["absent"] / hrs["shifts"] * 100), 1) if hrs["shifts"] else 100
+
+            rows.append({
+                "employee_id": emp.id,
+                "name": emp.full_name,
+                "ext_id": emp.employee_id,
+                "lob": _lob_name(emp),
+                "team_lead": emp.team_lead or "",
+                "total_hours": hrs["hours"],
+                "total_shifts": hrs["shifts"],
+                "absent_count": att["absent"],
+                "late_count": att["late"],
+                "early_count": att["early"],
+                "attendance_rate": attendance_rate,
+                "quality_avg": qual["avg"],
+                "quality_evals": qual["count"],
+            })
+        rows.sort(key=lambda r: r["name"])
+
+        # KPI averages
+        att_rates = [r["attendance_rate"] for r in rows if r["total_shifts"] > 0]
+        qual_scores = [r["quality_avg"] for r in rows if r["quality_avg"] is not None]
+
+        return jsonify(success=True, kpi={
+            "avg_attendance_rate": round(sum(att_rates) / len(att_rates), 1) if att_rates else None,
+            "avg_quality_score": round(sum(qual_scores) / len(qual_scores), 1) if qual_scores else None,
+            "total_agents": len(rows),
+            "total_issues": sum(r["absent_count"] + r["late_count"] + r["early_count"] for r in rows),
+        }, rows=rows)
+    except Exception as e:
+        log.exception("agent-performance error")
+        return jsonify(success=False, error=str(e))
+
+
+@reports_bp.route("/api/agent-performance/csv", methods=["POST"])
+@login_required
+def agent_performance_csv():
+    """CSV export of agent performance."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    payload = request.get_json(silent=True) or {}
+    resp = agent_performance()
+    data = resp.get_json() if hasattr(resp, 'get_json') else {}
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Employee", "Employee ID", "LOB", "Team Lead", "Hours", "Shifts",
+                     "Absences", "Lates", "Early Leaves", "Attendance Rate %", "Quality Avg", "Quality Evals"])
+    for r in data.get("rows", []):
+        writer.writerow([r["name"], r["ext_id"], r["lob"], r["team_lead"], r["total_hours"],
+                         r["total_shifts"], r["absent_count"], r["late_count"], r["early_count"],
+                         r["attendance_rate"], r["quality_avg"] or "", r["quality_evals"]])
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=agent_performance_{date.today().isoformat()}.csv"})
+
+
+# ── 5. PTO & Leave ───────────────────────────────────────────
+
+@reports_bp.route("/api/pto-leave", methods=["POST"])
+@login_required
+def pto_leave():
+    """PTO and Leave of Absence report."""
+    user = _require_admin_or_sup()
+    if not user:
+        return jsonify(success=False, error="Forbidden"), 403
+    if user.get("is_demo"):
+        return jsonify(success=True, kpi={}, by_type=[], rows=[], message="Demo mode")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+        emp_ids = {e.id for e in emps}
+        emp_map = {e.id: e for e in emps}
+
+        # PTO entries
+        pto_q = PTOEntry.query.filter(
+            PTOEntry.employee_id.in_(emp_ids),
+            PTOEntry.start_date <= end_d,
+            PTOEntry.end_date >= start_d,
+        ) if emp_ids else PTOEntry.query.filter(db.false())
+
+        ptos = pto_q.all()
+        approved = sum(1 for p in ptos if p.approval_status == "approved")
+        pending = sum(1 for p in ptos if p.approval_status == "pending")
+        denied = sum(1 for p in ptos if p.approval_status == "denied")
+        days_consumed = sum((min(p.end_date, end_d) - max(p.start_date, start_d)).days + 1
+                           for p in ptos if p.approval_status == "approved")
+
+        # By type
+        by_type = []
+        try:
+            from app.models import TimeOffType
+            types = TimeOffType.query.all()
+            for t in types:
+                cnt = sum(1 for p in ptos if p.time_off_type_id == t.id and p.approval_status == "approved")
+                if cnt:
+                    by_type.append({"type": t.label, "count": cnt})
+        except Exception:
+            pass
+
+        # Per-employee rows
+        emp_pto = defaultdict(list)
+        for p in ptos:
+            emp_pto[p.employee_id].append({
+                "start": p.start_date.isoformat(),
+                "end": p.end_date.isoformat(),
+                "status": p.approval_status,
+                "type": "",
+                "days": (p.end_date - p.start_date).days + 1,
+            })
+
+        # LOA
+        loa_count = 0
+        try:
+            loas = LeaveOfAbsence.query.filter(
+                LeaveOfAbsence.employee_id.in_(emp_ids),
+                LeaveOfAbsence.start_date <= end_d,
+                ((LeaveOfAbsence.expected_return_date >= start_d) | (LeaveOfAbsence.expected_return_date.is_(None))),
+            ).all() if emp_ids else []
+            loa_count = len(loas)
+            for loa in loas:
+                emp_pto[loa.employee_id].append({
+                    "start": loa.start_date.isoformat(),
+                    "end": (loa.expected_return_date or loa.actual_return_date or end_d).isoformat(),
+                    "status": loa.status,
+                    "type": f"LOA: {loa.leave_type}",
+                    "days": ((loa.expected_return_date or end_d) - loa.start_date).days + 1,
+                })
+        except Exception:
+            pass
+
+        rows = []
+        for eid, entries in emp_pto.items():
+            emp = emp_map.get(eid)
+            if not emp:
+                continue
+            rows.append({
+                "employee_id": eid,
+                "name": emp.full_name,
+                "ext_id": emp.employee_id,
+                "lob": _lob_name(emp),
+                "entries": sorted(entries, key=lambda x: x["start"]),
+                "total_days": sum(e["days"] for e in entries if e["status"] == "approved"),
+                "total_requests": len(entries),
+            })
+        rows.sort(key=lambda r: -r["total_days"])
+
+        return jsonify(success=True, kpi={
+            "total_requests": len(ptos),
+            "approved": approved,
+            "pending": pending,
+            "denied": denied,
+            "days_consumed": days_consumed,
+            "active_loa": loa_count,
+        }, by_type=by_type, rows=rows)
+    except Exception as e:
+        log.exception("pto-leave error")
+        return jsonify(success=False, error=str(e))
+
+
+@reports_bp.route("/api/pto-leave/csv", methods=["POST"])
+@login_required
+def pto_leave_csv():
+    """CSV export of PTO & Leave."""
+    user = _require_admin_or_sup()
+    if not user:
+        return "Forbidden", 403
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo mode")
+
+    payload = request.get_json(silent=True) or {}
+    resp = pto_leave()
+    data = resp.get_json() if hasattr(resp, 'get_json') else {}
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Employee", "Employee ID", "LOB", "Total Days", "Total Requests"])
+    for r in data.get("rows", []):
+        writer.writerow([r["name"], r["ext_id"], r["lob"], r["total_days"], r["total_requests"]])
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=pto_leave_{date.today().isoformat()}.csv"})
