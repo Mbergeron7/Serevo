@@ -2185,7 +2185,7 @@ function renderTimelineView(container) {
         <div class="tl-emp-name">
           <span>${shift.employee}${attnBadge(shift)}</span>
           <span class="emp-actions">
-            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${origIdx},'${(shift.employee_id||'').toString().replace(/'/g,"\\'")}')">&#9998;</button>
+            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${origIdx},${shift.id||0})">&#9998;</button>
             <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${origIdx})" style="color:#dc2626">✕</button>
           </span>
         </div>
@@ -2479,24 +2479,21 @@ function confirmAddShift() {
 // ═══════════════════════════════════════════════════════════
 // EDIT MODAL
 // ═══════════════════════════════════════════════════════════
-function openEditModal(dayIdx, shiftIdxOrId, empId) {
+function openEditModal(dayIdx, shiftIdxHint, shiftDbId) {
   const day = scheduleData.days[dayIdx];
   if (!day) { console.error('openEditModal: invalid dayIdx', dayIdx); return; }
-  let shiftIdx = shiftIdxOrId;
+
+  let shiftIdx = shiftIdxHint;
   let shift = day.shifts[shiftIdx];
 
-  // If empId passed, verify the shift matches — if not, search for the right one
-  if (empId && shift && String(shift.employee_id) !== String(empId)) {
-    const realIdx = day.shifts.findIndex(s => String(s.employee_id) === String(empId));
-    if (realIdx >= 0) { shiftIdx = realIdx; shift = day.shifts[realIdx]; }
-  }
-  // Fallback: search by DB shift id
-  if (!shift && shiftIdxOrId) {
-    const byId = day.shifts.findIndex(s => s.id && s.id == shiftIdxOrId);
+  // If a DB id was passed, always use it — index may be stale after filtering
+  if (shiftDbId && shiftDbId > 0) {
+    const byId = day.shifts.findIndex(s => s.id == shiftDbId);
     if (byId >= 0) { shiftIdx = byId; shift = day.shifts[byId]; }
   }
+
   if (!shift) {
-    console.error('openEditModal: shift not found', {dayIdx, shiftIdxOrId, empId, shifts: day.shifts.length});
+    console.error('openEditModal: shift not found', {dayIdx, shiftIdxHint, shiftDbId, shifts: day.shifts.length});
     return;
   }
 
@@ -2839,7 +2836,7 @@ function renderDayView(container) {
           <td style="font-weight:600">${s.employee}${attnBadge(s)}</td>
           <td>${s.start}</td><td>${s.end}</td>
           <td>${s.hours}</td><td>${badge}</td>
-          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${origSi},'${(s.employee_id||'').toString().replace(/'/g,"\\'")}')}" title="Edit">&#9998; Edit</button>
+          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${origSi},${s.id||0})" title="Edit">&#9998; Edit</button>
           <button class="emp-action-btn" onclick="showAbsencePopup(event,${idx},${origSi})" title="Mark absent" style="color:#dc2626;margin-left:4px">✕</button></td></tr>`;
       });
       html += '</tbody></table></div>';
