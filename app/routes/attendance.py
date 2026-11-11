@@ -325,6 +325,40 @@ def weekly_hours():
 
 
 # ═══════════════════════════════════════════════════════════════
+# ATTENDANCE OVERLAY — for schedule page badges
+# ═══════════════════════════════════════════════════════════════
+
+@attendance_bp.route("/api/events/range", methods=["POST"])
+@login_required
+def events_for_range():
+    """Return coded attendance events for a date range, keyed by employee_id+date."""
+    data = request.get_json(silent=True) or {}
+    start_str = data.get("start")
+    end_str = data.get("end")
+    if not start_str or not end_str:
+        return jsonify(error="start and end required"), 400
+    try:
+        d_start = date.fromisoformat(start_str)
+        d_end = date.fromisoformat(end_str)
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid date"), 400
+
+    events = AttendanceEvent.query.filter(
+        AttendanceEvent.event_date >= d_start,
+        AttendanceEvent.event_date <= d_end,
+    ).all()
+
+    result = {}
+    for evt in events:
+        key = f"{evt.employee_id}_{evt.event_date.isoformat()}"
+        if key not in result:
+            result[key] = []
+        result[key].append(evt.to_dict())
+
+    return jsonify(success=True, events=result)
+
+
+# ═══════════════════════════════════════════════════════════════
 # MANUAL ATTENDANCE CODING — exception codes + supervisor coding
 # ═══════════════════════════════════════════════════════════════
 

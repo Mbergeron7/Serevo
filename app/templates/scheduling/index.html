@@ -1737,6 +1737,8 @@ function loadSchedule() {
     showResults();
     if (!shifts.length) showToast('No saved shifts in this range yet — use "+ Add shift" on a day to enter one manually.', 'success');
     else showToast('Schedule loaded from database.', 'success');
+    // Overlay coded attendance events onto shifts
+    _loadAttendanceOverlay(start, end);
   })
   .catch(e => { hideLoading(); showToast('Load failed: ' + e, 'error'); });
 }
@@ -2001,6 +2003,46 @@ function publishSchedule() {
 // ═══════════════════════════════════════════════════════════
 // DISPLAY
 // ═══════════════════════════════════════════════════════════
+async function _loadAttendanceOverlay(startDate, endDate) {
+  try {
+    const r = await fetch('/attendance/api/events/range', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start: startDate, end: endDate}),
+    });
+    const data = await r.json();
+    if (!data.success || !data.events) return;
+    const evts = data.events; // keyed by "empId_date"
+    let applied = 0;
+    scheduleData.days.forEach(day => {
+      day.shifts.forEach(shift => {
+        const key = `${shift.employee_id}_${day.date}`;
+        const coded = evts[key];
+        if (!coded || !coded.length) return;
+        // Determine the most significant event
+        const cats = coded.map(c => c.category);
+        if (cats.includes('absence')) {
+          shift.attendance = 'absent';
+          shift._attnNote = coded.find(c => c.category === 'absence').note || '';
+          shift._attnLabel = coded.find(c => c.category === 'absence').label || 'Absent';
+        } else if (cats.includes('late')) {
+          shift.attendance = 'was_late';
+          const lateEvt = coded.find(c => c.category === 'late');
+          shift._attnNote = lateEvt.note || '';
+          shift._attnLabel = lateEvt.label || 'Late';
+        } else if (cats.includes('early_out')) {
+          shift.attendance = 'left_early';
+          const earlyEvt = coded.find(c => c.category === 'early_out');
+          shift._attnNote = earlyEvt.note || '';
+          shift._attnLabel = earlyEvt.label || 'Left Early';
+        }
+        shift._attnCoded = coded;
+        applied++;
+      });
+    });
+    if (applied) switchView(currentView); // re-render with badges
+  } catch(e) { console.error('Attendance overlay error:', e); }
+}
+
 function showResults() {
   updateStats();
   // Show middle bar (view tabs + stats + approvals)
@@ -2253,12 +2295,24 @@ const _statusLabels = {off:'Day Off', pto:'PTO', sick:'Sick', personal:'Personal
 function attnBadge(shift) {
   const a = _effectiveAttn(shift);
   if (!a) return '';
-  // Use specific label from saved status when available
+  // Use coded label if available, then status label, then default
   const st = shift.status;
-  const label = (st && _statusLabels[st]) ? _statusLabels[st] :
-    a === 'absent' ? 'Absent' : a === 'was_late' ? 'Late' : a === 'left_early' ? 'Left Early' : '';
+  let label = shift._attnLabel || ((st && _statusLabels[st]) ? _statusLabels[st] :
+    a === 'absent' ? 'Absent' : a === 'was_late' ? 'Late' : a === 'left_early' ? 'Left Early' : '');
   const cls = a === 'absent' ? 'attn-absent' : a === 'was_late' ? 'attn-late' : a === 'left_early' ? 'attn-left' : '';
-  return `<span class="attn-badge ${cls}">${label}</span>`;
+  // Add time details from coded note
+  let detail = '';
+  if (shift._attnNote) {
+    // Extract times from auto-detect notes like "Auto: 12m late (scheduled 08:00, actual 08:12)"
+    const m = shift._attnNote.match(/(\d+)m (late|early)/);
+    if (m) detail = ` (${m[1]}m)`;
+    // Or extract actual times
+    const t = shift._attnNote.match(/actual (\d{2}:\d{2})/);
+    if (t) detail = ` ${t[1]}`;
+    const t2 = shift._attnNote.match(/last seen (\d{2}:\d{2})/);
+    if (t2) detail = ` left ${t2[1]}`;
+  }
+  return `<span class="attn-badge ${cls}" title="${(shift._attnNote || '').replace(/"/g, '&quot;')}">${label}${detail}</span>`;
 }
 function attnRowClass(shift) {
   const a = _effectiveAttn(shift);
