@@ -289,7 +289,7 @@ async function initFilters() {
   try {
     const f = await api('/reports/api/filters');
     if (f.lobs && f.lobs.length) {
-      MSPicker.init('rptLob', f.lobs, null, true);
+      MSPicker.init('rptLob', f.lobs.map(l => typeof l === 'string' ? l : l.name), null, true);
     }
     if (f.team_leads) {
       const sel = document.getElementById('rptTeamLead');
