@@ -460,18 +460,18 @@ async function loadCoverage() {
 
   if (lobRows.length) {
     // Show by-LOB breakdown
-    tbl.querySelector('thead').innerHTML = '<tr><th>LOB</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Coverage %</th></tr>';
+    tbl.querySelector('thead').innerHTML = '<tr><th>LOB</th><th class="num">Avg Required</th><th class="num">Peak Required</th><th class="num">Scheduled</th><th class="num">Gap (vs Peak)</th><th class="num">Coverage %</th></tr>';
     tbl.querySelector('tbody').innerHTML = lobRows.map(r => {
       const gCls = (r.gap||0) < 0 ? 'bad' : (r.gap||0) > 0 ? 'good' : '';
-      return `<tr><td>${esc(r.lob)}</td><td class="num">${fmt(r.required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
+      return `<tr><td>${esc(r.lob)}</td><td class="num">${fmt(r.avg_required)}</td><td class="num">${fmt(r.peak_required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
     }).join('');
   } else if (daily.length) {
     // Show daily breakdown
-    tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Hours</th><th class="num">Coverage %</th></tr>';
+    tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th class="num">Avg Required</th><th class="num">Peak Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Hours</th><th class="num">Coverage %</th></tr>';
     tbl.querySelector('tbody').innerHTML = daily.map(r => {
       const gCls = (r.gap||0) < 0 ? 'bad' : (r.gap||0) > 0 ? 'good' : '';
       const dt = new Date(r.date+'T12:00:00');
-      return `<tr><td>${dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td><td class="num">${fmt(r.required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num">${r.hours ? r.hours.toFixed(1) + 'h' : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
+      return `<tr><td>${dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td><td class="num">${fmt(r.avg_required)}</td><td class="num">${fmt(r.peak_required)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num ${gCls}">${r.gap != null ? (r.gap > 0 ? '+' : '') + r.gap : '—'}</td><td class="num">${r.hours ? r.hours.toFixed(1) + 'h' : '—'}</td><td class="num ${kpiCls(r.coverage_pct,90,70)}">${pct(r.coverage_pct)}</td></tr>`;
     }).join('');
   } else {
     tbl.querySelector('thead').innerHTML = '<tr><th>Date</th><th class="num">Required</th><th class="num">Scheduled</th><th class="num">Gap</th><th class="num">Coverage %</th></tr>';

@@ -790,18 +790,22 @@ def coverage_report():
             ).all()
             pu_ids = [p.id for p in pus_match] if pus_match else []
 
-        # Requirements by day
+        # Requirements by day — average agents required per interval
         req_q = db.session.query(
             func.date(RequirementInterval.timestamp).label("d"),
-            func.sum(RequirementInterval.agents_required).label("req"),
+            func.avg(RequirementInterval.agents_required).label("avg_req"),
+            func.max(RequirementInterval.agents_required).label("peak_req"),
             func.count().label("intervals"),
         ).filter(RequirementInterval.timestamp >= start_dt, RequirementInterval.timestamp < end_dt)
         if pu_ids is not None:
             req_q = req_q.filter(RequirementInterval.planning_unit_id.in_(pu_ids))
-        req_by_day = {str(r.d): {"required": float(r.req or 0), "intervals": r.intervals}
-                      for r in req_q.group_by(func.date(RequirementInterval.timestamp)).all()}
+        req_by_day = {str(r.d): {
+            "avg_required": round(float(r.avg_req or 0), 1),
+            "peak_required": round(float(r.peak_req or 0), 1),
+            "intervals": r.intervals,
+        } for r in req_q.group_by(func.date(RequirementInterval.timestamp)).all()}
 
-        # Scheduled count by day
+        # Scheduled count by day (number of agents with shifts)
         sched_q = db.session.query(
             Schedule.schedule_date,
             func.count().label("cnt"),
@@ -826,12 +830,14 @@ def coverage_report():
         peak_gap = 0
 
         for d_str in all_days:
-            req_info = req_by_day.get(d_str, {"required": 0, "intervals": 0})
+            req_info = req_by_day.get(d_str, {"avg_required": 0, "peak_required": 0, "intervals": 0})
             sched_info = sched_by_day.get(d_str, {"scheduled": 0, "hours": 0})
-            req_total = req_info["required"]
+            avg_req = req_info["avg_required"]
+            peak_req = req_info["peak_required"]
             sched_total = sched_info["scheduled"]
-            gap = sched_total - req_total
-            cov_pct = round(sched_total / req_total * 100, 1) if req_total else 100
+            gap = round(sched_total - peak_req, 1)
+            # Coverage: scheduled agents vs peak requirement
+            cov_pct = round(sched_total / peak_req * 100, 1) if peak_req else (100 if sched_total else 0)
 
             if gap < 0:
                 total_understaffed += 1
@@ -843,9 +849,10 @@ def coverage_report():
 
             daily_data.append({
                 "date": d_str,
-                "required": round(req_total, 1),
+                "avg_required": avg_req,
+                "peak_required": peak_req,
                 "scheduled": sched_total,
-                "gap": round(gap, 1),
+                "gap": gap,
                 "coverage_pct": cov_pct,
                 "hours": sched_info["hours"],
             })
@@ -860,23 +867,30 @@ def coverage_report():
             lob_pus = PlanningUnit.query.filter_by(is_active=True).all()
         if lob_pus:
             for pu in lob_pus:
-                req_v = db.session.query(func.coalesce(func.sum(RequirementInterval.agents_required), 0)).filter(
+                # Average and peak required per interval for this LOB
+                req_row = db.session.query(
+                    func.avg(RequirementInterval.agents_required).label("avg_req"),
+                    func.max(RequirementInterval.agents_required).label("peak_req"),
+                ).filter(
                     RequirementInterval.planning_unit_id == pu.id,
                     RequirementInterval.timestamp >= start_dt, RequirementInterval.timestamp < end_dt,
-                ).scalar()
+                ).first()
+                avg_req = round(float(req_row.avg_req or 0), 1) if req_row else 0
+                peak_req = round(float(req_row.peak_req or 0), 1) if req_row else 0
                 sched_v = Schedule.query.filter(
                     Schedule.planning_unit_id == pu.id,
                     Schedule.schedule_date >= start_d, Schedule.schedule_date <= end_d,
                     Schedule.status == "scheduled",
                 ).count()
-                req_f = float(req_v or 0)
-                if req_f > 0 or sched_v > 0:
+                if peak_req > 0 or sched_v > 0:
+                    gap = round(sched_v - peak_req, 1)
                     rows.append({
                         "lob": pu.name,
-                        "required": round(req_f, 1),
+                        "avg_required": avg_req,
+                        "peak_required": peak_req,
                         "scheduled": sched_v,
-                        "gap": round(sched_v - req_f, 1),
-                        "coverage_pct": round(sched_v / req_f * 100, 1) if req_f else 100,
+                        "gap": gap,
+                        "coverage_pct": round(sched_v / peak_req * 100, 1) if peak_req else 100,
                     })
 
         return jsonify(success=True, kpi={
