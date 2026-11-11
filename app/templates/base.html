@@ -81,6 +81,10 @@
         </div>
       </div>
 
+      <a href="/portal/"{% if request.path.startswith('/portal') or request.path.startswith('/my-schedule') or request.path.startswith('/my-time-off') %} class="active"{% endif %}>My Portal</a>
+      <a href="/support/"{% if request.path.startswith('/support') %} class="active"{% endif %}>Support</a>
+      <a href="/help/"{% if request.path.startswith('/help') %} class="active"{% endif %}>Help</a>
+
       {% else %}
       {# Agent nav — portal only #}
       <a href="/my-schedule/"{% if request.path.startswith('/my-schedule') %} class="active"{% endif %}>My Schedule</a>
@@ -107,16 +111,8 @@
           🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
         </div>
         {% endif %}
-        <div class="nav-dropdown" style="margin-left:4px;">
-          <button class="nav-dropdown-btn" style="font-size:.85rem;">{{ current_user.name if current_user else '' }} <span class="caret">▾</span></button>
-          <div class="nav-dropdown-menu" style="right:0;left:auto;">
-            <a href="/portal/">My Portal</a>
-            <a href="/help/">Help</a>
-            <a href="/support/">Support</a>
-            <hr style="margin:4px 0;border:none;border-top:1px solid var(--border);">
-            <a href="/logout">Sign out</a>
-          </div>
-        </div>
+        <span class="user-name">{{ current_user.name if current_user else '' }}</span>
+        <a href="/logout">Sign out</a>
       </span>
       {% endblock %}
     </div>

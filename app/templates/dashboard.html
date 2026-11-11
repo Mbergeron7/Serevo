@@ -104,16 +104,49 @@
     <div id="shiftNotesBody" style="font-size:.85rem;"></div>
   </div>
 
-  <!-- ═══ Quick Links ═══ -->
-  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:1.5rem;">
-    <a href="/scheduling/" class="btn btn-sm" style="text-decoration:none;">📅 Scheduling</a>
-    <a href="/realtime/" class="btn btn-sm" style="text-decoration:none;">📡 Real-Time</a>
-    <a href="/forecasting/" class="btn btn-sm" style="text-decoration:none;">📈 Forecasting</a>
-    <a href="/capacity/" class="btn btn-sm" style="text-decoration:none;">👥 Capacity</a>
-    <a href="/people/" class="btn btn-sm" style="text-decoration:none;">🗂 People</a>
-    <a href="/approvals/" class="btn btn-sm" style="text-decoration:none;">✅ Approvals</a>
+  <!-- ═══ Feature Cards ═══ -->
+  <div class="card-grid">
+    <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>📅 Scheduling</h3>
+      <p>Build shifts, manage rosters, and optimize coverage across your teams.</p>
+    </a>
+    <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>📡 Real-Time</h3>
+      <p>Live agent monitoring, adherence tracking, staffing alerts, and attendance coding.</p>
+    </a>
+    <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>📈 Forecasting</h3>
+      <p>Interval-level volume forecasting with trend analysis and accuracy tracking.</p>
+    </a>
+    <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>👥 Capacity Planning</h3>
+      <p>Headcount requirements by LOB, skill, and interval.</p>
+    </a>
+    <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>🗂 People</h3>
+      <p>Employee roster, accommodations, leave, and time-off management.</p>
+    </a>
+    <a href="/approvals/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>✅ Approvals</h3>
+      <p>Review and manage PTO requests, shift bids, and swap requests.</p>
+    </a>
+    <a href="/reports/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>📊 Reports</h3>
+      <p>Attendance summaries, schedule exports, and operational reports.</p>
+    </a>
+    <a href="/team-calendar/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>🗓 Team Calendar</h3>
+      <p>Visual overview of team schedules, PTO, and availability.</p>
+    </a>
     {% if current_user and current_user.is_admin %}
-    <a href="/settings/" class="btn btn-sm" style="text-decoration:none;">⚙️ Settings</a>
+    <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>📥 Data Import</h3>
+      <p>Upload CSV/Excel files or sync data from external systems.</p>
+    </a>
+    <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
+      <h3>⚙️ Settings</h3>
+      <p>API connections, planning units, branding, and platform configuration.</p>
+    </a>
     {% endif %}
   </div>
 </div>
