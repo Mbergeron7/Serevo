@@ -401,6 +401,10 @@ def report_filters():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
 
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_report_filters
+        return jsonify(get_demo_report_filters())
+
     lobs = [{"id": pu.id, "name": pu.name}
             for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
 
@@ -427,7 +431,12 @@ def attendance_coded():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(success=True, kpi={}, daily_trend=[], rows=[], message="Demo mode")
+        from app.demo_data import get_demo_report_attendance_coded
+        payload = request.get_json(silent=True) or {}
+        sd = payload.get("start_date")
+        ed = payload.get("end_date")
+        return jsonify(get_demo_report_attendance_coded(
+            date.fromisoformat(sd) if sd else None, date.fromisoformat(ed) if ed else None))
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -561,7 +570,12 @@ def forecast_accuracy():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(success=True, kpi={}, daily_trend=[], rows=[], message="Demo mode")
+        from app.demo_data import get_demo_report_forecast_accuracy
+        payload = request.get_json(silent=True) or {}
+        sd = payload.get("start_date")
+        ed = payload.get("end_date")
+        return jsonify(get_demo_report_forecast_accuracy(
+            date.fromisoformat(sd) if sd else None, date.fromisoformat(ed) if ed else None))
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -716,7 +730,12 @@ def coverage_report():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(success=True, kpi={}, daily_data=[], rows=[], message="Demo mode")
+        from app.demo_data import get_demo_report_coverage
+        payload = request.get_json(silent=True) or {}
+        sd = payload.get("start_date")
+        ed = payload.get("end_date")
+        return jsonify(get_demo_report_coverage(
+            date.fromisoformat(sd) if sd else None, date.fromisoformat(ed) if ed else None))
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -863,7 +882,8 @@ def agent_performance():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(success=True, kpi={}, rows=[], message="Demo mode")
+        from app.demo_data import get_demo_report_agent_performance
+        return jsonify(get_demo_report_agent_performance())
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -1001,7 +1021,12 @@ def pto_leave():
     if not user:
         return jsonify(success=False, error="Forbidden"), 403
     if user.get("is_demo"):
-        return jsonify(success=True, kpi={}, by_type=[], rows=[], message="Demo mode")
+        from app.demo_data import get_demo_report_pto_leave
+        payload = request.get_json(silent=True) or {}
+        sd = payload.get("start_date")
+        ed = payload.get("end_date")
+        return jsonify(get_demo_report_pto_leave(
+            date.fromisoformat(sd) if sd else None, date.fromisoformat(ed) if ed else None))
 
     try:
         payload = request.get_json(silent=True) or {}

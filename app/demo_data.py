@@ -2525,6 +2525,271 @@ def get_demo_reports_attendance(days=7):
     return rows
 
 
+# ── New report demo data ─────────────────────────────────────
+
+def get_demo_report_filters():
+    """Return filter options for the reports page."""
+    lobs = [{"id": i + 1, "name": lob} for i, lob in enumerate(DEMO_LOBS)]
+    tls = sorted({e["Team Lead"] for e in DEMO_EMPLOYEES if e.get("Team Lead")})
+    emps = [{"id": i + 1, "name": f"{e['First Name']} {e['Last Name']}", "employee_id": e["Employee ID"]}
+            for i, e in enumerate(DEMO_EMPLOYEES) if e["Status"] == "Active"]
+    return {"success": True, "lobs": lobs, "team_leads": tls, "employees": emps}
+
+
+def get_demo_report_attendance_coded(start_date=None, end_date=None):
+    """Return coded attendance report with KPIs, daily trend, and per-employee rows."""
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=30)
+    if not end_date:
+        end_date = today
+    rng = random.Random(42)
+    active = [e for e in DEMO_EMPLOYEES if e["Status"] == "Active"]
+    codes = [
+        ("ABS", "Absent", "#ef4444", "absence"),
+        ("LATE", "Late", "#f59e0b", "late"),
+        ("EOUT", "Early Out", "#f97316", "early_out"),
+        ("SICK", "Sick", "#a855f7", "absence"),
+    ]
+    total_scheduled = 0
+    absent_count = late_count = early_count = 0
+    trend = {}
+    emp_events = {}
+
+    d = start_date
+    while d <= end_date:
+        if d.weekday() >= 5:
+            d += datetime.timedelta(days=1)
+            continue
+        day_str = d.isoformat()
+        trend[day_str] = {"date": day_str, "absent": 0, "late": 0, "early": 0}
+        for emp in active:
+            total_scheduled += 1
+            # ~8% chance of an issue
+            if rng.random() < 0.08:
+                code, label, color, cat = rng.choice(codes)
+                eid = emp["Employee ID"]
+                if eid not in emp_events:
+                    emp_events[eid] = {"emp": emp, "events": []}
+                evt = {"event_date": day_str, "code": code, "label": label,
+                       "color": color, "category": cat, "is_excused": code == "SICK",
+                       "note": f"Auto: demo {label.lower()}"}
+                emp_events[eid]["events"].append(evt)
+                if cat == "absence":
+                    absent_count += 1
+                    trend[day_str]["absent"] += 1
+                elif cat == "late":
+                    late_count += 1
+                    trend[day_str]["late"] += 1
+                elif cat == "early_out":
+                    early_count += 1
+                    trend[day_str]["early"] += 1
+        d += datetime.timedelta(days=1)
+
+    absence_rate = round(absent_count / total_scheduled * 100, 1) if total_scheduled else 0
+    rows = []
+    for eid, data in emp_events.items():
+        emp = data["emp"]
+        evts = data["events"]
+        rows.append({
+            "employee_id": eid, "name": f"{emp['First Name']} {emp['Last Name']}",
+            "ext_id": eid, "lob": emp["Latest Skill Name"], "team_lead": emp.get("Team Lead", ""),
+            "events": evts,
+            "absent": sum(1 for e in evts if e["category"] == "absence"),
+            "late": sum(1 for e in evts if e["category"] == "late"),
+            "early": sum(1 for e in evts if e["category"] == "early_out"),
+        })
+    rows.sort(key=lambda r: -(r["absent"] + r["late"] + r["early"]))
+
+    return {
+        "success": True,
+        "kpi": {"total_scheduled": total_scheduled, "absent_count": absent_count,
+                "late_count": late_count, "early_count": early_count, "absence_rate": absence_rate},
+        "daily_trend": sorted(trend.values(), key=lambda x: x["date"]),
+        "rows": rows,
+    }
+
+
+def get_demo_report_forecast_accuracy(start_date=None, end_date=None):
+    """Return forecast vs actual report."""
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=30)
+    if not end_date:
+        end_date = today
+    rng = random.Random(55)
+    trend = []
+    total_fc = total_act = 0
+    d = start_date
+    while d <= end_date:
+        if d.weekday() < 5:
+            fc = rng.randint(180, 320)
+            act = fc + rng.randint(-30, 25)
+            total_fc += fc
+            total_act += act
+            acc = round(100 - abs(act - fc) / fc * 100, 1) if fc else 100
+            trend.append({"date": d.isoformat(), "forecast": fc, "actual": act, "accuracy_pct": acc})
+        d += datetime.timedelta(days=1)
+
+    avg_acc = round(100 - abs(total_act - total_fc) / total_fc * 100, 1) if total_fc else 0
+    var_pct = round((total_act - total_fc) / total_fc * 100, 1) if total_fc else 0
+    rows = []
+    for lob in DEMO_LOBS:
+        fc = rng.randint(1200, 2800)
+        act = fc + rng.randint(-200, 150)
+        rows.append({"lob": lob, "forecast": fc, "actual": act, "variance": act - fc,
+                     "variance_pct": round((act - fc) / fc * 100, 1),
+                     "accuracy_pct": round(100 - abs(act - fc) / fc * 100, 1)})
+
+    return {
+        "success": True,
+        "kpi": {"avg_accuracy_pct": avg_acc, "total_forecast_volume": total_fc,
+                "total_actual_volume": total_act, "volume_variance_pct": var_pct},
+        "daily_trend": trend, "rows": rows,
+    }
+
+
+def get_demo_report_coverage(start_date=None, end_date=None):
+    """Return schedule coverage report."""
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=30)
+    if not end_date:
+        end_date = today
+    rng = random.Random(66)
+    daily_data = []
+    coverages = []
+    understaffed = overstaffed = 0
+    peak_gap = 0
+    d = start_date
+    while d <= end_date:
+        if d.weekday() < 5:
+            req = rng.randint(14, 22)
+            sched = req + rng.randint(-4, 3)
+            gap = sched - req
+            cov = round(sched / req * 100, 1) if req else 100
+            coverages.append(cov)
+            if gap < 0:
+                understaffed += 1
+            elif gap > 0:
+                overstaffed += 1
+            if abs(gap) > abs(peak_gap):
+                peak_gap = gap
+            daily_data.append({"date": d.isoformat(), "required": req, "scheduled": sched,
+                               "gap": gap, "coverage_pct": cov, "hours": sched * 8.5})
+        d += datetime.timedelta(days=1)
+
+    avg_cov = round(sum(coverages) / len(coverages), 1) if coverages else 0
+    rows = []
+    for lob in DEMO_LOBS:
+        req = rng.randint(400, 900)
+        sched = req + rng.randint(-60, 40)
+        rows.append({"lob": lob, "required": req, "scheduled": sched,
+                     "gap": sched - req, "coverage_pct": round(sched / req * 100, 1) if req else 100})
+
+    return {
+        "success": True,
+        "kpi": {"avg_coverage_pct": avg_cov, "understaffed_days": understaffed,
+                "overstaffed_days": overstaffed, "peak_gap": peak_gap},
+        "daily_data": daily_data, "rows": rows,
+    }
+
+
+def get_demo_report_agent_performance(start_date=None, end_date=None):
+    """Return agent performance scorecard."""
+    rng = random.Random(77)
+    active = [e for e in DEMO_EMPLOYEES if e["Status"] == "Active"]
+    rows = []
+    for i, emp in enumerate(active):
+        shifts = rng.randint(15, 25)
+        absent = rng.randint(0, 2)
+        late = rng.randint(0, 3)
+        early = rng.randint(0, 1)
+        att_rate = round(100 - (absent / shifts * 100), 1) if shifts else 100
+        qual = round(rng.uniform(72, 98), 1)
+        rows.append({
+            "employee_id": i + 1, "name": f"{emp['First Name']} {emp['Last Name']}",
+            "ext_id": emp["Employee ID"], "lob": emp["Latest Skill Name"],
+            "team_lead": emp.get("Team Lead", ""),
+            "total_hours": round(shifts * emp["Hours Per Day"], 1),
+            "total_shifts": shifts, "absent_count": absent, "late_count": late,
+            "early_count": early, "attendance_rate": att_rate,
+            "quality_avg": qual, "quality_evals": rng.randint(3, 10),
+        })
+    rows.sort(key=lambda r: r["name"])
+    att_rates = [r["attendance_rate"] for r in rows]
+    qual_scores = [r["quality_avg"] for r in rows]
+    return {
+        "success": True,
+        "kpi": {
+            "avg_attendance_rate": round(sum(att_rates) / len(att_rates), 1),
+            "avg_quality_score": round(sum(qual_scores) / len(qual_scores), 1),
+            "total_agents": len(rows),
+            "total_issues": sum(r["absent_count"] + r["late_count"] + r["early_count"] for r in rows),
+        },
+        "rows": rows,
+    }
+
+
+def get_demo_report_pto_leave(start_date=None, end_date=None):
+    """Return PTO & Leave report."""
+    today = datetime.date.today()
+    if not start_date:
+        start_date = today - datetime.timedelta(days=30)
+    if not end_date:
+        end_date = today
+    rng = random.Random(88)
+    types = ["Vacation", "Sick", "Personal", "Family"]
+    statuses = ["approved", "approved", "approved", "pending", "denied"]
+    active = [e for e in DEMO_EMPLOYEES if e["Status"] == "Active"]
+    emp_pto = {}
+    all_entries = []
+    for emp in active:
+        if rng.random() < 0.4:
+            eid = emp["Employee ID"]
+            typ = rng.choice(types)
+            status = rng.choice(statuses)
+            s = start_date + datetime.timedelta(days=rng.randint(0, 25))
+            dur = rng.randint(1, 5)
+            e = s + datetime.timedelta(days=dur - 1)
+            entry = {"start": s.isoformat(), "end": e.isoformat(), "status": status,
+                     "type": typ, "days": dur}
+            all_entries.append((emp, entry))
+            if eid not in emp_pto:
+                emp_pto[eid] = {"emp": emp, "entries": []}
+            emp_pto[eid]["entries"].append(entry)
+
+    approved = sum(1 for _, e in all_entries if e["status"] == "approved")
+    pending = sum(1 for _, e in all_entries if e["status"] == "pending")
+    denied = sum(1 for _, e in all_entries if e["status"] == "denied")
+    days_consumed = sum(e["days"] for _, e in all_entries if e["status"] == "approved")
+    by_type = {}
+    for _, e in all_entries:
+        if e["status"] == "approved":
+            by_type[e["type"]] = by_type.get(e["type"], 0) + e["days"]
+    by_type_list = [{"type": t, "days": d} for t, d in sorted(by_type.items())]
+
+    rows = []
+    for eid, data in emp_pto.items():
+        emp = data["emp"]
+        entries = data["entries"]
+        rows.append({
+            "employee_id": eid, "name": f"{emp['First Name']} {emp['Last Name']}",
+            "ext_id": eid, "lob": emp["Latest Skill Name"],
+            "entries": sorted(entries, key=lambda x: x["start"]),
+            "total_days": sum(e["days"] for e in entries if e["status"] == "approved"),
+            "total_requests": len(entries),
+        })
+    rows.sort(key=lambda r: -r["total_days"])
+
+    return {
+        "success": True,
+        "kpi": {"total_requests": len(all_entries), "approved": approved, "pending": pending,
+                "denied": denied, "days_consumed": days_consumed, "active_loa": rng.randint(0, 2)},
+        "by_type": by_type_list, "rows": rows,
+    }
+
+
 # ── Payroll demo data ────────────────────────────────────────
 def get_demo_payroll_summary(start_date=None, end_date=None):
     """Return realistic payroll summary for demo users."""
