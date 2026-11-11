@@ -1937,6 +1937,53 @@ def get_demo_attendance_dashboard(date_str=None):
     }
 
 
+def get_demo_adherence_codes():
+    """Return demo adherence exception codes for attendance coding."""
+    return [
+        {"id": 1, "code": "ABS",  "label": "Absent",            "color": "#ef4444", "is_excused": False, "category": "absence",       "is_default": True,  "is_active": True, "sort_order": 1},
+        {"id": 2, "code": "NCNS", "label": "No Call / No Show",  "color": "#dc2626", "is_excused": False, "category": "absence",       "is_default": False, "is_active": True, "sort_order": 2},
+        {"id": 3, "code": "LATE", "label": "Late",              "color": "#f59e0b", "is_excused": False, "category": "late",           "is_default": True,  "is_active": True, "sort_order": 3},
+        {"id": 4, "code": "EOUT", "label": "Early Out",         "color": "#f97316", "is_excused": False, "category": "early_out",      "is_default": True,  "is_active": True, "sort_order": 4},
+        {"id": 5, "code": "SICK", "label": "Sick",              "color": "#a855f7", "is_excused": True,  "category": "absence",       "is_default": False, "is_active": True, "sort_order": 5},
+        {"id": 6, "code": "VAC",  "label": "Vacation",          "color": "#3b82f6", "is_excused": True,  "category": "absence",       "is_default": False, "is_active": True, "sort_order": 6},
+        {"id": 7, "code": "PER",  "label": "Personal Day",      "color": "#6366f1", "is_excused": True,  "category": "absence",       "is_default": False, "is_active": True, "sort_order": 7},
+        {"id": 8, "code": "APPR", "label": "Approved Absence",  "color": "#10b981", "is_excused": True,  "category": "absence",       "is_default": False, "is_active": True, "sort_order": 9},
+    ]
+
+
+def get_demo_attendance_events(date_obj=None):
+    """Return demo coded attendance events for a given date."""
+    if date_obj is None:
+        date_obj = datetime.date.today()
+    ds = date_obj.isoformat()
+    return [
+        {"id": 1, "employee_id": 4,  "employee_name": "Taylor Brooks",  "event_date": ds,
+         "adherence_exception_id": 1, "code": "ABS", "label": "Absent", "color": "#ef4444",
+         "category": "absence", "is_excused": False,
+         "note": "Auto: No login (08:00–16:30)", "coded_by": "Admin", "created_at": ds + " 09:15"},
+        {"id": 2, "employee_id": 9,  "employee_name": "Drew Campbell",  "event_date": ds,
+         "adherence_exception_id": 5, "code": "SICK", "label": "Sick", "color": "#a855f7",
+         "category": "absence", "is_excused": True,
+         "note": "Called in sick — flu", "coded_by": "Admin", "created_at": ds + " 08:05"},
+        {"id": 3, "employee_id": 2,  "employee_name": "Jordan Rivera",  "event_date": ds,
+         "adherence_exception_id": 3, "code": "LATE", "label": "Late", "color": "#f59e0b",
+         "category": "late", "is_excused": False,
+         "note": "Auto: 14m late (scheduled 09:00, actual 09:14)", "coded_by": "Admin", "created_at": ds + " 09:30"},
+        {"id": 4, "employee_id": 7,  "employee_name": "Jamie Torres",   "event_date": ds,
+         "adherence_exception_id": 3, "code": "LATE", "label": "Late", "color": "#f59e0b",
+         "category": "late", "is_excused": False,
+         "note": "Auto: 8m late (scheduled 08:00, actual 08:08)", "coded_by": "Admin", "created_at": ds + " 09:30"},
+        {"id": 5, "employee_id": 6,  "employee_name": "Riley Kim",      "event_date": ds,
+         "adherence_exception_id": 4, "code": "EOUT", "label": "Early Out", "color": "#f97316",
+         "category": "early_out", "is_excused": False,
+         "note": "Auto: left 47m early (last seen 15:43, scheduled to 16:30)", "coded_by": "Admin", "created_at": ds + " 17:00"},
+        {"id": 6, "employee_id": 10, "employee_name": "Harper Wilson",  "event_date": ds,
+         "adherence_exception_id": 6, "code": "VAC", "label": "Vacation", "color": "#3b82f6",
+         "category": "absence", "is_excused": True,
+         "note": "Pre-approved vacation", "coded_by": "Admin", "created_at": ds + " 07:00"},
+    ]
+
+
 def get_demo_notifications(user_id=None):
     """Return list of demo notifications."""
     today = datetime.date.today()
