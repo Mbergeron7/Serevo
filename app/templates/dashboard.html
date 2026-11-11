@@ -49,6 +49,12 @@
   </div>
   {% endif %}
 
+  <!-- ═══ Operational Snapshot (loaded via AJAX) ═══ -->
+  <div class="card" style="margin-bottom:1.5rem; display:none;" id="opsSnapshot">
+    <h3 style="margin:0 0 12px; font-size:.95rem;">📊 Today's Operations</h3>
+    <div id="opsBody" style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:.88rem;"></div>
+  </div>
+
   {% if pending and (pending.pto or pending.bids or pending.swaps) %}
   <div class="card" style="margin-bottom:1.5rem; border-left:4px solid #d97706;">
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -98,43 +104,16 @@
     <div id="shiftNotesBody" style="font-size:.85rem;"></div>
   </div>
 
-  <div class="card-grid">
-    <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Forecasting</h3>
-      <p>Interval-level volume forecasting and trend analysis.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
-    <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Capacity Planning</h3>
-      <p>Headcount requirements by LOB, skill, and interval.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
-    <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>People</h3>
-      <p>Employee roster, accommodations, and time-off management.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
-    <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Scheduling</h3>
-      <p>Shift generation, coverage analysis, and roster views.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
-    <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Real-Time</h3>
-      <p>Live queue monitoring, adherence, and staffing alerts.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
+  <!-- ═══ Quick Links ═══ -->
+  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:1.5rem;">
+    <a href="/scheduling/" class="btn btn-sm" style="text-decoration:none;">📅 Scheduling</a>
+    <a href="/realtime/" class="btn btn-sm" style="text-decoration:none;">📡 Real-Time</a>
+    <a href="/forecasting/" class="btn btn-sm" style="text-decoration:none;">📈 Forecasting</a>
+    <a href="/capacity/" class="btn btn-sm" style="text-decoration:none;">👥 Capacity</a>
+    <a href="/people/" class="btn btn-sm" style="text-decoration:none;">🗂 People</a>
+    <a href="/approvals/" class="btn btn-sm" style="text-decoration:none;">✅ Approvals</a>
     {% if current_user and current_user.is_admin %}
-    <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Data Import</h3>
-      <p>Upload CSV/Excel files or enter data manually.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
-    <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>Settings</h3>
-      <p>API connections, branding, and platform configuration.</p>
-      <span class="badge" style="background:var(--brand-accent); color:#fff;">Active</span>
-    </a>
+    <a href="/settings/" class="btn btn-sm" style="text-decoration:none;">⚙️ Settings</a>
     {% endif %}
   </div>
 </div>
@@ -225,6 +204,37 @@
       </div>`;
     });
     body.innerHTML = html;
+  })
+  .catch(() => {});
+})();
+
+// ── Operational Snapshot ──
+(function(){
+  const card = document.getElementById('opsSnapshot');
+  const body = document.getElementById('opsBody');
+  if (!card || !body) return;
+
+  const today = new Date().toISOString().slice(0,10);
+
+  // Load today's coded attendance events
+  fetch('/attendance/api/events', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date: today})
+  })
+  .then(r => r.json())
+  .then(events => {
+    if (!events || !events.length) return;
+    card.style.display = '';
+    const absent = events.filter(e => e.category === 'absence').length;
+    const late = events.filter(e => e.category === 'late').length;
+    const early = events.filter(e => e.category === 'early_out').length;
+    let html = '';
+    if (absent) html += `<div style="text-align:center;"><strong style="font-size:1.3rem;color:#dc2626;">${absent}</strong><br><span style="font-size:.78rem;color:var(--text-muted);">Absent</span></div>`;
+    if (late) html += `<div style="text-align:center;"><strong style="font-size:1.3rem;color:#f59e0b;">${late}</strong><br><span style="font-size:.78rem;color:var(--text-muted);">Late</span></div>`;
+    if (early) html += `<div style="text-align:center;"><strong style="font-size:1.3rem;color:#f97316;">${early}</strong><br><span style="font-size:.78rem;color:var(--text-muted);">Early Leave</span></div>`;
+    if (!html) html = '<span style="color:var(--text-muted);">No attendance issues today.</span>';
+    body.innerHTML = html + `<a href="/realtime/#absent" style="font-size:.78rem;color:var(--brand-accent);text-decoration:none;margin-left:auto;align-self:center;">View Details →</a>`;
   })
   .catch(() => {});
 })();
