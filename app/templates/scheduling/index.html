@@ -2484,13 +2484,19 @@ function openEditModal(dayIdx, shiftIdxHint, shiftDbId) {
   if (!day) { console.error('openEditModal: invalid dayIdx', dayIdx); return; }
 
   let shiftIdx = shiftIdxHint;
-  let shift = day.shifts[shiftIdx];
+  let shift;
 
-  // If a DB id was passed, always use it — index may be stale after filtering
+  // Always prefer DB id lookup — index may be stale after filtering/sorting
   if (shiftDbId && shiftDbId > 0) {
     const byId = day.shifts.findIndex(s => s.id == shiftDbId);
     if (byId >= 0) { shiftIdx = byId; shift = day.shifts[byId]; }
   }
+  // Fallback to index
+  if (!shift) { shift = day.shifts[shiftIdx]; }
+
+  console.log('openEditModal', {dayIdx, shiftIdxHint, shiftDbId, resolvedIdx: shiftIdx,
+    employee: shift ? shift.employee : 'NOT FOUND', shiftId: shift ? shift.id : null,
+    totalShifts: day.shifts.length, allIds: day.shifts.map(s => s.id)});
 
   if (!shift) {
     console.error('openEditModal: shift not found', {dayIdx, shiftIdxHint, shiftDbId, shifts: day.shifts.length});
