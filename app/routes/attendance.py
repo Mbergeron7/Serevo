@@ -348,9 +348,21 @@ def events_for_range():
         AttendanceEvent.event_date <= d_end,
     ).all()
 
+    # Build DB id → external employee_id lookup (schedule uses external IDs)
+    emp_ext = {}
+    try:
+        emp_ids = {evt.employee_id for evt in events}
+        if emp_ids:
+            emps = Employee.query.filter(Employee.id.in_(emp_ids)).all()
+            for emp in emps:
+                emp_ext[emp.id] = emp.employee_id or str(emp.id)
+    except Exception:
+        pass
+
     result = {}
     for evt in events:
-        key = f"{evt.employee_id}_{evt.event_date.isoformat()}"
+        ext_id = emp_ext.get(evt.employee_id, str(evt.employee_id))
+        key = f"{ext_id}_{evt.event_date.isoformat()}"
         if key not in result:
             result[key] = []
         result[key].append(evt.to_dict())

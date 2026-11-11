@@ -2010,8 +2010,10 @@ async function _loadAttendanceOverlay(startDate, endDate) {
       body: JSON.stringify({start: startDate, end: endDate}),
     });
     const data = await r.json();
-    if (!data.success || !data.events) return;
-    const evts = data.events; // keyed by "empId_date"
+    if (!data.success || !data.events) { console.log('Attendance overlay: no events', data); return; }
+    const evts = data.events; // keyed by "extEmpId_date"
+    const evtKeys = Object.keys(evts);
+    console.log(`Attendance overlay: ${evtKeys.length} employee-dates with coded events`);
     let applied = 0;
     scheduleData.days.forEach(day => {
       day.shifts.forEach(shift => {
