@@ -57,11 +57,16 @@ def _filter_employees(start_d, end_d, lob, team_lead, employee_id):
     if employee_id:
         q = q.filter(Employee.id == int(employee_id))
     if lob:
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
-        if pu:
-            q = q.filter(Employee.planning_unit_id == pu.id)
-        else:
-            q = q.filter(db.false())
+        # Support comma-separated LOB names
+        lob_names = [l.strip() for l in lob.split(",") if l.strip()]
+        if lob_names:
+            pu_ids = [pu.id for pu in PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
+            ).all()]
+            if pu_ids:
+                q = q.filter(Employee.planning_unit_id.in_(pu_ids))
+            else:
+                q = q.filter(db.false())
     if team_lead:
         q = q.filter(Employee.team_lead == team_lead)
     return q.order_by(Employee.last_name, Employee.first_name)
@@ -498,16 +503,16 @@ def attendance_coded():
                 continue
             rows.append({
                 "employee_id": eid,
-                "name": emp.full_name,
+                "employee_name": emp.full_name,
                 "ext_id": emp.employee_id,
                 "lob": _lob_name(emp),
                 "team_lead": emp.team_lead or "",
                 "events": sorted(evt_list, key=lambda x: x.get("event_date", "")),
-                "absent": sum(1 for ev in evt_list if ev.get("category") == "absence"),
-                "late": sum(1 for ev in evt_list if ev.get("category") == "late"),
-                "early": sum(1 for ev in evt_list if ev.get("category") == "early_out"),
+                "absent_count": sum(1 for ev in evt_list if ev.get("category") == "absence"),
+                "late_count": sum(1 for ev in evt_list if ev.get("category") == "late"),
+                "early_count": sum(1 for ev in evt_list if ev.get("category") == "early_out"),
             })
-        rows.sort(key=lambda r: -(r["absent"] + r["late"] + r["early"]))
+        rows.sort(key=lambda r: -(r["absent_count"] + r["late_count"] + r["early_count"]))
 
         return jsonify(success=True, kpi={
             "total_scheduled": total_scheduled,
@@ -954,7 +959,7 @@ def agent_performance():
 
             rows.append({
                 "employee_id": emp.id,
-                "name": emp.full_name,
+                "employee_name": emp.full_name,
                 "ext_id": emp.employee_id,
                 "lob": _lob_name(emp),
                 "team_lead": emp.team_lead or "",
@@ -1098,16 +1103,19 @@ def pto_leave():
             emp = emp_map.get(eid)
             if not emp:
                 continue
-            rows.append({
-                "employee_id": eid,
-                "name": emp.full_name,
-                "ext_id": emp.employee_id,
-                "lob": _lob_name(emp),
-                "entries": sorted(entries, key=lambda x: x["start"]),
-                "total_days": sum(e["days"] for e in entries if e["status"] == "approved"),
-                "total_requests": len(entries),
-            })
-        rows.sort(key=lambda r: -r["total_days"])
+            for entry in entries:
+                rows.append({
+                    "employee_id": eid,
+                    "employee_name": emp.full_name,
+                    "ext_id": emp.employee_id,
+                    "lob": _lob_name(emp),
+                    "type": entry.get("type", ""),
+                    "start_date": entry["start"],
+                    "end_date": entry["end"],
+                    "days": entry["days"],
+                    "status": entry["status"],
+                })
+        rows.sort(key=lambda r: r["start_date"], reverse=True)
 
         return jsonify(success=True, kpi={
             "total_requests": len(ptos),
