@@ -107,46 +107,65 @@ def summary():
 
     try:
         payload = request.get_json(silent=True) or {}
-        days = int(payload.get("days", 30))
-        cutoff = date.today() - timedelta(days=days)
+        start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+
+        # Filter employees by LOB/team lead
+        emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+        emp_ids = {e.id for e in emps}
 
         # -- Headcount --
-        total_employees = Employee.query.filter_by(status="Active").count()
+        total_employees = len(emps)
 
-        # -- Schedule stats --
-        sched_q = Schedule.query.filter(Schedule.schedule_date >= cutoff)
+        # -- Schedule stats (filtered by employees and date range) --
+        sched_q = Schedule.query.filter(
+            Schedule.schedule_date >= start_d,
+            Schedule.schedule_date <= end_d,
+        )
+        if emp_ids:
+            sched_q = sched_q.filter(Schedule.employee_id.in_(emp_ids))
         total_scheduled_hours = db.session.query(
             func.coalesce(func.sum(Schedule.hours), 0)
-        ).filter(Schedule.schedule_date >= cutoff).scalar()
+        ).filter(
+            Schedule.schedule_date >= start_d,
+            Schedule.schedule_date <= end_d,
+        )
+        if emp_ids:
+            total_scheduled_hours = total_scheduled_hours.filter(Schedule.employee_id.in_(emp_ids))
+        total_scheduled_hours = total_scheduled_hours.scalar()
         total_shifts = sched_q.count()
 
         # -- PTO stats --
-        pto_pending = PTOEntry.query.filter_by(approval_status="pending").count()
-        pto_approved = PTOEntry.query.filter(
-            PTOEntry.approval_status == "approved",
-            PTOEntry.start_date >= cutoff,
-        ).count()
-        pto_denied = PTOEntry.query.filter(
-            PTOEntry.approval_status == "denied",
-            PTOEntry.start_date >= cutoff,
-        ).count()
+        pto_base = PTOEntry.query.filter(PTOEntry.start_date >= start_d, PTOEntry.start_date <= end_d)
+        if emp_ids:
+            pto_base = pto_base.filter(PTOEntry.employee_id.in_(emp_ids))
+        pto_pending = pto_base.filter(PTOEntry.approval_status == "pending").count()
+        pto_approved = pto_base.filter(PTOEntry.approval_status == "approved").count()
+        pto_denied = pto_base.filter(PTOEntry.approval_status == "denied").count()
 
         # PTO days consumed
         pto_days = 0
-        approved_entries = PTOEntry.query.filter(
+        approved_q = PTOEntry.query.filter(
             PTOEntry.approval_status == "approved",
-            PTOEntry.start_date >= cutoff,
-        ).all()
-        for e in approved_entries:
+            PTOEntry.start_date >= start_d, PTOEntry.start_date <= end_d,
+        )
+        if emp_ids:
+            approved_q = approved_q.filter(PTOEntry.employee_id.in_(emp_ids))
+        for e in approved_q.all():
             pto_days += (e.end_date - e.start_date).days + 1
 
         # -- Quality --
-        quality_avg = db.session.query(
-            func.avg(QualityEvaluation.overall_score)
-        ).filter(QualityEvaluation.eval_date >= cutoff).scalar()
-        quality_count = QualityEvaluation.query.filter(
-            QualityEvaluation.eval_date >= cutoff
-        ).count()
+        qual_q = QualityEvaluation.query.filter(
+            QualityEvaluation.eval_date >= start_d, QualityEvaluation.eval_date <= end_d,
+        )
+        if emp_ids:
+            qual_q = qual_q.filter(QualityEvaluation.employee_id.in_(emp_ids))
+        quality_avg = db.session.query(func.avg(QualityEvaluation.overall_score)).filter(
+            QualityEvaluation.eval_date >= start_d, QualityEvaluation.eval_date <= end_d,
+        )
+        if emp_ids:
+            quality_avg = quality_avg.filter(QualityEvaluation.employee_id.in_(emp_ids))
+        quality_avg = quality_avg.scalar()
+        quality_count = qual_q.count()
 
         # -- Shift bids & swaps --
         open_shifts = ShiftPost.query.filter_by(status="open").count()
@@ -155,22 +174,26 @@ def summary():
             ShiftSwapRequest.status.in_(["pending", "accepted"])
         ).count()
 
-        # -- Scheduling coverage by week --
+        # -- Scheduling hours by week --
         weekly_hours = []
-        for w in range(min(days // 7, 12)):
-            week_start = date.today() - timedelta(days=(w + 1) * 7)
-            week_end = week_start + timedelta(days=6)
-            hrs = db.session.query(
+        days_span = (end_d - start_d).days + 1
+        num_weeks = max(1, min(days_span // 7 + 1, 12))
+        for w in range(num_weeks):
+            week_start = start_d + timedelta(weeks=w)
+            week_end = min(week_start + timedelta(days=6), end_d)
+            hrs_q = db.session.query(
                 func.coalesce(func.sum(Schedule.hours), 0)
             ).filter(
                 Schedule.schedule_date >= week_start,
                 Schedule.schedule_date <= week_end,
-            ).scalar()
+            )
+            if emp_ids:
+                hrs_q = hrs_q.filter(Schedule.employee_id.in_(emp_ids))
+            hrs = hrs_q.scalar()
             weekly_hours.append({
                 "week": week_start.isoformat(),
                 "hours": round(float(hrs), 1),
             })
-        weekly_hours.reverse()
 
         # -- PTO by type --
         pto_by_type = []
@@ -178,11 +201,14 @@ def summary():
             from app.models import TimeOffType
             types = TimeOffType.query.all()
             for t in types:
-                cnt = PTOEntry.query.filter(
+                cnt_q = PTOEntry.query.filter(
                     PTOEntry.time_off_type_id == t.id,
-                    PTOEntry.start_date >= cutoff,
+                    PTOEntry.start_date >= start_d, PTOEntry.start_date <= end_d,
                     PTOEntry.approval_status == "approved",
-                ).count()
+                )
+                if emp_ids:
+                    cnt_q = cnt_q.filter(PTOEntry.employee_id.in_(emp_ids))
+                cnt = cnt_q.count()
                 if cnt:
                     pto_by_type.append({"type": t.label, "count": cnt})
         except Exception:
@@ -190,24 +216,26 @@ def summary():
 
         # -- Quality trend by week --
         quality_trend = []
-        for w in range(min(days // 7, 12)):
-            week_start = date.today() - timedelta(days=(w + 1) * 7)
-            week_end = week_start + timedelta(days=6)
-            avg = db.session.query(
+        for w in range(num_weeks):
+            week_start = start_d + timedelta(weeks=w)
+            week_end = min(week_start + timedelta(days=6), end_d)
+            avg_q = db.session.query(
                 func.avg(QualityEvaluation.overall_score)
             ).filter(
                 QualityEvaluation.eval_date >= week_start,
                 QualityEvaluation.eval_date <= week_end,
-            ).scalar()
+            )
+            if emp_ids:
+                avg_q = avg_q.filter(QualityEvaluation.employee_id.in_(emp_ids))
+            avg = avg_q.scalar()
             quality_trend.append({
                 "week": week_start.isoformat(),
                 "avg_score": round(float(avg), 1) if avg else None,
             })
-        quality_trend.reverse()
 
         return jsonify({
             "success": True,
-            "period_days": days,
+            "period_days": (end_d - start_d).days + 1,
             "headcount": total_employees,
             "schedule": {
                 "total_shifts": total_shifts,
@@ -253,12 +281,9 @@ def attendance_report():
         return jsonify(success=True, rows=get_demo_reports_attendance(days), period_days=days)
 
     payload = request.get_json(silent=True) or {}
-    days = int(payload.get("days", 7))
-    cutoff = date.today() - timedelta(days=days)
+    start_d, end_d, lob, team_lead, employee_id_f = _parse_filters(payload)
 
-    employees = Employee.query.filter_by(status="Active").order_by(
-        Employee.last_name, Employee.first_name
-    ).all()
+    employees = _filter_employees(start_d, end_d, lob, team_lead, employee_id_f).all()
 
     rows = []
     for emp in employees:
@@ -267,7 +292,8 @@ def attendance_report():
             func.coalesce(func.sum(TimeClock.total_hours), 0)
         ).filter(
             TimeClock.employee_id == emp.id,
-            TimeClock.date >= cutoff,
+            TimeClock.date >= start_d,
+            TimeClock.date <= end_d,
             TimeClock.status == "completed",
         ).scalar()
 
@@ -276,7 +302,8 @@ def attendance_report():
             func.coalesce(func.sum(Schedule.hours), 0)
         ).filter(
             Schedule.employee_id == emp.id,
-            Schedule.schedule_date >= cutoff,
+            Schedule.schedule_date >= start_d,
+            Schedule.schedule_date <= end_d,
         ).scalar()
 
         actual_f = round(float(actual), 1)
