@@ -320,7 +320,7 @@ def attendance_report():
                 "difference": diff,
             })
 
-    return jsonify(success=True, rows=rows, period_days=days)
+    return jsonify(success=True, rows=rows, period_days=(end_d - start_d).days + 1)
 
 
 @reports_bp.route("/api/attendance/csv", methods=["POST"])

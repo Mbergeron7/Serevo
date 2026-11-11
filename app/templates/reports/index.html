@@ -552,7 +552,7 @@ async function loadSummary() {
   // Summary KPIs
   const f = getFilters();
   const days = Math.max(1, Math.round((new Date(f.end_date) - new Date(f.start_date)) / 86400000));
-  const d = await api('/reports/api/summary', {days});
+  const d = await api('/reports/api/summary', f);
   if (!d.success) return;
 
   renderKpis('sumKpis', [
@@ -603,7 +603,7 @@ async function loadSummary() {
   `;
 
   // Attendance hours
-  const att = await api('/reports/api/attendance', {days});
+  const att = await api('/reports/api/attendance', f);
   if (att.success && att.rows.length) {
     let ah = '<table class="rpt-table sortable" id="sumAttTbl"><thead><tr><th>Employee</th><th>LOB</th><th class="num">Actual</th><th class="num">Scheduled</th><th class="num">Diff</th></tr></thead><tbody>';
     att.rows.forEach(r => {
