@@ -941,39 +941,79 @@
   <!-- ============================================================ -->
   <!-- REPORTS -->
   <!-- ============================================================ -->
-  <div class="help-section" id="reports" data-keywords="reports export csv analytics summary attendance report hours kpi excel google sheets download workforce metrics">
+  <div class="help-section" id="reports" data-keywords="reports export csv analytics summary attendance report hours kpi excel google sheets download workforce metrics forecast accuracy coverage agent performance pto leave">
     <div class="help-header" onclick="toggleSection(this)">
-      <h2>Reports</h2><span class="help-chevron">▸</span>
+      <h2>Reports &amp; Analytics</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <h3>Summary Reports</h3>
-      <p>View KPI summaries over a selected time period:</p>
-      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Total active employees and headcount changes</li>
-        <li>Average scheduled hours per employee</li>
-        <li>PTO usage rates and balances</li>
-        <li>Attendance rates (on-time, late, absent)</li>
-        <li>Quality score averages by category</li>
-        <li>Training completion rates</li>
-      </ul>
-      <p>Select the date range and planning unit/LOB to focus the report. Results update immediately.</p>
+      <p>The Reports &amp; Analytics page provides six dedicated report tabs with a shared filter bar. Every report includes KPI summary cards, a chart, and a sortable detail table. All data can be exported to CSV.</p>
 
-      <h3>Attendance Reports</h3>
-      <p>Detailed attendance data showing, for each employee over the selected period:</p>
+      <h3>Filter Bar</h3>
+      <p>The filter bar at the top of the page is shared across all tabs:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Daily clock-in and clock-out times</li>
-        <li>Total hours worked per day</li>
-        <li>Scheduled hours vs. actual hours</li>
-        <li>Absence count and tardiness count</li>
-        <li>Overtime hours</li>
+        <li><strong>Date Range</strong> — pick a start and end date. Defaults to the last 30 days.</li>
+        <li><strong>LOB</strong> — multi-select dropdown to focus on specific lines of business.</li>
+        <li><strong>Team Lead</strong> — filter to a specific team lead's employees.</li>
+        <li><strong>Employee</strong> — search by name to drill into one person.</li>
+        <li><strong>Apply</strong> — reloads the current tab with the selected filters.</li>
+        <li><strong>Export CSV</strong> — downloads the current tab's data as a CSV file.</li>
       </ul>
 
-      <h3>CSV Export</h3>
+      <h3>Attendance Report</h3>
+      <p>Tracks coded attendance events — absences, lates, and early leaves — from the manual coding and auto-detect system.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Total Scheduled, Absent count, Late count, Early Leave count, Absence Rate %</li>
+        <li><strong>Chart:</strong> Stacked daily trend showing absences, lates, and early leaves over time</li>
+        <li><strong>Table:</strong> Per-employee rows with name, LOB, event counts, and coded exception details</li>
+      </ul>
+
+      <h3>Forecast Accuracy Report</h3>
+      <p>Compares forecasted demand against actual volume to measure planning accuracy.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Average Accuracy %, Total Forecast Volume, Total Actual Volume, Variance %</li>
+        <li><strong>Chart:</strong> Line chart showing forecast vs. actual volume by day</li>
+        <li><strong>Table:</strong> Per-day or per-LOB breakdown with forecast, actual, and variance columns</li>
+      </ul>
+
+      <h3>Schedule Coverage Report</h3>
+      <p>Analyzes whether scheduled staffing meets forecasted requirements.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Average Coverage %, Understaffed Intervals, Overstaffed Intervals, Peak Gap</li>
+        <li><strong>Chart:</strong> Bar chart of coverage % by day — green (≥90%), yellow (70–90%), red (&lt;70%)</li>
+        <li><strong>Table:</strong> Per-day rows showing required vs. scheduled headcount with gap analysis</li>
+      </ul>
+
+      <h3>Agent Performance Report</h3>
+      <p>Combines quality, attendance, and scheduling data into a single agent scorecard.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Average Quality Score, Average Attendance Rate, Total Agents, Total Hours</li>
+        <li><strong>Table:</strong> Per-agent rows with quality average, attendance rate %, total hours, absence count, and late count</li>
+        <li>Color-coded thresholds: green for good, yellow for warning, red for critical</li>
+      </ul>
+
+      <h3>PTO &amp; Leave Report</h3>
+      <p>Tracks time-off requests, approval status, and usage across the team.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Total Requests, Approved, Pending, Denied, Days Consumed</li>
+        <li><strong>Chart:</strong> Pie chart showing PTO by type (vacation, sick, personal, etc.)</li>
+        <li><strong>Table:</strong> Per-employee entries with type, dates, approval status, and days used</li>
+      </ul>
+
+      <h3>Summary Report</h3>
+      <p>High-level workforce KPIs and trends for management overview.</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>KPI cards:</strong> Active Employees, Scheduled Hours, Total Shifts, PTO Days Used, Avg Quality Score, Pending Approvals</li>
+        <li><strong>Charts:</strong> Scheduled hours by week (bar) and quality score trend (line)</li>
+        <li><strong>Details:</strong> PTO breakdown by type and self-service activity (open shifts, pending bids, pending swaps)</li>
+      </ul>
+
+      <h3>Exporting</h3>
+      <p>Every report tab supports CSV export:</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Configure your report using the filters and date range.</li>
-        <li>Click the <strong>Export CSV</strong> button.</li>
-        <li>Choose between summary or attendance export formats.</li>
-        <li>The CSV file downloads to your computer. It includes all visible data and can be opened in Excel, Google Sheets, or any spreadsheet application.</li>
+        <li>Set your filters (date range, LOB, team lead, employee) and click <strong>Apply</strong>.</li>
+        <li>Switch to the report tab you want to export.</li>
+        <li>Click the <strong>Export CSV</strong> button in the filter bar.</li>
+        <li>The CSV file downloads to your computer. It includes all data from the current tab and can be opened in Excel, Google Sheets, or any spreadsheet application.</li>
       </ol>
     </div>
   </div>
