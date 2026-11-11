@@ -590,6 +590,16 @@ def forecast_accuracy():
         start_dt = datetime.combine(start_d, datetime.min.time())
         end_dt = datetime.combine(end_d + timedelta(days=1), datetime.min.time())
 
+        # For today, cap at the current time so we only compare
+        # forecast intervals that have had a chance to get actuals
+        from app.utils.timezone import get_app_timezone
+        from zoneinfo import ZoneInfo
+        tz = get_app_timezone()
+        now_local = datetime.now(tz).replace(tzinfo=None)
+        today_str = now_local.date().isoformat()
+        # Find the latest actual timestamp to use as the cap for today
+        now_cap = now_local  # default: current time
+
         # Build PU filter
         pu_ids = None
         if lob:
@@ -599,11 +609,19 @@ def forecast_accuracy():
             ).all()
             pu_ids = [p.id for p in pus] if pus else []
 
-        # Forecast by day
+        # Forecast by day — for today, only count intervals up to now
         fc_q = db.session.query(
             func.date(ForecastInterval.timestamp).label("d"),
             func.sum(ForecastInterval.offered).label("vol"),
         ).filter(ForecastInterval.timestamp >= start_dt, ForecastInterval.timestamp < end_dt)
+        # Cap today's forecast at current time
+        if end_d >= now_local.date():
+            fc_q = fc_q.filter(
+                db.or_(
+                    func.date(ForecastInterval.timestamp) < today_str,
+                    ForecastInterval.timestamp <= now_cap,
+                )
+            )
         if pu_ids is not None:
             fc_q = fc_q.filter(ForecastInterval.planning_unit_id.in_(pu_ids))
         fc_q = fc_q.group_by(func.date(ForecastInterval.timestamp))
@@ -651,10 +669,18 @@ def forecast_accuracy():
             pus = PlanningUnit.query.filter_by(is_active=True).all()
         if pus:
             for pu in pus:
-                fc_vol = db.session.query(func.coalesce(func.sum(ForecastInterval.offered), 0)).filter(
+                fc_lob_q = db.session.query(func.coalesce(func.sum(ForecastInterval.offered), 0)).filter(
                     ForecastInterval.planning_unit_id == pu.id,
                     ForecastInterval.timestamp >= start_dt, ForecastInterval.timestamp < end_dt,
-                ).scalar()
+                )
+                if end_d >= now_local.date():
+                    fc_lob_q = fc_lob_q.filter(
+                        db.or_(
+                            func.date(ForecastInterval.timestamp) < today_str,
+                            ForecastInterval.timestamp <= now_cap,
+                        )
+                    )
+                fc_vol = fc_lob_q.scalar()
                 act_vol = db.session.query(func.coalesce(func.sum(IntervalActual.offered), 0)).filter(
                     IntervalActual.planning_unit_id == pu.id,
                     IntervalActual.timestamp >= start_dt, IntervalActual.timestamp < end_dt,
