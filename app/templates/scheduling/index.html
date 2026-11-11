@@ -2185,7 +2185,7 @@ function renderTimelineView(container) {
         <div class="tl-emp-name">
           <span>${shift.employee}${attnBadge(shift)}</span>
           <span class="emp-actions">
-            <button class="emp-action-btn" title="Edit shift" onclick="openEditModal(${dayIdx},${origIdx},${shift.id||0})">&#9998;</button>
+            <button class="emp-action-btn" title="Edit shift" data-sid="${shift.id||''}" onclick="openEditModal(${dayIdx},${origIdx},this.dataset.sid)">&#9998;</button>
             <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${origIdx})" style="color:#dc2626">✕</button>
           </span>
         </div>
@@ -2483,23 +2483,20 @@ function openEditModal(dayIdx, shiftIdxHint, shiftDbId) {
   const day = scheduleData.days[dayIdx];
   if (!day) { console.error('openEditModal: invalid dayIdx', dayIdx); return; }
 
+  const sid = shiftDbId ? parseInt(shiftDbId) : 0;
   let shiftIdx = shiftIdxHint;
   let shift;
 
   // Always prefer DB id lookup — index may be stale after filtering/sorting
-  if (shiftDbId && shiftDbId > 0) {
-    const byId = day.shifts.findIndex(s => s.id == shiftDbId);
+  if (sid > 0) {
+    const byId = day.shifts.findIndex(s => s.id == sid);
     if (byId >= 0) { shiftIdx = byId; shift = day.shifts[byId]; }
   }
   // Fallback to index
   if (!shift) { shift = day.shifts[shiftIdx]; }
 
-  console.log('openEditModal', {dayIdx, shiftIdxHint, shiftDbId, resolvedIdx: shiftIdx,
-    employee: shift ? shift.employee : 'NOT FOUND', shiftId: shift ? shift.id : null,
-    totalShifts: day.shifts.length, allIds: day.shifts.map(s => s.id)});
-
   if (!shift) {
-    console.error('openEditModal: shift not found', {dayIdx, shiftIdxHint, shiftDbId, shifts: day.shifts.length});
+    console.error('openEditModal: shift not found', {dayIdx, shiftIdxHint, sid, shifts: day.shifts.length});
     return;
   }
 
@@ -2842,7 +2839,7 @@ function renderDayView(container) {
           <td style="font-weight:600">${s.employee}${attnBadge(s)}</td>
           <td>${s.start}</td><td>${s.end}</td>
           <td>${s.hours}</td><td>${badge}</td>
-          <td><button class="emp-action-btn" onclick="openEditModal(${idx},${origSi},${s.id||0})" title="Edit">&#9998; Edit</button>
+          <td><button class="emp-action-btn" data-sid="${s.id||''}" onclick="openEditModal(${idx},${origSi},this.dataset.sid)" title="Edit">&#9998; Edit</button>
           <button class="emp-action-btn" onclick="showAbsencePopup(event,${idx},${origSi})" title="Mark absent" style="color:#dc2626;margin-left:4px">✕</button></td></tr>`;
       });
       html += '</tbody></table></div>';
