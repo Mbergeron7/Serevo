@@ -339,6 +339,25 @@
       </ol>
       <p>You can unpublish and make further edits, then re-publish. Agents will see the updated version.</p>
 
+      <h3>Editing Shifts &amp; Segments</h3>
+      <p>Click any shift in the timeline to open the <strong>Edit Shift</strong> modal. From there you can change the start/end time, shift type, and status.</p>
+      <p>The modal shows a list of the shift's <strong>segments</strong> (on-call, break, lunch, meeting, etc.). You can:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Click a segment</strong> to edit it in-place — the form populates with the segment's current values and the segment is highlighted. Change the activity type, start/end time, or notes, then click <strong>Save</strong>.</li>
+        <li><strong>Add a segment</strong> by clicking <strong>+ Add Segment</strong> — choose the activity type, times, and optional notes.</li>
+        <li><strong>Delete a segment</strong> by clicking the ✕ button on any segment in the list.</li>
+      </ul>
+      <p>Changes to segments are saved automatically to the database when the shift is already persisted.</p>
+
+      <h3>Attendance Badges on Schedule</h3>
+      <p>When attendance events have been coded (via the Real-Time → Absenteeism tab), badges appear next to employee names on the schedule:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><span style="color:#dc2626;font-weight:600;">Absent</span> — red badge for employees with no login</li>
+        <li><span style="color:#f59e0b;font-weight:600;">Late (Xm)</span> — amber badge showing minutes late</li>
+        <li><span style="color:#f97316;font-weight:600;">Left Early</span> — orange badge showing the departure time</li>
+      </ul>
+      <p>Hover over a badge to see the full note from the auto-detect or manual coding.</p>
+
       <h3>Day Models</h3>
       <p>Day models are shift templates that define the structure of a work day. Each day model specifies:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -697,6 +716,14 @@
     <div class="help-body">
       <p>The Real-Time Management page is organized into tabbed views, each focused on a different aspect of intraday operations. Select a planning unit (LOB) and date at the top — all tabs share the same context. Data refreshes automatically from your connected Google Sheets or ACD integration.</p>
 
+      <h3>Page Features</h3>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Employee Search</strong> — a search box in the top bar lets you filter any tab's tables by employee name.</li>
+        <li><strong>Tab Badges</strong> — colored count badges appear on tabs when there's notable data: <span style="color:#dc2626;">Absenteeism</span> (absent count), <span style="color:#3b82f6;">Agent Status</span> (active agents), <span style="color:#10b981;">Live Agents</span> (logged-in count), <span style="color:#f97316;">Net Staffing</span> (understaffed intervals).</li>
+        <li><strong>Data Status Bar</strong> — below the top bar, shows ✓ or ✗ for Actuals, Adherence, Forecast, and Agent Status data availability so you know what's loaded.</li>
+        <li><strong>Auto-Refresh Countdown</strong> — when enabled, a visible countdown (60s, 59s, …) shows when the next refresh will fire. Uncheck to pause.</li>
+      </ul>
+
       <h3>Intraday</h3>
       <p>The default view. Shows a side-by-side comparison of <strong>forecasted</strong> versus <strong>actual</strong> contact volumes and handle times for each interval throughout the day. Use it to spot emerging trends — if actuals are consistently running above forecast, you may need to extend shifts or post overtime.</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -742,6 +769,7 @@
         <li>Color-coded: green when meeting target, red when below</li>
       </ul>
       <p><strong>Note:</strong> If your data source does not provide an "answered within threshold" column, {{ brand_name }} estimates service level from Average Speed of Answer (ASA) data. For the most accurate results, ensure your data feed includes a column for calls answered within the SL threshold.</p>
+      <p><strong>Erlang C Estimates:</strong> When no call actuals are available (e.g., before the day starts or for future intervals), {{ brand_name }} calculates estimated service levels using the <strong>Erlang C</strong> model based on forecast demand and scheduled staffing. These appear as supplementary estimates below the actuals table when present, or as the primary view when actuals are absent.</p>
 
       <h3>Absenteeism</h3>
       <p>Tracks unplanned absences and their impact on staffing for the selected date. Shows which agents are absent, the reason (if provided), and how their absence affects coverage for each interval.</p>
