@@ -2481,7 +2481,10 @@ function confirmAddShift() {
 // ═══════════════════════════════════════════════════════════
 function openEditModal(dayIdx, shiftIdx) {
   const day = scheduleData.days[dayIdx];
+  if (!day) { console.error('openEditModal: invalid dayIdx', dayIdx); return; }
   const shift = day.shifts[shiftIdx];
+  if (!shift) { console.error('openEditModal: invalid shiftIdx', shiftIdx, 'day has', day.shifts.length, 'shifts'); return; }
+  console.log('openEditModal', {dayIdx, shiftIdx, employee: shift.employee, id: shift.id});
 
   document.getElementById('editDayIdx').value = dayIdx;
   document.getElementById('editShiftIdx').value = shiftIdx;
