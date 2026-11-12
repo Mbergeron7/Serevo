@@ -727,7 +727,25 @@ def forecast_demand():
                             "agents_required": req_map.get(t, 0),
                         })
 
+                # Count scheduled agents per interval
                 if intervals:
+                    day_scheds = Schedule.query.filter(
+                        Schedule.planning_unit_id == pu.id,
+                        Schedule.schedule_date == current,
+                        Schedule.status == "scheduled",
+                    ).all()
+                    for iv in intervals:
+                        iv_mins = int(iv["time"][:2]) * 60 + int(iv["time"][3:5])
+                        count = 0
+                        for s in day_scheds:
+                            if s.shift_start and s.shift_end:
+                                s_mins = s.shift_start.hour * 60 + s.shift_start.minute
+                                e_mins = s.shift_end.hour * 60 + s.shift_end.minute
+                                if e_mins <= s_mins:
+                                    e_mins += 24 * 60
+                                if s_mins <= iv_mins < e_mins:
+                                    count += 1
+                        iv["scheduled"] = count
                     unit_days.append({"date": current.strftime("%Y-%m-%d"), "intervals": intervals})
                 current += _dt.timedelta(days=1)
 
