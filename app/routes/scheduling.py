@@ -937,6 +937,14 @@ def load_schedule():
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+            # Deduplicate — an employee may match both PU and assignment criteria
+            seen_ids = set()
+            deduped = []
+            for s in schedules:
+                if s.id not in seen_ids:
+                    seen_ids.add(s.id)
+                    deduped.append(s)
+            schedules = deduped
         else:
             # All LOBs
             schedules = Schedule.query.filter(
