@@ -708,8 +708,9 @@ def forecast_demand():
                         if t not in slot_data:
                             slot_data[t] = {"offered": 0, "aht_sum": 0, "aht_cnt": 0}
                         slot_data[t]["offered"] += row.offered or 0
-                        if row.aht and row.aht > 0:
-                            slot_data[t]["aht_sum"] += row.aht * (row.offered or 1)
+                        aht_val = getattr(row, 'aht_secs', None) or 0
+                        if aht_val > 0:
+                            slot_data[t]["aht_sum"] += aht_val * (row.offered or 1)
                             slot_data[t]["aht_cnt"] += row.offered or 1
 
                 # Merge: actuals where available, forecast for the rest
