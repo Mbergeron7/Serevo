@@ -1094,11 +1094,12 @@ function updateSummaryCards() {
 
   // For daily view with interval data, compute from intervals
   if (currentView === 'daily' && intervalData && intervalData.length) {
-    let totalHist = 0, totalFc = 0, totalAhtW = 0, totalAhtN = 0, totalReq = 0, fcCount = 0, histCount = 0;
+    let totalHist = 0, totalFc = 0, totalFcMatched = 0, totalAhtW = 0, totalAhtN = 0, totalReq = 0, fcCount = 0, histCount = 0;
     let peakVol = 0, peakLabel = '';
     for (const iv of intervalData) {
-      if (iv.hist_offered != null) { totalHist += iv.hist_offered; histCount++; totalAhtW += iv.hist_offered * (iv.hist_aht || 0); totalAhtN += iv.hist_offered; }
-      if (iv.fc_offered != null) { totalFc += iv.fc_offered; fcCount++; if (!iv.hist_offered) { totalAhtW += iv.fc_offered * (iv.fc_aht || 0); totalAhtN += iv.fc_offered; } }
+      const hasHist = iv.hist_offered != null;
+      if (hasHist) { totalHist += iv.hist_offered; histCount++; totalAhtW += iv.hist_offered * (iv.hist_aht || 0); totalAhtN += iv.hist_offered; }
+      if (iv.fc_offered != null) { totalFc += iv.fc_offered; fcCount++; if (hasHist) { totalFcMatched += iv.fc_offered; } if (!hasHist) { totalAhtW += iv.fc_offered * (iv.fc_aht || 0); totalAhtN += iv.fc_offered; } }
       totalReq += iv.agents_required;
       const vol = iv.hist_offered || 0;
       if (vol > peakVol) { peakVol = vol; peakLabel = iv.time || ''; }
@@ -1112,10 +1113,12 @@ function updateSummaryCards() {
     document.getElementById('totalOfferedDetail').textContent = `${histCount} intervals`;
     document.getElementById('totalForecasted').textContent = fcCount ? Math.round(totalFc).toLocaleString() : '—';
     document.getElementById('totalForecastedDetail').textContent = fcCount ? `${fcCount} intervals` : 'No forecast';
-    if (fcCount && totalFc > 0) {
-      const otf = (totalHist / totalFc) * 100;
+    // OTF: compare actuals only against forecast for intervals that have actuals
+    const otfFc = totalFcMatched > 0 ? totalFcMatched : totalFc;
+    if (fcCount && otfFc > 0 && histCount > 0) {
+      const otf = (totalHist / otfFc) * 100;
       document.getElementById('otfCard').textContent = otf.toFixed(1) + '%';
-      const diff = totalFc - totalHist;
+      const diff = otfFc - totalHist;
       document.getElementById('otfDetail').textContent = diff >= 0 ? `+${Math.round(diff).toLocaleString()} over` : `${Math.round(Math.abs(diff)).toLocaleString()} under`;
     } else {
       document.getElementById('otfCard').textContent = '—';
