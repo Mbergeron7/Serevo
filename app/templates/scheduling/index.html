@@ -4759,7 +4759,14 @@ function loadDemandHeatmap() {
   })
   .then(r => r.json())
   .then(data => {
+    console.log('[HeatMap] response:', {success: data.success, units: data.units?.length, days: data.units?.map(u => ({name: u.name, days: u.days.length, intervals: u.days[0]?.intervals?.length}))});
     if (!data.success || !data.units || !data.units.length) {
+      zone.classList.remove('visible');
+      return;
+    }
+    // Check if any unit has actual interval data
+    const hasIntervals = data.units.some(u => u.days.some(d => d.intervals && d.intervals.length > 0));
+    if (!hasIntervals) {
       zone.classList.remove('visible');
       return;
     }
