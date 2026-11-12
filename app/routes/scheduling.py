@@ -680,10 +680,22 @@ def forecast_demand():
                     t = r.timestamp.strftime("%H:%M")
                     req_map[t] = r.agents_required
 
-                # Get forecast or actuals
+                # Get actuals + forecast (for today: actuals for past, forecast for rest)
                 intervals = []
+                # Always load forecasts for this PU
+                fc_map = {}
+                fcs = ForecastInterval.query.filter(
+                    ForecastInterval.planning_unit_id == pu.id,
+                    ForecastInterval.timestamp >= day_start,
+                    ForecastInterval.timestamp <= day_end,
+                ).all()
+                for fc in fcs:
+                    t = fc.timestamp.strftime("%H:%M")
+                    fc_map[t] = {"offered": round(fc.offered or 0, 1), "aht": round(fc.aht or 0, 1)}
+
+                # Load actuals for today and past days
+                slot_data = {}
                 if current <= today:
-                    # Use actuals
                     q = IntervalActual.query.filter(
                         IntervalActual.planning_unit_id == actuals_pu_id,
                         IntervalActual.timestamp >= day_start,
@@ -691,40 +703,34 @@ def forecast_demand():
                     )
                     if route_id_filter:
                         q = q.filter(IntervalActual.route_id.in_(route_id_filter))
-
-                    rows = q.all()
-                    # Aggregate by time slot
-                    slot_data = defaultdict(lambda: {"offered": 0, "aht_sum": 0, "aht_cnt": 0})
-                    for row in rows:
+                    for row in q.all():
                         t = row.timestamp.strftime("%H:%M")
+                        if t not in slot_data:
+                            slot_data[t] = {"offered": 0, "aht_sum": 0, "aht_cnt": 0}
                         slot_data[t]["offered"] += row.offered or 0
                         if row.aht and row.aht > 0:
                             slot_data[t]["aht_sum"] += row.aht * (row.offered or 1)
                             slot_data[t]["aht_cnt"] += row.offered or 1
 
-                    for t in sorted(slot_data.keys()):
+                # Merge: actuals where available, forecast for the rest
+                all_times = sorted(set(list(fc_map.keys()) + list(slot_data.keys()) + list(req_map.keys())))
+                for t in all_times:
+                    if t in slot_data:
                         d = slot_data[t]
                         aht = round(d["aht_sum"] / d["aht_cnt"], 1) if d["aht_cnt"] > 0 else 0
                         intervals.append({
-                            "time": t,
-                            "offered": round(d["offered"], 1),
-                            "aht": aht,
-                            "agents_required": req_map.get(t, 0),
+                            "time": t, "offered": round(d["offered"], 1),
+                            "aht": aht, "agents_required": req_map.get(t, 0),
                         })
-                else:
-                    # Use forecasts
-                    fcs = ForecastInterval.query.filter(
-                        ForecastInterval.planning_unit_id == pu.id,
-                        ForecastInterval.timestamp >= day_start,
-                        ForecastInterval.timestamp <= day_end,
-                    ).all()
-                    for fc in sorted(fcs, key=lambda f: f.timestamp):
-                        t = fc.timestamp.strftime("%H:%M")
+                    elif t in fc_map:
                         intervals.append({
-                            "time": t,
-                            "offered": round(fc.offered or 0, 1),
-                            "aht": round(fc.aht or 0, 1),
-                            "agents_required": req_map.get(t, 0),
+                            "time": t, "offered": fc_map[t]["offered"],
+                            "aht": fc_map[t]["aht"], "agents_required": req_map.get(t, 0),
+                        })
+                    elif t in req_map:
+                        intervals.append({
+                            "time": t, "offered": 0, "aht": 0,
+                            "agents_required": req_map[t],
                         })
 
                 # Count scheduled agents per interval
