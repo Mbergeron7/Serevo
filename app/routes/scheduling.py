@@ -929,22 +929,20 @@ def load_schedule():
                        EmployeePlanningUnit.valid_to >= start_date),
             ).all()}
             emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+            # Show schedules assigned to this PU, plus schedules with no PU
+            # for employees who belong to the PU (avoids pulling in their
+            # schedules from other PUs like QA when filtering by Admin)
             schedules = Schedule.query.filter(
                 db.or_(
                     Schedule.planning_unit_id.in_(pu_ids),
-                    Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    db.and_(
+                        Schedule.planning_unit_id.is_(None),
+                        Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    ),
                 ),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
-            # Deduplicate — an employee may match both PU and assignment criteria
-            seen_ids = set()
-            deduped = []
-            for s in schedules:
-                if s.id not in seen_ids:
-                    seen_ids.add(s.id)
-                    deduped.append(s)
-            schedules = deduped
         else:
             # All LOBs
             schedules = Schedule.query.filter(
