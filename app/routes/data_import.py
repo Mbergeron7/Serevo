@@ -452,7 +452,7 @@ def bulk_actuals_chunk(job_id):
             except ValueError: pass
         return None
 
-    batch = []
+    dedup = {}  # (pu_id, timestamp) → record, to avoid duplicate keys in batch
     chunk_imported = chunk_skipped = 0
     end = min(offset + CHUNK, total)
 
@@ -467,13 +467,21 @@ def bulk_actuals_chunk(job_id):
         offered = int(float((row.get("Offered") or "0").strip() or "0"))
         aht_raw = (row.get("AHT") or "").strip()
         aht = float(aht_raw) if aht_raw else None
-        batch.append({
-            "planning_unit_id": pu_id, "timestamp": ts,
-            "offered": offered, "answered": offered, "answered_within": offered,
-            "abandoned": 0, "rolled": 0, "aht_secs": aht, "asa_secs": None,
-            "route_id": "", "source": "upload", "max_queued": None,
-        })
+        key = (pu_id, ts)
+        if key in dedup:
+            # Sum duplicates
+            dedup[key]["offered"] += offered
+            dedup[key]["answered"] += offered
+            dedup[key]["answered_within"] += offered
+        else:
+            dedup[key] = {
+                "planning_unit_id": pu_id, "timestamp": ts,
+                "offered": offered, "answered": offered, "answered_within": offered,
+                "abandoned": 0, "rolled": 0, "aht_secs": aht, "asa_secs": None,
+                "route_id": "", "source": "upload", "max_queued": None,
+            }
 
+    batch = list(dedup.values())
     if batch:
         try:
             stmt = pg_insert(IntervalActual.__table__).values(batch)
