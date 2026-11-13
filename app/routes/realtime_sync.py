@@ -1217,6 +1217,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
 
                 offered = _safe_int(row[agg_col_map["offered"]]) if "offered" in agg_col_map else 0
                 answered = _safe_int(row[agg_col_map["answered"]]) if "answered" in agg_col_map else 0
+                answered_within = _safe_int(row[agg_col_map["answered_within"]]) if "answered_within" in agg_col_map else 0
                 abandoned = _safe_int(row[agg_col_map["abandoned"]]) if "abandoned" in agg_col_map else 0
                 rolled = _safe_int(row[agg_col_map["rolled"]]) if "rolled" in agg_col_map else 0
                 asa = _safe_float(row[agg_col_map["asa"]]) if "asa" in agg_col_map else None
@@ -1229,6 +1230,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     if prev is None:
                         evt_aggregated[key] = dict(
                             offered=offered, answered=answered,
+                            answered_within=answered_within,
                             abandoned=abandoned, rolled=rolled,
                             _asa_sum=((asa or 0) * answered) if asa is not None else 0,
                             _aht_sum=((aht or 0) * answered) if aht is not None else 0,
@@ -1238,6 +1240,7 @@ def _sync_event_format(spreadsheet, feed_type, tab_name=None,
                     else:
                         prev["offered"] += offered
                         prev["answered"] += answered
+                        prev["answered_within"] += answered_within
                         prev["abandoned"] += abandoned
                         prev["rolled"] += rolled
                         if asa is not None:
