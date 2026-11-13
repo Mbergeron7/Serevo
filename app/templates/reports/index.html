@@ -355,21 +355,25 @@ async function loadAttendance() {
 
   // Chart: stacked bar
   const trend = d.daily_trend || [];
-  const labels = trend.map(t => { const dt = new Date(t.date+'T12:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
-  destroyChart('att');
-  const ctx = document.getElementById('attChart').getContext('2d');
-  _charts.att = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label:'Absent', data:trend.map(t=>t.absent||0), backgroundColor:'#ef4444', borderRadius:2 },
-        { label:'Late', data:trend.map(t=>t.late||0), backgroundColor:'#f59e0b', borderRadius:2 },
-        { label:'Early Leave', data:trend.map(t=>t.early||0), backgroundColor:'#f97316', borderRadius:2 },
-      ],
-    },
-    options: { responsive:true, plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}, scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}} },
-  });
+  try {
+    const labels = trend.map(t => { const dt = new Date(t.date+'T12:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+    destroyChart('att');
+    if (trend.length > 0) {
+      const ctx = document.getElementById('attChart').getContext('2d');
+      _charts.att = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label:'Absent', data:trend.map(t=>t.absent||0), backgroundColor:'#ef4444', borderRadius:2 },
+            { label:'Late', data:trend.map(t=>t.late||0), backgroundColor:'#f59e0b', borderRadius:2 },
+            { label:'Early Leave', data:trend.map(t=>t.early||0), backgroundColor:'#f97316', borderRadius:2 },
+          ],
+        },
+        options: { responsive:true, plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}, scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}} },
+      });
+    }
+  } catch(e) { console.error('Attendance chart error:', e); }
 
   // Table
   const rows = d.rows || [];
