@@ -588,23 +588,28 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
     for (queue, bucket_start), bucket_events in sorted(buckets.items()):
         offered = len(bucket_events)
         abandoned = sum(1 for e in bucket_events if e["is_abandoned"])
-        answered = offered - abandoned
         rolled = sum(1 for e in bucket_events if e["is_rolled"])
+        # Answered = not abandoned AND not rolled
+        answered = sum(1 for e in bucket_events
+                       if not e["is_abandoned"] and not e["is_rolled"])
 
-        # Answered within SL threshold — answered calls with queue_time ≤ threshold
+        # Answered within SL threshold — answered (not abandoned, not rolled)
+        # with queue_time ≤ threshold
         answered_within = sum(1 for e in bucket_events
-                              if not e["is_abandoned"]
+                              if not e["is_abandoned"] and not e["is_rolled"]
                               and e["wait_time"] is not None
                               and e["wait_time"] <= sl_threshold_secs)
 
-        # Average wait time (ASA) — only for answered calls
+        # Average wait time (ASA) — only for answered calls (not abandoned, not rolled)
         waits = [e["wait_time"] for e in bucket_events
-                 if not e["is_abandoned"] and e["wait_time"] is not None]
+                 if not e["is_abandoned"] and not e["is_rolled"]
+                 and e["wait_time"] is not None]
         asa = round(sum(waits) / len(waits), 1) if waits else ""
 
         # Average duration (AHT) — only for answered calls
         durs = [e["duration"] for e in bucket_events
-                if not e["is_abandoned"] and e["duration"] is not None]
+                if not e["is_abandoned"] and not e["is_rolled"]
+                and e["duration"] is not None]
         aht = round(sum(durs) / len(durs), 1) if durs else ""
 
         result_rows.append([
