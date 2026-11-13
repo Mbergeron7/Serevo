@@ -1148,36 +1148,57 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
         seen_ext_ids.add(ext)
         resolved.append((emp, s))
 
-    # Bulk-clear ALL existing schedules in the date range before inserting.
-    # This ensures the source system is the source of truth — any manually
-    # created or previously imported schedules are replaced entirely.
+    # Clear existing schedules for matched employees in the date range before
+    # inserting.  This scopes the clear to only the employees being imported
+    # so that schedules for OTHER LOBs/employees aren't wiped.
     if start_date and end_date:
-        # Delete child segments first (bulk), then schedules
-        old_sched_ids = db.session.query(Schedule.id).filter(
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        ).subquery()
-        ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(
-            db.session.query(old_sched_ids.c.id)
-        )).delete(synchronize_session=False)
-        replaced = Schedule.query.filter(
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        ).delete(synchronize_session=False)
-        db.session.flush()
+        matched_emp_ids = list({emp.id for emp, _ in resolved})
+        if matched_emp_ids:
+            old_sched_ids = db.session.query(Schedule.id).filter(
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+                Schedule.employee_id.in_(matched_emp_ids),
+            ).subquery()
+            ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(
+                db.session.query(old_sched_ids.c.id)
+            )).delete(synchronize_session=False)
+            replaced = Schedule.query.filter(
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+                Schedule.employee_id.in_(matched_emp_ids),
+            ).delete(synchronize_session=False)
+            db.session.flush()
 
-    # Insert new shifts
+    # Insert new shifts (upsert: update existing if same employee+date+start)
     for emp, s in resolved:
         day = datetime.date.fromisoformat(s["date"])
         sh, sm = map(int, s["start"].split(":"))
         eh, em = map(int, s["end"].split(":"))
-        sched = Schedule(
-            employee_id=emp.id, planning_unit_id=emp.planning_unit_id, schedule_date=day,
-            shift_start=datetime.time(sh, sm), shift_end=datetime.time(eh, em),
-            shift_type="half" if s["hours"] <= 5 else "full", hours=s["hours"], status="scheduled",
-        )
-        db.session.add(sched)
-        db.session.flush()
+        # Check for existing schedule (in case clear didn't catch it)
+        existing = Schedule.query.filter_by(
+            employee_id=emp.id, schedule_date=day,
+            shift_start=datetime.time(sh, sm),
+        ).first()
+        if existing:
+            # Update in place
+            existing.shift_end = datetime.time(eh, em)
+            existing.hours = s["hours"]
+            existing.shift_type = "half" if s["hours"] <= 5 else "full"
+            existing.status = "scheduled"
+            existing.source = "imported"
+            # Clear old segments
+            ShiftSegment.query.filter_by(schedule_id=existing.id).delete()
+            db.session.flush()
+            sched = existing
+        else:
+            sched = Schedule(
+                employee_id=emp.id, planning_unit_id=emp.planning_unit_id, schedule_date=day,
+                shift_start=datetime.time(sh, sm), shift_end=datetime.time(eh, em),
+                shift_type="half" if s["hours"] <= 5 else "full", hours=s["hours"],
+                status="scheduled", source="imported",
+            )
+            db.session.add(sched)
+            db.session.flush()
         for i, seg in enumerate(s["segments"]):
             a, b = map(int, seg["start"].split(":")), map(int, seg["end"].split(":"))
             a, b = list(a), list(b)
