@@ -451,8 +451,14 @@ async function pollJobStatus(jobId) {
       if (data.status === 'unknown') return {success: false, error: 'Import job lost — please retry'};
       // Chunked import: process next chunk
       if (data.status === 'pending_chunks' || data.status === 'chunking') {
-        statusEl.innerHTML = `<div class="alert alert-info" style="background:#e0f2fe;border:1px solid #0284c7;padding:12px 16px;border-radius:8px;margin-bottom:12px;">
-          <strong>⏳ Importing…</strong> ${data.imported || 0} of ${data.total} rows processed</div>`;
+        const pct1 = data.total ? Math.round((data.imported||0)/data.total*100) : 0;
+        statusEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);padding:12px 16px;border-radius:8px;margin-bottom:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">⏳ Importing… ${pct1}%</div>
+          <div style="background:#e5e7eb;border-radius:6px;height:18px;overflow:hidden;">
+            <div style="height:100%;border-radius:6px;background:var(--brand-accent);width:${pct1}%;transition:width .3s;"></div>
+          </div>
+          <div style="font-size:.82rem;color:var(--text-muted);margin-top:4px;">${(data.imported||0).toLocaleString()} of ${(data.total||0).toLocaleString()} rows</div>
+        </div>`;
         const chunkResp = await fetch('/data/upload/process-chunk/' + jobId, {
           method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
         });
@@ -463,8 +469,14 @@ async function pollJobStatus(jobId) {
         if (!chunkData.success) {
           return {success: false, error: chunkData.error || 'Chunk processing failed'};
         }
-        statusEl.innerHTML = `<div class="alert alert-info" style="background:#e0f2fe;border:1px solid #0284c7;padding:12px 16px;border-radius:8px;margin-bottom:12px;">
-          <strong>⏳ Importing…</strong> ${chunkData.imported} of ${chunkData.total} rows processed</div>`;
+        const pct2 = chunkData.total ? Math.round(chunkData.imported/chunkData.total*100) : 0;
+        statusEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);padding:12px 16px;border-radius:8px;margin-bottom:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">⏳ Importing… ${pct2}%</div>
+          <div style="background:#e5e7eb;border-radius:6px;height:18px;overflow:hidden;">
+            <div style="height:100%;border-radius:6px;background:var(--brand-accent);width:${pct2}%;transition:width .3s;"></div>
+          </div>
+          <div style="font-size:.82rem;color:var(--text-muted);margin-top:4px;">${chunkData.imported.toLocaleString()} of ${chunkData.total.toLocaleString()} rows</div>
+        </div>`;
         continue;
       }
     } catch (err) {

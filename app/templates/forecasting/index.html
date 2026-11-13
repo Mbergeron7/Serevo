@@ -392,6 +392,12 @@
     <button class="btn-secondary" id="btnRetro" onclick="generateRetrospective()" title="Backfill forecast data for past dates so you can compare forecast vs actual on historical days">
       ↩ Backfill Past Forecasts
     </button>
+    <div id="fcProgWrap" style="display:none;flex:1;min-width:200px;">
+      <div style="background:#e5e7eb;border-radius:6px;height:18px;overflow:hidden;">
+        <div id="fcProgFill" style="height:100%;border-radius:6px;transition:width .3s;background:var(--brand-accent);width:0%;"></div>
+      </div>
+      <div id="fcProgDetail" style="font-size:.78rem;color:var(--text-muted);margin-top:2px;"></div>
+    </div>
   </div>
 </div>
 
@@ -930,8 +936,14 @@ async function generateForecasts() {
   const shrink = parseInt(document.getElementById('shrinkage').value) / 100;
 
   let done = 0;
+  const pw = document.getElementById('fcProgWrap');
+  const pf = document.getElementById('fcProgFill');
+  const pd = document.getElementById('fcProgDetail');
+  pw.style.display = '';
+  pf.style.width = '0%'; pf.style.background = 'var(--brand-accent)';
   for (const lob of lobs) {
-    showStatus(`Generating forecast for ${lob}… (${done}/${lobs.length})`, 'info');
+    pd.textContent = `Generating ${lob}… (${done+1}/${lobs.length})`;
+    pf.style.width = Math.round(done / lobs.length * 100) + '%';
     try {
       const resp = await fetch('/forecasting/generate-from-history', {
         method: 'POST',
@@ -958,6 +970,9 @@ async function generateForecasts() {
 
   btn.disabled = false;
   btn.textContent = 'Generate Forecasts';
+  pf.style.width = '100%'; pf.style.background = '#059669';
+  pd.textContent = `Complete — ${done} LOB(s) generated`;
+  setTimeout(() => { pw.style.display = 'none'; }, 3000);
   showStatus(`Forecasts generated for ${done} LOB(s). Data saved to database.`, 'success');
   setTimeout(hideStatus, 5000);
   renderDashboard();
@@ -980,9 +995,15 @@ async function generateRetrospective() {
 
   const method = document.getElementById('methodSelect').value;
   let totalDays = 0;
+  const pw = document.getElementById('fcProgWrap');
+  const pf = document.getElementById('fcProgFill');
+  const pd = document.getElementById('fcProgDetail');
+  pw.style.display = ''; pf.style.width = '0%'; pf.style.background = 'var(--brand-accent)';
+  let rDone = 0;
 
   for (const lob of lobs) {
-    showStatus(`Backfilling retrospective forecast for ${lob}…`, 'info');
+    pd.textContent = `Backfilling ${lob}… (${rDone+1}/${lobs.length})`;
+    pf.style.width = Math.round(rDone / lobs.length * 100) + '%';
     try {
       const resp = await fetch('/forecasting/generate-retrospective', {
         method: 'POST',
@@ -998,10 +1019,14 @@ async function generateRetrospective() {
     } catch (e) {
       console.error(`Error backfilling ${lob}:`, e);
     }
+    rDone++;
   }
 
   btn.disabled = false;
   btn.textContent = '↩ Backfill Past Forecasts';
+  pf.style.width = '100%'; pf.style.background = '#059669';
+  pd.textContent = `Complete — ${totalDays} day(s) backfilled`;
+  setTimeout(() => { pw.style.display = 'none'; }, 3000);
   showStatus(`Retrospective forecast generated for ${totalDays} day(s). Historical intraday views will now show forecast vs actual.`, 'success');
   setTimeout(hideStatus, 8000);
 }

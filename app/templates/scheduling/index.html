@@ -493,8 +493,15 @@
   .loading-box {
     background: var(--surface); padding: 30px 40px; border-radius: var(--radius);
     box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: center;
-    font-weight: 600; font-size: .95rem;
+    font-weight: 600; font-size: .95rem; min-width: 340px;
   }
+  .prog-bar-bg { background:#e5e7eb; border-radius:6px; height:20px; overflow:hidden; margin-top:12px; }
+  .prog-bar-fill { height:100%; border-radius:6px; transition:width .3s; }
+  .prog-bar-fill.indeterminate { background:linear-gradient(90deg,var(--brand-accent) 30%,#34d399 50%,var(--brand-accent) 70%); background-size:200%; animation:prog-slide 1.5s linear infinite; }
+  .prog-bar-fill.determinate { background:var(--brand-accent); }
+  .prog-bar-fill.complete { background:#059669; }
+  .prog-detail { margin-top:6px; font-size:.82rem; color:var(--text-muted); font-weight:400; }
+  @keyframes prog-slide { 0%{background-position:200% 0} 100%{background-position:0% 0} }
 
   .toast {
     position: fixed; bottom: 24px; right: 24px; padding: 12px 24px;
@@ -1310,7 +1317,13 @@
 </div>
 
 <div class="loading-overlay" id="loadingOverlay">
-  <div class="loading-box" id="loadingMsg">Generating schedule…</div>
+  <div class="loading-box">
+    <div id="loadingMsg">Generating schedule…</div>
+    <div class="prog-bar-bg" id="progBarWrap" style="display:none;">
+      <div class="prog-bar-fill indeterminate" id="progBarFill" style="width:100%;"></div>
+    </div>
+    <div class="prog-detail" id="progDetail" style="display:none;"></div>
+  </div>
 </div>
 
 <!-- ── Toast ──────────────────────────────────────────────── -->
@@ -1348,7 +1361,26 @@ function showToast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+function showProgress(pct, detail, title) {
+  const wrap = document.getElementById('progBarWrap');
+  const fill = document.getElementById('progBarFill');
+  const det = document.getElementById('progDetail');
+  wrap.style.display = '';
+  if (pct === null || pct === undefined) {
+    fill.className = 'prog-bar-fill indeterminate'; fill.style.width = '100%';
+  } else {
+    fill.className = 'prog-bar-fill' + (pct >= 100 ? ' complete' : ' determinate');
+    fill.style.width = Math.min(pct, 100) + '%';
+  }
+  if (detail) { det.style.display = ''; det.textContent = detail; } else { det.style.display = 'none'; }
+  if (title) document.getElementById('loadingMsg').textContent = title;
+}
+function hideProgress() {
+  document.getElementById('progBarWrap').style.display = 'none';
+  document.getElementById('progDetail').style.display = 'none';
+}
 function showLoading(msg) {
+  hideProgress();
   document.getElementById('loadingMsg').textContent = msg || 'Loading…';
   document.getElementById('loadingOverlay').classList.add('show');
 }
@@ -1585,14 +1617,15 @@ function importFromWFM() {
   const btn = document.getElementById('btnImportPW');
   btn.disabled = true;
   const scope = lob ? lob : 'all LOBs';
-  showLoading(`Pulling schedules for ${scope} from the connected system… this can take a few minutes.`);
+  showLoading(`Pulling schedules for ${scope} from the connected system…`);
+  showProgress(null, 'Connecting to WFM system…');
   fetch('/scheduling/import/wfm', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lob, start_date: start, end_date: end}),
   }).then(r => r.json()).then(data => {
     if (!data.success && !data.poll) { btn.disabled = false; hideLoading(); showToast(data.error || 'Import failed', 'error'); return; }
     if (data.poll) {
-      showLoading('Import running in the background — this may take a few minutes…');
+      showProgress(null, 'Import running in the background…', 'Importing Schedules…');
       const poll = setInterval(() => {
         fetch('/scheduling/import/wfm/status').then(r=>r.json()).then(s => {
           if (s.done) {
@@ -1626,6 +1659,7 @@ function generateSchedule() {
   _generateInFlight = true;
   document.getElementById('btnGenerate').disabled = true;
   showLoading('Generating schedule…');
+  showProgress(null, 'Preparing schedule generation…');
 
   fetch('/scheduling/generate', {
     method: 'POST',
@@ -1645,7 +1679,7 @@ function generateSchedule() {
     }
     if (data.poll && data.job_id) {
       // Async mode — poll for results
-      showLoading('Generating schedule — this may take a minute…');
+      showProgress(null, 'Building optimal schedule…', 'Generating Schedule…');
       _pollGenerateJob(data.job_id, 0);
     } else {
       // Sync result (demo mode)
@@ -1813,18 +1847,34 @@ function fetchCoverageForDays(sd) {
 function saveSchedule() {
   if (!scheduleData) return;
   showLoading('Saving schedule…');
+  showProgress(0, `Saving 0 of ${scheduleData.days.length} days…`);
   const lob = scheduleData.lob;
-  const promises = scheduleData.days.map(day => {
-    return fetch('/scheduling/save', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
-      body: JSON.stringify({ lob, date: day.date, shifts: day.shifts }),
-    }).then(r => r.json());
-  });
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const totalDays = scheduleData.days.length;
+  let completed = 0;
+  let totalSaved = 0;
+  const errors = [];
 
-  Promise.all(promises).then(results => {
-    const totalSaved = results.reduce((s, r) => s + (r.saved || 0), 0);
-    const errors = results.filter(r => !r.success);
+  // Save days sequentially to show progress
+  async function saveDays() {
+    for (const day of scheduleData.days) {
+      try {
+        const r = await fetch('/scheduling/save', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+          body: JSON.stringify({ lob, date: day.date, shifts: day.shifts }),
+        });
+        const result = await r.json();
+        if (!result.success) errors.push(result);
+        totalSaved += (result.saved || 0);
+      } catch(e) { errors.push({error: e}); }
+      completed++;
+      const pct = Math.round(completed / totalDays * 100);
+      showProgress(pct, `Saved ${completed} of ${totalDays} days (${totalSaved} shifts)…`);
+    }
+  }
+
+  saveDays().then(() => {
     if (errors.length) {
       hideLoading();
       showToast('Some days failed to save.', 'error');
@@ -1860,6 +1910,7 @@ function saveSchedule() {
     }
   }).catch(e => { hideLoading(); showToast('Save failed: ' + e, 'error'); });
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // CLEAR SAVED SCHEDULES

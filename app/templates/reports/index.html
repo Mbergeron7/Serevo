@@ -124,6 +124,7 @@
   .rpt-kpis { grid-template-columns:repeat(2,1fr); }
   .rpt-tab { padding:8px 14px; font-size:.82rem; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 
 <!-- ═══ Header ═══ -->
@@ -630,6 +631,9 @@ function toggleExport() {
 }
 async function doExport(type) {
   document.getElementById('rptExportMenu').classList.remove('open');
+  const expBtn = document.querySelector('.rpt-export-wrap .rpt-btn-outline');
+  const origText = expBtn.textContent;
+  expBtn.disabled = true; expBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px;"></span>Exporting…';
   const f = getFilters();
   const days = Math.max(1, Math.round((new Date(f.end_date) - new Date(f.start_date)) / 86400000));
   let url;
@@ -661,6 +665,7 @@ async function doExport(type) {
     a.click();
     URL.revokeObjectURL(a.href);
   } catch(e) { alert('Export failed: ' + e.message); }
+  expBtn.disabled = false; expBtn.textContent = origText;
 }
 
 // Close export menu on outside click
