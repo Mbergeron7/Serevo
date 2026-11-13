@@ -568,15 +568,34 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
         key = (evt["queue"], bucket_start)
         buckets.setdefault(key, []).append(evt)
 
+    # Determine SL threshold for "answered within" calculation
+    sl_threshold_secs = 20  # default
+    try:
+        from app.models import PlanningUnit
+        # Get threshold from first queue's PU settings
+        first_queue = events[0]["queue"] if events else None
+        if first_queue:
+            pu = PlanningUnit.query.filter_by(name=first_queue).first()
+            if pu and pu.sl_threshold_secs:
+                sl_threshold_secs = pu.sl_threshold_secs
+    except Exception:
+        pass
+
     # Build aggregated rows
     result_rows = [["date", "time", "route_id", "offered", "answered",
-                    "abandoned", "rolled", "asa", "aht"]]
+                    "answered_within", "abandoned", "rolled", "asa", "aht"]]
 
     for (queue, bucket_start), bucket_events in sorted(buckets.items()):
         offered = len(bucket_events)
         abandoned = sum(1 for e in bucket_events if e["is_abandoned"])
         answered = offered - abandoned
         rolled = sum(1 for e in bucket_events if e["is_rolled"])
+
+        # Answered within SL threshold — answered calls with queue_time ≤ threshold
+        answered_within = sum(1 for e in bucket_events
+                              if not e["is_abandoned"]
+                              and e["wait_time"] is not None
+                              and e["wait_time"] <= sl_threshold_secs)
 
         # Average wait time (ASA) — only for answered calls
         waits = [e["wait_time"] for e in bucket_events
@@ -594,6 +613,7 @@ def _aggregate_call_events(rows, headers, interval_minutes=15, custom_mapping=No
             str(queue),
             str(offered),
             str(answered),
+            str(answered_within),
             str(abandoned),
             str(rolled),
             str(asa),
