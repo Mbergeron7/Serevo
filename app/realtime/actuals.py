@@ -137,7 +137,7 @@ def _sheet_interval_actuals(lob, date_obj, sheet=None):
         if not ts or ts.strftime("%Y-%m-%d") != target:
             continue
         answered = int(_num(r.get("Answered"), 0) or 0)
-        aw = _num(r.get("Answered Within"))
+        aw = _num(r.get("Answered Within")) or _num(r.get("Answered WI")) or _num(r.get("Answered_WI"))
         out.append({
             "time": ts.strftime("%H:%M"),
             "timestamp": ts.strftime("%Y-%m-%d %H:%M"),

@@ -122,6 +122,7 @@ COLUMN_ALIASES = {
     # ── Actuals ──
     "Answered":         ["answered", "calls answered", "handled"],
     "Answered Within":  ["answered within", "answered within sl",
+                         "answered wi", "answered_wi",
                          "service level", "sl answered"],
     "Abandoned":        ["abandoned", "calls abandoned", "abn"],
     "Rolled":           ["rolled", "overflowed", "transferred"],
