@@ -2131,11 +2131,13 @@ def _import_actuals(rows):
             skipped += 1
             continue
 
-        # Capture route_id from CSV if available
-        csv_route_id = _get_val(row, "Route ID") or _get_val(row, "Route") or None
+        # Capture route_id from CSV if available (use empty string instead of NULL
+        # so the unique constraint works for dedup)
+        csv_route_id = _get_val(row, "Route ID") or _get_val(row, "Route") or ""
 
         offered = int(_num(_get_val(row, "Offered")))
-        answered = int(_num(_get_val(row, "Answered")))
+        ans_raw = _get_val(row, "Answered")
+        answered = int(_num(ans_raw)) if ans_raw not in (None, "") else offered
         aw = _get_val(row, "Answered Within")
         answered_within = int(_num(aw)) if aw not in (None, "") else answered
         abandoned = int(_num(_get_val(row, "Abandoned")))
