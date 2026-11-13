@@ -377,6 +377,110 @@ def manual_entry():
     return render_template("data_import/manual_entry.html", user=user)
 
 
+@data_import_bp.route("/upload/bulk-actuals", methods=["POST"])
+@admin_required
+def upload_bulk_actuals():
+    """Dedicated endpoint for large historical actuals CSV imports.
+    Processes synchronously in committed batches with a streaming response."""
+    from app.models import db, IntervalActual, PlanningUnit
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    import io
+
+    dg = _demo_guard()
+    if dg:
+        return dg
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify(success=False, error="No file")
+
+    # Read CSV
+    content = file.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content))
+    rows = list(reader)
+    total = len(rows)
+
+    if not total:
+        return jsonify(success=False, error="Empty file")
+
+    # Build PU lookup
+    pu_map = {pu.name.lower(): pu.id for pu in PlanningUnit.query.all()}
+
+    def parse_ts(date_str, time_str):
+        date_str, time_str = date_str.strip(), time_str.strip()
+        for fmt in ("%Y-%m-%d %I:%M:%S %p", "%Y-%m-%d %I:%M %p"):
+            try: return datetime.datetime.strptime(f"{date_str} {time_str}", fmt)
+            except ValueError: pass
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try: return datetime.datetime.strptime(f"{date_str} {time_str}", fmt)
+            except ValueError: pass
+        return None
+
+    BATCH = 500
+    batch = []
+    imported = skipped = 0
+
+    for row in rows:
+        lob = (row.get("LOB") or "").strip()
+        pu_id = pu_map.get(lob.lower())
+        if not pu_id:
+            skipped += 1; continue
+        ts = parse_ts(row.get("Date", ""), row.get("Timestamp", ""))
+        if not ts:
+            skipped += 1; continue
+        offered = int(float((row.get("Offered") or "0").strip() or "0"))
+        aht_raw = (row.get("AHT") or "").strip()
+        aht = float(aht_raw) if aht_raw else None
+        batch.append({
+            "planning_unit_id": pu_id, "timestamp": ts,
+            "offered": offered, "answered": offered, "answered_within": offered,
+            "abandoned": 0, "rolled": 0, "aht_secs": aht, "asa_secs": None,
+            "route_id": "", "source": "upload", "max_queued": None,
+        })
+        if len(batch) >= BATCH:
+            try:
+                stmt = pg_insert(IntervalActual.__table__).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_actual_unit_route_ts",
+                    set_={"offered": stmt.excluded.offered, "answered": stmt.excluded.answered,
+                           "answered_within": stmt.excluded.answered_within,
+                           "aht_secs": stmt.excluded.aht_secs, "source": stmt.excluded.source})
+                db.session.execute(stmt)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                for rec in batch:
+                    try:
+                        existing = IntervalActual.query.filter_by(
+                            planning_unit_id=rec["planning_unit_id"],
+                            route_id=rec["route_id"], timestamp=rec["timestamp"]).first()
+                        if existing:
+                            for k, v in rec.items(): setattr(existing, k, v)
+                        else:
+                            db.session.add(IntervalActual(**rec))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+            imported += len(batch)
+            batch = []
+
+    if batch:
+        try:
+            stmt = pg_insert(IntervalActual.__table__).values(batch)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_actual_unit_route_ts",
+                set_={"offered": stmt.excluded.offered, "answered": stmt.excluded.answered,
+                       "answered_within": stmt.excluded.answered_within,
+                       "aht_secs": stmt.excluded.aht_secs, "source": stmt.excluded.source})
+            db.session.execute(stmt)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        imported += len(batch)
+
+    return jsonify(success=True, imported=imported, skipped=skipped, total=total)
+
+
 @data_import_bp.route("/upload", methods=["POST"])
 @admin_required
 def upload():
