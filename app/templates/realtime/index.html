@@ -2166,6 +2166,8 @@ if (_origShowView) {
     const h = (location.hash || '').replace('#','');
     if (h) showView(h); else showView('liveagents');
   } catch(e) { console.error("showView init error:", e); }
+  // Ensure auto-refresh is on by default
+  $('chkAuto').checked = true;
   // Load data for the landing tab
   loadAll();
 })();
