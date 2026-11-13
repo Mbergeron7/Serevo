@@ -673,9 +673,20 @@ const TAB_LOADERS = {
     renderForecast(DATA.forecast);
   },
   async interval() {
-    const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
-    DATA.interval = await api('/realtime/reports/interval', body).catch(e => ({success:false, error:e.message}));
-    renderInterval(DATA.interval);
+    const lobs = selectedLobs();
+    const date = $('inpDate').value;
+    if (lobs.length > 1) {
+      // Fetch each LOB separately for side-by-side view
+      const results = await Promise.all(lobs.map(lob =>
+        api('/realtime/reports/interval', { lobs: [lob], date, lob }).catch(e => ({success:false, error:e.message}))
+      ));
+      DATA.interval = results;
+      renderIntervalMulti(results, lobs);
+    } else {
+      const body = { lobs, date, lob: lobs[0] || 'All' };
+      DATA.interval = await api('/realtime/reports/interval', body).catch(e => ({success:false, error:e.message}));
+      renderInterval(DATA.interval);
+    }
   },
   async svl() {
     const body = { lobs: selectedLobs(), date: $('inpDate').value, lob: selectedLobParam() };
@@ -1052,6 +1063,47 @@ function renderInterval(d) {
       <td class="${r.offered==null?'':slClass(r.service_level, 80)}">${pct(r.service_level)}</td><td>${secs(r.asa)}</td><td>${secs(r.actual_aht)}</td><td>${secs(r.forecast_aht)}</td><td>${fmt(r.max_queued)}</td></tr>`).join('') +
     `<tr class="total"><td>Day total (to date)</td><td>${fmt(vt.forecast_cv)}</td><td>${fmt(vt.offered)}</td><td>${pct(vtOtf)}</td><td>${fmt(vt.answered)}</td><td>${fmt(vt.answered_within)}</td><td>${fmt(vt.abandoned)}</td><td>${fmt(vt.rolled)}</td><td>${pct(vtLost)}</td><td>${pct(vtSl)}</td><td>${secs(vtAsa)}</td><td>${secs(vtAht)}</td><td></td><td></td></tr>
     </tbody></table></div></div>`;
+  el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
+}
+
+/* ── Interval Report — multi-LOB view ─────────── */
+function renderIntervalMulti(results, lobNames) {
+  const el = $('view-interval');
+  let html = '';
+  results.forEach((d, i) => {
+    const lob = lobNames[i] || 'Unknown';
+    if (!d || !d.success || !d.rows || !d.rows.length) {
+      html += `<div class="report-card"><h3>${esc(lob)} <span class="hint">No data</span></h3></div>`;
+      return;
+    }
+    const visibleRows = d.rows.filter(r => r.is_past || r.is_current);
+    if (!visibleRows.length) {
+      html += `<div class="report-card"><h3>${esc(lob)} <span class="hint">No intervals yet</span></h3></div>`;
+      return;
+    }
+    const vt = {forecast_cv:0, offered:0, answered:0, answered_within:0, abandoned:0, rolled:0, aht_w:0, aht_n:0, asa_w:0, asa_n:0};
+    for (const r of visibleRows) {
+      vt.forecast_cv += r.forecast_cv || 0; vt.offered += r.offered || 0;
+      vt.answered += r.answered || 0; vt.answered_within += r.answered_within || 0;
+      vt.abandoned += r.abandoned || 0; vt.rolled += r.rolled || 0;
+      if (r.actual_aht) { vt.aht_w += r.actual_aht * (r.answered || 1); vt.aht_n += r.answered || 1; }
+      if (r.asa) { vt.asa_w += r.asa * (r.answered || 1); vt.asa_n += r.answered || 1; }
+    }
+    const vtOtf = vt.forecast_cv > 0 ? (vt.offered / vt.forecast_cv) * 100 : null;
+    const vtLost = vt.offered > 0 ? (vt.abandoned / vt.offered) * 100 : null;
+    const vtSl = vt.offered > 0 ? (vt.answered_within / vt.offered) * 100 : null;
+    const vtAht = vt.aht_n > 0 ? vt.aht_w / vt.aht_n : null;
+    const vtAsa = vt.asa_n > 0 ? vt.asa_w / vt.asa_n : null;
+
+    html += `<div class="report-card" style="margin-bottom:12px"><h3>${esc(lob)} <span class="hint">current interval ${d.cutoff}</span></h3>
+      <div class="wrap"><table class="rt sortable"><thead><tr><th>Interval</th><th>Forecast CV</th><th>Calls offered</th><th>OTF</th><th>Answered</th><th>Answered WI</th><th>ABND</th><th>Rolled</th><th>% lost</th><th>Service level</th><th>ASA</th><th>Actual AHT</th><th>Forecast AHT</th><th>Max queued</th></tr></thead><tbody>` +
+      visibleRows.map(r => `<tr class="${r.is_current ? 'current' : ''}"><td>${r.time}</td><td>${fmt(r.forecast_cv)}</td><td>${fmt(r.offered)}</td><td class="${r.offered==null?'':otfClass(r.otf_pct)}">${pct(r.otf_pct)}</td>
+        <td>${fmt(r.answered)}</td><td>${fmt(r.answered_within)}</td><td>${fmt(r.abandoned)}</td><td>${fmt(r.rolled)}</td><td class="${r.offered==null?'':abClass(r.pct_lost)}">${pct(r.pct_lost)}</td>
+        <td class="${r.offered==null?'':slClass(r.service_level, 80)}">${pct(r.service_level)}</td><td>${secs(r.asa)}</td><td>${secs(r.actual_aht)}</td><td>${secs(r.forecast_aht)}</td><td>${fmt(r.max_queued)}</td></tr>`).join('') +
+      `<tr class="total"><td>Day total (to date)</td><td>${fmt(vt.forecast_cv)}</td><td>${fmt(vt.offered)}</td><td>${pct(vtOtf)}</td><td>${fmt(vt.answered)}</td><td>${fmt(vt.answered_within)}</td><td>${fmt(vt.abandoned)}</td><td>${fmt(vt.rolled)}</td><td>${pct(vtLost)}</td><td>${pct(vtSl)}</td><td>${secs(vtAsa)}</td><td>${secs(vtAht)}</td><td></td><td></td></tr>
+      </tbody></table></div></div>`;
+  });
+  el.innerHTML = html || '<div class="empty">No interval data available.</div>';
   el.querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
 }
 
