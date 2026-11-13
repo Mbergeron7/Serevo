@@ -1610,13 +1610,29 @@ def resync_feed(feed_id):
     if not feed:
         return jsonify({"error": "Feed not found"}), 404
 
+    # Only clear data for the dates the sheet actually covers (today + yesterday),
+    # NOT all historical data. The sheet is a rolling window.
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+    today = _date.today()
+    clear_start = _dt.combine(today - _td(days=1), _dt.min.time())  # yesterday 00:00
+    clear_end = _dt.combine(today + _td(days=1), _dt.min.time())    # tomorrow 00:00
+
     deleted = 0
     if feed.feed_type == "call_volume":
-        deleted = IntervalActual.query.filter_by(source="sheet").delete()
+        deleted = IntervalActual.query.filter(
+            IntervalActual.source == "sheet",
+            IntervalActual.timestamp >= clear_start,
+            IntervalActual.timestamp < clear_end,
+        ).delete(synchronize_session=False)
     elif feed.feed_type == "agent_status":
-        deleted = AgentStatusEvent.query.filter_by(source="sheet").delete()
+        deleted = AgentStatusEvent.query.filter(
+            AgentStatusEvent.source == "sheet",
+            AgentStatusEvent.timestamp >= clear_start,
+            AgentStatusEvent.timestamp < clear_end,
+        ).delete(synchronize_session=False)
     db.session.commit()
-    log.info(f"Resync: cleared {deleted} rows for feed '{feed.name}' (type={feed.feed_type})")
+    log.info(f"Resync: cleared {deleted} rows for dates {clear_start.date()} to {today} "
+             f"(feed '{feed.name}', type={feed.feed_type})")
 
     # Run re-sync in a background thread so the request doesn't time out
     import threading
