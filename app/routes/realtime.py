@@ -1565,6 +1565,70 @@ def report_dashboard():
 
 
 # ═══════════════════════════════════════════════════════════════
+# DIAGNOSTICS
+# ═══════════════════════════════════════════════════════════════
+
+@realtime_bp.route("/diagnostics/unmapped-queues", methods=["GET", "POST"])
+@login_required
+def unmapped_queues():
+    """Show queue IDs from recent actuals that have no CallRoute mapping."""
+    from app.models import db, IntervalActual, CallRoute, PlanningUnit
+    from datetime import date, datetime, timedelta
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    days_back = int(payload.get("days", 7))
+    cutoff = datetime.combine(date.today() - timedelta(days=days_back), datetime.min.time())
+
+    # Get all distinct route_ids from recent actuals
+    actual_routes = db.session.query(
+        IntervalActual.route_id
+    ).filter(
+        IntervalActual.timestamp >= cutoff,
+        IntervalActual.route_id.isnot(None),
+        IntervalActual.route_id != "",
+    ).distinct().all()
+    actual_route_ids = {r[0] for r in actual_routes}
+
+    # Get all mapped route_ids
+    mapped = db.session.query(CallRoute.route_id).filter(
+        CallRoute.is_active == True
+    ).distinct().all()
+    mapped_ids = {r[0] for r in mapped}
+
+    # Find unmapped
+    unmapped = sorted(actual_route_ids - mapped_ids)
+
+    # Also get the full mapping for reference
+    mappings = []
+    for cr in CallRoute.query.filter(CallRoute.is_active == True).order_by(CallRoute.route_id).all():
+        pu = cr.planning_unit
+        mappings.append({
+            "route_id": cr.route_id,
+            "route_name": cr.name,
+            "planning_unit": pu.name if pu else "NONE",
+        })
+
+    # Count calls per unmapped route
+    unmapped_detail = []
+    for rid in unmapped:
+        count = IntervalActual.query.filter(
+            IntervalActual.route_id == rid,
+            IntervalActual.timestamp >= cutoff,
+        ).count()
+        unmapped_detail.append({"route_id": rid, "recent_records": count})
+
+    return jsonify(success=True,
+                   unmapped=unmapped_detail,
+                   mapped=mappings,
+                   total_route_ids_in_data=len(actual_route_ids),
+                   total_mapped=len(mapped_ids),
+                   total_unmapped=len(unmapped))
+
+
+# ═══════════════════════════════════════════════════════════════
 # VTO / OT MANAGEMENT (supervisors & admins)
 # ═══════════════════════════════════════════════════════════════
 
