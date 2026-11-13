@@ -998,15 +998,40 @@ def upload_confirm():
     user_email = user.get("email", "")
     job_id = uuid.uuid4().hex
 
-    # Run import synchronously — background thread was not persisting changes
-    log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
-             upload_type, row_count, orig_filename, user_email)
-    result = _import_rows(upload_type, rows, user_email)
-    if result.get("success"):
-        log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
-                 upload_type, result.get("imported", 0), result.get("skipped", 0))
-    _import_jobs[job_id] = {"status": "complete", "result": result}
-    return jsonify({"success": True, "job_id": job_id, "result": result})
+    # For large files, run in background to avoid Render's 30s timeout
+    if row_count > 5000:
+        import threading
+        from flask import current_app
+        _app = current_app._get_current_object()
+        _import_jobs[job_id] = {"status": "running", "result": None}
+
+        def _bg_import():
+            with _app.app_context():
+                try:
+                    log.info("Background mapped upload: type=%s rows=%d file=%s user=%s",
+                             upload_type, row_count, orig_filename, user_email)
+                    res = _import_rows(upload_type, rows, user_email)
+                    if res.get("success"):
+                        log.info("Background mapped upload complete: type=%s imported=%d skipped=%d",
+                                 upload_type, res.get("imported", 0), res.get("skipped", 0))
+                    _import_jobs[job_id] = {"status": "complete", "result": res}
+                except Exception as e:
+                    log.exception("Background import failed")
+                    _import_jobs[job_id] = {"status": "complete", "result": {"success": False, "error": str(e)}}
+
+        t = threading.Thread(target=_bg_import, daemon=True)
+        t.start()
+        return jsonify({"success": True, "job_id": job_id, "background": True,
+                        "message": f"Importing {row_count} rows in the background. Check status shortly."})
+    else:
+        log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
+                 upload_type, row_count, orig_filename, user_email)
+        result = _import_rows(upload_type, rows, user_email)
+        if result.get("success"):
+            log.info("Mapped upload complete: type=%s imported=%d skipped=%d",
+                     upload_type, result.get("imported", 0), result.get("skipped", 0))
+        _import_jobs[job_id] = {"status": "complete", "result": result}
+        return jsonify({"success": True, "job_id": job_id, "result": result})
 
 
 def _remap_rows(rows, mapping, inverted=False):
