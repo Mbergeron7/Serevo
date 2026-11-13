@@ -384,6 +384,24 @@ def bulk_actuals_page():
     return render_template("data_import/bulk_actuals.html", user=user)
 
 
+@data_import_bp.route("/cleanup-upload-dupes", methods=["POST"])
+@admin_required
+def cleanup_upload_dupes():
+    """Remove upload-sourced actuals for dates that also have sheet-sourced data."""
+    from app.models import db, IntervalActual
+    payload = request.get_json(silent=True) or {}
+    start = payload.get("start_date", "2026-11-12")
+    end = payload.get("end_date", "2026-11-14")
+    deleted = IntervalActual.query.filter(
+        IntervalActual.source == "upload",
+        IntervalActual.route_id == "",
+        IntervalActual.timestamp >= f"{start} 00:00:00",
+        IntervalActual.timestamp < f"{end} 00:00:00",
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify(success=True, deleted=deleted)
+
+
 @data_import_bp.route("/upload/bulk-actuals", methods=["POST"])
 @admin_required
 def upload_bulk_actuals():
