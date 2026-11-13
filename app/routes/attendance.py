@@ -656,8 +656,8 @@ def auto_detect():
     # ── EARLY LEAVE ──
     if early_code:
         for row in report.get("early_leave", []):
-            # Skip trivial cases (less than 5 minutes early)
-            if (row.get("minutes_early") or 0) < 5:
+            # Skip trivial cases (less than 2 minutes early)
+            if (row.get("minutes_early") or 0) < 2:
                 continue
             emp_id = _find_emp_id(row)
             if not emp_id:
