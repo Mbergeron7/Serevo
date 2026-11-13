@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Bulk Actuals Import — {{ brand_name }}{% endblock %}
+{% block content %}
+<div style="max-width:600px;margin:2rem auto;padding:0 1rem;">
+  <h1 style="font-size:1.4rem;margin-bottom:.5rem;">Bulk Historical Actuals Import</h1>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:1.5rem;">
+    Upload a CSV with columns: <strong>LOB, Date, Timestamp, Offered, AHT</strong><br>
+    Processes in chunks — no timeout on large files.
+  </p>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;">
+    <input type="file" id="csvFile" accept=".csv" style="margin-bottom:1rem;display:block;">
+    <button id="startBtn" onclick="startImport()" style="background:var(--brand-accent);color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-weight:600;">
+      Start Import
+    </button>
+  </div>
+
+  <div id="progress" style="margin-top:1.5rem;display:none;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;">
+      <div style="font-weight:600;margin-bottom:.5rem;" id="statusText">Uploading...</div>
+      <div style="background:#e5e7eb;border-radius:6px;height:24px;overflow:hidden;">
+        <div id="bar" style="background:var(--brand-accent);height:100%;width:0%;transition:width .3s;border-radius:6px;"></div>
+      </div>
+      <div style="margin-top:.5rem;font-size:.85rem;color:var(--text-muted);" id="detail"></div>
+    </div>
+  </div>
+
+  <div id="result" style="margin-top:1rem;"></div>
+</div>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+async function startImport() {
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) { alert('Select a CSV file first'); return; }
+
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('statusText').textContent = 'Uploading file...';
+
+  // Step 1: Upload
+  const fd = new FormData();
+  fd.append('file', file);
+  let resp = await fetch('/data/upload/bulk-actuals', {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}, body: fd
+  });
+  let data = await resp.json();
+  if (!data.success) {
+    document.getElementById('result').innerHTML = `<div style="color:#dc2626;font-weight:600;">Error: ${data.error}</div>`;
+    document.getElementById('startBtn').disabled = false;
+    return;
+  }
+
+  const jobId = data.job_id;
+  const total = data.total;
+  document.getElementById('statusText').textContent = `Processing ${total.toLocaleString()} rows...`;
+
+  // Step 2: Process chunks
+  while (true) {
+    resp = await fetch(`/data/upload/bulk-actuals/chunk/${jobId}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF}
+    });
+    data = await resp.json();
+    if (!data.success) {
+      document.getElementById('result').innerHTML = `<div style="color:#dc2626;font-weight:600;">Error: ${data.error}</div>`;
+      break;
+    }
+    const pct = Math.round((data.offset || data.imported) / total * 100);
+    document.getElementById('bar').style.width = pct + '%';
+    document.getElementById('detail').textContent = `${data.imported.toLocaleString()} imported, ${(data.skipped||0).toLocaleString()} skipped of ${total.toLocaleString()}`;
+    document.getElementById('statusText').textContent = `Processing... ${pct}%`;
+
+    if (data.done) {
+      document.getElementById('statusText').textContent = 'Import Complete!';
+      document.getElementById('bar').style.width = '100%';
+      document.getElementById('bar').style.background = '#059669';
+      document.getElementById('result').innerHTML = `<div style="color:#059669;font-weight:600;margin-top:.5rem;">
+        ✓ ${data.imported.toLocaleString()} rows imported successfully.</div>`;
+      break;
+    }
+  }
+  document.getElementById('startBtn').disabled = false;
+}
+</script>
+{% endblock %}

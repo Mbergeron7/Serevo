@@ -377,13 +377,17 @@ def manual_entry():
     return render_template("data_import/manual_entry.html", user=user)
 
 
+@data_import_bp.route("/bulk-actuals")
+@admin_required
+def bulk_actuals_page():
+    user = get_current_user()
+    return render_template("data_import/bulk_actuals.html", user=user)
+
+
 @data_import_bp.route("/upload/bulk-actuals", methods=["POST"])
 @admin_required
 def upload_bulk_actuals():
-    """Dedicated endpoint for large historical actuals CSV imports.
-    Processes synchronously in committed batches with a streaming response."""
-    from app.models import db, IntervalActual, PlanningUnit
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    """Step 1: Upload CSV and save to disk. Returns a job_id to process chunks."""
     import io
 
     dg = _demo_guard()
@@ -394,7 +398,6 @@ def upload_bulk_actuals():
     if not file:
         return jsonify(success=False, error="No file")
 
-    # Read CSV
     content = file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
     rows = list(reader)
@@ -403,10 +406,49 @@ def upload_bulk_actuals():
     if not total:
         return jsonify(success=False, error="Empty file")
 
-    # Build PU lookup
-    pu_map = {pu.name.lower(): pu.id for pu in PlanningUnit.query.all()}
+    job_id = uuid.uuid4().hex
+    tmp_path = os.path.join(tempfile.gettempdir(), f"serevo_bulk_{job_id}.json")
+    with open(tmp_path, "w") as f:
+        json.dump(rows, f)
 
-    def parse_ts(date_str, time_str):
+    _import_jobs[job_id] = {"status": "ready", "path": tmp_path, "total": total,
+                            "offset": 0, "imported": 0, "skipped": 0}
+    return jsonify(success=True, job_id=job_id, total=total)
+
+
+@data_import_bp.route("/upload/bulk-actuals/chunk/<job_id>", methods=["POST"])
+@admin_required
+def bulk_actuals_chunk(job_id):
+    """Process one chunk of a bulk actuals import. Call repeatedly until done."""
+    from app.models import db, IntervalActual, PlanningUnit
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    job = _import_jobs.get(job_id)
+    if not job:
+        return jsonify(success=False, error="Job not found")
+
+    # Load rows from disk on first call
+    if "_rows" not in job:
+        path = job.get("path")
+        if not path or not os.path.exists(path):
+            return jsonify(success=False, error="Upload data expired — re-upload")
+        with open(path) as f:
+            job["_rows"] = json.load(f)
+        os.remove(path)
+        job["_pu_map"] = {pu.name.lower(): pu.id for pu in PlanningUnit.query.all()}
+
+    rows = job["_rows"]
+    pu_map = job["_pu_map"]
+    offset = job["offset"]
+    total = job["total"]
+    CHUNK = 2000
+
+    if offset >= total:
+        result = {"success": True, "imported": job["imported"], "skipped": job["skipped"], "total": total}
+        _import_jobs.pop(job_id, None)
+        return jsonify(done=True, **result)
+
+    def _parse_ts(date_str, time_str):
         date_str, time_str = date_str.strip(), time_str.strip()
         for fmt in ("%Y-%m-%d %I:%M:%S %p", "%Y-%m-%d %I:%M %p"):
             try: return datetime.datetime.strptime(f"{date_str} {time_str}", fmt)
@@ -416,18 +458,18 @@ def upload_bulk_actuals():
             except ValueError: pass
         return None
 
-    BATCH = 500
     batch = []
-    imported = skipped = 0
+    chunk_imported = chunk_skipped = 0
+    end = min(offset + CHUNK, total)
 
-    for row in rows:
+    for row in rows[offset:end]:
         lob = (row.get("LOB") or "").strip()
         pu_id = pu_map.get(lob.lower())
         if not pu_id:
-            skipped += 1; continue
-        ts = parse_ts(row.get("Date", ""), row.get("Timestamp", ""))
+            chunk_skipped += 1; continue
+        ts = _parse_ts(row.get("Date", ""), row.get("Timestamp", ""))
         if not ts:
-            skipped += 1; continue
+            chunk_skipped += 1; continue
         offered = int(float((row.get("Offered") or "0").strip() or "0"))
         aht_raw = (row.get("AHT") or "").strip()
         aht = float(aht_raw) if aht_raw else None
@@ -437,32 +479,6 @@ def upload_bulk_actuals():
             "abandoned": 0, "rolled": 0, "aht_secs": aht, "asa_secs": None,
             "route_id": "", "source": "upload", "max_queued": None,
         })
-        if len(batch) >= BATCH:
-            try:
-                stmt = pg_insert(IntervalActual.__table__).values(batch)
-                stmt = stmt.on_conflict_do_update(
-                    constraint="uq_actual_unit_route_ts",
-                    set_={"offered": stmt.excluded.offered, "answered": stmt.excluded.answered,
-                           "answered_within": stmt.excluded.answered_within,
-                           "aht_secs": stmt.excluded.aht_secs, "source": stmt.excluded.source})
-                db.session.execute(stmt)
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-                for rec in batch:
-                    try:
-                        existing = IntervalActual.query.filter_by(
-                            planning_unit_id=rec["planning_unit_id"],
-                            route_id=rec["route_id"], timestamp=rec["timestamp"]).first()
-                        if existing:
-                            for k, v in rec.items(): setattr(existing, k, v)
-                        else:
-                            db.session.add(IntervalActual(**rec))
-                        db.session.commit()
-                    except Exception:
-                        db.session.rollback()
-            imported += len(batch)
-            batch = []
 
     if batch:
         try:
@@ -474,11 +490,22 @@ def upload_bulk_actuals():
                        "aht_secs": stmt.excluded.aht_secs, "source": stmt.excluded.source})
             db.session.execute(stmt)
             db.session.commit()
-        except Exception:
+            chunk_imported = len(batch)
+        except Exception as e:
             db.session.rollback()
-        imported += len(batch)
+            log.exception("Bulk actuals chunk error")
+            return jsonify(success=False, error=str(e))
 
-    return jsonify(success=True, imported=imported, skipped=skipped, total=total)
+    job["offset"] = end
+    job["imported"] += chunk_imported
+    job["skipped"] += chunk_skipped
+
+    done = end >= total
+    if done:
+        _import_jobs.pop(job_id, None)
+
+    return jsonify(success=True, done=done, imported=job["imported"],
+                   skipped=job["skipped"], total=total, offset=end)
 
 
 @data_import_bp.route("/upload", methods=["POST"])
