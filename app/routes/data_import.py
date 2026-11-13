@@ -469,10 +469,88 @@ def upload_status(job_id):
         return jsonify({"status": "unknown", "error": "Job not found"})
     if job["status"] == "running":
         return jsonify({"status": "running"})
+    if job["status"] == "pending_chunks":
+        return jsonify({"status": "pending_chunks", "total": job.get("total", 0),
+                        "imported": job.get("imported", 0)})
+    if job["status"] == "chunking":
+        return jsonify({"status": "chunking", "total": job.get("total", 0),
+                        "imported": job.get("imported", 0)})
     # Complete — return the result and clean up
-    result = job["result"]
-    _import_jobs.pop(job_id, None)
+    result = job.get("result")
     return jsonify({"status": "complete", "result": result})
+
+
+@data_import_bp.route("/upload/process-chunk/<job_id>", methods=["POST"])
+@admin_required
+def process_chunk(job_id):
+    """Process the next chunk of a large import. Called repeatedly by frontend."""
+    job = _import_jobs.get(job_id)
+    if not job:
+        return jsonify({"success": False, "error": "Job not found"})
+
+    CHUNK = 2000  # rows per request
+
+    # First call: load from disk
+    if job["status"] == "pending_chunks":
+        chunk_path = job.get("chunk_path")
+        if not chunk_path or not os.path.exists(chunk_path):
+            return jsonify({"success": False, "error": "Import data expired"})
+        with open(chunk_path, "r") as f:
+            stored = json.load(f)
+        os.remove(chunk_path)
+        job["_rows"] = stored["rows"]
+        job["_upload_type"] = stored["upload_type"]
+        job["_user_email"] = stored["user_email"]
+        job["_offset"] = 0
+        job["status"] = "chunking"
+        job["total"] = len(stored["rows"])
+        job["imported"] = 0
+        job["skipped"] = 0
+        job["errors"] = []
+
+    if job["status"] != "chunking":
+        return jsonify({"success": False, "error": f"Unexpected status: {job['status']}"})
+
+    rows = job["_rows"]
+    offset = job["_offset"]
+    upload_type = job["_upload_type"]
+    total = job["total"]
+
+    if offset >= total:
+        # Done
+        job["status"] = "complete"
+        job["result"] = {"success": True, "imported": job["imported"],
+                         "skipped": job["skipped"], "total": total}
+        # Clean up
+        job.pop("_rows", None)
+        job.pop("_upload_type", None)
+        job.pop("_user_email", None)
+        return jsonify({"success": True, "done": True,
+                        "imported": job["imported"], "total": total})
+
+    chunk = rows[offset:offset + CHUNK]
+    try:
+        result = _import_rows(upload_type, chunk, job["_user_email"])
+        job["imported"] += result.get("imported", 0)
+        job["skipped"] += result.get("skipped", 0)
+    except Exception as e:
+        log.exception(f"Chunk import error at offset {offset}")
+        job["errors"].append(str(e))
+
+    job["_offset"] = offset + CHUNK
+    done = job["_offset"] >= total
+
+    if done:
+        job["status"] = "complete"
+        job["result"] = {"success": True, "imported": job["imported"],
+                         "skipped": job["skipped"], "total": total}
+        job.pop("_rows", None)
+        job.pop("_upload_type", None)
+        job.pop("_user_email", None)
+
+    return jsonify({"success": True, "done": done,
+                    "imported": job["imported"], "total": total,
+                    "offset": job.get("_offset", total)})
 
 
 @data_import_bp.route("/debug/employees")
@@ -998,31 +1076,18 @@ def upload_confirm():
     user_email = user.get("email", "")
     job_id = uuid.uuid4().hex
 
-    # For large files, run in background to avoid Render's 30s timeout
+    # For large files, save to disk and process via a chunked endpoint
+    # that the frontend polls. Background daemon threads get killed by Gunicorn.
     if row_count > 5000:
-        import threading
-        from flask import current_app
-        _app = current_app._get_current_object()
-        _import_jobs[job_id] = {"status": "running", "result": None}
-
-        def _bg_import():
-            with _app.app_context():
-                try:
-                    log.info("Background mapped upload: type=%s rows=%d file=%s user=%s",
-                             upload_type, row_count, orig_filename, user_email)
-                    res = _import_rows(upload_type, rows, user_email)
-                    if res.get("success"):
-                        log.info("Background mapped upload complete: type=%s imported=%d skipped=%d",
-                                 upload_type, res.get("imported", 0), res.get("skipped", 0))
-                    _import_jobs[job_id] = {"status": "complete", "result": res}
-                except Exception as e:
-                    log.exception("Background import failed")
-                    _import_jobs[job_id] = {"status": "complete", "result": {"success": False, "error": str(e)}}
-
-        t = threading.Thread(target=_bg_import, daemon=True)
-        t.start()
+        chunk_path = os.path.join(tempfile.gettempdir(), f"serevo_chunk_{job_id}.json")
+        with open(chunk_path, "w") as f:
+            json.dump({"rows": rows, "upload_type": upload_type,
+                       "user_email": user_email, "filename": orig_filename}, f)
+        _import_jobs[job_id] = {"status": "pending_chunks", "chunk_path": chunk_path,
+                                "total": row_count, "imported": 0}
         return jsonify({"success": True, "job_id": job_id, "background": True,
-                        "message": f"Importing {row_count} rows in the background. Check status shortly."})
+                        "total": row_count,
+                        "message": f"{row_count} rows queued. Processing will start automatically."})
     else:
         log.info("Mapped upload: type=%s rows=%d file=%s user=%s",
                  upload_type, row_count, orig_filename, user_email)

@@ -441,13 +441,32 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
 });
 
 async function pollJobStatus(jobId) {
+  const statusEl = document.getElementById('uploadResult');
   while (true) {
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, 1000));
     try {
       const resp = await fetch('/data/upload/status/' + jobId);
       const data = await resp.json();
       if (data.status === 'complete') return data.result;
       if (data.status === 'unknown') return {success: false, error: 'Import job lost — please retry'};
+      // Chunked import: process next chunk
+      if (data.status === 'pending_chunks' || data.status === 'chunking') {
+        statusEl.innerHTML = `<div class="alert alert-info" style="background:#e0f2fe;border:1px solid #0284c7;padding:12px 16px;border-radius:8px;margin-bottom:12px;">
+          <strong>⏳ Importing…</strong> ${data.imported || 0} of ${data.total} rows processed</div>`;
+        const chunkResp = await fetch('/data/upload/process-chunk/' + jobId, {
+          method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+        });
+        const chunkData = await chunkResp.json();
+        if (chunkData.done) {
+          return {success: true, imported: chunkData.imported, total: chunkData.total};
+        }
+        if (!chunkData.success) {
+          return {success: false, error: chunkData.error || 'Chunk processing failed'};
+        }
+        statusEl.innerHTML = `<div class="alert alert-info" style="background:#e0f2fe;border:1px solid #0284c7;padding:12px 16px;border-radius:8px;margin-bottom:12px;">
+          <strong>⏳ Importing…</strong> ${chunkData.imported} of ${chunkData.total} rows processed</div>`;
+        continue;
+      }
     } catch (err) {
       return {success: false, error: 'Lost connection while importing: ' + err.message};
     }
