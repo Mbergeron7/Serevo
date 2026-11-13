@@ -387,9 +387,7 @@ def bulk_actuals_page():
 @data_import_bp.route("/upload/bulk-actuals", methods=["POST"])
 @admin_required
 def upload_bulk_actuals():
-    """Step 1: Upload CSV and save to disk. Returns a job_id to process chunks."""
-    import io
-
+    """Step 1: Upload CSV and save raw to disk. Returns a job_id to process chunks."""
     dg = _demo_guard()
     if dg:
         return dg
@@ -398,18 +396,14 @@ def upload_bulk_actuals():
     if not file:
         return jsonify(success=False, error="No file")
 
-    content = file.read().decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(content))
-    rows = list(reader)
-    total = len(rows)
-
-    if not total:
-        return jsonify(success=False, error="Empty file")
-
+    # Save raw CSV to disk (much smaller than JSON conversion)
     job_id = uuid.uuid4().hex
-    tmp_path = os.path.join(tempfile.gettempdir(), f"serevo_bulk_{job_id}.json")
-    with open(tmp_path, "w") as f:
-        json.dump(rows, f)
+    tmp_path = os.path.join(tempfile.gettempdir(), f"serevo_bulk_{job_id}.csv")
+    file.save(tmp_path)
+
+    # Count rows
+    with open(tmp_path, encoding="utf-8-sig") as f:
+        total = sum(1 for _ in f) - 1  # minus header
 
     _import_jobs[job_id] = {"status": "ready", "path": tmp_path, "total": total,
                             "offset": 0, "imported": 0, "skipped": 0}
@@ -432,8 +426,8 @@ def bulk_actuals_chunk(job_id):
         path = job.get("path")
         if not path or not os.path.exists(path):
             return jsonify(success=False, error="Upload data expired — re-upload")
-        with open(path) as f:
-            job["_rows"] = json.load(f)
+        with open(path, encoding="utf-8-sig") as f:
+            job["_rows"] = list(csv.DictReader(f))
         os.remove(path)
         job["_pu_map"] = {pu.name.lower(): pu.id for pu in PlanningUnit.query.all()}
 
@@ -451,10 +445,10 @@ def bulk_actuals_chunk(job_id):
     def _parse_ts(date_str, time_str):
         date_str, time_str = date_str.strip(), time_str.strip()
         for fmt in ("%Y-%m-%d %I:%M:%S %p", "%Y-%m-%d %I:%M %p"):
-            try: return datetime.datetime.strptime(f"{date_str} {time_str}", fmt)
+            try: return datetime.strptime(f"{date_str} {time_str}", fmt)
             except ValueError: pass
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-            try: return datetime.datetime.strptime(f"{date_str} {time_str}", fmt)
+            try: return datetime.strptime(f"{date_str} {time_str}", fmt)
             except ValueError: pass
         return None
 
