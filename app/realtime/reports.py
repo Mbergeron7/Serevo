@@ -504,19 +504,21 @@ def _is_offline(status):
 
 
 def _first_last_login(events):
-    """(first_login_dt, last_offline_dt, current_status) from an agent's events.
+    """(first_login_dt, last_offline_dt, current_status, logged_back_in) from an agent's events.
 
     Tracks the latest end-time of any *present* event (logged-in or off-queue)
     to determine when the agent was last seen.  If the most recent present event
     has no end time the agent is still active, so last_end is None (= no early leave).
 
-    An offline event that has an end time means the agent came back — that gap is
-    a transient disconnect, not an early departure.
+    logged_back_in mirrors the WFM ticketing portal logic: True if any non-Offline
+    activity appears AFTER the last Offline event, meaning the agent returned and
+    the offline was a transient disconnect, not a departure.
     """
     first = None
     last_end = None
     current = None
-    for e in sorted(events, key=lambda x: x["start"]):
+    sorted_events = sorted(events, key=lambda x: x["start"])
+    for e in sorted_events:
         st = _parse_dt(e["start"])
         en = _parse_dt(e["end"]) if e.get("end") else None
         if _is_present(e["status"]):
@@ -526,17 +528,23 @@ def _first_last_login(events):
                 last_end = en
             if not en:
                 last_end = None  # still present — no early leave
-        else:
-            # Non-present event (offline/logged out).
-            # If it has an end time, the agent came back — don't count this
-            # as a departure.  If it has NO end time, the agent is currently
-            # offline, so keep last_end from the previous present event.
-            if en and last_end is not None:
-                # Agent returned after this offline gap — clear last_end only
-                # if a subsequent present event resets it (handled above).
-                pass
         current = e["status"]
-    return first, last_end, current
+
+    # Check logged_back_in: find last Offline event, see if any present
+    # activity follows it (same approach as WFM ticketing portal).
+    logged_back_in = False
+    last_offline_idx = None
+    for i in range(len(sorted_events) - 1, -1, -1):
+        if _is_offline(sorted_events[i].get("status")):
+            last_offline_idx = i
+            break
+    if last_offline_idx is not None:
+        for e in sorted_events[last_offline_idx + 1:]:
+            if _is_present(e.get("status")):
+                logged_back_in = True
+                break
+
+    return first, last_end, current, logged_back_in
 
 
 def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=2, early_grace_mins=2):
@@ -575,7 +583,7 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=2,
             # Overnight shift: end is next day
             if sh_end <= sh_start:
                 sh_end += datetime.timedelta(days=1)
-            first, last_end, current = _first_last_login(ev_by_emp.get(ext, []))
+            first, last_end, current, logged_back_in = _first_last_login(ev_by_emp.get(ext, []))
 
             # If no agent status events, check TimeClock
             if first is None and ext in clocked_in:
@@ -586,6 +594,7 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=2,
                     first = ci.replace(tzinfo=None)
                 last_end = None
                 current = "Clocked in (no ACD status)"
+                logged_back_in = False
 
             base = {"employee": s.get("employee", ext), "employee_id": ext, "lob": lob,
                     "scheduled_from": s["start"], "scheduled_to": s["end"]}
@@ -604,14 +613,26 @@ def absenteeism_report(lobs, date_obj, user=None, sheet=None, late_grace_mins=2,
                 late_rows.append({**base, "actual_start": first.strftime("%H:%M"),
                                   "minutes_late": int(delta), "recent_status": current})
 
-            # Early leave: agent's last present status ended before shift end
-            # and they haven't come back (current status is not present).
-            # If a new status appears they're back and won't be flagged.
-            if last_end and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins):
-                if _is_offline(current):
-                    early += 1
-                    early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
-                                       "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
+            # Early leave detection — mirrors WFM ticketing portal approach:
+            # 1. Agent must be currently offline (not still logged in)
+            # 2. Agent must NOT have logged back in after their last offline event
+            # 3. Last activity ended before shift_end minus grace period
+            # 4. For live shifts (today, shift not ended), only flag if agent
+            #    has been offline for 15+ minutes (avoids mid-shift break false positives)
+            flag_early = False
+            if (last_end and not logged_back_in
+                    and last_end < sh_end - datetime.timedelta(minutes=early_grace_mins)
+                    and _is_offline(current)):
+                if is_today and now < sh_end:
+                    # Shift still active — only flag if offline 15+ min
+                    mins_offline = (now - last_end).total_seconds() / 60
+                    flag_early = mins_offline >= 15
+                else:
+                    flag_early = True
+            if flag_early:
+                early += 1
+                early_rows.append({**base, "last_offline": last_end.strftime("%H:%M"),
+                                   "minutes_early": int((sh_end - last_end).total_seconds() / 60)})
 
         by_lob.append({"lob": lob, "scheduled": sched, "absent": absent,
                        "absence_pct": _pct(absent, sched), "late": late,
