@@ -1515,18 +1515,40 @@ def clear_schedule():
             return jsonify({"success": True, "deleted": 0, "demo": True,
                             "message": "Schedules cleared (demo mode)."})
 
-        from app.models import PlanningUnit
+        from app.models import PlanningUnit, EmployeePlanningUnit, ShiftSegment
         pu = PlanningUnit.query.filter(
             db.func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not pu:
             return jsonify({"success": True, "deleted": 0})
 
-        count = Schedule.query.filter(
-            Schedule.planning_unit_id == pu.id,
+        # Find all employees in this PU (direct + assigned) — same logic as load
+        direct_emp_ids = {e.id for e in Employee.query.filter(
+            Employee.planning_unit_id == pu.id, Employee.status == "Active"
+        ).all()}
+        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.planning_unit_id == pu.id,
+        ).all()}
+        emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+
+        # Delete schedules assigned to this PU AND schedules with null PU
+        # for employees in this PU (matches the load query exactly)
+        target_q = Schedule.query.filter(
+            db.or_(
+                Schedule.planning_unit_id == pu.id,
+                db.and_(
+                    Schedule.planning_unit_id.is_(None),
+                    Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                ),
+            ),
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
-        ).delete(synchronize_session=False)
+        )
+        # Delete segments first (FK constraint)
+        sched_ids = [s.id for s in target_q.all()]
+        if sched_ids:
+            ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(sched_ids)).delete(synchronize_session=False)
+        count = target_q.delete(synchronize_session=False)
         db.session.commit()
 
         return jsonify({"success": True, "deleted": count})
