@@ -591,6 +591,7 @@ def auto_detect():
     try:
         report = absenteeism_report(lobs, d, user=user)
     except Exception as e:
+        db.session.rollback()
         log.error(f"Auto-detect absenteeism_report error: {e}", exc_info=True)
         return jsonify(error=f"Report failed: {str(e)[:200]}"), 500
 
@@ -674,7 +675,12 @@ def auto_detect():
                 ))
                 created_early += 1
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"Auto-detect commit error: {e}", exc_info=True)
+        return jsonify(error=f"Database error: {str(e)[:200]}"), 500
     total = created_abs + created_late + created_early
     return jsonify(success=True, created=total, cleared=cleared,
                    detail={"absent": created_abs, "late": created_late, "early_leave": created_early},
