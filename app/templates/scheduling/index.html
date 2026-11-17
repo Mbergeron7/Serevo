@@ -1919,8 +1919,9 @@ function clearSchedule() {
   const lob = getCfgLob();
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
-  if (!lob || !start || !end) { showToast('Select LOB and date range first.', 'error'); return; }
-  if (!confirm('Clear all saved schedules for ' + lob + ' from ' + start + ' to ' + end + '?')) return;
+  if (!start || !end) { showToast('Select date range first.', 'error'); return; }
+  const scope = lob || 'All LOBs';
+  if (!confirm('Clear all saved schedules for ' + scope + ' from ' + start + ' to ' + end + '?')) return;
   showLoading('Clearing schedules…');
   fetch('/scheduling/clear', {
     method: 'POST',

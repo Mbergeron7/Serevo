@@ -1504,8 +1504,10 @@ def clear_schedule():
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
 
-        if not lob or not start_str or not end_str:
-            return jsonify({"success": False, "error": "LOB and date range required"})
+        log.info(f"Clear schedule request: lob='{lob}', start='{start_str}', end='{end_str}'")
+
+        if not start_str or not end_str:
+            return jsonify({"success": False, "error": "Date range required"})
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
@@ -1516,34 +1518,55 @@ def clear_schedule():
                             "message": "Schedules cleared (demo mode)."})
 
         from app.models import PlanningUnit, EmployeePlanningUnit, ShiftSegment
-        pu = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
-        ).first()
-        if not pu:
-            return jsonify({"success": True, "deleted": 0})
+        from app.constants import LOB_ALL_LABEL
 
-        # Find all employees in this PU (direct + assigned) — same logic as load
-        direct_emp_ids = {e.id for e in Employee.query.filter(
-            Employee.planning_unit_id == pu.id, Employee.status == "Active"
-        ).all()}
-        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
-            EmployeePlanningUnit.planning_unit_id == pu.id,
-        ).all()}
-        emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+        # Parse comma-separated LOBs; treat "All" or empty as all LOBs
+        lob_list = []
+        if lob and lob != LOB_ALL_LABEL and lob.lower() != 'all':
+            lob_list = [l.strip() for l in lob.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
 
-        # Delete schedules assigned to this PU AND schedules with null PU
-        # for employees in this PU (matches the load query exactly)
-        filter_cond = db.and_(
-            db.or_(
-                Schedule.planning_unit_id == pu.id,
-                db.and_(
-                    Schedule.planning_unit_id.is_(None),
-                    Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+        if lob_list:
+            # Specific LOB(s) selected — find their PU ids
+            pu_ids = []
+            for lname in lob_list:
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lname.lower()
+                ).first()
+                if pu:
+                    pu_ids.append(pu.id)
+            if not pu_ids:
+                log.warning(f"Clear schedule: no PUs found for {lob_list}")
+                return jsonify({"success": True, "deleted": 0})
+
+            # Find all employees in these PUs (direct + assigned)
+            direct_emp_ids = {e.id for e in Employee.query.filter(
+                Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
+            ).all()}
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
+            ).all()}
+            emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+
+            # Delete schedules assigned to these PUs AND null-PU schedules
+            # for employees in these PUs (matches load query exactly)
+            filter_cond = db.and_(
+                db.or_(
+                    Schedule.planning_unit_id.in_(pu_ids),
+                    db.and_(
+                        Schedule.planning_unit_id.is_(None),
+                        Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    ),
                 ),
-            ),
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        )
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+            )
+        else:
+            # "All" LOBs — delete ALL schedules in the date range
+            filter_cond = db.and_(
+                Schedule.schedule_date >= start_date,
+                Schedule.schedule_date <= end_date,
+            )
+
         # Collect IDs first, then delete segments, then delete schedules
         sched_ids = [s.id for s in Schedule.query.filter(filter_cond).all()]
         if sched_ids:
