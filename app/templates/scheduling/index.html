@@ -1386,6 +1386,7 @@ function showLoading(msg) {
 }
 function hideLoading() {
   document.getElementById('loadingOverlay').classList.remove('show');
+  hideProgress();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1626,12 +1627,19 @@ function importFromWFM() {
     if (!data.success && !data.poll) { btn.disabled = false; hideLoading(); showToast(data.error || 'Import failed', 'error'); return; }
     if (data.poll) {
       showProgress(null, 'Import running in the background…', 'Importing Schedules…');
+      let pollCount = 0;
       const poll = setInterval(() => {
+        pollCount++;
         fetch('/scheduling/import/wfm/status').then(r=>r.json()).then(s => {
-          if (s.done) {
+          if (s.done || (!s.running && pollCount > 2)) {
             clearInterval(poll); btn.disabled = false; hideLoading();
             if (s.success) { showToast(s.message, 'success'); loadSchedule(); }
-            else { showToast(s.message || 'No schedules found', 'error'); }
+            else if (s.done) { showToast(s.message || 'No schedules found', 'error'); }
+            else { showToast('Import finished — loading schedule.', 'success'); loadSchedule(); }
+          } else if (pollCount > 60) {
+            // 5 min timeout — thread likely died
+            clearInterval(poll); btn.disabled = false; hideLoading();
+            showToast('Import timed out. Try loading the schedule to check.', 'error');
           }
         }).catch(()=>{});
       }, 5000);
