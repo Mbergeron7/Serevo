@@ -797,23 +797,53 @@ def save_schedule():
             return jsonify({"success": True, "saved": len(shifts), "demo": True,
                             "message": "Saved (demo mode — changes are not persisted)"})
 
-        # Find or create planning unit
-        from app.models import PlanningUnit
+        # Find planning unit and clear existing schedules for this LOB+date
+        from app.models import PlanningUnit, EmployeePlanningUnit
+        from app.constants import LOB_ALL_LABEL
         pu_id = None
-        if lob:
-            pu = PlanningUnit.query.filter(
-                db.func.lower(PlanningUnit.name) == lob.lower()
-            ).first()
-            pu_id = pu.id if pu else None
-            # Delete existing schedules for this LOB+date (bulk)
-            Schedule.query.filter_by(
-                schedule_date=sched_date, planning_unit_id=pu_id
-            ).delete(synchronize_session=False)
+        lob_list = []
+        if lob and lob != LOB_ALL_LABEL and lob.lower() != 'all':
+            lob_list = [l.strip() for l in lob.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
+
+        if lob_list:
+            # Specific LOB — find PU and clear its schedules + null-PU schedules
+            pu_ids = []
+            for lname in lob_list:
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lname.lower()
+                ).first()
+                if pu:
+                    pu_ids.append(pu.id)
+            pu_id = pu_ids[0] if len(pu_ids) == 1 else None
+
+            if pu_ids:
+                direct_emp_ids = {e.id for e in Employee.query.filter(
+                    Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
+                ).all()}
+                assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                    EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
+                ).all()}
+                emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+                old_ids = [s.id for s in Schedule.query.filter(
+                    db.or_(
+                        Schedule.planning_unit_id.in_(pu_ids),
+                        db.and_(
+                            Schedule.planning_unit_id.is_(None),
+                            Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                        ),
+                    ),
+                    Schedule.schedule_date == sched_date,
+                ).all()]
+            else:
+                old_ids = []
         else:
             # All LOBs — delete all schedules for this date
-            Schedule.query.filter_by(
-                schedule_date=sched_date
-            ).delete(synchronize_session=False)
+            old_ids = [s.id for s in Schedule.query.filter_by(schedule_date=sched_date).all()]
+
+        if old_ids:
+            ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(old_ids)).delete(synchronize_session=False)
+            Schedule.query.filter(Schedule.id.in_(old_ids)).delete(synchronize_session=False)
+            db.session.flush()
 
         # Prefetch all employees by external ID for this batch
         ext_ids = [str(s.get("employee_id", "")).strip() for s in shifts if s.get("employee_id")]
