@@ -1533,7 +1533,7 @@ def clear_schedule():
 
         # Delete schedules assigned to this PU AND schedules with null PU
         # for employees in this PU (matches the load query exactly)
-        target_q = Schedule.query.filter(
+        filter_cond = db.and_(
             db.or_(
                 Schedule.planning_unit_id == pu.id,
                 db.and_(
@@ -1544,14 +1544,15 @@ def clear_schedule():
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
         )
-        # Delete segments first (FK constraint)
-        sched_ids = [s.id for s in target_q.all()]
+        # Collect IDs first, then delete segments, then delete schedules
+        sched_ids = [s.id for s in Schedule.query.filter(filter_cond).all()]
         if sched_ids:
             ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(sched_ids)).delete(synchronize_session=False)
-        count = target_q.delete(synchronize_session=False)
+            Schedule.query.filter(Schedule.id.in_(sched_ids)).delete(synchronize_session=False)
         db.session.commit()
 
-        return jsonify({"success": True, "deleted": count})
+        log.info(f"Clear schedule: LOB={lob}, {start_date}→{end_date}, deleted {len(sched_ids)} schedules")
+        return jsonify({"success": True, "deleted": len(sched_ids)})
 
     except Exception as e:
         log.exception("Clear schedule error")
