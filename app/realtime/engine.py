@@ -141,14 +141,56 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
         except Exception:
             fc_intervals = []
 
-    # Load scheduled shifts
+    # Load scheduled shifts from the database (saved schedules)
+    # Falls back to the generator only if no saved schedules exist
+    shifts = []
+    unassigned = []
+    warnings = []
     try:
-        from app.scheduling.engine import generate_shifts
-        shifts, unassigned, warnings = generate_shifts(lob, date_obj, sheet=sheet)
+        from app.models import db, Schedule, Employee, EmployeePlanningUnit
+        if pu:
+            # Same scope as the scheduling load endpoint: PU + null-PU for employees in PU
+            direct_emp_ids = {e.id for e in Employee.query.filter(
+                Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                EmployeePlanningUnit.planning_unit_id == pu.id).all()}
+            emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+            saved = Schedule.query.filter(
+                db.or_(
+                    Schedule.planning_unit_id == pu.id,
+                    db.and_(
+                        Schedule.planning_unit_id.is_(None),
+                        Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    ),
+                ),
+                Schedule.schedule_date == date_obj,
+                Schedule.status == "scheduled",
+            ).all()
+        else:
+            saved = Schedule.query.filter(
+                Schedule.schedule_date == date_obj,
+                Schedule.status == "scheduled",
+            ).all()
+        if saved:
+            for s in saved:
+                shifts.append({
+                    "employee": s.employee.full_name if s.employee else "",
+                    "employee_id": s.employee.employee_id if s.employee else "",
+                    "start": s.shift_start.strftime("%H:%M") if s.shift_start else "",
+                    "end": s.shift_end.strftime("%H:%M") if s.shift_end else "",
+                    "type": s.shift_type or "full",
+                    "hours": s.hours or 0,
+                })
     except Exception:
-        shifts = []
-        unassigned = []
-        warnings = []
+        log.warning("Failed to load saved schedules for intraday", exc_info=True)
+
+    # Fallback to generator if no saved schedules exist
+    if not shifts:
+        try:
+            from app.scheduling.engine import generate_shifts
+            shifts, unassigned, warnings = generate_shifts(lob, date_obj, sheet=sheet)
+        except Exception:
+            pass
 
     # Build requirement map {HH:MM -> agents_required}
     req_map = {}
@@ -365,12 +407,46 @@ def get_adherence_snapshot(lob, date_obj=None, sheet=None):
     if date_obj is None:
         date_obj = datetime.date.today()
 
+    # Load saved schedules from DB first, fall back to generator
+    shifts = []
     try:
-        from app.scheduling.engine import generate_shifts
-        shifts, unassigned, _ = generate_shifts(lob, date_obj, sheet=sheet)
+        from app.models import db, Schedule, Employee, PlanningUnit, EmployeePlanningUnit
+        pu = PlanningUnit.query.filter_by(name=lob).first()
+        if pu:
+            direct_emp_ids = {e.id for e in Employee.query.filter(
+                Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                EmployeePlanningUnit.planning_unit_id == pu.id).all()}
+            emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+            saved = Schedule.query.filter(
+                db.or_(
+                    Schedule.planning_unit_id == pu.id,
+                    db.and_(
+                        Schedule.planning_unit_id.is_(None),
+                        Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    ),
+                ),
+                Schedule.schedule_date == date_obj,
+                Schedule.status == "scheduled",
+            ).all()
+            for s in saved:
+                shifts.append({
+                    "employee": s.employee.full_name if s.employee else "",
+                    "employee_id": s.employee.employee_id if s.employee else "",
+                    "start": s.shift_start.strftime("%H:%M") if s.shift_start else "",
+                    "end": s.shift_end.strftime("%H:%M") if s.shift_end else "",
+                    "type": s.shift_type or "full",
+                    "hours": s.hours or 0,
+                })
     except Exception:
-        shifts = []
-        unassigned = []
+        log.warning("Failed to load saved schedules for adherence", exc_info=True)
+
+    if not shifts:
+        try:
+            from app.scheduling.engine import generate_shifts
+            shifts, _, _ = generate_shifts(lob, date_obj, sheet=sheet)
+        except Exception:
+            pass
 
     cur_time = _current_interval()
     cur_mins = _time_to_minutes(cur_time)

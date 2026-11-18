@@ -14,6 +14,7 @@ from app.models import (
     QualityEvaluation, ShiftSwapRequest, ShiftBid, ShiftPost,
     PlanningUnit, TimeClock, AttendanceEvent, AdherenceException,
     IntervalActual, RequirementInterval, LeaveOfAbsence,
+    EmployeePlanningUnit,
 )
 
 log = logging.getLogger(__name__)
@@ -52,7 +53,12 @@ def _parse_filters(payload):
 
 
 def _filter_employees(start_d, end_d, lob, team_lead, employee_id):
-    """Return filtered Employee query."""
+    """Return filtered Employee query.
+
+    Uses both Employee.planning_unit_id (denormalized cache) and the
+    EmployeePlanningUnit junction table so multi-PU assignments and
+    recent PU changes are reflected immediately.
+    """
     q = Employee.query.filter_by(status="Active")
     if employee_id:
         q = q.filter(Employee.id == int(employee_id))
@@ -64,7 +70,19 @@ def _filter_employees(start_d, end_d, lob, team_lead, employee_id):
                 db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
             ).all()]
             if pu_ids:
-                q = q.filter(Employee.planning_unit_id.in_(pu_ids))
+                # Include employees via direct PU AND via junction table
+                direct_ids = {e.id for e in Employee.query.filter(
+                    Employee.planning_unit_id.in_(pu_ids),
+                    Employee.status == "Active",
+                ).all()}
+                assigned_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                    EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
+                ).all()}
+                all_emp_ids = list(direct_ids | assigned_ids)
+                if all_emp_ids:
+                    q = q.filter(Employee.id.in_(all_emp_ids))
+                else:
+                    q = q.filter(db.false())
             else:
                 q = q.filter(db.false())
     if team_lead:
@@ -334,12 +352,10 @@ def attendance_csv():
         return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
-    days = int(payload.get("days", 7))
-    cutoff = date.today() - timedelta(days=days)
+    start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+    cutoff = start_d
 
-    employees = Employee.query.filter_by(status="Active").order_by(
-        Employee.last_name, Employee.first_name
-    ).all()
+    employees = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -383,24 +399,37 @@ def summary_csv():
         return jsonify(success=True, message="Demo mode")
 
     payload = request.get_json(silent=True) or {}
-    days = int(payload.get("days", 30))
-    cutoff = date.today() - timedelta(days=days)
+    start_d, end_d, lob, team_lead, employee_id = _parse_filters(payload)
+    days = (end_d - start_d).days or 30
+    cutoff = start_d
 
-    total_employees = Employee.query.filter_by(status="Active").count()
+    emps = _filter_employees(start_d, end_d, lob, team_lead, employee_id).all()
+    emp_ids = [e.id for e in emps]
+    total_employees = len(emps)
     total_hours = db.session.query(
         func.coalesce(func.sum(Schedule.hours), 0)
-    ).filter(Schedule.schedule_date >= cutoff).scalar()
-    total_shifts = Schedule.query.filter(Schedule.schedule_date >= cutoff).count()
-    pto_pending = PTOEntry.query.filter_by(approval_status="pending").count()
+    ).filter(Schedule.schedule_date >= cutoff,
+             Schedule.employee_id.in_(emp_ids) if emp_ids else db.false()).scalar() if emp_ids else 0
+    total_shifts = Schedule.query.filter(
+        Schedule.schedule_date >= cutoff,
+        Schedule.employee_id.in_(emp_ids) if emp_ids else db.false()
+    ).count() if emp_ids else 0
+    pto_pending = PTOEntry.query.filter(
+        PTOEntry.approval_status == "pending",
+        PTOEntry.employee_id.in_(emp_ids) if emp_ids else db.false()
+    ).count() if emp_ids else 0
     pto_approved = PTOEntry.query.filter(
-        PTOEntry.approval_status == "approved", PTOEntry.start_date >= cutoff
-    ).count()
+        PTOEntry.approval_status == "approved", PTOEntry.start_date >= cutoff,
+        PTOEntry.employee_id.in_(emp_ids) if emp_ids else db.false()
+    ).count() if emp_ids else 0
     quality_avg = db.session.query(
         func.avg(QualityEvaluation.overall_score)
-    ).filter(QualityEvaluation.eval_date >= cutoff).scalar()
+    ).filter(QualityEvaluation.eval_date >= cutoff,
+             QualityEvaluation.employee_id.in_(emp_ids) if emp_ids else db.false()).scalar() if emp_ids else None
     quality_count = QualityEvaluation.query.filter(
-        QualityEvaluation.eval_date >= cutoff
-    ).count()
+        QualityEvaluation.eval_date >= cutoff,
+        QualityEvaluation.employee_id.in_(emp_ids) if emp_ids else db.false()
+    ).count() if emp_ids else 0
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -439,7 +468,7 @@ def report_filters():
         return jsonify(get_demo_report_filters())
 
     lobs = [{"id": pu.id, "name": pu.name}
-            for pu in PlanningUnit.query.order_by(PlanningUnit.name).all()]
+            for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
 
     tls = [r[0] for r in db.session.query(Employee.team_lead).filter(
         Employee.status == "Active",

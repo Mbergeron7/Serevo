@@ -2525,6 +2525,7 @@ function confirmAddShift() {
     closeAddModal();
     updateStats();
     switchView(currentView);
+    if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
 
     // Auto-save to DB if viewing a saved schedule
     if (scheduleSource === 'saved') {
@@ -2789,6 +2790,7 @@ function applyShiftEdit() {
   scheduleData.totals.total_hours = Math.round(totalHours * 10) / 10;
   updateStats();
   switchView(currentView);
+  if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
 }
 
 function deleteShift() {
@@ -2818,6 +2820,7 @@ function deleteShift() {
   scheduleData.totals.total_hours = Math.round(totalHours * 10) / 10;
   updateStats();
   switchView(currentView);
+  if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4837,7 +4840,6 @@ function loadDemandHeatmap() {
   })
   .then(r => r.json())
   .then(data => {
-    console.log('[HeatMap] response:', {success: data.success, units: data.units?.length, days: data.units?.map(u => ({name: u.name, days: u.days.length, intervals: u.days[0]?.intervals?.length}))});
     if (!data.success || !data.units || !data.units.length) {
       zone.classList.remove('visible');
       return;

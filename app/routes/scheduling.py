@@ -41,10 +41,59 @@ def _parse_time(t):
 
 
 def _time_diff_hours(start, end):
-    """Calculate hours between two time objects."""
+    """Calculate hours between two time objects (handles overnight shifts)."""
     s = start.hour * 60 + start.minute
     e = end.hour * 60 + end.minute
-    return round((e - s) / 60, 1)
+    diff = e - s
+    if diff <= 0:
+        diff += 24 * 60  # overnight shift
+    return round(diff / 60, 1)
+
+
+def _query_schedules_for_lob(lob, start_date, end_date):
+    """Shared helper: query schedules for a LOB (or All LOBs) over a date range.
+    Includes null-PU schedules for employees belonging to the PU."""
+    from app.models import PlanningUnit, EmployeePlanningUnit
+    from app.constants import LOB_ALL_LABEL
+
+    lob_list = []
+    if lob and lob != LOB_ALL_LABEL and lob.lower() != 'all':
+        lob_list = [l.strip() for l in lob.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
+
+    if lob_list:
+        pu_ids = []
+        for lname in lob_list:
+            pu = PlanningUnit.query.filter(
+                db.func.lower(PlanningUnit.name) == lname.lower()
+            ).first()
+            if pu:
+                pu_ids.append(pu.id)
+        if not pu_ids:
+            return []
+        direct_emp_ids = {e.id for e in Employee.query.filter(
+            Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
+        ).all()}
+        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
+        ).all()}
+        emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+        return Schedule.query.filter(
+            db.or_(
+                Schedule.planning_unit_id.in_(pu_ids),
+                db.and_(
+                    Schedule.planning_unit_id.is_(None),
+                    Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                ),
+            ),
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+    else:
+        # All LOBs
+        return Schedule.query.filter(
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
 
 # ── Main view ───────────────────────────────────────────────
@@ -407,13 +456,26 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode):
 
     existing_by_day = {}
     if mode == "fill":
-        from app.models import PlanningUnit
+        from app.models import PlanningUnit, EmployeePlanningUnit
         pu = PlanningUnit.query.filter(
             db.func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if pu:
+            direct_emp_ids = {e.id for e in Employee.query.filter(
+                Employee.planning_unit_id == pu.id, Employee.status == "Active"
+            ).all()}
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                EmployeePlanningUnit.planning_unit_id == pu.id,
+            ).all()}
+            emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
             saved = Schedule.query.filter(
-                Schedule.planning_unit_id == pu.id,
+                db.or_(
+                    Schedule.planning_unit_id == pu.id,
+                    db.and_(
+                        Schedule.planning_unit_id.is_(None),
+                        Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+                    ),
+                ),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
             ).all()
@@ -734,10 +796,22 @@ def forecast_demand():
                             "agents_required": req_map[t],
                         })
 
-                # Count scheduled agents per interval
+                # Count scheduled agents per interval (include null-PU schedules)
                 if intervals:
+                    from app.models import EmployeePlanningUnit as _EPU
+                    _d_eids = {e.id for e in Employee.query.filter(
+                        Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
+                    _a_eids = {ep.employee_id for ep in _EPU.query.filter(
+                        _EPU.planning_unit_id == pu.id).all()}
+                    _pu_eids = list(_d_eids | _a_eids)
                     day_scheds = Schedule.query.filter(
-                        Schedule.planning_unit_id == pu.id,
+                        db.or_(
+                            Schedule.planning_unit_id == pu.id,
+                            db.and_(
+                                Schedule.planning_unit_id.is_(None),
+                                Schedule.employee_id.in_(_pu_eids) if _pu_eids else db.false(),
+                            ),
+                        ),
                         Schedule.schedule_date == current,
                         Schedule.status == "scheduled",
                     ).all()
@@ -1436,24 +1510,13 @@ def export_csv():
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
 
-        if not lob or not start_str or not end_str:
-            return jsonify({"success": False, "error": "LOB and date range required"})
+        if not start_str or not end_str:
+            return jsonify({"success": False, "error": "Date range required"})
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
 
-        from app.models import PlanningUnit
-        pu = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
-        ).first()
-        if not pu:
-            return jsonify({"success": False, "error": "No planning unit found"})
-
-        schedules = Schedule.query.filter(
-            Schedule.planning_unit_id == pu.id,
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+        schedules = _query_schedules_for_lob(lob, start_date, end_date)
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -1503,24 +1566,13 @@ def export_xlsx():
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
 
-        if not lob or not start_str or not end_str:
-            return jsonify({"success": False, "error": "LOB and date range required"})
+        if not start_str or not end_str:
+            return jsonify({"success": False, "error": "Date range required"})
 
         start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
 
-        from app.models import PlanningUnit
-        pu = PlanningUnit.query.filter(
-            db.func.lower(PlanningUnit.name) == lob.lower()
-        ).first()
-        if not pu:
-            return jsonify({"success": False, "error": "No planning unit found"})
-
-        schedules = Schedule.query.filter(
-            Schedule.planning_unit_id == pu.id,
-            Schedule.schedule_date >= start_date,
-            Schedule.schedule_date <= end_date,
-        ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+        schedules = _query_schedules_for_lob(lob, start_date, end_date)
 
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -1704,23 +1756,43 @@ def copy_week():
             return jsonify({"success": True, "copied": 0, "demo": True,
                             "message": "Week copied (demo mode)."})
 
-        from app.models import PlanningUnit, ShiftSegment
+        from app.models import PlanningUnit, EmployeePlanningUnit, ShiftSegment
         pu = PlanningUnit.query.filter(
             db.func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not pu:
             return jsonify({"success": False, "error": "Planning unit not found"})
 
-        # Delete existing schedules in target range
-        Schedule.query.filter(
+        # Build employee set for this PU (includes multi-PU employees)
+        direct_emp_ids = {e.id for e in Employee.query.filter(
+            Employee.planning_unit_id == pu.id, Employee.status == "Active"
+        ).all()}
+        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.planning_unit_id == pu.id,
+        ).all()}
+        emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
+
+        pu_or_null = db.or_(
             Schedule.planning_unit_id == pu.id,
+            db.and_(
+                Schedule.planning_unit_id.is_(None),
+                Schedule.employee_id.in_(emp_ids_in_pu) if emp_ids_in_pu else db.false(),
+            ),
+        )
+
+        # Delete existing schedules in target range (segments first, then schedules)
+        target_ids = [s.id for s in Schedule.query.filter(
+            pu_or_null,
             Schedule.schedule_date >= target_start,
             Schedule.schedule_date <= target_end,
-        ).delete(synchronize_session=False)
+        ).all()]
+        if target_ids:
+            ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(target_ids)).delete(synchronize_session=False)
+            Schedule.query.filter(Schedule.id.in_(target_ids)).delete(synchronize_session=False)
 
         # Load source schedules with segments
         source_schedules = Schedule.query.filter(
-            Schedule.planning_unit_id == pu.id,
+            pu_or_null,
             Schedule.schedule_date >= source_start,
             Schedule.schedule_date <= source_end,
         ).all()

@@ -348,6 +348,14 @@
         <li><strong>Delete a segment</strong> by clicking the ✕ button on any segment in the list.</li>
       </ul>
       <p>Changes to segments are saved automatically to the database when the shift is already persisted.</p>
+      <p><strong>Adding shifts manually:</strong> When viewing a saved (loaded) schedule, clicking <strong>+ Add shift</strong> on any day and confirming will <strong>save the shift to the database immediately</strong> — no need to click Save afterward. When viewing a generated (unsaved) schedule, manual additions are kept in memory until you click Save.</p>
+
+      <h3>Clearing Schedules</h3>
+      <p>The <strong>Clear</strong> button (red, top-right of the toolbar) deletes all saved schedules for the selected LOB and date range from the database. If "All LOBs" is selected, it clears schedules across all LOBs for that range.</p>
+      <p>You do <strong>not</strong> need to clear before generating or importing — both operations automatically replace existing schedules for the affected employees and dates.</p>
+
+      <h3>Copy Week</h3>
+      <p>The <strong>Copy Wk</strong> button copies an entire week's schedule to a different target week. Select the source week start date and the target week start date. All 7 days of shifts are copied, replacing any existing schedules in the target week for the selected LOB.</p>
 
       <h3>Attendance Badges on Schedule</h3>
       <p>When attendance events have been coded (via the Real-Time → Absenteeism tab), badges appear next to employee names on the schedule:</p>
@@ -777,7 +785,7 @@
       <h4>Attendance Coding</h4>
       <p>At the bottom of the Absenteeism tab is the <strong>Coded Attendance Events</strong> section where you can permanently record attendance issues:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>🔍 Auto-detect</strong> — scans the schedule versus agent logins and creates coded events for absences, lates (first login &gt; 5 min after shift start), and early leaves (last activity &gt; 15 min before shift end). Skips employees who already have a coded event.</li>
+        <li><strong>🔍 Auto-detect</strong> — scans the schedule versus agent logins and creates coded events for absences, lates (first login &gt; 2 min after shift start), and early leaves (last activity before shift end while currently offline for 15+ min). Skips employees who already have a coded event.</li>
         <li><strong>🔄 Re-detect</strong> — clears all previously auto-detected entries for the date, then scans fresh. Use this after importing updated schedules from PeopleWare or correcting shifts.</li>
         <li><strong>+ Code Event</strong> — manually create an attendance record. Pick an employee, select an exception code, and add an optional note.</li>
       </ul>
@@ -1746,6 +1754,11 @@
         <li>Remove blank rows at the bottom of your file to avoid empty records.</li>
         <li>For employee imports, the <strong>Employee ID</strong> field is used to match existing records. If an ID already exists, the record is updated instead of duplicated.</li>
       </ul>
+
+      <h3>Bulk Historical Actuals Import</h3>
+      <p>For importing large volumes of historical call data (tens of thousands of rows or more), use the dedicated <strong>Bulk Historical Actuals Import</strong> page at <strong>Tools &rarr; Data Import &rarr; Bulk Actuals</strong> (or navigate directly to <code>/data/bulk-actuals</code>).</p>
+      <p>This page uses <strong>chunked processing</strong> — your file is uploaded once, then processed in batches of 2,000 rows at a time, with a progress bar showing real-time status. This avoids the 30-second request timeout that can interrupt large imports.</p>
+      <p>Your CSV should have columns: <strong>LOB</strong>, <strong>Date</strong>, <strong>Timestamp</strong>, <strong>Offered</strong>, and <strong>AHT</strong>. Rows are upserted by LOB + timestamp, so re-importing the same data updates rather than duplicates.</p>
     </div>
   </div>
 

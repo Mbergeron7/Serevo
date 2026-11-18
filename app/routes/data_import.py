@@ -2013,6 +2013,20 @@ def _import_employees(rows):
             modified = db.session.is_modified(emp)
             log.info("AFTER row %d (emp %s): modified=%s status=%r start_date=%r end_date=%r",
                      i, emp_id, modified, emp.status, emp.start_date, emp.end_date)
+
+        # Clean up future schedules when employee goes Inactive
+        if emp.status == "Inactive" and not is_new:
+            from app.models import Schedule as _Sched, ShiftSegment as _Seg
+            from datetime import date as _today_date
+            _future = [s.id for s in _Sched.query.filter(
+                _Sched.employee_id == emp.id,
+                _Sched.schedule_date >= _today_date.today(),
+            ).all()]
+            if _future:
+                _Seg.query.filter(_Seg.schedule_id.in_(_future)).delete(synchronize_session=False)
+                _Sched.query.filter(_Sched.id.in_(_future)).delete(synchronize_session=False)
+                log.info("Cleaned %d future schedules for inactive employee %s", len(_future), emp_id)
+
         imported += 1
 
     db.session.flush()

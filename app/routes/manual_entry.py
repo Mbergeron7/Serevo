@@ -176,6 +176,19 @@ def save_employee():
         emp.schedule_excluded = bool(data.get("schedule_excluded"))
         emp.manually_edited = True
 
+        # Clean up future schedules when employee goes Inactive
+        if emp.status == "Inactive":
+            from app.models import Schedule as _Sched, ShiftSegment as _Seg
+            from datetime import date as _today_date
+            _future = [s.id for s in _Sched.query.filter(
+                _Sched.employee_id == emp.id,
+                _Sched.schedule_date >= _today_date.today(),
+            ).all()]
+            if _future:
+                _Seg.query.filter(_Seg.schedule_id.in_(_future)).delete(synchronize_session=False)
+                _Sched.query.filter(_Sched.id.in_(_future)).delete(synchronize_session=False)
+                log.info("Cleaned %d future schedules for inactive employee %s", len(_future), emp.employee_id)
+
         db.session.commit()
         return jsonify({"success": True, "id": emp.id})
 
