@@ -474,10 +474,6 @@
   <div class="la-controls">
     <button class="la-refresh-btn" id="laRefreshBtn" onclick="laManualRefresh()">🔄 Refresh Now</button>
     <span style="color:var(--text-muted)">|</span>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;font-size:.8rem;color:var(--text-muted)">
-      <input type="checkbox" id="laAutoToggle" onchange="laToggleAuto(this.checked)" style="accent-color:var(--brand-accent);width:13px;height:13px"> Auto-refresh
-    </label>
-    <span class="la-countdown" id="laCountdown" style="display:none"></span>
     <span style="color:var(--text-muted)">|</span>
     <div class="la-filter-wrap">
       <button class="la-filter-btn" onclick="laToggleLobDrop()">🔽 LOBs <span id="laLobCount"></span></button>
@@ -851,7 +847,9 @@ async function refreshActive() {
     }
     if (_activeView === 'intraday') renderIntraday();
     // Refresh active tab if it's not intraday
-    if (_activeView !== 'intraday') {
+    if (_activeView === 'liveagents') {
+      laLoadAgents(false);
+    } else if (_activeView !== 'intraday') {
       delete _loaded[_activeView];
       loadTab(_activeView);
     }
@@ -2151,24 +2149,10 @@ function laApplyStatusFilter(){
   });
 }
 
-// Auto-refresh
-function laStartCountdown(){
-  la_secondsLeft=45;
-  const el=document.getElementById("laCountdown");el.style.display="inline";
-  el.textContent="(next in 45s)";
-  if(la_countdown){clearInterval(la_countdown);la_countdown=null;}
-  la_countdown=setInterval(()=>{
-    la_secondsLeft--;
-    if(la_secondsLeft<0) la_secondsLeft=0;
-    el.textContent="(next in "+la_secondsLeft+"s)";
-    if(la_secondsLeft<=0){clearInterval(la_countdown);la_countdown=null;el.textContent="(refreshing…)";laLoadAgents(false).then(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();}).catch(()=>{if(document.getElementById("laAutoToggle").checked)laStartCountdown();});}
-  },1000);
-}
-function laStopCountdown(){if(la_countdown){clearInterval(la_countdown);la_countdown=null;}const el=document.getElementById("laCountdown");if(el)el.style.display="none";}
-function laToggleAuto(on){if(on)laStartCountdown();else laStopCountdown();}
+// Live Agents uses the main page auto-refresh (chkAuto) — no separate timer
 function laManualRefresh(){
-  const btn=document.getElementById("laRefreshBtn");btn.textContent="⏳ Refreshing…";btn.disabled=true;laStopCountdown();
-  laLoadAgents(true).then(()=>{btn.textContent="🔄 Refresh Now";btn.disabled=false;if(document.getElementById("laAutoToggle").checked)laStartCountdown();});
+  const btn=document.getElementById("laRefreshBtn");btn.textContent="⏳ Refreshing…";btn.disabled=true;
+  laLoadAgents(true).then(()=>{btn.textContent="🔄 Refresh Now";btn.disabled=false;});
 }
 
 // Agent detail panel
@@ -2219,13 +2203,8 @@ if (_origShowView) {
   showView = function(name) {
     __showView(name);
     if (name === 'liveagents') {
-      laStopCountdown();
       la_loaded = true;
-      laLoadAgents(true).then(()=>{
-        if(document.getElementById("laAutoToggle") && document.getElementById("laAutoToggle").checked) laStartCountdown();
-      });
-    } else {
-      laStopCountdown();
+      laLoadAgents(true);
     }
   };
 }
