@@ -436,15 +436,19 @@ async function loadOpenShifts() {
   if (!shifts.length) { el.innerHTML = '<p class="empty-msg">No open shifts available right now.</p>'; return; }
   let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Hours</th><th>LOB</th><th>Skills</th><th>Bids</th><th>Notes</th><th></th></tr></thead><tbody>';
   shifts.forEach(s => {
+    const conflict = s.has_conflict ? ' <span style="color:#dc2626;font-size:.68rem;" title="Conflicts with existing shift">⚠ conflict</span>' : '';
     html += `<tr>
-      <td style="font-weight:600;">${esc(s.date)}</td>
+      <td style="font-weight:600;">${esc(s.date)}${conflict}</td>
       <td>${esc(s.start)} – ${esc(s.end)}</td>
       <td>${s.hours}</td>
       <td>${esc(s.lob)}</td>
       <td>${esc(s.required_skills) || '—'}</td>
       <td>${s.bid_count || 0}</td>
       <td style="font-size:.78rem; color:var(--text-muted);">${esc(s.notes)}</td>
-      <td><button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="placeBid(${s.id})">Bid</button></td>
+      <td style="display:flex; gap:4px;">
+        <button class="btn btn-primary" style="font-size:.72rem; padding:2px 10px;" onclick="placeBid(${s.id})">Bid</button>
+        <button class="btn" style="font-size:.72rem; padding:2px 10px; background:#059669; color:#fff;${s.has_conflict ? ' opacity:.5; pointer-events:none;' : ''}" onclick="claimShift(${s.id})" title="Claim this shift immediately">Claim</button>
+      </td>
     </tr>`;
   });
   html += '</tbody></table></div>';
@@ -1013,5 +1017,45 @@ function loadPunchHistory() {
   checkUpcoming();
   setInterval(checkUpcoming, CHECK_INTERVAL);
 })();
+
+// ── Badges ─────────────────────────────
+async function loadBadges() {
+  const el = document.getElementById('badgesBody');
+  const countEl = document.getElementById('badgeCount');
+  try {
+    const data = await api('/portal/badges');
+    if (!data.success) { el.innerHTML = '<p class="empty-msg">Unable to load badges.</p>'; return; }
+    const badges = data.badges || [];
+    countEl.textContent = data.total_earned + ' / ' + badges.length + ' earned';
+    if (!badges.length) { el.innerHTML = '<p class="empty-msg">No badges available yet.</p>'; return; }
+    let html = '<div class="badge-grid">';
+    badges.forEach(b => {
+      const cls = b.earned ? 'badge-card earned' : 'badge-card locked';
+      html += `<div class="${cls}">
+        <div class="badge-icon">${b.icon}</div>
+        <div class="badge-label">${esc(b.label)}</div>
+        <div class="badge-desc">${esc(b.desc)}</div>
+        ${b.earned && b.earned_date ? `<div class="badge-date">Earned ${b.earned_date}</div>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<p class="empty-msg">Unable to load badges.</p>'; }
+}
+
+// ── Self-Scheduling: Claim Shift ─────────────────────
+async function claimShift(postId) {
+  if (!confirm('Claim this shift? It will be added to your schedule.')) return;
+  try {
+    const data = await api('/portal/claim-shift', {shift_post_id: postId});
+    if (data.success) {
+      alert(data.message || 'Shift claimed!');
+      loadOpenShifts();
+      loadSchedule();
+    } else {
+      alert(data.error || 'Could not claim shift');
+    }
+  } catch(e) { alert('Error claiming shift: ' + e); }
+}
 </script>
 {% endblock %}

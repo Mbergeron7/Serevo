@@ -997,14 +997,6 @@ def portal_badges():
     """Return the agent's earned badges + all available badge definitions."""
     user = get_current_user()
     emp = _get_agent_employee(user) if user else None
-    # Ensure table exists
-    try:
-        db.engine.execute("SELECT 1 FROM agent_badges LIMIT 0")
-    except Exception:
-        try:
-            AgentBadge.__table__.create(db.engine, checkfirst=True)
-        except Exception:
-            pass
 
     earned = []
     if emp:
