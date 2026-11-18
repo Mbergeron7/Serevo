@@ -12,11 +12,21 @@ from app.auth import login_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, TimeOffType,
     ShiftPost, ShiftBid, ShiftSwapRequest, VTOOTPost, VTOOTSignup,
-    QualityEvaluation,
+    QualityEvaluation, AgentBadge, ShiftSegment,
 )
 from datetime import date as _date_type
 
 agent_bp = Blueprint("agent", __name__)
+
+# ── Badge Definitions ──────────────────────────────────────────
+BADGE_DEFS = {
+    "perfect_week":  {"icon": "🏆", "label": "Perfect Week",  "desc": "No absences, no lates for a full week"},
+    "early_bird":    {"icon": "🌅", "label": "Early Bird",    "desc": "Logged in before shift start 5 days straight"},
+    "streak_5":      {"icon": "🔥", "label": "On Fire",       "desc": "5-day adherence streak above 95%"},
+    "top_performer": {"icon": "⭐", "label": "Top Performer", "desc": "Highest quality score this month"},
+    "team_player":   {"icon": "🤝", "label": "Team Player",   "desc": "Covered 3+ shift swaps this month"},
+    "iron_will":     {"icon": "💪", "label": "Iron Will",     "desc": "30-day perfect attendance"},
+}
 
 
 def _get_agent_employee(user):
@@ -975,3 +985,197 @@ def my_quality():
             "notes": (e.notes or "")[:200],
         } for e in evals],
     })
+
+
+# ═════════════════════════════════════════════════════════════
+# BADGES
+# ═════════════════════════════════════════════════════════════
+
+@agent_bp.route("/portal/badges", methods=["GET"])
+@login_required
+def portal_badges():
+    """Return the agent's earned badges + all available badge definitions."""
+    user = get_current_user()
+    emp = _get_agent_employee(user) if user else None
+    # Ensure table exists
+    try:
+        db.engine.execute("SELECT 1 FROM agent_badges LIMIT 0")
+    except Exception:
+        try:
+            AgentBadge.__table__.create(db.engine, checkfirst=True)
+        except Exception:
+            pass
+
+    earned = []
+    if emp:
+        badges = AgentBadge.query.filter_by(employee_id=emp.id)\
+            .order_by(AgentBadge.earned_date.desc()).all()
+        earned = [{
+            "badge_type": b.badge_type,
+            "earned_date": b.earned_date.isoformat(),
+            "details": b.details or "",
+        } for b in badges]
+
+    all_defs = []
+    earned_types = {b["badge_type"] for b in earned}
+    for key, defn in BADGE_DEFS.items():
+        entry = {**defn, "type": key, "earned": key in earned_types}
+        # Find latest earn date if earned
+        for b in earned:
+            if b["badge_type"] == key:
+                entry["earned_date"] = b["earned_date"]
+                entry["details"] = b["details"]
+                break
+        all_defs.append(entry)
+
+    return jsonify({"success": True, "badges": all_defs, "total_earned": len(earned_types)})
+
+
+# ═════════════════════════════════════════════════════════════
+# SELF-SCHEDULING — Available Shifts + Claim
+# ═════════════════════════════════════════════════════════════
+
+@agent_bp.route("/portal/available-shifts", methods=["GET"])
+@login_required
+def available_shifts():
+    """Return open shifts the agent qualifies for based on PU/skills."""
+    user = get_current_user()
+    emp = _get_agent_employee(user) if user else None
+    if not emp:
+        return jsonify({"success": True, "shifts": []})
+
+    from app.models import EmployeePlanningUnit
+    # Get all PU IDs this agent belongs to
+    pu_ids = set()
+    if emp.planning_unit_id:
+        pu_ids.add(emp.planning_unit_id)
+    for epu in EmployeePlanningUnit.query.filter_by(employee_id=emp.id).all():
+        pu_ids.add(epu.planning_unit_id)
+
+    # Find open shifts matching agent's PUs
+    q = ShiftPost.query.filter(
+        ShiftPost.status == "open",
+        ShiftPost.schedule_date >= date.today(),
+    )
+    if pu_ids:
+        q = q.filter(db.or_(
+            ShiftPost.planning_unit_id.in_(list(pu_ids)),
+            ShiftPost.planning_unit_id.is_(None),
+        ))
+    shifts = q.order_by(ShiftPost.schedule_date, ShiftPost.shift_start).all()
+
+    # Check for conflicts with existing schedules
+    result = []
+    for sp in shifts:
+        # Check if agent already has a shift on that day at that time
+        conflict = Schedule.query.filter(
+            Schedule.employee_id == emp.id,
+            Schedule.schedule_date == sp.schedule_date,
+        ).first()
+        has_conflict = False
+        if conflict:
+            # Simple time overlap check
+            if conflict.shift_start and conflict.shift_end and sp.shift_start and sp.shift_end:
+                has_conflict = not (conflict.shift_end <= sp.shift_start or conflict.shift_start >= sp.shift_end)
+        d = sp.to_dict()
+        d["has_conflict"] = has_conflict
+        d["already_bid"] = ShiftBid.query.filter_by(
+            shift_post_id=sp.id, employee_id=emp.id
+        ).first() is not None
+        result.append(d)
+
+    return jsonify({"success": True, "shifts": result})
+
+
+@agent_bp.route("/portal/claim-shift", methods=["POST"])
+@login_required
+def claim_shift():
+    """Agent claims an open shift — creates a Schedule record and marks ShiftPost as filled."""
+    user = get_current_user()
+    emp = _get_agent_employee(user) if user else None
+    if not emp:
+        return jsonify({"success": False, "error": "No employee record linked"})
+
+    data = request.get_json(silent=True) or {}
+    post_id = data.get("shift_post_id")
+    if not post_id:
+        return jsonify({"success": False, "error": "shift_post_id required"})
+
+    post = ShiftPost.query.get(post_id)
+    if not post:
+        return jsonify({"success": False, "error": "Shift not found"})
+    if post.status != "open":
+        return jsonify({"success": False, "error": "Shift is no longer available"})
+
+    # Check for time conflict
+    existing = Schedule.query.filter(
+        Schedule.employee_id == emp.id,
+        Schedule.schedule_date == post.schedule_date,
+    ).all()
+    for ex in existing:
+        if ex.shift_start and ex.shift_end and post.shift_start and post.shift_end:
+            if not (ex.shift_end <= post.shift_start or ex.shift_start >= post.shift_end):
+                return jsonify({"success": False,
+                    "error": f"Conflicts with your existing shift {ex.shift_start.strftime('%H:%M')}–{ex.shift_end.strftime('%H:%M')}"})
+
+    # Check weekly hours limit from contract
+    try:
+        from app.models import Contract, EmployeeContract
+        ec = EmployeeContract.query.filter_by(employee_id=emp.id, is_active=True).first()
+        if ec:
+            contract = Contract.query.get(ec.contract_id)
+            if contract and contract.max_hours_week:
+                # Sum hours for the week containing this shift
+                d = post.schedule_date
+                week_start = d - timedelta(days=d.weekday())
+                week_end = week_start + timedelta(days=6)
+                week_hours = db.session.query(db.func.coalesce(db.func.sum(Schedule.hours), 0)).filter(
+                    Schedule.employee_id == emp.id,
+                    Schedule.schedule_date >= week_start,
+                    Schedule.schedule_date <= week_end,
+                ).scalar() or 0
+                if week_hours + (post.hours or 0) > contract.max_hours_week:
+                    return jsonify({"success": False,
+                        "error": f"Would exceed weekly hours limit ({contract.max_hours_week}h). Current: {week_hours}h"})
+    except Exception:
+        pass  # contract check is best-effort
+
+    # Create the schedule record
+    sched = Schedule(
+        employee_id=emp.id,
+        planning_unit_id=post.planning_unit_id or emp.planning_unit_id,
+        schedule_date=post.schedule_date,
+        shift_start=post.shift_start,
+        shift_end=post.shift_end,
+        shift_type="full" if (post.hours or 0) > 5 else "half",
+        hours=post.hours or 0,
+        status="scheduled",
+        source="self-scheduled",
+    )
+    db.session.add(sched)
+    db.session.flush()
+
+    # Add a default on-call segment
+    from app.routes.scheduling import _time_diff_hours
+    dur = int((post.hours or 0) * 60) if post.hours else 0
+    db.session.add(ShiftSegment(
+        schedule_id=sched.id,
+        activity_type="on-call",
+        start_time=post.shift_start,
+        end_time=post.shift_end,
+        duration_mins=dur,
+        sort_order=0,
+    ))
+
+    # Mark the shift post as assigned
+    post.status = "assigned"
+    post.assigned_to = emp.id
+
+    try:
+        db.session.commit()
+        log.info("Agent %s self-scheduled shift %d for %s", emp.full_name, post.id, post.schedule_date)
+        return jsonify({"success": True, "message": f"Shift claimed for {post.schedule_date}"})
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Claim shift error")
+        return jsonify({"success": False, "error": str(e)})

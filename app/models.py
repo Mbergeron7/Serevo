@@ -3429,3 +3429,21 @@ class RosterRotationState(db.Model):
     __table_args__ = (
         db.UniqueConstraint("roster_member_id", "period_start", name="uq_roster_state"),
     )
+
+
+class AgentBadge(db.Model):
+    """Achievement badges earned by agents for attendance, performance, etc."""
+    __tablename__ = "agent_badges"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    badge_type  = db.Column(db.String(50), nullable=False)
+    earned_date = db.Column(db.Date, nullable=False)
+    details     = db.Column(db.Text)
+
+    employee = db.relationship("Employee", backref=db.backref("badges", lazy="dynamic",
+                                                               cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("employee_id", "badge_type", "earned_date", name="uq_badge_emp_type_date"),
+    )

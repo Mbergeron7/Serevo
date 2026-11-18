@@ -52,6 +52,17 @@
   @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
 
   .mini-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:999; }
+  /* ── Badges ── */
+  .badge-grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .badge-card { width:140px; text-align:center; padding:16px 10px; border-radius:12px; border:2px solid var(--border); background:var(--surface); transition:transform .15s, box-shadow .15s; }
+  .badge-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
+  .badge-card.earned { border-color:var(--brand-accent); background:color-mix(in srgb, var(--brand-accent) 6%, var(--surface)); }
+  .badge-card.locked { opacity:.45; filter:grayscale(.8); }
+  .badge-icon { font-size:2rem; margin-bottom:6px; }
+  .badge-label { font-weight:700; font-size:.82rem; margin-bottom:4px; }
+  .badge-desc { font-size:.7rem; color:var(--text-muted); line-height:1.3; }
+  .badge-date { font-size:.68rem; color:var(--brand-accent); font-weight:600; margin-top:6px; }
+
   .mini-modal .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; max-width:520px; width:92%; max-height:90vh; overflow-y:auto; }
   .mini-modal h3 { font-size:.95rem; margin:0 0 16px; }
   .form-group { margin-bottom:12px; }
@@ -102,6 +113,7 @@
   <button onclick="switchTab('balances', this)">📊 My Balances</button>
   <button onclick="switchTab('quality', this)">🏆 My Quality</button>
   <button onclick="switchTab('punches', this); loadPunchHistory();">🕑 My Punches</button>
+  <button onclick="switchTab('badges', this); loadBadges();">🎖 Badges</button>
 </div>
 
 <!-- ═══ My Schedule Panel ═══ -->
@@ -230,6 +242,18 @@
           <tr><td colspan="5" style="padding:12px; text-align:center; color:var(--text-muted);">Select this tab to load punch history.</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Badges Panel ═══ -->
+<div class="p-panel" id="pp-badges">
+  <div class="p-card">
+    <div class="p-card-header">🎖 My Achievements
+      <span id="badgeCount" style="font-size:.78rem; color:var(--text-muted);"></span>
+    </div>
+    <div class="p-card-body" id="badgesBody">
+      <p class="empty-msg">Loading badges…</p>
     </div>
   </div>
 </div>
