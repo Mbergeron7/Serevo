@@ -2517,14 +2517,32 @@ function confirmAddShift() {
   const emp = empList.find(e => String(e.employee_id) === String(empId)) || ALL_EMPS[empId];
   const hours = Math.round((timeToMins(end) - timeToMins(start)) / 60 * 100) / 100;
   const finish = (segments) => {
-    day.shifts.push({ employee: emp ? emp.name : empId, employee_id: empId, date: day.date,
-      start, end, hours, type, status: 'scheduled', segments, manual: true });
+    const shiftObj = { employee: emp ? emp.name : empId, employee_id: empId, date: day.date,
+      start, end, hours, type, status: 'scheduled', segments, manual: true };
+    day.shifts.push(shiftObj);
     day.shifts.sort((a, b) => (a.start + a.employee).localeCompare(b.start + b.employee));
     day.unassigned = (day.unassigned || []).filter(n => n !== (emp ? emp.name : empId));
     closeAddModal();
     updateStats();
     switchView(currentView);
-    showToast(`Added ${emp ? emp.name : empId} on ${day.date_label} — click Save to keep it.`, 'success');
+
+    // Auto-save to DB if viewing a saved schedule
+    if (scheduleSource === 'saved') {
+      fetch('/scheduling/shift', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({employee_id: empId, date: day.date, start, end, type, segments}),
+      }).then(r => r.json()).then(r => {
+        if (r.success && r.shift) {
+          shiftObj.id = r.shift.id;
+          showToast(`Saved ${emp ? emp.name : empId} on ${day.date_label}.`, 'success');
+        } else {
+          showToast(`Added on screen — save failed: ${r.error || 'unknown'}`, 'error');
+        }
+      }).catch(e => showToast('Added on screen but save failed: ' + e, 'error'));
+    } else {
+      showToast(`Added ${emp ? emp.name : empId} on ${day.date_label} — click Save to keep it.`, 'success');
+    }
   };
   if (document.getElementById('addAutoSegs').checked) {
     fetch('/scheduling/segments/auto', {method:'POST', headers:{'Content-Type':'application/json'},

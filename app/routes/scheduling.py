@@ -1126,6 +1126,69 @@ def update_shift(shift_id):
         return jsonify({"success": False, "error": str(e)})
 
 
+@scheduling_bp.route("/shift", methods=["POST"])
+@login_required
+def create_shift():
+    """Create a single shift and save it to the DB immediately.
+    POST JSON: {employee_id, date, start, end, type, segments?}
+    """
+    _u = get_current_user()
+    if _u and _u.get("is_demo"):
+        return jsonify({"success": True, "demo": True, "id": 0})
+    try:
+        payload = request.get_json(silent=True) or {}
+        emp_ext_id = str(payload.get("employee_id", "")).strip()
+        date_str = payload.get("date", "")
+        start = payload.get("start", "")
+        end = payload.get("end", "")
+        shift_type = payload.get("type", "full")
+
+        if not emp_ext_id or not date_str or not start or not end:
+            return jsonify({"success": False, "error": "employee_id, date, start, end required"})
+
+        sched_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        emp = Employee.query.filter_by(employee_id=emp_ext_id).first()
+        if not emp:
+            return jsonify({"success": False, "error": f"Employee {emp_ext_id} not found"})
+
+        start_t = _parse_time(start)
+        end_t = _parse_time(end)
+        hours = _time_diff_hours(start_t, end_t) if start_t and end_t else 0
+
+        sched = Schedule(
+            employee_id=emp.id,
+            planning_unit_id=emp.planning_unit_id,
+            schedule_date=sched_date,
+            shift_start=start_t,
+            shift_end=end_t,
+            shift_type=shift_type,
+            hours=hours,
+            status="scheduled",
+            source="manual",
+        )
+        db.session.add(sched)
+        db.session.flush()
+
+        for idx, seg in enumerate(payload.get("segments", [])):
+            db.session.add(ShiftSegment(
+                schedule_id=sched.id,
+                activity_type=seg.get("type", "on-call"),
+                start_time=_parse_time(seg.get("start", "")),
+                end_time=_parse_time(seg.get("end", "")),
+                duration_mins=int(seg.get("duration_mins", 0)),
+                sort_order=idx,
+                notes=seg.get("notes", ""),
+            ))
+        db.session.commit()
+        log.info(f"Created manual shift: emp={emp.full_name}, date={sched_date}, {start}-{end}")
+        return jsonify({"success": True, "shift": sched.to_dict()})
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Create shift error")
+        return jsonify({"success": False, "error": str(e)})
+
+
 @scheduling_bp.route("/shift/<int:shift_id>", methods=["DELETE"])
 @login_required
 def delete_shift(shift_id):
