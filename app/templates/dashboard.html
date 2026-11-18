@@ -3,157 +3,375 @@
 
 
 {% block content %}
+<style>
+  .dash-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+  .dash-header h1 { margin:0; }
+  .dash-customize-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 14px; cursor:pointer; font-size:.82rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; }
+  .dash-customize-btn:hover { background:var(--hover); color:var(--text-primary); }
+  .customize-panel { display:none; position:fixed; top:0; right:0; width:320px; height:100vh; background:var(--surface); border-left:1px solid var(--border); box-shadow:-4px 0 20px rgba(0,0,0,.1); z-index:1000; padding:1.5rem; overflow-y:auto; }
+  .customize-panel.open { display:block; }
+  .customize-panel h3 { margin:0 0 4px; font-size:1rem; }
+  .customize-panel .sub { font-size:.78rem; color:var(--text-muted); margin-bottom:1.2rem; }
+  .customize-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:999; }
+  .customize-overlay.open { display:block; }
+  .cust-item { display:flex; align-items:center; gap:10px; padding:10px 8px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--surface); cursor:grab; }
+  .cust-item:active { cursor:grabbing; }
+  .cust-item.dragging { opacity:.4; }
+  .cust-item .drag-handle { color:var(--text-muted); font-size:.9rem; flex-shrink:0; }
+  .cust-item label { flex:1; font-size:.85rem; cursor:pointer; display:flex; align-items:center; gap:8px; margin:0; }
+  .cust-item input[type=checkbox] { width:16px; height:16px; accent-color:var(--brand-accent); }
+  .cust-actions { display:flex; gap:8px; margin-top:1rem; }
+  .cust-actions button { flex:1; padding:8px; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
+  .cust-reset { background:transparent; border:1px solid var(--border); color:var(--text-muted); }
+  .cust-done { background:var(--brand-accent); border:none; color:#fff; }
+  .dash-widget { transition:opacity .2s; }
+  .dash-widget.hidden-widget { display:none !important; }
+  /* Setup wizard progress bar */
+  .setup-progress { background:var(--border); border-radius:8px; height:8px; margin-bottom:1.2rem; overflow:hidden; }
+  .setup-progress-fill { height:100%; background:var(--brand-accent); border-radius:8px; transition:width .4s ease; }
+  .setup-step { display:flex; align-items:flex-start; gap:12px; padding:14px 0; }
+  .setup-step:not(:last-child) { border-bottom:1px solid var(--border); }
+  .setup-step .step-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; font-size:.85rem; font-weight:700; flex-shrink:0; }
+  .setup-step .step-icon.done { background:#16a34a; color:#fff; }
+  .setup-step .step-icon.pending { background:var(--brand-accent); color:#fff; }
+  .setup-step .step-body { flex:1; }
+  .setup-step .step-label { font-size:.95rem; font-weight:600; }
+  .setup-step .step-label a { color:var(--brand-accent); text-decoration:none; }
+  .setup-step .step-desc { font-size:.78rem; color:var(--text-muted); margin-top:2px; }
+</style>
+
 <div class="dashboard">
-  <h1>Welcome back, {{ current_user.name.split(' ')[0] if current_user else '' }}</h1>
-  <p class="subtitle">Your workforce management hub.</p>
+  <div class="dash-header">
+    <div>
+      <h1>Welcome back, {{ current_user.name.split(' ')[0] if current_user else '' }}</h1>
+      <p class="subtitle" style="margin:0;">Your workforce management hub.</p>
+    </div>
+    <button class="dash-customize-btn" onclick="openCustomize()">⚙ Customize</button>
+  </div>
 
   {% set stats = demo_stats or live_stats %}
-  {% if stats and stats.total_employees > 0 %}
-  <div class="stat-row">
-    <div class="card"><div class="stat-val">{{ stats.total_employees }}</div><div class="stat-label">Employees</div></div>
-    <div class="card"><div class="stat-val">{{ stats.on_today }}</div><div class="stat-label">Scheduled Today</div></div>
-    <div class="card"><div class="stat-val">{{ stats.planning_units }}</div><div class="stat-label">LOBs</div></div>
-    <div class="card"><div class="stat-val">{{ stats.pto_today }}</div><div class="stat-label">On PTO Today</div></div>
-    <div class="card"><div class="stat-val">{{ stats.clocked_in or 0 }}</div><div class="stat-label">Clocked In Now</div></div>
-  </div>
-  {% else %}
-  <div class="card" style="padding:2.5rem;">
-    <div style="text-align:center; margin-bottom:1.5rem;">
+
+  {# ═══ Setup Wizard (shown when no employees yet) ═══ #}
+  {% if not stats or stats.total_employees == 0 %}
+  {% set s = setup or {} %}
+  {% set steps = [
+    (s.get('has_units', false), '/settings/planning-units', 'Set up Planning Units', 'Define your lines of business and teams. Each planning unit represents a group you schedule and forecast independently.', none),
+    (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to planning units and set their skills.', '/data/'),
+    (s.get('has_sheets', false), '/settings/google-sheets', 'Connect Google Sheets', 'Link your Google Sheet for real-time call data sync. This powers live monitoring and interval reports.', none),
+    (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to planning units so call volume flows to the right LOB.', none),
+    (s.get('has_history', false), '/data/bulk-actuals', 'Import Historical Data', 'Upload past call volume data to build accurate forecasts. At least 4-8 weeks recommended.', '/data/'),
+    (s.get('has_forecast', false), '/forecasting/', 'Generate Forecasts', 'Create interval-level volume and AHT forecasts using your historical data. Multiple methods available.', none),
+    (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', 'Build optimized schedules based on your forecasts, employee availability, and coverage requirements.', none),
+  ] %}
+  {% set done_count = steps|selectattr(0)|list|length %}
+  {% set total_steps = steps|length %}
+  <div class="card" style="padding:2.5rem;" data-widget="setup">
+    <div style="text-align:center; margin-bottom:1.2rem;">
       <div style="font-size:2rem; margin-bottom:.5rem;">🚀</div>
-      <p style="font-size:1.1rem; font-weight:600; margin-bottom:.5rem; color:var(--text-primary);">Getting Started</p>
-      <p style="font-size:.85rem; color:var(--text-muted);">Set up your workspace in a few steps to start managing your workforce.</p>
+      <p style="font-size:1.1rem; font-weight:600; margin-bottom:.3rem; color:var(--text-primary);">Getting Started</p>
+      <p style="font-size:.85rem; color:var(--text-muted);">Set up your workspace in {{ total_steps }} steps. {{ done_count }} of {{ total_steps }} complete.</p>
     </div>
-    {% set s = setup or {} %}
-    <ol style="list-style:none; padding:0; margin:0; max-width:480px; margin:0 auto;">
-      {% set steps = [
-        (s.get('has_units', false), '/settings/planning-units', 'Set up Planning Units', none),
-        (s.get('has_employees', false), '/people/', 'Add Employees', '/data/'),
-        (s.get('has_forecast', false), '/forecasting/', 'Enter Forecast Data', none),
-        (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', none),
-      ] %}
-      {% for done, url, label, alt_url in steps %}
-      <li style="display:flex; align-items:center; gap:12px; padding:12px 0;{{ '' if loop.last else ' border-bottom:1px solid var(--border);' }}">
+    <div class="setup-progress"><div class="setup-progress-fill" style="width:{{ (done_count / total_steps * 100)|round }}%;"></div></div>
+    <div style="max-width:540px; margin:0 auto;">
+      {% for done, url, label, desc, alt_url in steps %}
+      <div class="setup-step">
         {% if done %}
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#16a34a; color:#fff; font-size:1rem; flex-shrink:0;">✓</span>
-        <span style="font-size:.95rem; color:var(--text-muted); text-decoration:line-through;">{{ label }}</span>
+        <span class="step-icon done">✓</span>
+        <div class="step-body">
+          <div class="step-label"><a href="{{ url }}" style="color:var(--text-muted); text-decoration:line-through;">{{ label }}</a></div>
+          <div class="step-desc">{{ desc }}</div>
+        </div>
         {% else %}
-        <span style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--brand-accent); color:#fff; font-size:.8rem; font-weight:700; flex-shrink:0;">{{ loop.index }}</span>
-        <span style="font-size:.95rem;">
-          <a href="{{ url }}" style="color:var(--brand-accent); font-weight:600; text-decoration:none;">{{ label }}</a>
-          {% if alt_url %}<span style="color:var(--text-muted); font-size:.85rem;"> or <a href="{{ alt_url }}" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span>{% endif %}
-        </span>
+        <span class="step-icon pending">{{ loop.index }}</span>
+        <div class="step-body">
+          <div class="step-label">
+            <a href="{{ url }}">{{ label }}</a>
+            {% if alt_url %}<span style="font-size:.82rem; font-weight:400; color:var(--text-muted);"> or <a href="{{ alt_url }}" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span>{% endif %}
+          </div>
+          <div class="step-desc">{{ desc }}</div>
+        </div>
         {% endif %}
-      </li>
+      </div>
       {% endfor %}
-    </ol>
+    </div>
   </div>
   {% endif %}
 
-  <!-- ═══ Operational Snapshot (loaded via AJAX) ═══ -->
-  <div class="card" style="margin-bottom:1.5rem; display:none;" id="opsSnapshot">
-    <h3 style="margin:0 0 12px; font-size:.95rem;">📊 Today's Operations</h3>
-    <div id="opsBody" style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:.88rem;"></div>
+  {# ═══ KPI Stats Row ═══ #}
+  {% if stats and stats.total_employees > 0 %}
+  <div class="dash-widget" data-widget="kpi-stats">
+    <div class="stat-row">
+      <div class="card"><div class="stat-val">{{ stats.total_employees }}</div><div class="stat-label">Employees</div></div>
+      <div class="card"><div class="stat-val">{{ stats.on_today }}</div><div class="stat-label">Scheduled Today</div></div>
+      <div class="card"><div class="stat-val">{{ stats.planning_units }}</div><div class="stat-label">LOBs</div></div>
+      <div class="card"><div class="stat-val">{{ stats.pto_today }}</div><div class="stat-label">On PTO Today</div></div>
+      <div class="card"><div class="stat-val">{{ stats.clocked_in or 0 }}</div><div class="stat-label">Clocked In Now</div></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ═══ Operational Snapshot ═══ #}
+  <div class="dash-widget" data-widget="ops-snapshot">
+    <div class="card" style="margin-bottom:1.5rem; display:none;" id="opsSnapshot">
+      <h3 style="margin:0 0 12px; font-size:.95rem;">📊 Today's Operations</h3>
+      <div id="opsBody" style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:.88rem;"></div>
+    </div>
   </div>
 
+  {# ═══ Pending Approvals ═══ #}
   {% if pending and (pending.pto or pending.bids or pending.swaps) %}
-  <div class="card" style="margin-bottom:1.5rem; border-left:4px solid #d97706;">
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-      <span style="font-size:1.4rem;">⚠️</span>
-      <div style="flex:1;">
-        <div style="font-weight:700; font-size:.95rem;">Pending Approvals</div>
-        <div style="font-size:.82rem; color:var(--text-muted); margin-top:2px;">
-          {% set parts = [] %}
-          {% if pending.pto %}{% set _ = parts.append(pending.pto ~ ' PTO request' ~ ('s' if pending.pto != 1 else '')) %}{% endif %}
-          {% if pending.bids %}{% set _ = parts.append(pending.bids ~ ' shift bid' ~ ('s' if pending.bids != 1 else '')) %}{% endif %}
-          {% if pending.swaps %}{% set _ = parts.append(pending.swaps ~ ' swap' ~ ('s' if pending.swaps != 1 else '')) %}{% endif %}
-          {{ parts | join(', ') }} awaiting review
+  <div class="dash-widget" data-widget="approvals">
+    <div class="card" style="margin-bottom:1.5rem; border-left:4px solid #d97706;">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span style="font-size:1.4rem;">⚠️</span>
+        <div style="flex:1;">
+          <div style="font-weight:700; font-size:.95rem;">Pending Approvals</div>
+          <div style="font-size:.82rem; color:var(--text-muted); margin-top:2px;">
+            {% set parts = [] %}
+            {% if pending.pto %}{% set _ = parts.append(pending.pto ~ ' PTO request' ~ ('s' if pending.pto != 1 else '')) %}{% endif %}
+            {% if pending.bids %}{% set _ = parts.append(pending.bids ~ ' shift bid' ~ ('s' if pending.bids != 1 else '')) %}{% endif %}
+            {% if pending.swaps %}{% set _ = parts.append(pending.swaps ~ ' swap' ~ ('s' if pending.swaps != 1 else '')) %}{% endif %}
+            {{ parts | join(', ') }} awaiting review
+          </div>
+        </div>
+        <a href="/approvals/" class="btn btn-primary" style="font-size:.82rem; padding:6px 16px; text-decoration:none;">Review Now</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ═══ Upcoming PTO ═══ #}
+  {% if upcoming_pto and upcoming_pto > 0 %}
+  <div class="dash-widget" data-widget="upcoming-pto">
+    <div class="card" style="margin-bottom:1.5rem; border-left:4px solid #2563eb;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.4rem;">📅</span>
+        <div>
+          <div style="font-weight:700; font-size:.95rem;">Upcoming Time Off</div>
+          <div style="font-size:.82rem; color:var(--text-muted); margin-top:2px;">{{ upcoming_pto }} approved PTO request{{ 's' if upcoming_pto != 1 else '' }} starting in the next 7 days</div>
         </div>
       </div>
-      <a href="/approvals/" class="btn btn-primary" style="font-size:.82rem; padding:6px 16px; text-decoration:none;">Review Now</a>
     </div>
   </div>
   {% endif %}
 
-  {% if upcoming_pto and upcoming_pto > 0 %}
-  <div class="card" style="margin-bottom:1.5rem; border-left:4px solid #2563eb;">
-    <div style="display:flex; align-items:center; gap:12px;">
-      <span style="font-size:1.4rem;">📅</span>
-      <div>
-        <div style="font-weight:700; font-size:.95rem;">Upcoming Time Off</div>
-        <div style="font-size:.82rem; color:var(--text-muted); margin-top:2px;">{{ upcoming_pto }} approved PTO request{{ 's' if upcoming_pto != 1 else '' }} starting in the next 7 days</div>
+  {# ═══ Today's Activity ═══ #}
+  <div class="dash-widget" data-widget="activity">
+    <div class="card" style="margin-bottom:1.5rem;" id="todayActivity">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:.95rem;">Today's Activity</h3>
+        <a href="/attendance/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
       </div>
+      <div id="activityBody" style="font-size:.85rem; color:var(--text-muted);">Loading…</div>
     </div>
   </div>
-  {% endif %}
 
-  <!-- ═══ Today's Activity (loaded via AJAX) ═══ -->
-  <div class="card" style="margin-bottom:1.5rem;" id="todayActivity">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h3 style="margin:0; font-size:.95rem;">Today's Activity</h3>
-      <a href="/attendance/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
+  {# ═══ Unresolved Shift Notes ═══ #}
+  <div class="dash-widget" data-widget="shift-notes">
+    <div class="card" style="margin-bottom:1.5rem; display:none;" id="shiftNotesCard">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:.95rem;">📋 Open Shift Notes</h3>
+        <a href="/shift-notes/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
+      </div>
+      <div id="shiftNotesBody" style="font-size:.85rem;"></div>
     </div>
-    <div id="activityBody" style="font-size:.85rem; color:var(--text-muted);">Loading…</div>
   </div>
 
-  <!-- ═══ Unresolved Shift Notes ═══ -->
-  <div class="card" style="margin-bottom:1.5rem; display:none;" id="shiftNotesCard">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h3 style="margin:0; font-size:.95rem;">📋 Open Shift Notes</h3>
-      <a href="/shift-notes/" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">View All →</a>
+  {# ═══ Feature Cards ═══ #}
+  <div class="dash-widget" data-widget="feature-cards">
+    <div class="card-grid">
+      <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>📅 Scheduling</h3>
+        <p>Build shifts, manage rosters, and optimize coverage across your teams.</p>
+      </a>
+      <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>📡 Real-Time</h3>
+        <p>Live agent monitoring, adherence tracking, staffing alerts, and attendance coding.</p>
+      </a>
+      <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>📈 Forecasting</h3>
+        <p>Interval-level volume forecasting with trend analysis and accuracy tracking.</p>
+      </a>
+      <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>👥 Capacity Planning</h3>
+        <p>Headcount requirements by LOB, skill, and interval.</p>
+      </a>
+      <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>🗂 People</h3>
+        <p>Employee roster, accommodations, leave, and time-off management.</p>
+      </a>
+      <a href="/approvals/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>✅ Approvals</h3>
+        <p>Review and manage PTO requests, shift bids, and swap requests.</p>
+      </a>
+      <a href="/reports/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>📊 Reports</h3>
+        <p>Attendance summaries, schedule exports, and operational reports.</p>
+      </a>
+      <a href="/team-calendar/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>🗓 Team Calendar</h3>
+        <p>Visual overview of team schedules, PTO, and availability.</p>
+      </a>
+      {% if current_user and current_user.is_admin %}
+      <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>📥 Data Import</h3>
+        <p>Upload CSV/Excel files or sync data from external systems.</p>
+      </a>
+      <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
+        <h3>⚙️ Settings</h3>
+        <p>API connections, planning units, branding, and platform configuration.</p>
+      </a>
+      {% endif %}
     </div>
-    <div id="shiftNotesBody" style="font-size:.85rem;"></div>
   </div>
+</div>
 
-  <!-- ═══ Feature Cards ═══ -->
-  <div class="card-grid">
-    <a href="/scheduling/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>📅 Scheduling</h3>
-      <p>Build shifts, manage rosters, and optimize coverage across your teams.</p>
-    </a>
-    <a href="/realtime/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>📡 Real-Time</h3>
-      <p>Live agent monitoring, adherence tracking, staffing alerts, and attendance coding.</p>
-    </a>
-    <a href="/forecasting/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>📈 Forecasting</h3>
-      <p>Interval-level volume forecasting with trend analysis and accuracy tracking.</p>
-    </a>
-    <a href="/capacity/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>👥 Capacity Planning</h3>
-      <p>Headcount requirements by LOB, skill, and interval.</p>
-    </a>
-    <a href="/people/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>🗂 People</h3>
-      <p>Employee roster, accommodations, leave, and time-off management.</p>
-    </a>
-    <a href="/approvals/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>✅ Approvals</h3>
-      <p>Review and manage PTO requests, shift bids, and swap requests.</p>
-    </a>
-    <a href="/reports/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>📊 Reports</h3>
-      <p>Attendance summaries, schedule exports, and operational reports.</p>
-    </a>
-    <a href="/team-calendar/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>🗓 Team Calendar</h3>
-      <p>Visual overview of team schedules, PTO, and availability.</p>
-    </a>
-    {% if current_user and current_user.is_admin %}
-    <a href="/data/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>📥 Data Import</h3>
-      <p>Upload CSV/Excel files or sync data from external systems.</p>
-    </a>
-    <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
-      <h3>⚙️ Settings</h3>
-      <p>API connections, planning units, branding, and platform configuration.</p>
-    </a>
-    {% endif %}
+{# ═══ Customize Panel ═══ #}
+<div class="customize-overlay" id="custOverlay" onclick="closeCustomize()"></div>
+<div class="customize-panel" id="custPanel">
+  <h3>Customize Dashboard</h3>
+  <p class="sub">Drag to reorder. Toggle to show or hide widgets.</p>
+  <div id="custList"></div>
+  <div class="cust-actions">
+    <button class="cust-reset" onclick="resetDashPrefs()">Reset to Default</button>
+    <button class="cust-done" onclick="closeCustomize()">Done</button>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// ═══ Widget names for the customize panel ═══
+const WIDGET_LABELS = {
+  'kpi-stats':    'KPI Stats Row',
+  'ops-snapshot': 'Operational Snapshot',
+  'approvals':    'Pending Approvals',
+  'upcoming-pto': 'Upcoming Time Off',
+  'activity':     'Today\'s Activity',
+  'shift-notes':  'Open Shift Notes',
+  'feature-cards':'Feature Cards'
+};
+const DEFAULT_ORDER = ['kpi-stats','ops-snapshot','approvals','upcoming-pto','activity','shift-notes','feature-cards'];
+const STORAGE_KEY = 'serevo_dashboard_prefs';
+
+function getDashPrefs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return null;
+}
+function saveDashPrefs(prefs) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch(e) {}
+}
+
+function applyDashPrefs() {
+  const prefs = getDashPrefs();
+  if (!prefs) return;
+  const container = document.querySelector('.dashboard');
+  if (!container) return;
+  const widgets = Array.from(container.querySelectorAll('.dash-widget'));
+  const widgetMap = {};
+  widgets.forEach(w => { widgetMap[w.dataset.widget] = w; });
+
+  // Apply visibility
+  if (prefs.hidden) {
+    widgets.forEach(w => {
+      if (prefs.hidden.includes(w.dataset.widget)) w.classList.add('hidden-widget');
+      else w.classList.remove('hidden-widget');
+    });
+  }
+  // Apply order — move widgets into the specified order
+  if (prefs.order && prefs.order.length) {
+    // Find the first widget as anchor
+    let anchor = null;
+    for (const key of prefs.order) {
+      if (widgetMap[key]) { anchor = widgetMap[key]; break; }
+    }
+    if (anchor) {
+      let prev = anchor;
+      for (const key of prefs.order) {
+        const w = widgetMap[key];
+        if (w && w !== prev) {
+          prev.after(w);
+          prev = w;
+        } else if (w) {
+          prev = w;
+        }
+      }
+    }
+  }
+}
+
+function openCustomize() {
+  const prefs = getDashPrefs() || { order: DEFAULT_ORDER.slice(), hidden: [] };
+  const list = document.getElementById('custList');
+  const order = prefs.order || DEFAULT_ORDER.slice();
+  // Ensure all widgets are in the order list
+  DEFAULT_ORDER.forEach(k => { if (!order.includes(k)) order.push(k); });
+
+  list.innerHTML = '';
+  order.forEach(key => {
+    const label = WIDGET_LABELS[key] || key;
+    const checked = !(prefs.hidden || []).includes(key);
+    const item = document.createElement('div');
+    item.className = 'cust-item';
+    item.draggable = true;
+    item.dataset.key = key;
+    item.innerHTML = `<span class="drag-handle">☰</span><label><input type="checkbox" ${checked?'checked':''} onchange="updateCustPref()"> ${label}</label>`;
+    list.appendChild(item);
+  });
+  // Drag and drop within list
+  let dragItem = null;
+  list.querySelectorAll('.cust-item').forEach(item => {
+    item.addEventListener('dragstart', e => { dragItem = item; item.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    item.addEventListener('dragend', () => { if(dragItem) dragItem.classList.remove('dragging'); dragItem = null; });
+    item.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragItem && dragItem !== item) {
+        const rect = item.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (e.clientY < mid) item.before(dragItem);
+        else item.after(dragItem);
+        updateCustPref();
+      }
+    });
+  });
+  document.getElementById('custOverlay').classList.add('open');
+  document.getElementById('custPanel').classList.add('open');
+}
+
+function closeCustomize() {
+  document.getElementById('custOverlay').classList.remove('open');
+  document.getElementById('custPanel').classList.remove('open');
+  applyDashPrefs();
+}
+
+function updateCustPref() {
+  const items = document.querySelectorAll('#custList .cust-item');
+  const order = [];
+  const hidden = [];
+  items.forEach(item => {
+    const key = item.dataset.key;
+    order.push(key);
+    if (!item.querySelector('input').checked) hidden.push(key);
+  });
+  saveDashPrefs({ order, hidden });
+}
+
+function resetDashPrefs() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+  // Remove hidden classes
+  document.querySelectorAll('.dash-widget').forEach(w => w.classList.remove('hidden-widget'));
+  closeCustomize();
+  location.reload();
+}
+
+// Apply saved prefs on load
+applyDashPrefs();
+
+// ═══ AJAX data loaders (unchanged logic) ═══
 (function(){
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
   const el = document.getElementById('activityBody');
@@ -170,7 +388,6 @@
     const s = data.stats;
     if (s.total_entries === 0) { el.innerHTML = '<span style="color:var(--text-muted);">No clock activity yet today.</span>'; return; }
 
-    // Recent 5 entries
     const recent = (data.rows || []).slice(-5).reverse();
     let html = `<div style="display:flex; gap:1.2rem; flex-wrap:wrap; margin-bottom:14px;">
       <div><strong style="font-size:1.1rem;">${s.currently_in}</strong> <span>clocked in</span></div>
@@ -249,7 +466,6 @@
 
   const today = new Date().toISOString().slice(0,10);
 
-  // Load today's coded attendance events
   fetch('/attendance/api/events', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
