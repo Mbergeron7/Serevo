@@ -338,6 +338,15 @@
 
 <!-- ═══════════ INTRADAY OPTIMIZER ═══════════ -->
 <div id="view-optimizer" class="view-panel">
+  <!-- Smart VTO/OT Suggestions -->
+  <div class="report-card" id="smartSuggestCard" style="margin-bottom:1rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;font-size:.92rem;">🎯 Smart VTO / OT Suggestions <span class="hint">next 4 hours</span></h3>
+      <button class="btn-action" style="padding:4px 14px;font-size:.76rem;" onclick="loadSmartSuggestions()">Refresh</button>
+    </div>
+    <div id="smartSuggestSummary" style="display:flex;gap:1.2rem;margin-bottom:10px;font-size:.82rem;"></div>
+    <div id="smartSuggestBody" style="font-size:.82rem;color:var(--text-muted);">Click <strong>Load</strong> or <strong>Refresh</strong> to analyze staffing.</div>
+  </div>
   <div id="optEmpty" class="empty"><strong>⚡ Optimizer</strong><br>Analyzes staffing gaps and suggests break moves, VTO offers, and skill reassignments.<br><small style="color:var(--text-muted)">Select a date and click <strong>Load</strong> to generate recommendations.</small></div>
   <div id="optContent" style="display:none;">
     <div class="stats-row" id="optStats"></div>
@@ -705,7 +714,7 @@ const TAB_LOADERS = {
     renderEff(DATA.efficiency);
   },
   async netstaffing() { renderNetStaffing(); },
-  async optimizer()    { renderOptimizer(); },
+  async optimizer()    { loadSmartSuggestions(); renderOptimizer(); },
   async gamify()       { renderGamify(); },
   async liveagents()   { /* rendered from adherence data, already loaded */ },
 };
@@ -1662,6 +1671,61 @@ function renderOptimizer() {
     $('optRecs').innerHTML = h;
     $('optRecs').querySelectorAll('table.sortable').forEach(t => { if(window.initSortable) initSortable(t); });
   });
+}
+
+/* ── Smart VTO/OT Suggestions ── */
+function loadSmartSuggestions() {
+  const lob = selectedLobParam(), date = $('inpDate').value;
+  const body = $('smartSuggestBody');
+  const summary = $('smartSuggestSummary');
+  body.innerHTML = '<span style="color:var(--text-muted);">Analyzing staffing…</span>';
+  summary.innerHTML = '';
+
+  api('/realtime/api/vto-ot-suggestions', { lob, date }).then(d => {
+    if (!d || !d.success) {
+      body.innerHTML = '<span style="color:#c00;">' + esc(d?.error || 'Failed to load suggestions') + '</span>';
+      return;
+    }
+    const s = d.summary;
+    let sumHtml = '';
+    if (s.total_vto > 0) sumHtml += `<div style="background:#ecfdf5;color:#065f46;padding:4px 12px;border-radius:6px;font-weight:600;">🏠 ${s.total_vto} agent${s.total_vto!==1?'s':''} can VTO</div>`;
+    if (s.total_ot > 0) sumHtml += `<div style="background:#fff7ed;color:#9a3412;padding:4px 12px;border-radius:6px;font-weight:600;">⏰ ${s.total_ot} agent${s.total_ot!==1?'s':''} needed for OT</div>`;
+    if (!s.total_vto && !s.total_ot) sumHtml = '<div style="background:var(--surface);padding:4px 12px;border-radius:6px;color:var(--text-muted);">✅ Staffing is well-balanced for the next 4 hours</div>';
+    summary.innerHTML = sumHtml;
+
+    if (!d.suggestions || !d.suggestions.length) {
+      body.innerHTML = '<span style="color:var(--text-muted);">No VTO or OT needed right now.</span>';
+      return;
+    }
+
+    let h = '<table class="rt" style="font-size:.8rem;"><thead><tr><th>Interval</th><th>Type</th><th>Count</th><th>Scheduled</th><th>Required</th><th>Reason</th><th style="text-align:center">Action</th></tr></thead><tbody>';
+    d.suggestions.forEach(r => {
+      const bg = r.type === 'VTO' ? 'background:rgba(16,185,129,0.06);' : 'background:rgba(249,115,22,0.06);';
+      const badge = r.type === 'VTO'
+        ? '<span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700;">VTO</span>'
+        : '<span style="background:#f97316;color:#fff;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700;">OT</span>';
+      h += `<tr style="${bg}">
+        <td style="font-weight:600;">${esc(r.interval)}</td>
+        <td>${badge}</td>
+        <td style="font-weight:700;">${r.count}</td>
+        <td>${r.scheduled}</td>
+        <td>${r.required}</td>
+        <td style="color:var(--text-muted);">${esc(r.reason)}</td>
+        <td style="text-align:center"><button class="btn-action" style="padding:3px 10px;font-size:.72rem;" onclick="createVTOOTFromSuggestion('${r.type}','${r.interval}',${r.count})">Create Post</button></td>
+      </tr>`;
+    });
+    h += '</tbody></table>';
+    body.innerHTML = h;
+  }).catch(e => {
+    body.innerHTML = '<span style="color:#c00;">Error loading suggestions</span>';
+  });
+}
+
+function createVTOOTFromSuggestion(type, interval, count) {
+  // Navigate to VTO/OT management page with pre-filled params
+  const date = $('inpDate').value || new Date().toISOString().slice(0,10);
+  const lob = selectedLobParam();
+  window.open(`/realtime/vto-ot?prefill_type=${type.toLowerCase()}&prefill_date=${date}&prefill_time=${interval}&prefill_count=${count}&prefill_lob=${encodeURIComponent(lob)}`, '_blank');
 }
 
 function applyRec(id) {

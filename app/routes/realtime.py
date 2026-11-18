@@ -2178,3 +2178,195 @@ def vto_ot_delete():
     db.session.delete(post)
     db.session.commit()
     return jsonify(success=True)
+
+
+# ═════════════════════════════════════════════════════════════
+# SMART VTO / OT SUGGESTIONS
+# ═════════════════════════════════════════════════════════════
+
+@realtime_bp.route("/api/vto-ot-suggestions", methods=["POST"])
+@login_required
+def vto_ot_suggestions():
+    """Compare scheduled agents vs forecast requirements for the next 4 hours
+    and return actionable VTO (overstaffed) / OT (understaffed) suggestions.
+
+    POST JSON: {lob?, date?}
+    """
+    try:
+        from app.models import (db, Schedule, ForecastInterval,
+                                RequirementInterval, PlanningUnit,
+                                EmployeePlanningUnit, Employee)
+
+        payload = request.get_json(silent=True) or {}
+        lob = (payload.get("lob") or "").strip() or LOB_ALL_LABEL
+        date_str = payload.get("date", "")
+        date_obj = (datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_str else datetime.date.today())
+
+        user = get_current_user()
+        if user and user.get("is_demo"):
+            return _demo_vto_ot_suggestions(date_obj)
+
+        # Resolve PU ids
+        pu_ids = []
+        if lob and lob != LOB_ALL_LABEL:
+            for lname in lob.split(","):
+                lname = lname.strip()
+                if not lname or lname == LOB_ALL_LABEL:
+                    continue
+                pu = PlanningUnit.query.filter(
+                    db.func.lower(PlanningUnit.name) == lname.lower()
+                ).first()
+                if pu:
+                    pu_ids.append(pu.id)
+        if not pu_ids:
+            # All LOBs
+            pu_ids = [p.id for p in PlanningUnit.query.filter_by(is_active=True).all()]
+
+        # Determine time window: now → +4 hours in 30-min intervals
+        tz = get_app_timezone()
+        now = datetime.datetime.now(tz) if tz else datetime.datetime.now()
+        now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+
+        # Round to current 30-min interval
+        base_min = (now_naive.minute // 30) * 30
+        interval_start = now_naive.replace(minute=base_min, second=0, microsecond=0)
+
+        suggestions = []
+        total_vto = 0
+        total_ot = 0
+        interval_count = 0
+
+        for i in range(8):  # 8 × 30 min = 4 hours
+            iv_time = interval_start + datetime.timedelta(minutes=i * 30)
+            iv_label = iv_time.strftime("%H:%M")
+            iv_dt = datetime.datetime.combine(date_obj, iv_time.time())
+
+            # Count scheduled agents whose shift covers this interval
+            iv_time_obj = iv_time.time()
+            scheduled = Schedule.query.filter(
+                Schedule.planning_unit_id.in_(pu_ids),
+                Schedule.schedule_date == date_obj,
+                Schedule.shift_start <= iv_time_obj,
+                Schedule.shift_end > iv_time_obj,
+                Schedule.status == "scheduled",
+            ).count()
+
+            # Also count null-PU schedules for employees in these PUs
+            direct_emp_ids = {e.id for e in Employee.query.filter(
+                Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
+            ).all()}
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                EmployeePlanningUnit.planning_unit_id.in_(pu_ids)
+            ).all()}
+            all_emp_ids = list(direct_emp_ids | assigned_emp_ids)
+            if all_emp_ids:
+                null_pu = Schedule.query.filter(
+                    Schedule.planning_unit_id.is_(None),
+                    Schedule.employee_id.in_(all_emp_ids),
+                    Schedule.schedule_date == date_obj,
+                    Schedule.shift_start <= iv_time_obj,
+                    Schedule.shift_end > iv_time_obj,
+                    Schedule.status == "scheduled",
+                ).count()
+                scheduled += null_pu
+
+            # Get requirement (Erlang-C based) for this interval
+            req_row = RequirementInterval.query.filter(
+                RequirementInterval.planning_unit_id.in_(pu_ids),
+                RequirementInterval.timestamp >= iv_dt,
+                RequirementInterval.timestamp < iv_dt + datetime.timedelta(minutes=30),
+            ).first()
+            required = int(req_row.agents_required) if req_row else 0
+
+            # Fallback: estimate from forecast if no requirement exists
+            if not required:
+                fc = ForecastInterval.query.filter(
+                    ForecastInterval.planning_unit_id.in_(pu_ids),
+                    ForecastInterval.timestamp >= iv_dt,
+                    ForecastInterval.timestamp < iv_dt + datetime.timedelta(minutes=30),
+                ).first()
+                if fc and fc.offered and fc.aht:
+                    # Simple Erlang approximation: traffic / (1 - occupancy)
+                    traffic = (fc.offered * fc.aht) / 1800
+                    required = max(int(traffic / 0.80) + 1, 1)  # ~80% occupancy
+
+            interval_count += 1
+
+            if scheduled == 0 and required == 0:
+                continue
+
+            gap = scheduled - required
+            if gap >= 2:
+                count = gap
+                total_vto += count
+                suggestions.append({
+                    "interval": iv_label,
+                    "type": "VTO",
+                    "count": count,
+                    "scheduled": scheduled,
+                    "required": required,
+                    "reason": f"{count} agent{'s' if count != 1 else ''} over requirement",
+                })
+            elif gap <= -1 and required > 0:
+                count = abs(gap)
+                total_ot += count
+                suggestions.append({
+                    "interval": iv_label,
+                    "type": "OT",
+                    "count": count,
+                    "scheduled": scheduled,
+                    "required": required,
+                    "reason": f"{count} agent{'s' if count != 1 else ''} under requirement",
+                })
+
+        return jsonify({
+            "success": True,
+            "suggestions": suggestions,
+            "summary": {
+                "total_vto": total_vto,
+                "total_ot": total_ot,
+                "next_4h_intervals": interval_count,
+            },
+        })
+
+    except Exception as e:
+        log.exception("VTO/OT suggestions error")
+        return jsonify({"success": False, "error": str(e)})
+
+
+def _demo_vto_ot_suggestions(date_obj):
+    """Return realistic demo VTO/OT suggestions."""
+    now = datetime.datetime.now()
+    base_min = (now.minute // 30) * 30
+    start = now.replace(minute=base_min, second=0, microsecond=0)
+
+    suggestions = []
+    import random
+    random.seed(date_obj.toordinal())
+    for i in range(8):
+        iv = start + datetime.timedelta(minutes=i * 30)
+        label = iv.strftime("%H:%M")
+        sched = random.randint(10, 20)
+        req = random.randint(8, 18)
+        gap = sched - req
+        if gap >= 2:
+            suggestions.append({
+                "interval": label, "type": "VTO", "count": gap,
+                "scheduled": sched, "required": req,
+                "reason": f"{gap} agents over requirement",
+            })
+        elif gap <= -1:
+            suggestions.append({
+                "interval": label, "type": "OT", "count": abs(gap),
+                "scheduled": sched, "required": req,
+                "reason": f"{abs(gap)} agents under requirement",
+            })
+
+    total_vto = sum(s["count"] for s in suggestions if s["type"] == "VTO")
+    total_ot = sum(s["count"] for s in suggestions if s["type"] == "OT")
+    return jsonify({
+        "success": True,
+        "suggestions": suggestions,
+        "summary": {"total_vto": total_vto, "total_ot": total_ot, "next_4h_intervals": 8},
+    })
