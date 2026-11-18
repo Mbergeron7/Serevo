@@ -9,7 +9,7 @@ from datetime import date
 
 from flask import Blueprint, render_template, redirect, session
 from app.auth import get_current_user
-from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest
+from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest, CallRoute, IntervalActual, AppSetting
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -50,7 +50,10 @@ def index():
             setup = {
                 "has_units": pu_count > 0,
                 "has_employees": emp_count > 0,
+                "has_sheets": bool(AppSetting.get("google_sheet_key")),
+                "has_routes": CallRoute.query.first() is not None,
                 "has_forecast": ForecastInterval.query.first() is not None,
+                "has_history": IntervalActual.query.filter(IntervalActual.timestamp < today).first() is not None,
                 "has_schedules": Schedule.query.first() is not None,
             }
             # Pending approvals for admin/supervisor
@@ -75,7 +78,7 @@ def index():
             import logging
             logging.getLogger("serevo.dashboard").exception("Failed to load dashboard stats")
             live_stats = {"total_employees": 0, "planning_units": 0, "on_today": 0, "pto_today": 0}
-            setup = {"has_units": False, "has_employees": False, "has_forecast": False, "has_schedules": False}
+            setup = {"has_units": False, "has_employees": False, "has_sheets": False, "has_routes": False, "has_forecast": False, "has_history": False, "has_schedules": False}
             pending = {}
             upcoming_pto = 0
     return render_template("dashboard.html", user=user, demo_stats=demo_stats,
