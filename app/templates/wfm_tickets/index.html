@@ -486,10 +486,12 @@
         <input id="ticketActivityName" type="text" placeholder="e.g. Product Launch Training">
       </div>
 
-      <!-- Skill name -->
+      <!-- Skill update: current + new -->
       <div class="form-group cond-field" id="skillNameGroup" data-show="skill_update" style="display:none;">
-        <label>Skill Name</label>
-        <input id="ticketSkillName" type="text" placeholder="e.g. Billing Queue, French Support">
+        <label>Current Skill/Queue</label>
+        <input id="ticketCurrentSkill" type="text" placeholder="Current skill assignment">
+        <label style="margin-top:8px;">New Skill/Queue</label>
+        <input id="ticketNewSkill" type="text" placeholder="Requested new skill assignment">
       </div>
 
       <!-- Status change description -->
@@ -951,7 +953,9 @@ async function submitTicket(){
   const new_start=(document.getElementById('ticketNewStart')||{}).value||'';
   const new_end=(document.getElementById('ticketNewEnd')||{}).value||'';
   const activity_name=(document.getElementById('ticketActivityName')||{}).value||'';
-  const skill_name=(document.getElementById('ticketSkillName')||{}).value||'';
+  const current_skill=(document.getElementById('ticketCurrentSkill')||{}).value||'';
+  const new_skill=(document.getElementById('ticketNewSkill')||{}).value||'';
+  const skill_name=current_skill&&new_skill?current_skill+' → '+new_skill:(current_skill||new_skill);
   const status_change=(document.getElementById('ticketStatusChange')||{}).value||'';
   const date_mode=(document.getElementById('ticketDateMode')||{}).value||'single';
   const time_start=(document.getElementById('ticketTimeStart')||{}).value||'';
@@ -1047,7 +1051,13 @@ async function viewTicket(id){
     if(t.contracted_hours)fields.push(['Contracted Hours',t.contracted_hours]);
     if(t.swap_with)fields.push(['Swap With',esc(t.swap_with)]);
     if(t.activity_name)fields.push(['Activity',esc(t.activity_name)]);
-    if(t.skill_name)fields.push(['Skill',esc(t.skill_name)]);
+    if(t.skill_name){
+      if(t.skill_name.includes('→')){
+        const parts=t.skill_name.split('→').map(s=>s.trim());
+        fields.push(['Current Skill',esc(parts[0])]);
+        fields.push(['New Skill',esc(parts[1])]);
+      } else { fields.push(['Skill',esc(t.skill_name)]); }
+    }
     if(t.status_change)fields.push(['Status Change',esc(t.status_change)]);
     if(t.has_documentation===true)fields.push(['Documentation','Yes']);
     else if(t.has_documentation===false)fields.push(['Documentation','No']);

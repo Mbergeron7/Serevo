@@ -1931,7 +1931,7 @@ def get_demo_wfm_tickets():
            category="skill_update", priority="low", status="in_progress", submitted_by=99, submitter_name="Team Lead",
            assigned_to=99, assignee_name="WFM Analyst",
            affected_agents="Riley Kim", affected_date=None, affected_date_end=None, lob="Tech Help Desk",
-           shift_time=None, overtime_hours=None, swap_with=None, skill_name="Billing Queue",
+           shift_time=None, overtime_hours=None, swap_with=None, skill_name="General Support → Billing Queue",
            created_at=(today - datetime.timedelta(days=2)).isoformat(), updated_at=(today - datetime.timedelta(days=1)).isoformat()),
         _t(8, subject="Employee Status Update — Drew Campbell", description="Drew is moving to part-time starting next pay period.",
            category="employee_status", priority="medium", status="open", submitted_by=99, submitter_name="Team Lead",
