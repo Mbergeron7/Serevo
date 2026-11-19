@@ -178,12 +178,9 @@
         <option value="ot_inquiry">OT Inquiry</option>
         <option value="move_break">Move Break/Lunch</option>
         <option value="schedule_update">Schedule Update</option>
-        <option value="schedule_error">Schedule Error</option>
         <option value="shift_swap">Shift Swap/Offer</option>
-        <option value="suggestions">Suggestions/Feedback</option>
-        <option value="unpaid_timeoff">Unpaid Time Off</option>
+        <option value="timeoff">Time Off / Vacation</option>
         <option value="wfm_department">WFM Department</option>
-        <option value="testing">Testing</option>
       </select>
       <div class="spacer"></div>
       <div class="refresh-info">
@@ -318,14 +315,11 @@
         <option value="skill_update">🔧 Skill Update</option>
         <option value="employee_status">👤 Employee Status Update</option>
         <option value="ot_inquiry">❓ Is OT Available?</option>
-        <option value="move_break">☕ Move Break/Lunch Because of Meeting</option>
+        <option value="move_break">☕ Move Break/Lunch</option>
         <option value="schedule_update">📝 Schedule Update</option>
-        <option value="schedule_error">⚠️ Schedule Error Adjustment</option>
         <option value="shift_swap">🔄 Shift Swap/Offer</option>
-        <option value="suggestions">💡 Suggestions/Feedback</option>
-        <option value="unpaid_timeoff">🏖️ Unpaid Time Off/Vacation</option>
+        <option value="timeoff">🏖️ Time Off / Vacation</option>
         <option value="wfm_department">🏢 WFM Department Work</option>
-        <option value="testing">🧪 Testing</option>
       </select>
     </div>
 
@@ -352,7 +346,7 @@
       </div>
 
       <!-- Affected Agent(s) — searchable dropdown -->
-      <div class="form-group cond-field" id="agentGroup" data-show="accommodation add_hours team_meeting training offline_segment late_remove_absence skill_update employee_status ot_inquiry move_break schedule_update schedule_error shift_swap unpaid_timeoff">
+      <div class="form-group cond-field" id="agentGroup" data-show="accommodation add_hours team_meeting training offline_segment late_remove_absence skill_update employee_status ot_inquiry move_break schedule_update shift_swap timeoff">
         <label>Affected Agent(s) *</label>
         <div id="agentSelectWrap" style="position:relative;">
           <input type="text" id="agentSearch" placeholder="Search agents…" autocomplete="off"
@@ -363,7 +357,7 @@
       </div>
 
       <!-- Action Type sub-selector -->
-      <div class="form-group cond-field" id="actionTypeGroup" data-show="accommodation team_meeting training shift_swap" style="display:none;">
+      <div class="form-group cond-field" id="actionTypeGroup" data-show="accommodation team_meeting training shift_swap move_break timeoff" style="display:none;">
         <label>Action</label>
         <select id="ticketActionType">
           <option value="add">Add</option>
@@ -414,7 +408,7 @@
       </div>
 
       <!-- Date mode: single/multi -->
-      <div class="form-group cond-field" id="dateModeGroup" data-show="add_hours schedule_update" style="display:none;">
+      <div class="form-group cond-field" id="dateModeGroup" data-show="add_hours schedule_update shift_swap" style="display:none;">
         <label>Duration</label>
         <select id="ticketDateMode" onchange="toggleDateMode()">
           <option value="single">Single Day</option>
@@ -423,7 +417,7 @@
       </div>
 
       <!-- Date row -->
-      <div class="form-row cond-field" id="dateGroup" data-show="accommodation add_hours team_meeting training offline_segment late_remove_absence ot_inquiry move_break schedule_update schedule_error shift_swap unpaid_timeoff">
+      <div class="form-row cond-field" id="dateGroup" data-show="accommodation add_hours team_meeting training offline_segment late_remove_absence ot_inquiry move_break schedule_update shift_swap timeoff">
         <div class="form-group">
           <label id="dateLabel">Effective Date *</label>
           <input id="ticketDate" type="date">
@@ -458,8 +452,8 @@
         </div>
       </div>
 
-      <!-- Swap With (shift_swap only) -->
-      <div class="form-group cond-field" id="swapGroup" data-show="shift_swap" style="display:none;">
+      <!-- Swap With (legacy, hidden — replaced by offering/receiving agents) -->
+      <div class="form-group cond-field" id="swapGroup" data-show="" style="display:none;">
         <label>Swap With (Agent)</label>
         <select id="ticketSwapWith">
           <option value="">— Select Agent —</option>
@@ -494,10 +488,83 @@
         <input id="ticketNewSkill" type="text" placeholder="Requested new skill assignment">
       </div>
 
-      <!-- Status change description -->
+      <!-- Offline segment type -->
+      <div class="form-group cond-field" id="offlineTypeGroup" data-show="offline_segment" style="display:none;">
+        <label>Segment Type</label>
+        <select id="ticketOfflineType">
+          <option value="coaching">Coaching</option>
+          <option value="meeting">Meeting</option>
+          <option value="training">Training</option>
+          <option value="project_work">Project Work</option>
+          <option value="admin">Admin / Paperwork</option>
+          <option value="system_issue">System Issue</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <!-- Status change dropdown -->
       <div class="form-group cond-field" id="statusChangeGroup" data-show="employee_status" style="display:none;">
-        <label>Status Change Description</label>
-        <input id="ticketStatusChange" type="text" placeholder="e.g. Moving to part-time, LOA return">
+        <label>New Status</label>
+        <select id="ticketStatusChange">
+          <option value="">— Select Status —</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="loa">Leave of Absence (LOA)</option>
+          <option value="transfer_lob">Transfer LOB</option>
+          <option value="part_time">Move to Part-Time</option>
+          <option value="full_time">Move to Full-Time</option>
+          <option value="probation">Probation</option>
+          <option value="return_from_loa">Return from LOA</option>
+          <option value="termination">Termination</option>
+          <option value="resignation">Resignation</option>
+        </select>
+      </div>
+
+      <!-- Time Off type dropdown -->
+      <div class="form-group cond-field" id="timeoffTypeGroup" data-show="timeoff" style="display:none;">
+        <label>Time Off Type</label>
+        <select id="ticketTimeoffType">
+          <option value="paid_vacation">Paid Vacation</option>
+          <option value="unpaid_timeoff">Unpaid Time Off</option>
+          <option value="appointment">Appointment</option>
+        </select>
+      </div>
+
+      <!-- Move break/lunch: old + new times -->
+      <div class="cond-field" id="moveBreakTimesGroup" data-show="move_break" style="display:none;">
+        <div class="form-row">
+          <div class="form-group"><label>Current Start</label><input id="ticketBreakOldStart" type="time"></div>
+          <div class="form-group"><label>Current End</label><input id="ticketBreakOldEnd" type="time"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>New Start</label><input id="ticketBreakNewStart" type="time"></div>
+          <div class="form-group"><label>New End</label><input id="ticketBreakNewEnd" type="time"></div>
+        </div>
+      </div>
+
+      <!-- Shift swap: offering agent + receiving agent from dropdown -->
+      <div class="form-group cond-field" id="swapOfferAgentGroup" data-show="shift_swap" style="display:none;">
+        <label>Agent Offering Shift</label>
+        <select id="ticketSwapOffering"><option value="">— Select Agent —</option></select>
+      </div>
+      <div class="form-group cond-field" id="swapReceiveAgentGroup" data-show="shift_swap" style="display:none;">
+        <label>Agent Receiving Shift</label>
+        <select id="ticketSwapReceiving"><option value="">— Select Agent —</option></select>
+      </div>
+
+      <!-- Add hours: weekly grid (shown when multi-day selected) -->
+      <div class="cond-field" id="weeklyHoursGroup" data-show="add_hours" style="display:none;">
+        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Hours Per Day</label>
+        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 8px;align-items:center;font-size:.82rem;">
+          <span style="font-weight:600;">Day</span><span style="font-weight:600;">Start</span><span style="font-weight:600;">End</span>
+          <span>Monday</span><input type="time" id="ahMon_s" style="padding:4px;"><input type="time" id="ahMon_e" style="padding:4px;">
+          <span>Tuesday</span><input type="time" id="ahTue_s" style="padding:4px;"><input type="time" id="ahTue_e" style="padding:4px;">
+          <span>Wednesday</span><input type="time" id="ahWed_s" style="padding:4px;"><input type="time" id="ahWed_e" style="padding:4px;">
+          <span>Thursday</span><input type="time" id="ahThu_s" style="padding:4px;"><input type="time" id="ahThu_e" style="padding:4px;">
+          <span>Friday</span><input type="time" id="ahFri_s" style="padding:4px;"><input type="time" id="ahFri_e" style="padding:4px;">
+          <span>Saturday</span><input type="time" id="ahSat_s" style="padding:4px;"><input type="time" id="ahSat_e" style="padding:4px;">
+          <span>Sunday</span><input type="time" id="ahSun_s" style="padding:4px;"><input type="time" id="ahSun_e" style="padding:4px;">
+        </div>
       </div>
 
       <!-- Subject (auto-generated but editable) -->
@@ -550,12 +617,14 @@ const categoryLabels = {
   accommodation:'Accommodation',add_hours:'Add Hours',team_meeting:'Team Meeting',
   training:'Training',offline_segment:'Offline Segment',late_remove_absence:'Late/Remove Absence',
   skill_update:'Skill Update',employee_status:'Employee Status',ot_inquiry:'OT Inquiry',
-  move_break:'Move Break/Lunch',schedule_update:'Schedule Update',schedule_error:'Schedule Error',
-  shift_swap:'Shift Swap/Offer',suggestions:'Suggestions/Feedback',unpaid_timeoff:'Unpaid Time Off',
-  wfm_department:'WFM Department',testing:'Testing',
+  move_break:'Move Break/Lunch',schedule_update:'Schedule Update',
+  shift_swap:'Shift Swap/Offer',timeoff:'Time Off / Vacation',
+  wfm_department:'WFM Department',
   // Legacy mappings for old tickets
   schedule_change:'Schedule Change',overtime:'Overtime',time_off_exception:'Time Off Exception',
-  headcount:'Headcount',forecast_adjustment:'Forecast Adjustment',general:'General'
+  headcount:'Headcount',forecast_adjustment:'Forecast Adjustment',general:'General',
+  schedule_error:'Schedule Error',suggestions:'Suggestions/Feedback',
+  unpaid_timeoff:'Unpaid Time Off',testing:'Testing'
 };
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -827,17 +896,32 @@ function onCategoryChange(){
     else if(cat==='team_meeting'){actSel.innerHTML='<option value="add">Add</option><option value="remove">Remove</option><option value="change">Change</option>';}
     else if(cat==='training'){actSel.innerHTML='<option value="add">Add</option><option value="remove">Remove</option><option value="move">Move</option>';}
     else if(cat==='shift_swap'){actSel.innerHTML='<option value="offer">Shift Offer</option><option value="swap">Shift Swap</option>';}
+    else if(cat==='move_break'){actSel.innerHTML='<option value="add">Add</option><option value="remove">Delete</option><option value="adjust">Adjust</option>';}
+    else if(cat==='timeoff'){actSel.innerHTML='<option value="add">Add</option><option value="remove">Remove</option><option value="adjust">Adjust</option>';}
   }
 
-  // Show/hide date end based on category (some need range, some don't)
+  // Show/hide date end based on category
   const dateEnd=document.getElementById('dateEndGroup');
-  if(dateEnd) dateEnd.style.display=['accommodation','unpaid_timeoff','add_hours','schedule_update'].includes(cat)?'':'none';
+  if(dateEnd) dateEnd.style.display=['accommodation','timeoff','add_hours','schedule_update','shift_swap'].includes(cat)?'':'none';
+
+  // Show weekly hours grid for add_hours multi-day
+  const whg=document.getElementById('weeklyHoursGroup');
+  if(whg) whg.style.display=(cat==='add_hours')?'none':'none'; // shown via toggleDateMode
+
+  // Populate swap agent dropdowns with the loaded employees
+  if(cat==='shift_swap'){
+    const opts='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
+    const so=document.getElementById('ticketSwapOffering');
+    const sr=document.getElementById('ticketSwapReceiving');
+    if(so)so.innerHTML=opts;
+    if(sr)sr.innerHTML=opts;
+  }
 
   // Update date label
   const dl=document.getElementById('dateLabel');
   if(dl){
     if(cat==='shift_swap')dl.textContent='Swap Date *';
-    else if(cat==='unpaid_timeoff')dl.textContent='Start Date *';
+    else if(cat==='timeoff')dl.textContent='Start Date *';
     else dl.textContent='Effective Date *';
   }
 
@@ -845,8 +929,18 @@ function onCategoryChange(){
 }
 function toggleDateMode(){
   const mode=document.getElementById('ticketDateMode').value;
+  const cat=document.getElementById('ticketCategory').value;
   const eg=document.getElementById('dateEndGroup');
   if(eg) eg.style.display=(mode==='multi')?'':'none';
+  // For add_hours multi-day: show weekly grid, hide single time fields
+  const whg=document.getElementById('weeklyHoursGroup');
+  const tg=document.getElementById('timeGroup');
+  const otg=document.getElementById('otGroup');
+  if(cat==='add_hours'){
+    if(whg) whg.style.display=(mode==='multi')?'':'none';
+    if(tg) tg.style.display=(mode==='multi')?'none':'';
+    if(otg) otg.style.display=(mode==='multi')?'none':'';
+  }
 }
 
 /* ── Agent Multi-Select ── */
@@ -937,7 +1031,15 @@ async function submitTicket(){
   const affected_date_end=(document.getElementById('ticketDateEnd')||{}).value||'';
   const shift_time=(document.getElementById('ticketShift')||{}).value||'';
   const overtime_hours=parseFloat((document.getElementById('ticketOtHours')||{}).value)||null;
-  const swap_with=(document.getElementById('ticketSwapWith')||{}).value||'';
+  const swap_offering=(document.getElementById('ticketSwapOffering')||{}).value||'';
+  const swap_receiving=(document.getElementById('ticketSwapReceiving')||{}).value||'';
+  const swap_with=swap_offering&&swap_receiving?swap_offering+' ↔ '+swap_receiving:(document.getElementById('ticketSwapWith')||{}).value||'';
+  const offline_type=(document.getElementById('ticketOfflineType')||{}).value||'';
+  const timeoff_type=(document.getElementById('ticketTimeoffType')||{}).value||'';
+  const break_old_start=(document.getElementById('ticketBreakOldStart')||{}).value||'';
+  const break_old_end=(document.getElementById('ticketBreakOldEnd')||{}).value||'';
+  const break_new_start=(document.getElementById('ticketBreakNewStart')||{}).value||'';
+  const break_new_end=(document.getElementById('ticketBreakNewEnd')||{}).value||'';
 
   // Build affected_agents from selected chips
   const agents=selectedAgentIds.map(id=>{const e=ddEmployees.find(x=>x.id===id);return e?e.name:'';}).filter(Boolean).join(', ');
@@ -995,6 +1097,25 @@ async function submitTicket(){
   if(skill_name)body.skill_name=skill_name;
   if(status_change)body.status_change=status_change;
   if(date_mode!=='single')body.date_mode=date_mode;
+  if(offline_type)body.activity_name=(body.activity_name||'')?body.activity_name:offline_type;
+  if(timeoff_type)body.accommodation_type=timeoff_type; // reuse field for timeoff type
+  // Move break times → store in current/new start/end
+  if(category==='move_break'){
+    if(break_old_start)body.current_start=break_old_start;
+    if(break_old_end)body.current_end=break_old_end;
+    if(break_new_start)body.new_start=break_new_start;
+    if(break_new_end)body.new_end=break_new_end;
+  }
+  // Add hours weekly grid → store in day_times
+  if(category==='add_hours'&&date_mode==='multi'){
+    const wk={};
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{
+      const s=(document.getElementById('ah'+d+'_s')||{}).value||'';
+      const e=(document.getElementById('ah'+d+'_e')||{}).value||'';
+      if(s&&e)wk[d.toLowerCase()]=s+' - '+e;
+    });
+    if(Object.keys(wk).length)body.day_times=JSON.stringify(wk);
+  }
 
   const resp=await fetch('/wfm-tickets/api/tickets/create',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(body)});
   const data=await resp.json();
