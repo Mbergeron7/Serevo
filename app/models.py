@@ -3109,8 +3109,10 @@ class WfmTicket(db.Model):
     subject      = db.Column(db.String(255), nullable=False)
     description  = db.Column(db.Text, nullable=False)
     category     = db.Column(db.String(50), nullable=False, default="general")
-    # Categories: schedule_change, overtime, time_off_exception, shift_swap,
-    #             headcount, forecast_adjustment, general
+    # Categories: accommodation, add_hours, team_meeting, training, offline_segment,
+    #             late_remove_absence, skill_update, employee_status, ot_inquiry,
+    #             move_break, schedule_update, schedule_error, shift_swap,
+    #             suggestions, unpaid_timeoff, wfm_department, testing
     priority     = db.Column(db.String(20), nullable=False, default="medium")
     status       = db.Column(db.String(20), nullable=False, default="open")
     # Status: open, in_progress, resolved, closed
@@ -3123,6 +3125,20 @@ class WfmTicket(db.Model):
     shift_time   = db.Column(db.String(60), nullable=True)   # e.g. "9:00 AM - 5:00 PM"
     overtime_hours = db.Column(db.Float, nullable=True)      # hours of OT requested
     swap_with    = db.Column(db.String(200), nullable=True)   # agent to swap with
+    # Extended fields for expanded request types
+    action_type       = db.Column(db.String(20), nullable=True)   # add, update, remove, move (sub-action)
+    accommodation_type = db.Column(db.String(30), nullable=True)  # school, personal, medical
+    has_documentation = db.Column(db.Boolean, nullable=True)
+    day_times         = db.Column(db.Text, nullable=True)         # JSON: {"mon":"9-5","tue":"10-6",...}
+    contracted_hours  = db.Column(db.Float, nullable=True)
+    current_start     = db.Column(db.String(10), nullable=True)   # schedule update: current shift start
+    current_end       = db.Column(db.String(10), nullable=True)   # schedule update: current shift end
+    new_start         = db.Column(db.String(10), nullable=True)   # schedule update: new shift start
+    new_end           = db.Column(db.String(10), nullable=True)   # schedule update: new shift end
+    activity_name     = db.Column(db.String(200), nullable=True)  # training/meeting name
+    skill_name        = db.Column(db.String(100), nullable=True)  # skill update target
+    status_change     = db.Column(db.String(100), nullable=True)  # employee status change description
+    date_mode         = db.Column(db.String(10), default="single") # single or multi
     resolution   = db.Column(db.Text, nullable=True)
     internal_note = db.Column(db.Text, nullable=True)     # WFM-only internal notes
     closed_at    = db.Column(db.DateTime, nullable=True)
@@ -3155,6 +3171,19 @@ class WfmTicket(db.Model):
             "shift_time": self.shift_time,
             "overtime_hours": self.overtime_hours,
             "swap_with": self.swap_with,
+            "action_type": self.action_type,
+            "accommodation_type": self.accommodation_type,
+            "has_documentation": self.has_documentation,
+            "day_times": self.day_times,
+            "contracted_hours": self.contracted_hours,
+            "current_start": self.current_start,
+            "current_end": self.current_end,
+            "new_start": self.new_start,
+            "new_end": self.new_end,
+            "activity_name": self.activity_name,
+            "skill_name": self.skill_name,
+            "status_change": self.status_change,
+            "date_mode": self.date_mode,
             "resolution": self.resolution,
             "internal_note": self.internal_note,
             "closed_at": self.closed_at.isoformat() if self.closed_at else None,
