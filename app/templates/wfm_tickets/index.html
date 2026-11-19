@@ -567,6 +567,36 @@
         </div>
       </div>
 
+      <!-- Schedule Update: weekly grid (current + new times per day) -->
+      <div class="cond-field" id="weeklySchedGroup" data-show="schedule_update" style="display:none;">
+        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Schedule Changes Per Day</label>
+        <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:4px 6px;align-items:center;font-size:.82rem;">
+          <span style="font-weight:600;">Day</span><span style="font-weight:600;">Current Start</span><span style="font-weight:600;">Current End</span><span style="font-weight:600;">New Start</span><span style="font-weight:600;">New End</span>
+          <span>Monday</span><input type="time" id="suMon_cs" style="padding:3px;"><input type="time" id="suMon_ce" style="padding:3px;"><input type="time" id="suMon_ns" style="padding:3px;"><input type="time" id="suMon_ne" style="padding:3px;">
+          <span>Tuesday</span><input type="time" id="suTue_cs" style="padding:3px;"><input type="time" id="suTue_ce" style="padding:3px;"><input type="time" id="suTue_ns" style="padding:3px;"><input type="time" id="suTue_ne" style="padding:3px;">
+          <span>Wednesday</span><input type="time" id="suWed_cs" style="padding:3px;"><input type="time" id="suWed_ce" style="padding:3px;"><input type="time" id="suWed_ns" style="padding:3px;"><input type="time" id="suWed_ne" style="padding:3px;">
+          <span>Thursday</span><input type="time" id="suThu_cs" style="padding:3px;"><input type="time" id="suThu_ce" style="padding:3px;"><input type="time" id="suThu_ns" style="padding:3px;"><input type="time" id="suThu_ne" style="padding:3px;">
+          <span>Friday</span><input type="time" id="suFri_cs" style="padding:3px;"><input type="time" id="suFri_ce" style="padding:3px;"><input type="time" id="suFri_ns" style="padding:3px;"><input type="time" id="suFri_ne" style="padding:3px;">
+          <span>Saturday</span><input type="time" id="suSat_cs" style="padding:3px;"><input type="time" id="suSat_ce" style="padding:3px;"><input type="time" id="suSat_ns" style="padding:3px;"><input type="time" id="suSat_ne" style="padding:3px;">
+          <span>Sunday</span><input type="time" id="suSun_cs" style="padding:3px;"><input type="time" id="suSun_ce" style="padding:3px;"><input type="time" id="suSun_ns" style="padding:3px;"><input type="time" id="suSun_ne" style="padding:3px;">
+        </div>
+      </div>
+
+      <!-- Shift Swap: weekly grid (start/end per day) -->
+      <div class="cond-field" id="weeklySwapGroup" data-show="shift_swap" style="display:none;">
+        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Shift Times Per Day</label>
+        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 8px;align-items:center;font-size:.82rem;">
+          <span style="font-weight:600;">Day</span><span style="font-weight:600;">Start</span><span style="font-weight:600;">End</span>
+          <span>Monday</span><input type="time" id="swMon_s" style="padding:4px;"><input type="time" id="swMon_e" style="padding:4px;">
+          <span>Tuesday</span><input type="time" id="swTue_s" style="padding:4px;"><input type="time" id="swTue_e" style="padding:4px;">
+          <span>Wednesday</span><input type="time" id="swWed_s" style="padding:4px;"><input type="time" id="swWed_e" style="padding:4px;">
+          <span>Thursday</span><input type="time" id="swThu_s" style="padding:4px;"><input type="time" id="swThu_e" style="padding:4px;">
+          <span>Friday</span><input type="time" id="swFri_s" style="padding:4px;"><input type="time" id="swFri_e" style="padding:4px;">
+          <span>Saturday</span><input type="time" id="swSat_s" style="padding:4px;"><input type="time" id="swSat_e" style="padding:4px;">
+          <span>Sunday</span><input type="time" id="swSun_s" style="padding:4px;"><input type="time" id="swSun_e" style="padding:4px;">
+        </div>
+      </div>
+
       <!-- Subject (auto-generated but editable) -->
       <div class="form-group">
         <label>Subject</label>
@@ -930,16 +960,30 @@ function onCategoryChange(){
 function toggleDateMode(){
   const mode=document.getElementById('ticketDateMode').value;
   const cat=document.getElementById('ticketCategory').value;
+  const isMulti=mode==='multi';
   const eg=document.getElementById('dateEndGroup');
-  if(eg) eg.style.display=(mode==='multi')?'':'none';
-  // For add_hours multi-day: show weekly grid, hide single time fields
+  if(eg) eg.style.display=isMulti?'':'none';
+  // Add hours: weekly grid vs single time fields
   const whg=document.getElementById('weeklyHoursGroup');
   const tg=document.getElementById('timeGroup');
   const otg=document.getElementById('otGroup');
   if(cat==='add_hours'){
-    if(whg) whg.style.display=(mode==='multi')?'':'none';
-    if(tg) tg.style.display=(mode==='multi')?'none':'';
-    if(otg) otg.style.display=(mode==='multi')?'none':'';
+    if(whg) whg.style.display=isMulti?'':'none';
+    if(tg) tg.style.display=isMulti?'none':'';
+    if(otg) otg.style.display=isMulti?'none':'';
+  }
+  // Schedule update: weekly grid vs single current/new times
+  const wsg=document.getElementById('weeklySchedGroup');
+  const sug=document.getElementById('schedUpdateGroup');
+  if(cat==='schedule_update'){
+    if(wsg) wsg.style.display=isMulti?'':'none';
+    if(sug) sug.style.display=isMulti?'none':'';
+  }
+  // Shift swap: weekly grid vs single time fields
+  const swg=document.getElementById('weeklySwapGroup');
+  if(cat==='shift_swap'){
+    if(swg) swg.style.display=isMulti?'':'none';
+    if(tg) tg.style.display=isMulti?'none':'';
   }
 }
 
@@ -1106,12 +1150,32 @@ async function submitTicket(){
     if(break_new_start)body.new_start=break_new_start;
     if(break_new_end)body.new_end=break_new_end;
   }
-  // Add hours weekly grid → store in day_times
+  // Weekly grids → store in day_times JSON
   if(category==='add_hours'&&date_mode==='multi'){
     const wk={};
     ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{
       const s=(document.getElementById('ah'+d+'_s')||{}).value||'';
       const e=(document.getElementById('ah'+d+'_e')||{}).value||'';
+      if(s&&e)wk[d.toLowerCase()]=s+' - '+e;
+    });
+    if(Object.keys(wk).length)body.day_times=JSON.stringify(wk);
+  }
+  if(category==='schedule_update'&&date_mode==='multi'){
+    const wk={};
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{
+      const cs=(document.getElementById('su'+d+'_cs')||{}).value||'';
+      const ce=(document.getElementById('su'+d+'_ce')||{}).value||'';
+      const ns=(document.getElementById('su'+d+'_ns')||{}).value||'';
+      const ne=(document.getElementById('su'+d+'_ne')||{}).value||'';
+      if(cs||ns)wk[d.toLowerCase()]={current:cs&&ce?cs+'-'+ce:'',new:ns&&ne?ns+'-'+ne:''};
+    });
+    if(Object.keys(wk).length)body.day_times=JSON.stringify(wk);
+  }
+  if(category==='shift_swap'&&date_mode==='multi'){
+    const wk={};
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{
+      const s=(document.getElementById('sw'+d+'_s')||{}).value||'';
+      const e=(document.getElementById('sw'+d+'_e')||{}).value||'';
       if(s&&e)wk[d.toLowerCase()]=s+' - '+e;
     });
     if(Object.keys(wk).length)body.day_times=JSON.stringify(wk);
