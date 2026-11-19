@@ -582,18 +582,29 @@
         </div>
       </div>
 
-      <!-- Shift Swap: weekly grid (start/end per day) -->
+      <!-- Shift Swap: weekly grids — offering agent + receiving agent -->
       <div class="cond-field" id="weeklySwapGroup" data-show="shift_swap" style="display:none;">
-        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Shift Times Per Day</label>
+        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Agent Offering — Shift Times Per Day</label>
+        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin-bottom:12px;">
+          <span style="font-weight:600;">Day</span><span style="font-weight:600;">Start</span><span style="font-weight:600;">End</span>
+          <span>Monday</span><input type="time" id="swOMon_s" style="padding:4px;"><input type="time" id="swOMon_e" style="padding:4px;">
+          <span>Tuesday</span><input type="time" id="swOTue_s" style="padding:4px;"><input type="time" id="swOTue_e" style="padding:4px;">
+          <span>Wednesday</span><input type="time" id="swOWed_s" style="padding:4px;"><input type="time" id="swOWed_e" style="padding:4px;">
+          <span>Thursday</span><input type="time" id="swOThu_s" style="padding:4px;"><input type="time" id="swOThu_e" style="padding:4px;">
+          <span>Friday</span><input type="time" id="swOFri_s" style="padding:4px;"><input type="time" id="swOFri_e" style="padding:4px;">
+          <span>Saturday</span><input type="time" id="swOSat_s" style="padding:4px;"><input type="time" id="swOSat_e" style="padding:4px;">
+          <span>Sunday</span><input type="time" id="swOSun_s" style="padding:4px;"><input type="time" id="swOSun_e" style="padding:4px;">
+        </div>
+        <label style="font-weight:600;font-size:.85rem;margin-bottom:6px;display:block;">Agent Receiving — Shift Times Per Day</label>
         <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 8px;align-items:center;font-size:.82rem;">
           <span style="font-weight:600;">Day</span><span style="font-weight:600;">Start</span><span style="font-weight:600;">End</span>
-          <span>Monday</span><input type="time" id="swMon_s" style="padding:4px;"><input type="time" id="swMon_e" style="padding:4px;">
-          <span>Tuesday</span><input type="time" id="swTue_s" style="padding:4px;"><input type="time" id="swTue_e" style="padding:4px;">
-          <span>Wednesday</span><input type="time" id="swWed_s" style="padding:4px;"><input type="time" id="swWed_e" style="padding:4px;">
-          <span>Thursday</span><input type="time" id="swThu_s" style="padding:4px;"><input type="time" id="swThu_e" style="padding:4px;">
-          <span>Friday</span><input type="time" id="swFri_s" style="padding:4px;"><input type="time" id="swFri_e" style="padding:4px;">
-          <span>Saturday</span><input type="time" id="swSat_s" style="padding:4px;"><input type="time" id="swSat_e" style="padding:4px;">
-          <span>Sunday</span><input type="time" id="swSun_s" style="padding:4px;"><input type="time" id="swSun_e" style="padding:4px;">
+          <span>Monday</span><input type="time" id="swRMon_s" style="padding:4px;"><input type="time" id="swRMon_e" style="padding:4px;">
+          <span>Tuesday</span><input type="time" id="swRTue_s" style="padding:4px;"><input type="time" id="swRTue_e" style="padding:4px;">
+          <span>Wednesday</span><input type="time" id="swRWed_s" style="padding:4px;"><input type="time" id="swRWed_e" style="padding:4px;">
+          <span>Thursday</span><input type="time" id="swRThu_s" style="padding:4px;"><input type="time" id="swRThu_e" style="padding:4px;">
+          <span>Friday</span><input type="time" id="swRFri_s" style="padding:4px;"><input type="time" id="swRFri_e" style="padding:4px;">
+          <span>Saturday</span><input type="time" id="swRSat_s" style="padding:4px;"><input type="time" id="swRSat_e" style="padding:4px;">
+          <span>Sunday</span><input type="time" id="swRSun_s" style="padding:4px;"><input type="time" id="swRSun_e" style="padding:4px;">
         </div>
       </div>
 
@@ -887,10 +898,13 @@ async function loadAgentsByLob(){
 }
 
 function updateSwapDropdown(){
+  const opts='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
   const swapSel=document.getElementById('ticketSwapWith');
-  if(swapSel){
-    swapSel.innerHTML='<option value="">— Select Agent —</option>'+ddEmployees.map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
-  }
+  if(swapSel) swapSel.innerHTML=opts;
+  const so=document.getElementById('ticketSwapOffering');
+  const sr=document.getElementById('ticketSwapReceiving');
+  if(so) so.innerHTML=opts;
+  if(sr) sr.innerHTML=opts;
 }
 
 /* ── Category Change — show/hide fields ── */
@@ -1174,9 +1188,11 @@ async function submitTicket(){
   if(category==='shift_swap'&&date_mode==='multi'){
     const wk={};
     ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{
-      const s=(document.getElementById('sw'+d+'_s')||{}).value||'';
-      const e=(document.getElementById('sw'+d+'_e')||{}).value||'';
-      if(s&&e)wk[d.toLowerCase()]=s+' - '+e;
+      const os=(document.getElementById('swO'+d+'_s')||{}).value||'';
+      const oe=(document.getElementById('swO'+d+'_e')||{}).value||'';
+      const rs=(document.getElementById('swR'+d+'_s')||{}).value||'';
+      const re=(document.getElementById('swR'+d+'_e')||{}).value||'';
+      if(os||rs)wk[d.toLowerCase()]={offering:os&&oe?os+'-'+oe:'',receiving:rs&&re?rs+'-'+re:''};
     });
     if(Object.keys(wk).length)body.day_times=JSON.stringify(wk);
   }
