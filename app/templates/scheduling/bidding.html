@@ -323,7 +323,7 @@ async function loadShifts() {
         hours: s.hours || 0,
         employee: s.employee || '',
         employee_id: s.employee_id || '',
-        status: 'generated',
+        status: s.employee ? 'assigned' : 'open',
         bids: 0,
       }));
       renderShifts();
@@ -354,10 +354,10 @@ function renderShifts() {
   _shifts.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 
   tbody.innerHTML = _shifts.map(s => {
-    const sc = s.status === 'lottery_assigned' ? 'bid-status-assigned' :
-               s.status === 'generated' ? 'bid-status-generated' : 'bid-status-unassigned';
-    const statusLabel = s.status === 'lottery_assigned' ? 'Lottery Assigned' :
-                        s.status === 'generated' ? 'From Generation' : s.status;
+    const sc = s.status === 'assigned' ? 'bid-status-assigned' :
+               s.status === 'open' ? 'bid-status-unassigned' : 'bid-status-generated';
+    const statusLabel = s.status === 'assigned' ? '✅ Assigned' :
+                        s.status === 'open' ? '🔓 Open for Bidding' : s.status;
     return `<tr>
       <td>${s.date}</td>
       <td>${s.start}</td>

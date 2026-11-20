@@ -667,7 +667,7 @@ class Schedule(db.Model):
     __tablename__ = "schedules"
 
     id               = db.Column(db.Integer, primary_key=True)
-    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True, index=True)  # nullable for unassigned bidding slots
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
     schedule_date    = db.Column(db.Date, nullable=False, index=True)
     shift_start      = db.Column(db.Time, nullable=True)

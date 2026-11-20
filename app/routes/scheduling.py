@@ -3187,12 +3187,30 @@ def bidding_generate():
             ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(existing_ids)).delete(synchronize_session=False)
             Schedule.query.filter(Schedule.id.in_(existing_ids)).delete(synchronize_session=False)
 
-        # Generate shifts day by day
+        # Count available employees per day to determine how many slots to create
+        def _available_count(date_obj, emps, pto_map):
+            count = 0
+            dow = date_obj.weekday()
+            for emp in emps:
+                if emp.id in pto_map and date_obj in pto_map[emp.id]:
+                    continue
+                days_pw = emp.days_per_week or 5
+                if days_pw < 7:
+                    off_days = set()
+                    seed = emp.id % 7
+                    for i in range(7 - days_pw):
+                        off_days.add((seed + i) % 7)
+                    if dow in off_days:
+                        continue
+                count += 1
+            return count
+
+        # Generate UNASSIGNED shift slots day by day
+        # Slots have no employee — agents bid on them, then lottery assigns
         shifts_created = []
         d = start_date
         while d <= end_date:
             dow = d.weekday()
-            # Get operating hours for this day
             if lob_set:
                 op_start, op_end = lob_set.get_hours_for_day(dow)
             else:
@@ -3208,37 +3226,23 @@ def bidding_generate():
                 op_end_mins += 1440  # overnight
 
             shift_len_mins = int(default_shift_hrs * 60)
-            # Calculate how many staggered start times fit in the operating window
-            # Stagger by 30 min increments
+
+            # Build staggered start times across the operating window
             stagger = 30
             start_times = []
             t = op_start_mins
             while t + shift_len_mins <= op_end_mins:
                 start_times.append(t)
                 t += stagger
-
             if not start_times:
                 start_times = [op_start_mins]
 
-            # For each available employee, assign a shift slot
-            emp_index = 0
-            for emp in employees:
-                # Skip if on PTO
-                if emp.id in pto_dates and d in pto_dates[emp.id]:
-                    continue
-                # Check days_per_week — simple round-robin off days
-                days_pw = emp.days_per_week or 5
-                if days_pw < 7:
-                    # Give consistent days off based on employee ID
-                    off_days = set()
-                    seed = emp.id % 7
-                    for i in range(7 - days_pw):
-                        off_days.add((seed + i) % 7)
-                    if dow in off_days:
-                        continue
+            # Number of slots = number of available employees for this day
+            num_slots = _available_count(d, employees, pto_dates)
 
-                # Assign a staggered start time
-                s_mins = start_times[emp_index % len(start_times)]
+            # Distribute slots across staggered start times
+            for slot_i in range(num_slots):
+                s_mins = start_times[slot_i % len(start_times)]
                 e_mins = s_mins + shift_len_mins
                 s_time = datetime.time(s_mins // 60, s_mins % 60)
                 e_hr = (e_mins // 60) % 24
@@ -3246,27 +3250,28 @@ def bidding_generate():
                 e_time = datetime.time(e_hr, e_min)
                 hrs = round(shift_len_mins / 60, 1)
 
+                # Create UNASSIGNED slot — employee_id=None, status='open'
                 sched = Schedule(
-                    employee_id=emp.id,
+                    employee_id=None,
                     planning_unit_id=pu.id,
                     schedule_date=d,
                     shift_start=s_time,
                     shift_end=e_time,
                     shift_type="full",
                     hours=hrs,
-                    status="scheduled",
+                    status="open",
                     source="bidding",
                 )
                 db.session.add(sched)
                 shifts_created.append({
-                    "employee": emp.full_name,
-                    "employee_id": emp.employee_id,
+                    "employee": "",
+                    "employee_id": "",
                     "date": d.isoformat(),
                     "start": s_time.strftime("%H:%M"),
                     "end": e_time.strftime("%H:%M"),
                     "hours": hrs,
+                    "status": "open",
                 })
-                emp_index += 1
 
             d += datetime.timedelta(days=1)
 
