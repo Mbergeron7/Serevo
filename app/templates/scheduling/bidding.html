@@ -456,6 +456,10 @@ function renderStatusBar() {
   if (st === 'published') {
     btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
   }
+  // Cancel is always available (except published)
+  if (st !== 'published') {
+    btns += '<button class="bid-btn bid-btn-outline" style="color:#dc2626; border-color:#dc2626;" onclick="cancelBidding()">✕ Cancel Bidding</button>';
+  }
   actions.innerHTML = btns;
 
   // Show bids card
@@ -528,6 +532,26 @@ async function resetLottery() {
     alert(data.message || 'Lottery reset. Bidding reopened.');
     checkBiddingStatus();
     loadShifts();
+  } else { alert(data.error || 'Error'); }
+}
+
+// ── Cancel Bidding ──
+async function cancelBidding() {
+  if (!_window || !confirm('Cancel this bidding window entirely? This will delete the window, all bids, and all remaining bidding shifts. This cannot be undone.')) return;
+  const resp = await fetch('/scheduling/bidding/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ window_id: _window.id })
+  });
+  const data = await resp.json();
+  if (data.success) {
+    alert(data.message || 'Bidding cancelled.');
+    _window = null;
+    _shifts = [];
+    document.getElementById('statusBar').style.display = 'none';
+    document.getElementById('statsRow').style.display = 'none';
+    document.getElementById('shiftsCard').style.display = 'none';
+    document.getElementById('bidsCard').style.display = 'none';
   } else { alert(data.error || 'Error'); }
 }
 

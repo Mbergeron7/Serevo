@@ -3640,6 +3640,58 @@ def bidding_reset():
         return jsonify(success=False, error=str(e))
 
 
+@scheduling_bp.route("/bidding/cancel", methods=["POST"])
+@login_required
+def bidding_cancel():
+    """Cancel a bidding window — deletes the window, all preferences, and any remaining bidding shifts."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo: bidding cancelled")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import BiddingWindow, ShiftPreference
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+
+    try:
+        # Delete all preferences for this window
+        ShiftPreference.query.filter_by(bidding_window_id=window.id).delete()
+
+        # Delete unassigned bidding shifts in this window's range
+        scheds = Schedule.query.filter(
+            Schedule.schedule_date >= window.start_date,
+            Schedule.schedule_date <= window.end_date,
+            Schedule.source == "bidding",
+        )
+        if window.planning_unit_id:
+            scheds = scheds.filter(Schedule.planning_unit_id == window.planning_unit_id)
+
+        deleted = 0
+        for s in scheds.all():
+            db.session.delete(s)
+            deleted += 1
+
+        # Delete the window itself
+        db.session.delete(window)
+        db.session.commit()
+
+        return jsonify(success=True, deleted_shifts=deleted,
+                       message=f"Bidding cancelled. Removed window, {deleted} shifts, and all bids.")
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bidding cancel error")
+        return jsonify(success=False, error=str(e))
+
+
 @scheduling_bp.route("/bidding/publish", methods=["POST"])
 @login_required
 def bidding_publish():
