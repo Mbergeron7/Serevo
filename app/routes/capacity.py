@@ -566,12 +566,47 @@ def plan_view():
                 all_lobs = []
         if sel_lobs:
             plan = [p for p in plan if p["lob"] in sel_lobs]
+
+        # Compute monthly gap stats for trend display and What-If panel
+        monthly_fte_map = {}
+        monthly_hc_map = {}
+        monthly_labels = {}
+        lobs_in_deficit = 0
+        for lob_data in plan:
+            deficit_found = False
+            for md in lob_data.get("months", []):
+                m = md.get("month", md.get("month_label", ""))
+                monthly_fte_map[m] = monthly_fte_map.get(m, 0) + md.get("fte_req", 0)
+                monthly_hc_map[m] = monthly_hc_map.get(m, 0) + md.get("actual_hc", 0)
+                if m not in monthly_labels:
+                    monthly_labels[m] = md.get("month_label", str(m))
+                if md.get("gap", 0) < 0:
+                    deficit_found = True
+            if deficit_found:
+                lobs_in_deficit += 1
+
+        monthly_gaps = []
+        for m_key in sorted(monthly_fte_map.keys()):
+            fte_v = round(monthly_fte_map.get(m_key, 0), 1)
+            hc_v = monthly_hc_map.get(m_key, 0)
+            monthly_gaps.append({"label": monthly_labels.get(m_key, str(m_key)), "fte": fte_v, "hc": hc_v, "gap": round(hc_v - fte_v, 1)})
+
+        avg_gap = round(sum(g["gap"] for g in monthly_gaps) / max(1, len(monthly_gaps)), 1) if monthly_gaps else 0
+        best_gap = max((g["gap"] for g in monthly_gaps), default=0)
+        worst_gap = min((g["gap"] for g in monthly_gaps), default=0)
+
+        total_fte = round(sum(monthly_fte_map.values()) / max(1, len(monthly_fte_map)), 1) if monthly_fte_map else 0
+        total_hc = round(sum(monthly_hc_map.values()) / max(1, len(monthly_hc_map))) if monthly_hc_map else 0
+        totals = {"fte_req": total_fte, "actual_hc": total_hc, "gap": round(total_hc - total_fte, 1)}
+
         now_str = now.strftime("%Y-%m-%d %H:%M")
         return render_template("capacity/plan.html",
             user=user, plan=plan, year=year, years=years, now=now_str,
             all_lobs=all_lobs, sel_lobs=sel_lobs,
             shrinkage=round(shrinkage * 100), occupancy=round(occupancy * 100),
-            answer_rate=round(answer_rate * 100))
+            answer_rate=round(answer_rate * 100),
+            monthly_gaps=monthly_gaps, avg_gap=avg_gap, best_gap=best_gap,
+            worst_gap=worst_gap, totals=totals, lobs_in_deficit=lobs_in_deficit)
 
     except Exception as e:
         log.exception("Capacity plan view error")
@@ -587,6 +622,12 @@ def plan_view():
 
 # ── Capacity Summary (numeric) + Headcount ─────────────────────
 @capacity_bp.route("/")
+@login_required
+def capacity_index():
+    """Redirect main capacity page to the plan view."""
+    return redirect(url_for("capacity.plan_view"))
+
+
 @capacity_bp.route("/summary")
 @login_required
 def summary_view():
