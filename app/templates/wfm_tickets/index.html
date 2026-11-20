@@ -1092,32 +1092,41 @@ async function submitTicket(){
   const swap_offering=(document.getElementById('ticketSwapOffering')||{}).value||'';
   const swap_receiving=(document.getElementById('ticketSwapReceiving')||{}).value||'';
   const swap_with=swap_offering&&swap_receiving?swap_offering+' ↔ '+swap_receiving:(document.getElementById('ticketSwapWith')||{}).value||'';
-  const offline_type=(document.getElementById('ticketOfflineType')||{}).value||'';
-  const timeoff_type=(document.getElementById('ticketTimeoffType')||{}).value||'';
-  const break_old_start=(document.getElementById('ticketBreakOldStart')||{}).value||'';
-  const break_old_end=(document.getElementById('ticketBreakOldEnd')||{}).value||'';
-  const break_new_start=(document.getElementById('ticketBreakNewStart')||{}).value||'';
-  const break_new_end=(document.getElementById('ticketBreakNewEnd')||{}).value||'';
+  // Helper: only read a field value if its parent .cond-field is visible
+  function visVal(id){
+    const el=document.getElementById(id);
+    if(!el)return '';
+    const cf=el.closest('.cond-field');
+    if(cf&&cf.style.display==='none')return '';
+    return el.value||'';
+  }
+  const offline_type=visVal('ticketOfflineType');
+  const timeoff_type=visVal('ticketTimeoffType');
+  const break_old_start=visVal('ticketBreakOldStart');
+  const break_old_end=visVal('ticketBreakOldEnd');
+  const break_new_start=visVal('ticketBreakNewStart');
+  const break_new_end=visVal('ticketBreakNewEnd');
 
   // Build affected_agents from selected chips
   const agents=selectedAgentIds.map(id=>{const e=ddEmployees.find(x=>x.id===id);return e?e.name:'';}).filter(Boolean).join(', ');
 
-  // Extended fields
-  const action_type=(document.getElementById('ticketActionType')||{}).value||'';
-  const accommodation_type=(document.getElementById('ticketAccommodationType')||{}).value||'';
+  // Extended fields — only collect if their section is visible for this category
+  const action_type=visVal('ticketActionType');
+  const accommodation_type=visVal('ticketAccommodationType');
   const hasDocRadio=document.querySelector('input[name="hasDoc"]:checked');
-  const has_documentation=hasDocRadio?hasDocRadio.value==='true':null;
-  const contracted_hours=parseFloat((document.getElementById('ticketContractedHours')||{}).value)||null;
-  const current_start=(document.getElementById('ticketCurrentStart')||{}).value||'';
-  const current_end=(document.getElementById('ticketCurrentEnd')||{}).value||'';
-  const new_start=(document.getElementById('ticketNewStart')||{}).value||'';
-  const new_end=(document.getElementById('ticketNewEnd')||{}).value||'';
-  const activity_name=(document.getElementById('ticketActivityName')||{}).value||'';
-  const current_skill=(document.getElementById('ticketCurrentSkill')||{}).value||'';
-  const new_skill=(document.getElementById('ticketNewSkill')||{}).value||'';
+  const hasDocParent=hasDocRadio?hasDocRadio.closest('.cond-field'):null;
+  const has_documentation=(hasDocRadio&&(!hasDocParent||hasDocParent.style.display!=='none'))?hasDocRadio.value==='true':null;
+  const contracted_hours=parseFloat(visVal('ticketContractedHours'))||null;
+  const current_start=visVal('ticketCurrentStart');
+  const current_end=visVal('ticketCurrentEnd');
+  const new_start=visVal('ticketNewStart');
+  const new_end=visVal('ticketNewEnd');
+  const activity_name=visVal('ticketActivityName');
+  const current_skill=visVal('ticketCurrentSkill');
+  const new_skill=visVal('ticketNewSkill');
   const skill_name=current_skill&&new_skill?current_skill+' → '+new_skill:(current_skill||new_skill);
-  const status_change=(document.getElementById('ticketStatusChange')||{}).value||'';
-  const date_mode=(document.getElementById('ticketDateMode')||{}).value||'single';
+  const status_change=visVal('ticketStatusChange');
+  const date_mode=visVal('ticketDateMode')||'single';
   const time_start=(document.getElementById('ticketTimeStart')||{}).value||'';
   const time_end=(document.getElementById('ticketTimeEnd')||{}).value||'';
   // Build day_times JSON for accommodations
