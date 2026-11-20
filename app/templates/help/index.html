@@ -495,28 +495,36 @@
       <p>{{ brand_name }} supports three self-service workflows that give agents flexibility while keeping admins and supervisors in control: <strong>Shift Bidding</strong>, <strong>Shift Swaps</strong>, and <strong>VTO/OT Posts</strong>.</p>
 
       <h3>Shift Bidding</h3>
-      <p>Shift bidding lets admins/supervisors post open shifts that agents can bid on. The admin then selects the winning bid.</p>
+      <p>{{ brand_name }} supports two shift bidding workflows: a <strong>Bidding Cycle</strong> for full schedule generation, and <strong>Open Shift Posting</strong> for filling ad-hoc gaps.</p>
 
-      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Admin / Supervisor Workflow</h4>
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Bidding Cycle (Schedule Generation)</h4>
+      <p>Use the bidding cycle when generating a new schedule period. The system creates shifts from requirements, then agents rank their preferred shifts before final assignment.</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Navigate to <strong>Scheduling</strong> or the <strong>Shift Bidding</strong> section.</li>
-        <li>Click <strong>Post Open Shift</strong>.</li>
-        <li>Select the date, day model (shift template), and planning unit/LOB.</li>
-        <li>Optionally set required skills, a bidding deadline, and a description/note.</li>
-        <li>Click <strong>Post</strong>. The open shift becomes visible to all eligible agents in their portal.</li>
-        <li>As agents submit bids, you can see the list of bidders with their names and timestamps.</li>
-        <li>Review the bids. Consider each agent's existing schedule (hours worked, rest requirements, skills) to avoid conflicts.</li>
-        <li>Click <strong>Select Winner</strong> next to the chosen agent. The shift is assigned to that agent.</li>
-        <li>The winning agent receives a notification. Other bidders are notified the shift has been filled.</li>
+        <li><strong>Generate</strong> — Create the schedule from requirements as usual. Shifts are generated based on forecasted volume, AHT, and staffing rules.</li>
+        <li><strong>Open Bidding</strong> — Click the "Open Shift Bidding" button in the Shift Bidding panel on the scheduling page. Set a deadline for agents to submit their preferences.</li>
+        <li><strong>Agents Bid</strong> — Agents see the available shifts in the <strong>Shift Bidding</strong> tab of their portal. They can rank up to 3 shifts by preference (1st, 2nd, 3rd choice).</li>
+        <li><strong>Close Bidding</strong> — Close manually or let the deadline pass automatically.</li>
+        <li><strong>Run Lottery</strong> — Click "Run Lottery" to fairly assign shifts. The system uses a rotating priority order that changes each period, so the same agents don't always get first pick. Each agent is assigned their highest-ranked available shift.</li>
+        <li><strong>Auto-Assign Remaining</strong> — Any shifts that received no bids stay assigned from the original generation.</li>
+        <li><strong>Publish</strong> — Click "Publish" to finalize the schedule. All agents receive notifications with their assigned shifts.</li>
+      </ol>
+      <p>The <strong>View Bids</strong> button shows all bids grouped by shift with employee names and preference ranks. The status bar tracks progress: Draft → Bidding Open → Bidding Closed → Lottery Complete → Published.</p>
+
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Open Shift Posting (Ad-Hoc)</h4>
+      <p>Use open shift posting to fill individual gaps — callouts, overtime, or last-minute coverage needs.</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Go to the <strong>Approvals</strong> page or scheduling and click <strong>Post Open Shift</strong>.</li>
+        <li>Select the date, shift times, LOB, and optionally required skills and notes.</li>
+        <li>Agents see the posted shift in their portal and can place a bid.</li>
+        <li>Review incoming bids and approve the best candidate. The shift is assigned to the winning agent and other bidders are notified.</li>
       </ol>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Agent Workflow</h4>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Open your <strong>Agent Portal</strong> and look for the <strong>Open Shifts</strong> or <strong>Shift Bidding</strong> section.</li>
-        <li>Browse available open shifts. Each listing shows the date, time, LOB, and any required skills.</li>
-        <li>Click <strong>Bid</strong> on any shift you want.</li>
-        <li>Wait for the admin/supervisor to select a winner. You'll receive a notification with the result.</li>
-        <li>If your bid is selected, the shift appears on your schedule in <strong>My Schedule</strong>.</li>
+        <li>Open your <strong>Agent Portal</strong> and go to the <strong>Shift Bidding</strong> tab.</li>
+        <li>For <strong>bidding cycles</strong>: browse available shifts for the period, rank your top 3 preferences, and submit. After the lottery runs, you'll see which shift you were assigned.</li>
+        <li>For <strong>open shifts</strong>: browse individual posted shifts and click <strong>Bid</strong> on any you want. Wait for the admin to select a winner.</li>
+        <li>Assigned shifts appear in <strong>My Schedule</strong>.</li>
       </ol>
 
       <h3>Shift Swaps</h3>
@@ -1940,13 +1948,12 @@
       <p>Your request goes to your supervisor/admin for approval. You can track the status (pending, approved, denied) on this same page. You'll receive a notification when a decision is made.</p>
 
       <h3>Shift Bidding (Agent View)</h3>
-      <p>When admins post open shifts, they appear in the <strong>Open Shifts</strong> section of your portal:</p>
-      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Browse available open shifts. Each shows date, time, LOB, and required skills.</li>
-        <li>Click <strong>Bid</strong> on any shift you're interested in and qualified for.</li>
-        <li>Wait for the admin to select a winner. You'll be notified of the outcome.</li>
-        <li>If selected, the shift appears in My Schedule.</li>
-      </ol>
+      <p>The <strong>Shift Bidding</strong> tab in your portal shows two types of opportunities:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Bidding Cycles</strong> — When WFM opens a new schedule period for bidding, you'll see a window with the date range and deadline. Browse all available shifts, rank your top 3 in order of preference (1st, 2nd, 3rd choice), and submit before the deadline. After the lottery runs, you'll see which shift you were assigned. The lottery rotates priority each period for fairness.</li>
+        <li><strong>Open Shifts</strong> — Individual shifts posted for pickup (callouts, OT, extra coverage). Click <strong>Bid</strong> on any you're qualified for and wait for the admin to select a winner.</li>
+      </ul>
+      <p>All assigned shifts appear automatically in <strong>My Schedule</strong>.</p>
 
       <h3>Shift Swaps (Agent View)</h3>
       <p>To swap a shift with a colleague:</p>
