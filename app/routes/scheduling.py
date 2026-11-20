@@ -1073,12 +1073,22 @@ def load_schedule():
                 ),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
+                # Exclude unassigned bidding slots from regular schedule view
+                db.not_(db.and_(
+                    Schedule.source == "bidding",
+                    Schedule.employee_id.is_(None),
+                )),
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
         else:
             # All LOBs
             schedules = Schedule.query.filter(
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
+                # Exclude unassigned bidding slots from regular schedule view
+                db.not_(db.and_(
+                    Schedule.source == "bidding",
+                    Schedule.employee_id.is_(None),
+                )),
             ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
         shifts = [s.to_dict() for s in schedules]
