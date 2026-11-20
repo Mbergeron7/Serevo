@@ -678,11 +678,11 @@ def _demo_analytics():
         daily[d] = {"created": created, "same_day": same_day,
                      "in_progress": random.randint(0, 1), "pending": random.randint(0, 2)}
     members = {
-        "Joshua Sauve": {"assigned": 97, "completed": 96, "in_progress": 0, "not_started": 1, "same_day": 96, "same_day_pct": 100.0},
-        "Claudis Steffi": {"assigned": 78, "completed": 77, "in_progress": 0, "not_started": 1, "same_day": 72, "same_day_pct": 93.5},
-        "Dawn Devenny": {"assigned": 64, "completed": 64, "in_progress": 0, "not_started": 0, "same_day": 64, "same_day_pct": 100.0},
-        "Sara Zenasni": {"assigned": 60, "completed": 58, "in_progress": 1, "not_started": 1, "same_day": 52, "same_day_pct": 89.7},
-        "Mike Bergeron": {"assigned": 3, "completed": 1, "in_progress": 1, "not_started": 1, "same_day": 0, "same_day_pct": 0.0},
+        "Lisa Tran": {"assigned": 97, "completed": 96, "in_progress": 0, "not_started": 1, "same_day": 96, "same_day_pct": 100.0},
+        "Marco Ruiz": {"assigned": 78, "completed": 77, "in_progress": 0, "not_started": 1, "same_day": 72, "same_day_pct": 93.5},
+        "Jordan Rivera": {"assigned": 64, "completed": 64, "in_progress": 0, "not_started": 0, "same_day": 64, "same_day_pct": 100.0},
+        "Taylor Brooks": {"assigned": 60, "completed": 58, "in_progress": 1, "not_started": 1, "same_day": 52, "same_day_pct": 89.7},
+        "Admin User": {"assigned": 3, "completed": 1, "in_progress": 1, "not_started": 1, "same_day": 0, "same_day_pct": 0.0},
     }
     return jsonify(success=True, analytics={
         "total": 202,
@@ -699,11 +699,11 @@ def _demo_analytics():
         "lob_breakdown": lobs,
         "priority_breakdown": priorities,
         "workload": {
-            "Joshua Sauve": {"open": 1, "in_progress": 0, "resolved": 3, "closed": 93},
-            "Claudis Steffi": {"open": 1, "in_progress": 0, "resolved": 2, "closed": 75},
-            "Dawn Devenny": {"open": 0, "in_progress": 0, "resolved": 2, "closed": 62},
-            "Sara Zenasni": {"open": 1, "in_progress": 1, "resolved": 1, "closed": 57},
-            "Mike Bergeron": {"open": 1, "in_progress": 1, "resolved": 0, "closed": 1},
+            "Lisa Tran": {"open": 1, "in_progress": 0, "resolved": 3, "closed": 93},
+            "Marco Ruiz": {"open": 1, "in_progress": 0, "resolved": 2, "closed": 75},
+            "Jordan Rivera": {"open": 0, "in_progress": 0, "resolved": 2, "closed": 62},
+            "Taylor Brooks": {"open": 1, "in_progress": 1, "resolved": 1, "closed": 57},
+            "Admin User": {"open": 1, "in_progress": 1, "resolved": 0, "closed": 1},
         },
         "member_performance": members,
         "daily_completion": dict(sorted(daily.items(), reverse=True)),
