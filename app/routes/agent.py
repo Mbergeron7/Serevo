@@ -1237,7 +1237,8 @@ def bidding_shifts(window_id):
     schedules = Schedule.query.filter(
         Schedule.schedule_date >= window.start_date,
         Schedule.schedule_date <= window.end_date,
-        Schedule.status == "scheduled",
+        Schedule.source == "bidding",
+        Schedule.status.in_(["open", "scheduled"]),
     )
     if window.planning_unit_id:
         schedules = schedules.filter(Schedule.planning_unit_id == window.planning_unit_id)
