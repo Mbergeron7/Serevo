@@ -109,7 +109,7 @@
   <button onclick="switchTab('shifts', this)">📋 Open Shifts</button>
   <button onclick="switchTab('swaps', this)">🔄 Shift Swaps</button>
   <button onclick="switchTab('vto', this)">🕐 VTO / OT</button>
-  <button onclick="switchTab('mybids', this)">⭐ My Bids</button>
+  <button onclick="switchTab('mybids', this)">⭐ Open Shift Bids</button>
   <button onclick="switchTab('shiftbidding', this); loadBiddingWindows();">🎯 Shift Bidding</button>
   <button onclick="switchTab('balances', this)">📊 My Balances</button>
   <button onclick="switchTab('quality', this)">🏆 My Quality</button>
@@ -176,10 +176,10 @@
   </div>
 </div>
 
-<!-- ═══ My Bids Panel ═══ -->
+<!-- ═══ Open Shift Bids Panel ═══ -->
 <div class="p-panel" id="pp-mybids">
   <div class="p-card">
-    <div class="p-card-header">My Shift Bids</div>
+    <div class="p-card-header">Open Shift Bids</div>
     <div class="p-card-body" id="myBidsBody">
       <p class="empty-msg">Loading…</p>
     </div>
@@ -479,13 +479,13 @@ async function placeBid(postId) {
   }
 }
 
-// ── My Bids ──
+// ── Open Shift Bids ──
 async function loadMyBids() {
   let data;
   try { data = await api('/api/agent/my-bids'); } catch(err) { console.error(err); return; }
   const el = document.getElementById('myBidsBody');
   const bids = data.bids || [];
-  if (!bids.length) { el.innerHTML = '<p class="empty-msg">You haven\'t bid on any shifts yet. Check the Open Shifts tab.</p>'; return; }
+  if (!bids.length) { el.innerHTML = '<p class="empty-msg">No open shift bids yet. When you bid on an open shift, it will appear here.</p>'; return; }
   let html = '<div style="overflow-x:auto"><table class="p-tbl"><thead><tr><th>Date</th><th>Shift</th><th>Status</th><th></th></tr></thead><tbody>';
   bids.forEach(b => {
     html += `<tr>
