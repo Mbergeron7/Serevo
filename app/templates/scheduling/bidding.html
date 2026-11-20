@@ -247,19 +247,25 @@ async function generateShifts() {
 }
 
 async function pollGeneration(jobId) {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 45; i++) {
     await new Promise(r => setTimeout(r, 2000));
     const resp = await fetch(`/scheduling/generate/status?job_id=${jobId}`);
     const data = await resp.json();
-    if (data.status === 'done' && data.result) {
-      // Save the generated schedule
-      await saveGeneratedSchedule(data.result);
-      await loadShifts();
+    if (data.status === 'running') continue;
+    if (!data.success) { alert('Generation error: ' + (data.error || 'Unknown')); return; }
+    // Success — data IS the result (days, totals, etc.)
+    const totalShifts = data.totals?.total_shifts || 0;
+    if (totalShifts === 0) {
+      const allWarnings = (data.days || []).flatMap(d => d.warnings || []);
+      const warnMsg = allWarnings.length ? allWarnings[0] : 'No requirements data found for this LOB.';
+      alert('⚠️ No shifts generated. ' + warnMsg);
       return;
     }
-    if (data.status === 'error') { alert('Generation error: ' + (data.error || 'Unknown')); return; }
+    await saveGeneratedSchedule(data);
+    await loadShifts();
+    return;
   }
-  alert('Generation timed out');
+  alert('Generation timed out. The background job may have been interrupted — try again.');
 }
 
 async function saveGeneratedSchedule(result) {

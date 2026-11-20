@@ -1712,12 +1712,12 @@ function _pollGenerateJob(jobId, attempt) {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'running') {
-        // Still working — poll again (2s intervals, up to 5 min)
-        if (attempt > 150) {
+        // Still working — poll again (2s intervals, up to 90 seconds)
+        if (attempt > 45) {
           _generateInFlight = false;
           document.getElementById('btnGenerate').disabled = false;
           hideLoading();
-          showToast('Schedule generation timed out. Try a shorter date range.', 'error');
+          showToast('Schedule generation timed out. The background job may have been interrupted — try again or use a shorter date range.', 'error');
           return;
         }
         setTimeout(() => _pollGenerateJob(jobId, attempt + 1), 2000);
@@ -1734,6 +1734,14 @@ function _pollGenerateJob(jobId, attempt) {
         showToast('Schedule generated but returned incomplete data. Please try again.', 'error');
         console.error('Incomplete schedule data:', JSON.stringify(data).slice(0, 500));
         return;
+      }
+      // Check if any shifts were actually generated
+      const totalShifts = data.totals?.total_shifts || 0;
+      if (totalShifts === 0) {
+        // Show warnings from the engine if any
+        const allWarnings = (data.days || []).flatMap(d => d.warnings || []);
+        const warnMsg = allWarnings.length ? allWarnings[0] : 'No requirements data found for this LOB and date range.';
+        showToast('⚠️ No shifts generated. ' + warnMsg, 'error');
       }
       scheduleData = data;
       scheduleSource = 'generated';
