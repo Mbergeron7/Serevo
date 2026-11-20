@@ -2620,6 +2620,7 @@ def get_demo_reports_attendance(days=7):
         rows.append({
             "name": f"{emp['First Name']} {emp['Last Name']}",
             "employee_id": emp["Employee ID"],
+            "lob": emp["Latest Skill Name"],
             "actual_hours": actual,
             "scheduled_hours": scheduled,
             "difference": round(actual - scheduled, 1),
@@ -2777,8 +2778,9 @@ def get_demo_report_coverage(start_date=None, end_date=None):
                 overstaffed += 1
             if abs(gap) > abs(peak_gap):
                 peak_gap = gap
-            daily_data.append({"date": d.isoformat(), "required": req, "scheduled": sched,
-                               "gap": gap, "coverage_pct": cov, "hours": sched * 8.5})
+            peak_req = req + rng.randint(1, 4)
+            daily_data.append({"date": d.isoformat(), "avg_required": req, "peak_required": peak_req,
+                               "scheduled": sched, "gap": gap, "coverage_pct": cov, "hours": sched * 8.5})
         d += datetime.timedelta(days=1)
 
     avg_cov = round(sum(coverages) / len(coverages), 1) if coverages else 0
@@ -2786,8 +2788,9 @@ def get_demo_report_coverage(start_date=None, end_date=None):
     for lob in DEMO_LOBS:
         req = rng.randint(400, 900)
         sched = req + rng.randint(-60, 40)
-        rows.append({"lob": lob, "required": req, "scheduled": sched,
-                     "gap": sched - req, "coverage_pct": round(sched / req * 100, 1) if req else 100})
+        peak_req = req + rng.randint(2, 6)
+        rows.append({"lob": lob, "avg_required": req, "peak_required": peak_req, "scheduled": sched,
+                     "gap": sched - peak_req, "coverage_pct": round(sched / peak_req * 100, 1) if peak_req else 100})
 
     return {
         "success": True,
@@ -2825,9 +2828,9 @@ def get_demo_report_agent_performance(start_date=None, end_date=None):
         "success": True,
         "kpi": {
             "avg_attendance_rate": round(sum(att_rates) / len(att_rates), 1),
-            "avg_quality_score": round(sum(qual_scores) / len(qual_scores), 1),
+            "avg_quality": round(sum(qual_scores) / len(qual_scores), 1),
             "total_agents": len(rows),
-            "total_issues": sum(r["absent_count"] + r["late_count"] + r["early_count"] for r in rows),
+            "total_hours": round(sum(r.get("scheduled_hours", 0) or (rng.uniform(140, 180)) for r in rows), 1),
         },
         "rows": rows,
     }
@@ -2869,7 +2872,7 @@ def get_demo_report_pto_leave(start_date=None, end_date=None):
     for _, e in all_entries:
         if e["status"] == "approved":
             by_type[e["type"]] = by_type.get(e["type"], 0) + e["days"]
-    by_type_list = [{"type": t, "days": d} for t, d in sorted(by_type.items())]
+    by_type_list = [{"type": t, "count": d} for t, d in sorted(by_type.items())]
 
     rows = []
     for eid, data in emp_pto.items():
