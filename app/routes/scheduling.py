@@ -3153,9 +3153,14 @@ def bidding_generate():
             Employee.id.in_(all_emp_ids), Employee.status == "Active"
         ).all() if all_emp_ids else []
 
+        log.info(f"Bidding generate: {lob_name} ({start_date} to {end_date}), "
+                 f"PU id={pu.id}, LOB setting={'yes' if lob_set else 'NO'}, "
+                 f"employees found: {len(employees)}")
+
         if not employees:
             return jsonify(success=False,
-                           error=f"No active employees found in {lob_name}")
+                           error=f"No active employees found in {lob_name}. "
+                                 f"Check that employees are assigned to this planning unit.")
 
         # Get PTO entries for the date range
         pto_dates = {}  # {emp_id: set of dates}
@@ -3266,6 +3271,7 @@ def bidding_generate():
             d += datetime.timedelta(days=1)
 
         db.session.commit()
+        log.info(f"Bidding generate complete: {len(shifts_created)} shifts for {lob_name}")
         return jsonify(success=True, shifts=shifts_created,
                        count=len(shifts_created),
                        message=f"Generated {len(shifts_created)} shifts for {lob_name}")
