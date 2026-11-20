@@ -515,58 +515,128 @@ def ticket_analytics():
     # Resolution time tracking
     resolution_hours = []
 
+    # LOB breakdown, priority breakdown, per-member stats, daily completion
+    lob_counts = {}
+    priority_counts = {}
+    # Per-member performance: {name: {assigned, completed, in_progress, not_started, same_day}}
+    member_perf = {}
+    # Daily completion: {date: {created, same_day, in_progress, pending}}
+    daily_completion = {}
+    # Same-day resolution tracking
+    same_day_count = 0
+    late_count = 0  # tickets open > 24h
+
+    now = datetime.now(timezone.utc) if hasattr(timezone, 'utc') else datetime.utcnow()
+
     for t in tickets:
         status_counts[t.status] = status_counts.get(t.status, 0) + 1
 
         cat = t.category or "general"
         if cat not in category_counts:
-            category_counts[cat] = {"open": 0, "closed": 0}
+            category_counts[cat] = {"open": 0, "closed": 0, "total": 0}
+        category_counts[cat]["total"] += 1
         if t.status in ("closed", "resolved"):
             category_counts[cat]["closed"] += 1
         else:
             category_counts[cat]["open"] += 1
 
+        # LOB breakdown
+        lob = t.lob or "Unspecified"
+        lob_counts[lob] = lob_counts.get(lob, 0) + 1
+
+        # Priority breakdown
+        pri = t.priority or "medium"
+        priority_counts[pri] = priority_counts.get(pri, 0) + 1
+
         if t.created_at:
             day = t.created_at.strftime("%Y-%m-%d")
             volume_by_day[day] = volume_by_day.get(day, 0) + 1
+            # Daily completion tracking
+            if day not in daily_completion:
+                daily_completion[day] = {"created": 0, "same_day": 0, "in_progress": 0, "pending": 0}
+            daily_completion[day]["created"] += 1
 
+        # Assignee / member performance
         if t.assigned_to and t.assignee:
             name = t.assignee.display_name
             if name not in workload:
                 workload[name] = {"open": 0, "in_progress": 0, "resolved": 0, "closed": 0}
             workload[name][t.status] = workload[name].get(t.status, 0) + 1
 
+            if name not in member_perf:
+                member_perf[name] = {"assigned": 0, "completed": 0, "in_progress": 0, "not_started": 0, "same_day": 0}
+            member_perf[name]["assigned"] += 1
+            if t.status in ("closed", "resolved"):
+                member_perf[name]["completed"] += 1
+            elif t.status == "in_progress":
+                member_perf[name]["in_progress"] += 1
+            else:
+                member_perf[name]["not_started"] += 1
+
+        # Resolution time + same-day tracking
         if t.closed_at and t.created_at:
             delta = (t.closed_at - t.created_at).total_seconds() / 3600
             resolution_hours.append(delta)
+            if t.closed_at.date() == t.created_at.date():
+                same_day_count += 1
+                day_key = t.created_at.strftime("%Y-%m-%d")
+                if day_key in daily_completion:
+                    daily_completion[day_key]["same_day"] += 1
+                # Member same-day
+                if t.assigned_to and t.assignee:
+                    mname = t.assignee.display_name
+                    if mname in member_perf:
+                        member_perf[mname]["same_day"] += 1
+        elif t.status in ("open", "in_progress") and t.created_at:
+            # Track in-progress and pending in daily completion
+            day_key = t.created_at.strftime("%Y-%m-%d")
+            if day_key in daily_completion:
+                if t.status == "in_progress":
+                    daily_completion[day_key]["in_progress"] += 1
+                else:
+                    daily_completion[day_key]["pending"] += 1
+
+        # Late: open/in_progress for over 24 hours
+        if t.status in ("open", "in_progress") and t.created_at:
+            age_hours = (now - t.created_at).total_seconds() / 3600
+            if age_hours > 24:
+                late_count += 1
 
     total = len(tickets)
     closed_total = status_counts.get("closed", 0) + status_counts.get("resolved", 0)
     closure_rate = round(closed_total / total * 100, 1) if total > 0 else 0
+    same_day_rate = round(same_day_count / closed_total * 100, 1) if closed_total > 0 else 0
     avg_resolution = round(sum(resolution_hours) / len(resolution_hours), 1) if resolution_hours else None
+    avg_resolution_days = round(avg_resolution / 24, 1) if avg_resolution is not None else 0
 
-    # Busiest day
-    busiest_day = None
-    if volume_by_day:
-        busiest_day = max(volume_by_day, key=volume_by_day.get)
-        busiest_day = f"{busiest_day} ({volume_by_day[busiest_day]})"
+    # Compute same-day % for each member
+    for name in member_perf:
+        m = member_perf[name]
+        m["same_day_pct"] = round(m["same_day"] / m["completed"] * 100, 1) if m["completed"] > 0 else 0
 
     # Top request type
     top_type = None
     if category_counts:
-        top_cat = max(category_counts, key=lambda c: category_counts[c]["open"] + category_counts[c]["closed"])
+        top_cat = max(category_counts, key=lambda c: category_counts[c]["total"])
         top_type = top_cat
 
     return jsonify(success=True, analytics={
         "total": total,
         "status": status_counts,
         "closure_rate": closure_rate,
+        "same_day_rate": same_day_rate,
+        "same_day_count": same_day_count,
         "avg_resolution_hours": avg_resolution,
-        "busiest_day": busiest_day,
+        "avg_resolution_days": avg_resolution_days,
+        "late_count": late_count,
         "top_request_type": top_type,
         "volume_by_day": dict(sorted(volume_by_day.items())),
         "category_breakdown": category_counts,
+        "lob_breakdown": lob_counts,
+        "priority_breakdown": priority_counts,
         "workload": workload,
+        "member_performance": member_perf,
+        "daily_completion": dict(sorted(daily_completion.items(), reverse=True)),
     })
 
 

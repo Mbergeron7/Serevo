@@ -236,23 +236,46 @@
 
     <div class="kpi-row" id="kpiRow"></div>
 
-    <div class="chart-grid">
+    <!-- Row 1: Volume chart + LOB doughnut -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
       <div class="chart-card">
-        <h3>Ticket Volume</h3>
+        <h3>📈 Request Volume by Daily</h3>
         <canvas id="volumeChart"></canvas>
       </div>
       <div class="chart-card">
-        <h3>Status Breakdown</h3>
-        <canvas id="statusChart"></canvas>
+        <h3>🟠 By LOB</h3>
+        <canvas id="lobChart"></canvas>
       </div>
+    </div>
+
+    <!-- Row 2: Top Request Types + Priority Split -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
       <div class="chart-card">
-        <h3>Category Breakdown</h3>
+        <h3>📊 Top Request Types</h3>
         <canvas id="categoryChart"></canvas>
       </div>
       <div class="chart-card">
-        <h3>Team Workload</h3>
-        <div id="workloadTable"></div>
+        <h3>🔵 Priority Split</h3>
+        <div id="priorityTable"></div>
       </div>
+    </div>
+
+    <!-- Row 3: Team Performance + Daily Completion -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="chart-card">
+        <h3>👥 Team Performance</h3>
+        <div id="teamPerfTable"></div>
+      </div>
+      <div class="chart-card">
+        <h3>✅ Completion — Last 14 Days in Range</h3>
+        <div id="dailyCompletionTable"></div>
+      </div>
+    </div>
+
+    <!-- Row 4: All Request Types table -->
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>🗂️ All Request Types</h3>
+      <div id="allRequestTypesTable"></div>
     </div>
   </div>
 
@@ -1420,7 +1443,7 @@ async function addComment(ticketId){
 function downloadCSV(){window.location.href='/wfm-tickets/api/tickets/download-csv';}
 
 /* ── Analytics ── */
-let volumeChartInst=null, statusChartInst=null, categoryChartInst=null;
+let volumeChartInst=null, lobChartInst=null, categoryChartInst=null;
 
 function setRange(days,btn){
   document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
@@ -1448,23 +1471,27 @@ async function loadAnalytics(){
     const a=data.analytics;
     renderKPIs(a);
     renderVolumeChart(a.volume_by_day);
-    renderStatusChart(a.status);
+    renderLobChart(a.lob_breakdown);
     renderCategoryChart(a.category_breakdown);
-    renderWorkload(a.workload);
+    renderPriorityTable(a.priority_breakdown);
+    renderTeamPerf(a.member_performance);
+    renderDailyCompletion(a.daily_completion);
+    renderAllRequestTypes(a.category_breakdown, a.total);
   }catch(e){console.error(e);}
 }
 
 function renderKPIs(a){
+  const completed=a.status.resolved+a.status.closed;
   const kpis=[
-    {val:a.total,lbl:'Total Tickets'},
-    {val:a.status.open,lbl:'Open'},
-    {val:a.status.in_progress,lbl:'In Progress'},
-    {val:a.status.resolved+a.status.closed,lbl:'Resolved/Closed'},
-    {val:a.closure_rate+'%',lbl:'Closure Rate'},
-    {val:a.avg_resolution_hours!=null?a.avg_resolution_hours+'h':'—',lbl:'Avg Resolution'},
-    {val:a.top_request_type?(categoryLabels[a.top_request_type]||a.top_request_type):'—',lbl:'Top Category'},
+    {val:a.total,lbl:'REQUESTS',color:''},
+    {val:completed,lbl:'COMPLETED',color:'#16a34a'},
+    {val:a.same_day_rate+'%',lbl:'SAME-DAY RATE',color:'#2563eb'},
+    {val:a.avg_resolution_days,lbl:'AVG DAYS TO COMPLETE',color:''},
+    {val:a.status.in_progress,lbl:'IN PROGRESS',color:'#d97706'},
+    {val:a.status.open,lbl:'NOT STARTED',color:'#6b7280'},
+    {val:a.late_count,lbl:'LATE',color:a.late_count>0?'#dc2626':'#16a34a'},
   ];
-  document.getElementById('kpiRow').innerHTML=kpis.map(k=>`<div class="kpi"><div class="val">${k.val}</div><div class="lbl">${k.lbl}</div></div>`).join('');
+  document.getElementById('kpiRow').innerHTML=kpis.map(k=>`<div class="kpi"><div class="val" ${k.color?'style="color:'+k.color+'"':''}>${k.val}</div><div class="lbl">${k.lbl}</div></div>`).join('');
 }
 
 function renderVolumeChart(volumeByDay){
@@ -1487,44 +1514,127 @@ function renderVolumeChart(volumeByDay){
   });
 }
 
-function renderStatusChart(status){
-  const labels=['Open','In Progress','Resolved','Closed'];
-  const values=[status.open,status.in_progress,status.resolved,status.closed];
-  const colors=['#16a34a','#2563eb','#6b7280','#9ca3af'];
-  if(statusChartInst)statusChartInst.destroy();
-  statusChartInst=new Chart(document.getElementById('statusChart'),{
+function renderLobChart(lobs){
+  const lobColors=['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#c026d3','#059669','#ea580c','#4f46e5','#65a30d','#be185d'];
+  const labels=Object.keys(lobs);
+  const values=Object.values(lobs);
+  if(lobChartInst)lobChartInst.destroy();
+  lobChartInst=new Chart(document.getElementById('lobChart'),{
     type:'doughnut',
-    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:0}]},
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}
+    data:{labels,datasets:[{data:values,backgroundColor:lobColors.slice(0,labels.length),borderWidth:2,borderColor:'var(--surface)'}]},
+    options:{responsive:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10},padding:6}}}}
   });
 }
 
 function renderCategoryChart(cats){
-  const labels=Object.keys(cats).map(c=>categoryLabels[c]||c);
-  const openVals=Object.values(cats).map(v=>v.open);
-  const closedVals=Object.values(cats).map(v=>v.closed);
+  // Sort by total descending, take top 12
+  const sorted=Object.entries(cats).sort((a,b)=>(b[1].total||b[1].open+b[1].closed)-(a[1].total||a[1].open+a[1].closed)).slice(0,12);
+  const labels=sorted.map(([c])=>categoryLabels[c]||c);
+  const totals=sorted.map(([,v])=>v.total||(v.open+v.closed));
   if(categoryChartInst)categoryChartInst.destroy();
   categoryChartInst=new Chart(document.getElementById('categoryChart'),{
     type:'bar',
-    data:{labels,datasets:[
-      {label:'Open',data:openVals,backgroundColor:'#2563eb'},
-      {label:'Closed',data:closedVals,backgroundColor:'#9ca3af'}
-    ]},
-    options:{responsive:true,indexAxis:'y',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,beginAtZero:true},y:{stacked:true}}}
+    data:{labels,datasets:[{label:'Count',data:totals,backgroundColor:'#1e3a5f',borderRadius:3}]},
+    options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{stepSize:1}},y:{ticks:{font:{size:11}}}}}
   });
 }
 
-function renderWorkload(workload){
-  const el=document.getElementById('workloadTable');
-  const names=Object.keys(workload);
+function renderPriorityTable(priorities){
+  const el=document.getElementById('priorityTable');
+  const order=['urgent','high','medium','low'];
+  const labels={urgent:'Urgent',high:'High',medium:'Medium',low:'Low'};
+  let html=`<table style="width:100%;font-size:.85rem;border-collapse:collapse;">
+    <thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.75rem;text-transform:uppercase;color:var(--text-muted);">Priority</th>
+    <th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.75rem;text-transform:uppercase;color:var(--text-muted);">Count</th></tr></thead><tbody>`;
+  order.forEach(p=>{
+    if(priorities[p]){
+      html+=`<tr><td style="padding:6px 8px;border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);">${labels[p]}</td>
+        <td style="padding:6px 8px;text-align:right;border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);font-weight:600;">${priorities[p]}</td></tr>`;
+    }
+  });
+  html+=`</tbody></table>`;
+  el.innerHTML=html;
+}
+
+function renderTeamPerf(members){
+  const el=document.getElementById('teamPerfTable');
+  const names=Object.keys(members);
   if(!names.length){el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;">No assigned tickets.</p>';return;}
-  let html=`<div class="data-table-wrapper"><table class="workload-table"><thead><tr><th>Analyst</th><th>Open</th><th>In Progress</th><th>Resolved</th><th>Closed</th><th>Total</th></tr></thead><tbody>`;
+  // Sort by assigned desc
+  names.sort((a,b)=>members[b].assigned-members[a].assigned);
+  let html=`<div style="overflow-x:auto;"><table style="width:100%;font-size:.82rem;border-collapse:collapse;">
+    <thead><tr>
+      <th style="text-align:left;padding:5px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Member</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Assigned</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Completed</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">In Prog</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Not Started</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Same-Day %</th>
+    </tr></thead><tbody>`;
   names.forEach(n=>{
-    const w=workload[n];
-    const total=w.open+w.in_progress+w.resolved+w.closed;
-    html+=`<tr><td><strong>${esc(n)}</strong></td><td>${w.open}</td><td>${w.in_progress}</td><td>${w.resolved}</td><td>${w.closed}</td><td>${total}</td></tr>`;
+    const m=members[n];
+    const bdr='border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);';
+    html+=`<tr>
+      <td style="padding:5px 8px;${bdr}font-weight:600;">${esc(n)}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${m.assigned}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${m.completed}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${m.in_progress}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${m.not_started}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}font-weight:600;">${m.same_day_pct}%</td>
+    </tr>`;
   });
   html+=`</tbody></table></div>`;
+  el.innerHTML=html;
+}
+
+function renderDailyCompletion(daily){
+  const el=document.getElementById('dailyCompletionTable');
+  const days=Object.keys(daily).slice(0,14); // already sorted desc
+  if(!days.length){el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;">No data.</p>';return;}
+  let html=`<div style="overflow-x:auto;max-height:360px;overflow-y:auto;"><table style="width:100%;font-size:.82rem;border-collapse:collapse;">
+    <thead style="position:sticky;top:0;background:var(--surface);"><tr>
+      <th style="text-align:left;padding:5px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Date</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Created</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Same-Day</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">In Prog</th>
+      <th style="text-align:right;padding:5px 6px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Pending</th>
+    </tr></thead><tbody>`;
+  days.forEach(d=>{
+    const r=daily[d];
+    const bdr='border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);';
+    html+=`<tr>
+      <td style="padding:5px 8px;${bdr}font-weight:600;">${d}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${r.created}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${r.same_day}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${r.in_progress}</td>
+      <td style="padding:5px 6px;text-align:right;${bdr}">${r.pending}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  el.innerHTML=html;
+}
+
+function renderAllRequestTypes(cats, total){
+  const el=document.getElementById('allRequestTypesTable');
+  const sorted=Object.entries(cats).sort((a,b)=>(b[1].total||0)-(a[1].total||0));
+  if(!sorted.length){el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;">No data.</p>';return;}
+  let html=`<table style="width:100%;font-size:.85rem;border-collapse:collapse;">
+    <thead><tr>
+      <th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Request Type</th>
+      <th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">Count</th>
+      <th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;color:var(--text-muted);">% of Total</th>
+    </tr></thead><tbody>`;
+  sorted.forEach(([cat,v])=>{
+    const count=v.total||(v.open+v.closed);
+    const pct=total>0?((count/total)*100).toFixed(1):'0.0';
+    const bdr='border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);';
+    html+=`<tr>
+      <td style="padding:6px 8px;${bdr}">${categoryLabels[cat]||cat}</td>
+      <td style="padding:6px 8px;text-align:right;${bdr}font-weight:600;">${count}</td>
+      <td style="padding:6px 8px;text-align:right;${bdr}">${pct}%</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
   el.innerHTML=html;
 }
 
