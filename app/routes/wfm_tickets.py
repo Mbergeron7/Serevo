@@ -526,7 +526,7 @@ def ticket_analytics():
     same_day_count = 0
     late_count = 0  # tickets open > 24h
 
-    now = datetime.now(timezone.utc) if hasattr(timezone, 'utc') else datetime.utcnow()
+    now = datetime.utcnow()
 
     for t in tickets:
         status_counts[t.status] = status_counts.get(t.status, 0) + 1
