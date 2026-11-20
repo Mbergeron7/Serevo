@@ -1096,6 +1096,7 @@ def load_schedule():
             schedules = q.order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
         shifts = [s.to_dict() for s in schedules]
+        log.info(f"Schedule load: lob={lob}, {start_date} to {end_date}, include_bidding={include_bidding}, found {len(schedules)} schedules")
 
         # ── Enrich today's shifts with attendance status ──────
         try:

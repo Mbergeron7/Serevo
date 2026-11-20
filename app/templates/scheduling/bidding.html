@@ -250,7 +250,22 @@ async function generateShifts() {
       return;
     }
     alert(`✅ ${data.message || data.count + ' shifts generated.'}`);
+    // Try loading from DB first; if empty, use the generate response directly
     await loadShifts();
+    if (!_shifts.length && data.shifts && data.shifts.length) {
+      _shifts = data.shifts.map(s => ({
+        id: s.id || 0,
+        date: s.date,
+        start: s.start,
+        end: s.end,
+        hours: s.hours || 0,
+        employee: s.employee || '',
+        employee_id: s.employee_id || '',
+        status: 'open',
+        bids: 0,
+      }));
+      renderShifts();
+    }
     checkBiddingStatus();  // Will pick up the auto-created window
   } catch(e) { alert('Error: ' + e.message); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '🔄 Generate Shifts'; } }
