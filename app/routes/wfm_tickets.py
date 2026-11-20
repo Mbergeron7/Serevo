@@ -440,6 +440,10 @@ def permanent_delete_ticket():
     data = request.get_json(silent=True) or {}
     ticket_id = data.get("ticket_id")
     ticket = WfmTicket.query.get_or_404(ticket_id)
+    # Delete related records first to avoid FK constraint issues
+    from app.models import WfmTicketComment, WfmTicketHistory
+    WfmTicketHistory.query.filter_by(ticket_id=ticket.id).delete()
+    WfmTicketComment.query.filter_by(ticket_id=ticket.id).delete()
     db.session.delete(ticket)
     db.session.commit()
     return jsonify(success=True)

@@ -3209,7 +3209,7 @@ class WfmTicketComment(db.Model):
     is_internal = db.Column(db.Boolean, default=False)  # internal WFM-only comments
     created_at = db.Column(db.DateTime, default=_utcnow)
 
-    ticket = db.relationship("WfmTicket", backref=db.backref("comments", order_by="WfmTicketComment.created_at"))
+    ticket = db.relationship("WfmTicket", backref=db.backref("comments", order_by="WfmTicketComment.created_at", cascade="all, delete-orphan", passive_deletes=True))
     user   = db.relationship("User", backref="wfm_ticket_comments")
 
     def to_dict(self):
@@ -3238,7 +3238,7 @@ class WfmTicketHistory(db.Model):
     new_value  = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=_utcnow)
 
-    ticket = db.relationship("WfmTicket", backref=db.backref("history", order_by="WfmTicketHistory.created_at.desc()"))
+    ticket = db.relationship("WfmTicket", backref=db.backref("history", order_by="WfmTicketHistory.created_at.desc()", cascade="all, delete-orphan", passive_deletes=True))
     user   = db.relationship("User")
 
     def to_dict(self):
