@@ -1231,113 +1231,150 @@ async function viewTicket(id){
   const comments=data.comments||[];
   document.getElementById('viewTicketTitle').textContent='#'+t.id+' — '+t.subject;
 
-  let html=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+  // ── Section helper ──
+  const _sec=(title,body)=>`<div style="margin-bottom:16px;">
+    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:10px;">${title}</div>
+    ${body}</div>`;
+  const _row=(label,val)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 40%,transparent);font-size:.85rem;">
+    <span style="color:var(--text-muted);min-width:140px;">${label}</span><strong style="text-align:right;">${val}</strong></div>`;
+
+  // ── Header: pills + meta ──
+  let html=`<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
     <span class="pill pill-${t.status}">${t.status.replace('_',' ')}</span>
     <span class="pill pill-${t.priority}">${t.priority}</span>
     <span class="pill" style="background:var(--bg);color:var(--text-muted);">${categoryLabels[t.category]||t.category}</span>
   </div>
-  <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;">
-    Submitted by <strong>${esc(t.submitter_name)}</strong> on ${new Date(t.created_at).toLocaleString()}
-    ${t.assignee_name?' · Assigned to <strong>'+esc(t.assignee_name)+'</strong>':''}
-    ${t.closed_at?' · Closed '+new Date(t.closed_at).toLocaleString():''}
+  <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:16px;line-height:1.5;">
+    Submitted by <strong>${esc(t.submitter_name)}</strong> · ${new Date(t.created_at).toLocaleString()}
+    ${t.assignee_name?'<br>Assigned to <strong>'+esc(t.assignee_name)+'</strong>':''}
+    ${t.closed_at?'<br>Closed '+new Date(t.closed_at).toLocaleString():''}
   </div>`;
 
-  // Detail fields grid
+  // ── Request Details section ──
   {
-    const fields=[];
-    if(t.affected_agents)fields.push(['Affected Agent(s)',esc(t.affected_agents)]);
-    if(t.lob)fields.push(['LOB / Planning Unit',esc(t.lob)]);
-    if(t.action_type)fields.push(['Action',esc(t.action_type)]);
-    if(t.accommodation_type)fields.push(['Accommodation Type',esc(t.accommodation_type)]);
-    if(t.affected_date)fields.push(['Start Date',t.affected_date]);
-    if(t.affected_date_end)fields.push(['End Date',t.affected_date_end]);
-    if(t.date_mode&&t.date_mode!=='single')fields.push(['Duration','Multiple Days']);
-    if(t.shift_time)fields.push(['Shift / Time',esc(t.shift_time)]);
-    if(t.current_start)fields.push(['Current Start',esc(t.current_start)]);
-    if(t.current_end)fields.push(['Current End',esc(t.current_end)]);
-    if(t.new_start)fields.push(['New Start',esc(t.new_start)]);
-    if(t.new_end)fields.push(['New End',esc(t.new_end)]);
-    if(t.overtime_hours)fields.push(['Hours',t.overtime_hours]);
-    if(t.contracted_hours)fields.push(['Contracted Hours',t.contracted_hours]);
-    if(t.swap_with)fields.push(['Swap With',esc(t.swap_with)]);
-    if(t.activity_name)fields.push(['Activity',esc(t.activity_name)]);
+    let rows='';
+    if(t.affected_agents) rows+=_row('Agent(s)',esc(t.affected_agents));
+    if(t.lob) rows+=_row('LOB / Planning Unit',esc(t.lob));
+    if(t.action_type) rows+=_row('Action',esc(t.action_type));
+    if(t.accommodation_type) rows+=_row('Type',esc(t.accommodation_type));
+    if(t.status_change) rows+=_row('Status Change',esc(t.status_change));
+    if(t.activity_name) rows+=_row('Activity',esc(t.activity_name));
     if(t.skill_name){
       if(t.skill_name.includes('→')){
         const parts=t.skill_name.split('→').map(s=>s.trim());
-        fields.push(['Current Skill',esc(parts[0])]);
-        fields.push(['New Skill',esc(parts[1])]);
-      } else { fields.push(['Skill',esc(t.skill_name)]); }
+        rows+=_row('Current Skill',esc(parts[0]));
+        rows+=_row('New Skill',esc(parts[1]));
+      } else rows+=_row('Skill',esc(t.skill_name));
     }
-    if(t.status_change)fields.push(['Status Change',esc(t.status_change)]);
-    if(t.has_documentation===true)fields.push(['Documentation','Yes']);
-    else if(t.has_documentation===false)fields.push(['Documentation','No']);
-    if(t.day_times){try{const dt=JSON.parse(t.day_times);const days=Object.entries(dt).map(([d,v])=>d.charAt(0).toUpperCase()+d.slice(1)+': '+v).join(', ');if(days)fields.push(['Available Times',days]);}catch(e){}};
-    if(fields.length){
-      html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 16px;margin-bottom:12px;font-size:.85rem;">`;
-      fields.forEach(([k,v])=>html+=`<div><span style="color:var(--text-muted);">${k}:</span> <strong>${v}</strong></div>`);
-      html+=`</div>`;
-    }
+    if(t.swap_with) rows+=_row('Swap With',esc(t.swap_with));
+    if(rows) html+=_sec('Request Details',rows);
   }
 
-  html+=`<div style="padding:12px;background:var(--bg);border-radius:8px;font-size:.9rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;">${esc(t.description)}</div>`;
+  // ── Schedule / Timing section ──
+  {
+    let rows='';
+    if(t.affected_date) rows+=_row('Start Date',t.affected_date);
+    if(t.affected_date_end) rows+=_row('End Date',t.affected_date_end);
+    if(t.date_mode&&t.date_mode!=='single') rows+=_row('Duration','Multiple Days');
+    if(t.shift_time) rows+=_row('Shift / Time',esc(t.shift_time));
+    if(t.current_start||t.current_end){
+      rows+=_row('Current Schedule',(t.current_start||'—')+' – '+(t.current_end||'—'));
+    }
+    if(t.new_start||t.new_end){
+      rows+=_row('New Schedule',(t.new_start||'—')+' – '+(t.new_end||'—'));
+    }
+    if(t.overtime_hours) rows+=_row('Hours',t.overtime_hours);
+    if(t.contracted_hours) rows+=_row('Contracted Hours',t.contracted_hours);
+    if(t.has_documentation===true) rows+=_row('Documentation','Yes');
+    else if(t.has_documentation===false) rows+=_row('Documentation','No');
+    // Weekly grid / day times
+    if(t.day_times){
+      try{
+        const dt=JSON.parse(t.day_times);
+        const dayOrder=['mon','tue','wed','thu','fri','sat','sun'];
+        const dayLabel={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
+        let grid='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:4px;">';
+        dayOrder.forEach(d=>{
+          if(dt[d]){
+            grid+=`<div style="padding:6px 8px;background:var(--bg);border-radius:6px;font-size:.8rem;text-align:center;">
+              <div style="font-weight:700;color:var(--text-muted);margin-bottom:2px;">${dayLabel[d]}</div>${esc(dt[d])}</div>`;
+          }
+        });
+        grid+='</div>';
+        rows+=`<div style="padding:5px 0;font-size:.85rem;"><span style="color:var(--text-muted);">Weekly Schedule</span>${grid}</div>`;
+      }catch(e){}
+    }
+    if(rows) html+=_sec('Schedule & Timing',rows);
+  }
 
+  // ── Description section ──
+  html+=_sec('Details / Reason',`<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;">${esc(t.description)}</div>`);
+
+  // ── Resolution ──
   if(t.resolution){
-    html+=`<div style="padding:12px;background:#16a34a11;border:1px solid #16a34a33;border-radius:8px;font-size:.9rem;margin-bottom:16px;">
-      <strong style="color:#16a34a;">Resolution:</strong><br>${esc(t.resolution)}</div>`;
+    html+=_sec('Resolution',`<div style="padding:10px 12px;background:#16a34a08;border:1px solid #16a34a22;border-radius:6px;font-size:.88rem;line-height:1.5;white-space:pre-wrap;">${esc(t.resolution)}</div>`);
   }
 
+  // ── WFM Analyst Controls ──
   if(isAnalyst){
     const assignOpts=analystList.map(a=>`<option value="${a.id}" ${t.assigned_to===a.id?'selected':''}>${esc(a.name)}</option>`).join('');
-    html+=`<div style="padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px;border:1px solid var(--border);">
-      <h4 style="margin:0 0 10px;font-size:.85rem;color:var(--text-muted);">WFM Analyst Controls</h4>
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-        <select id="analystStatus" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
-          <option value="open" ${t.status==='open'?'selected':''}>Open</option>
-          <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
-          <option value="resolved" ${t.status==='resolved'?'selected':''}>Resolved</option>
-          <option value="closed" ${t.status==='closed'?'selected':''}>Closed</option>
-        </select>
-        <select id="analystPriority" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
-          <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
-          <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
-          <option value="high" ${t.priority==='high'?'selected':''}>High</option>
-          <option value="urgent" ${t.priority==='urgent'?'selected':''}>Urgent</option>
-        </select>
-        <select id="analystAssign" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);">
-          <option value="">Unassigned</option>${assignOpts}
-        </select>
-        <button onclick="updateTicketAnalyst(${t.id})" class="btn btn-primary" style="padding:6px 14px;font-size:.82rem;">Update</button>
+    const selStyle='padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:var(--surface);color:var(--text-primary);';
+    html+=`<div style="padding:14px 16px;background:var(--bg);border-radius:8px;margin-bottom:16px;border:1px solid var(--border);">
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px;">WFM Analyst Controls</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:end;">
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Status</label>
+          <select id="analystStatus" style="${selStyle}width:100%;">
+            <option value="open" ${t.status==='open'?'selected':''}>Open</option>
+            <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
+            <option value="resolved" ${t.status==='resolved'?'selected':''}>Resolved</option>
+            <option value="closed" ${t.status==='closed'?'selected':''}>Closed</option>
+          </select></div>
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Priority</label>
+          <select id="analystPriority" style="${selStyle}width:100%;">
+            <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+            <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
+            <option value="high" ${t.priority==='high'?'selected':''}>High</option>
+            <option value="urgent" ${t.priority==='urgent'?'selected':''}>Urgent</option>
+          </select></div>
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Assign To</label>
+          <select id="analystAssign" style="${selStyle}width:100%;">
+            <option value="">Unassigned</option>${assignOpts}
+          </select></div>
+        <button onclick="updateTicketAnalyst(${t.id})" class="btn btn-primary" style="padding:6px 14px;font-size:.82rem;height:fit-content;">Update</button>
       </div>
-      <div class="form-group" style="margin-bottom:8px;">
-        <label>Resolution Note</label>
-        <textarea id="analystResolution" rows="2" style="font-size:.85rem;">${esc(t.resolution||'')}</textarea>
-      </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label>Internal Note (WFM only)</label>
-        <textarea id="analystInternal" rows="2" style="font-size:.85rem;background:#fef9c311;border-color:#d9760633;">${esc(t.internal_note||'')}</textarea>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:.72rem;color:var(--text-muted);">Resolution Note</label>
+          <textarea id="analystResolution" rows="2" style="font-size:.85rem;">${esc(t.resolution||'')}</textarea>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:.72rem;color:var(--text-muted);">Internal Note (WFM only)</label>
+          <textarea id="analystInternal" rows="2" style="font-size:.85rem;background:#fef9c311;border-color:#d9760633;">${esc(t.internal_note||'')}</textarea>
+        </div>
       </div>
     </div>`;
   }
 
-  // Comments
-  html+=`<h3 style="font-size:.95rem;margin:16px 0 8px;">Comments</h3>`;
+  // ── Comments ──
+  html+=`<div style="margin-bottom:0;">
+    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:10px;">Comments</div>`;
   if(comments.length){
     html+=comments.map(c=>{
-      const ib=c.is_internal?' <span style="font-size:.7rem;padding:1px 6px;background:#d9760622;color:#d97706;border-radius:4px;font-weight:600;">INTERNAL</span>':'';
-      return `<div style="padding:10px 12px;background:${c.is_internal?'#fef9c311':'var(--bg)'};border-radius:8px;margin-bottom:8px;${c.is_internal?'border:1px dashed #d9760633;':''}">
-        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px;"><strong>${esc(c.user_name)}</strong> · ${new Date(c.created_at).toLocaleString()}${ib}</div>
-        <div style="font-size:.88rem;white-space:pre-wrap;">${esc(c.body)}</div>
+      const ib=c.is_internal?' <span style="font-size:.68rem;padding:1px 6px;background:#d9760622;color:#d97706;border-radius:4px;font-weight:600;">INTERNAL</span>':'';
+      return `<div style="padding:10px 12px;background:${c.is_internal?'#fef9c311':'var(--bg)'};border-radius:6px;margin-bottom:6px;${c.is_internal?'border:1px dashed #d9760633;':''}">
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:3px;"><strong>${esc(c.user_name)}</strong> · ${new Date(c.created_at).toLocaleString()}${ib}</div>
+        <div style="font-size:.86rem;white-space:pre-wrap;">${esc(c.body)}</div>
       </div>`;
     }).join('');
-  }else html+=`<p style="color:var(--text-muted);font-size:.85rem;">No comments yet.</p>`;
+  }else html+=`<p style="color:var(--text-muted);font-size:.84rem;margin:0 0 8px;">No comments yet.</p>`;
 
-  html+=`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+  html+=`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
     <textarea id="commentBody" rows="2" placeholder="Add a comment…" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;resize:vertical;background:var(--bg);color:var(--text-primary);"></textarea>
     <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-end;">
       ${isAnalyst?'<label style="font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="commentInternal"> Internal only</label>':''}
       <button onclick="addComment(${t.id})" class="btn btn-primary" style="padding:8px 14px;font-size:.85rem;">Send</button>
     </div>
-  </div>`;
+  </div></div>`;
 
   document.getElementById('viewTicketBody').innerHTML=html;
   document.getElementById('viewTicketModal').style.display='flex';
