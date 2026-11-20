@@ -647,27 +647,66 @@ def _demo_analytics():
     volume = {}
     for i in range(30):
         d = (today - timedelta(days=29 - i)).isoformat()
-        volume[d] = random.randint(1, 8)
+        volume[d] = random.randint(3, 18)
     cats = {
-        "schedule_change": {"open": 4, "closed": 12},
-        "overtime": {"open": 2, "closed": 8},
-        "time_off_exception": {"open": 1, "closed": 5},
-        "shift_swap": {"open": 1, "closed": 3},
-        "general": {"open": 2, "closed": 4},
+        "accommodation": {"open": 2, "closed": 14, "total": 16},
+        "add_hours": {"open": 5, "closed": 39, "total": 44},
+        "team_meeting": {"open": 0, "closed": 5, "total": 5},
+        "training": {"open": 1, "closed": 20, "total": 21},
+        "offline_segment": {"open": 3, "closed": 46, "total": 49},
+        "late_remove_absence": {"open": 0, "closed": 3, "total": 3},
+        "skill_update": {"open": 1, "closed": 11, "total": 12},
+        "employee_status": {"open": 0, "closed": 3, "total": 3},
+        "ot_inquiry": {"open": 2, "closed": 6, "total": 8},
+        "move_break": {"open": 0, "closed": 1, "total": 1},
+        "schedule_update": {"open": 1, "closed": 7, "total": 8},
+        "shift_swap": {"open": 1, "closed": 3, "total": 4},
+        "timeoff": {"open": 2, "closed": 15, "total": 17},
+        "wfm_department": {"open": 1, "closed": 10, "total": 11},
+    }
+    lobs = {
+        "SS Sales": 68, "SS CCA": 52, "WL SS": 35, "Admin": 18,
+        "PS CC": 12, "PS Sales": 8, "Team Lead": 5, "WL PS": 4,
+    }
+    priorities = {"low": 12, "medium": 168, "high": 18, "urgent": 4}
+    # Daily completion — last 14 days
+    daily = {}
+    for i in range(14):
+        d = (today - timedelta(days=i)).isoformat()
+        created = random.randint(5, 26)
+        same_day = int(created * random.uniform(0.7, 1.0))
+        daily[d] = {"created": created, "same_day": same_day,
+                     "in_progress": random.randint(0, 1), "pending": random.randint(0, 2)}
+    members = {
+        "Joshua Sauve": {"assigned": 97, "completed": 96, "in_progress": 0, "not_started": 1, "same_day": 96, "same_day_pct": 100.0},
+        "Claudis Steffi": {"assigned": 78, "completed": 77, "in_progress": 0, "not_started": 1, "same_day": 72, "same_day_pct": 93.5},
+        "Dawn Devenny": {"assigned": 64, "completed": 64, "in_progress": 0, "not_started": 0, "same_day": 64, "same_day_pct": 100.0},
+        "Sara Zenasni": {"assigned": 60, "completed": 58, "in_progress": 1, "not_started": 1, "same_day": 52, "same_day_pct": 89.7},
+        "Mike Bergeron": {"assigned": 3, "completed": 1, "in_progress": 1, "not_started": 1, "same_day": 0, "same_day_pct": 0.0},
     }
     return jsonify(success=True, analytics={
-        "total": 42,
-        "status": {"open": 6, "in_progress": 4, "resolved": 3, "closed": 29},
-        "closure_rate": 76.2,
-        "avg_resolution_hours": 18.4,
-        "busiest_day": f"{(today - timedelta(days=3)).isoformat()} (8)",
-        "top_request_type": "schedule_change",
+        "total": 202,
+        "status": {"open": 19, "in_progress": 2, "resolved": 8, "closed": 173},
+        "closure_rate": 89.6,
+        "same_day_rate": 93.4,
+        "same_day_count": 169,
+        "avg_resolution_hours": 4.2,
+        "avg_resolution_days": 0.2,
+        "late_count": 3,
+        "top_request_type": "offline_segment",
         "volume_by_day": volume,
         "category_breakdown": cats,
+        "lob_breakdown": lobs,
+        "priority_breakdown": priorities,
         "workload": {
-            "WFM Analyst": {"open": 3, "in_progress": 2, "resolved": 1, "closed": 14},
-            "Admin User": {"open": 2, "in_progress": 1, "resolved": 1, "closed": 10},
+            "Joshua Sauve": {"open": 1, "in_progress": 0, "resolved": 3, "closed": 93},
+            "Claudis Steffi": {"open": 1, "in_progress": 0, "resolved": 2, "closed": 75},
+            "Dawn Devenny": {"open": 0, "in_progress": 0, "resolved": 2, "closed": 62},
+            "Sara Zenasni": {"open": 1, "in_progress": 1, "resolved": 1, "closed": 57},
+            "Mike Bergeron": {"open": 1, "in_progress": 1, "resolved": 0, "closed": 1},
         },
+        "member_performance": members,
+        "daily_completion": dict(sorted(daily.items(), reverse=True)),
     })
 
 
