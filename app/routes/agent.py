@@ -1177,7 +1177,7 @@ def claim_shift():
 # SHIFT BIDDING CYCLE (Agent-side)
 # ═══════════════════════════════════════════════════════════════
 
-@agent_bp.route("/portal/bidding-windows")
+@agent_bp.route("/portal/bidding-windows", methods=["GET", "POST"])
 @login_required
 def bidding_windows():
     """Return open bidding windows for the agent's LOB."""
@@ -1213,7 +1213,7 @@ def bidding_windows():
     return jsonify(success=True, windows=[w.to_dict() for w in windows])
 
 
-@agent_bp.route("/portal/bidding-shifts/<int:window_id>")
+@agent_bp.route("/portal/bidding-shifts/<int:window_id>", methods=["GET", "POST"])
 @login_required
 def bidding_shifts(window_id):
     """Get available shifts for a bidding window."""
@@ -1333,7 +1333,7 @@ def bidding_preference():
         return jsonify(success=False, error=str(e))
 
 
-@agent_bp.route("/portal/bidding-status/<int:window_id>")
+@agent_bp.route("/portal/bidding-status/<int:window_id>", methods=["GET", "POST"])
 @login_required
 def bidding_pref_status(window_id):
     """Get agent's bid status for a window."""
