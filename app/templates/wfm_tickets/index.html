@@ -492,6 +492,7 @@
       <div class="form-group cond-field" id="offlineTypeGroup" data-show="offline_segment" style="display:none;">
         <label>Segment Type</label>
         <select id="ticketOfflineType">
+          <option value="">— Select Type —</option>
           <option value="coaching">Coaching</option>
           <option value="meeting">Meeting</option>
           <option value="training">Training</option>
@@ -524,6 +525,7 @@
       <div class="form-group cond-field" id="timeoffTypeGroup" data-show="timeoff" style="display:none;">
         <label>Time Off Type</label>
         <select id="ticketTimeoffType">
+          <option value="">— Select Type —</option>
           <option value="paid_vacation">Paid Vacation</option>
           <option value="unpaid_timeoff">Unpaid Time Off</option>
           <option value="appointment">Appointment</option>
@@ -924,8 +926,13 @@ function onCategoryChange(){
   dyn.style.display='block';
   loadDropdownData();
 
-  // Hide ALL conditional fields first
-  document.querySelectorAll('.cond-field').forEach(el=>{el.style.display='none';});
+  // Hide ALL conditional fields first and reset their inputs
+  document.querySelectorAll('.cond-field').forEach(el=>{
+    el.style.display='none';
+    el.querySelectorAll('select').forEach(s=>{s.selectedIndex=0;});
+    el.querySelectorAll('input[type="text"],input[type="number"],input[type="time"],input[type="date"]').forEach(i=>{i.value='';});
+    el.querySelectorAll('input[type="radio"]').forEach(r=>{r.checked=false;});
+  });
 
   // Show fields whose data-show includes the selected category
   document.querySelectorAll('.cond-field[data-show]').forEach(el=>{
@@ -1211,10 +1218,13 @@ async function submitTicket(){
   if(data.success){
     showToast('Request submitted','success');
     closeModal('newTicketModal');
-    // Reset form
+    // Reset entire form
     document.getElementById('ticketCategory').value='';
     document.getElementById('dynamicFields').style.display='none';
-    ['ticketSubject','ticketDescription','ticketDate','ticketDateEnd','ticketOtHours'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.querySelectorAll('#dynamicFields input[type="text"],#dynamicFields input[type="number"],#dynamicFields input[type="time"],#dynamicFields input[type="date"],#dynamicFields textarea').forEach(el=>{el.value='';});
+    document.querySelectorAll('#dynamicFields select').forEach(s=>{s.selectedIndex=0;});
+    document.querySelectorAll('#dynamicFields input[type="radio"]').forEach(r=>{r.checked=false;});
+    document.querySelectorAll('.cond-field').forEach(el=>{el.style.display='none';});
     document.getElementById('ticketSubject').dataset.manual='';
     selectedAgentIds=[];
     renderSelectedAgents();
