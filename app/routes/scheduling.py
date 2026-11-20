@@ -3302,11 +3302,37 @@ def bidding_generate():
 
             d += datetime.timedelta(days=1)
 
+        # Auto-create a bidding window (or reuse existing one for same PU/date range)
+        from app.models import BiddingWindow
+        existing_bw = BiddingWindow.query.filter_by(
+            planning_unit_id=pu.id,
+            start_date=start_date,
+            end_date=end_date,
+        ).first()
+        if existing_bw:
+            db.session.commit()
+            log.info(f"Bidding generate complete: {len(shifts_created)} shifts for {lob_name}, reusing window {existing_bw.id}")
+            return jsonify(success=True, shifts=shifts_created,
+                           count=len(shifts_created),
+                           window_id=existing_bw.id,
+                           message=f"Generated {len(shifts_created)} shifts for {lob_name}. Existing bidding window reused.")
+        default_deadline = datetime.datetime.utcnow() + datetime.timedelta(days=3)
+        bw = BiddingWindow(
+            planning_unit_id=pu.id,
+            start_date=start_date,
+            end_date=end_date,
+            deadline=default_deadline,
+            status="bidding_open",
+            rotation_seed=0,
+            created_by=user.get("id"),
+        )
+        db.session.add(bw)
         db.session.commit()
-        log.info(f"Bidding generate complete: {len(shifts_created)} shifts for {lob_name}")
+        log.info(f"Bidding generate complete: {len(shifts_created)} shifts for {lob_name}, window {bw.id} created")
         return jsonify(success=True, shifts=shifts_created,
                        count=len(shifts_created),
-                       message=f"Generated {len(shifts_created)} shifts for {lob_name}")
+                       window_id=bw.id,
+                       message=f"Generated {len(shifts_created)} shifts for {lob_name}. Bidding is now open (deadline: 3 days).")
 
     except Exception as e:
         db.session.rollback()

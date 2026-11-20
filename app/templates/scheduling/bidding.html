@@ -249,9 +249,9 @@ async function generateShifts() {
       alert('⚠️ No shifts generated. Check that the LOB has operating hours configured and active employees assigned.');
       return;
     }
-    alert(`✅ ${data.count} shifts generated for ${lob}.`);
+    alert(`✅ ${data.message || data.count + ' shifts generated.'}`);
     await loadShifts();
-    checkBiddingStatus();
+    checkBiddingStatus();  // Will pick up the auto-created window
   } catch(e) { alert('Error: ' + e.message); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '🔄 Generate Shifts'; } }
 }
@@ -413,7 +413,7 @@ function renderStatusBar() {
     deadline.textContent = '';
     actions.innerHTML = _shifts.length
       ? '<button class="bid-btn bid-btn-primary" onclick="openBiddingModal()">🎯 Open Bidding</button>'
-      : '';
+      : '<span style="font-size:.75rem; color:var(--text-muted);">Generate shifts to get started →</span>';
     // Update stats
     document.getElementById('statBids').textContent = '0';
     document.getElementById('statBidders').textContent = '0';
