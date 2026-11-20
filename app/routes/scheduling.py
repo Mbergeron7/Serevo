@@ -1017,8 +1017,10 @@ def load_schedule():
         user = get_current_user()
         if user and user.get("is_demo"):
             from app.demo_data import get_demo_schedules, DEMO_EMPLOYEES
-            if lob:
-                lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] == lob}
+            from app.constants import LOB_ALL_LABEL
+            if lob and lob != LOB_ALL_LABEL and lob.lower() != 'all':
+                lob_list_demo = [l.strip() for l in lob.split(",") if l.strip() and l.strip() != LOB_ALL_LABEL]
+                lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES if e["Latest Skill Name"] in lob_list_demo}
             else:
                 lob_emp_ids = {e["Employee ID"] for e in DEMO_EMPLOYEES}
             shifts = []
