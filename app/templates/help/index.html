@@ -498,17 +498,17 @@
       <p>{{ brand_name }} supports two shift bidding workflows: a <strong>Bidding Cycle</strong> for full schedule generation, and <strong>Open Shift Posting</strong> for filling ad-hoc gaps.</p>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Bidding Cycle (Schedule Generation)</h4>
-      <p>Use the bidding cycle when generating a new schedule period. The system creates shifts from requirements, then agents rank their preferred shifts before final assignment.</p>
+      <p>Use the bidding cycle when generating a new schedule period. The system creates unassigned shift slots, then agents pick their preferred shifts <strong>per day</strong> before the lottery assigns one shift per agent per day.</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Generate</strong> — Go to <strong>Operations → Shift Bidding</strong>. Select the LOB and date range, then click "Generate Shifts" to create shifts from requirements (forecasted volume, AHT, staffing rules).</li>
-        <li><strong>Open Bidding</strong> — Click "Open Shift Bidding" and set a deadline for agents to submit their preferences.</li>
-        <li><strong>Agents Bid</strong> — Agents see the available shifts in the <strong>Shift Bidding</strong> tab of their portal. They can rank up to 3 shifts by preference (1st, 2nd, 3rd choice).</li>
-        <li><strong>Close Bidding</strong> — Close manually or let the deadline pass automatically.</li>
-        <li><strong>Run Lottery</strong> — Click "Run Lottery" to fairly assign shifts. The system uses a rotating priority order that changes each period, so the same agents don't always get first pick. Each agent is assigned their highest-ranked available shift.</li>
-        <li><strong>Auto-Assign Remaining</strong> — Any shifts that received no bids stay assigned from the original generation.</li>
-        <li><strong>Publish</strong> — Click "Publish" to finalize the schedule. All agents receive notifications with their assigned shifts.</li>
+        <li><strong>Generate Shifts</strong> — Go to <strong>Operations → Shift Bidding</strong>. Select the LOB and date range, then click "Generate Shifts." This creates unassigned shift slots based on operating hours and employee contracts, and <strong>automatically opens a bidding window</strong> with a 3-day deadline.</li>
+        <li><strong>Agents Bid (Per Day)</strong> — Agents see the bidding window in the <strong>Shift Bidding</strong> tab of their portal. Inside, they see <strong>week tabs</strong> (for multi-week windows) and <strong>day tabs</strong> (Mon, Tue, etc.). For each day, they pick a <strong>1st choice</strong> and optionally a <strong>2nd choice</strong> from the available shifts. A green dot on the day tab shows which days have picks. A progress tracker at the bottom shows how many days have preferences set.</li>
+        <li><strong>Submit</strong> — Agents click "Submit All Preferences" to save all their picks across all days in one go.</li>
+        <li><strong>Close Bidding</strong> — Close manually when ready, or let the deadline pass.</li>
+        <li><strong>Run Lottery</strong> — Click "Run Lottery" to fairly assign shifts. The lottery runs <strong>per day</strong>: for each day, employees are sorted by a rotating priority order (changes each bidding window), and each agent gets their highest-ranked available shift for that day. This means each agent gets <strong>one shift per day</strong>, not one shift total.</li>
+        <li><strong>Reset or Cancel</strong> — If needed, click <strong>Reset Lottery</strong> to unassign everyone and reopen bidding (agent bids are preserved, no need to rebid), or <strong>Cancel Bidding</strong> to delete the window, all bids, and all bidding shifts entirely.</li>
+        <li><strong>Publish</strong> — Click "Publish" to finalize the schedule. All agents receive notifications with their assigned shifts. Assigned shifts appear on the regular scheduling page.</li>
       </ol>
-      <p>The <strong>View Bids</strong> button shows all bids grouped by shift with employee names and preference ranks. The status bar tracks progress: Draft → Bidding Open → Bidding Closed → Lottery Complete → Published.</p>
+      <p>The <strong>View Bids</strong> button shows all bids grouped by shift with employee names and preference ranks. The status bar tracks progress: Bidding Open → Bidding Closed → Lottery Complete → Published. The <strong>Bids</strong> column on each shift shows how many agents have bid on it.</p>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Open Shift Posting (Ad-Hoc)</h4>
       <p>Use open shift posting to fill individual gaps — callouts, overtime, or last-minute coverage needs.</p>
@@ -522,9 +522,9 @@
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Agent Workflow</h4>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Open your <strong>Agent Portal</strong> and go to the <strong>Shift Bidding</strong> tab.</li>
-        <li>For <strong>bidding cycles</strong>: browse available shifts for the period, rank your top 3 preferences, and submit. After the lottery runs, you'll see which shift you were assigned.</li>
+        <li>For <strong>bidding cycles</strong>: click on the open bidding window to see available shifts. Use the <strong>day tabs</strong> to navigate each day of the week. For each day, pick your <strong>1st choice</strong> and optionally a <strong>2nd choice</strong>. The progress bar shows how many days you've picked for. Click <strong>Submit All Preferences</strong> before the deadline.</li>
         <li>For <strong>open shifts</strong>: browse individual posted shifts and click <strong>Bid</strong> on any you want. Wait for the admin to select a winner.</li>
-        <li>Assigned shifts appear in <strong>My Schedule</strong>.</li>
+        <li>After the lottery runs, you'll be notified of your assigned shifts. They appear in <strong>My Schedule</strong>.</li>
       </ol>
 
       <h3>Shift Swaps</h3>
@@ -1948,9 +1948,9 @@
       <p>Your request goes to your supervisor/admin for approval. You can track the status (pending, approved, denied) on this same page. You'll receive a notification when a decision is made.</p>
 
       <h3>Shift Bidding (Agent View)</h3>
-      <p>The <strong>Shift Bidding</strong> tab in your portal shows two types of opportunities:</p>
+      <p>The <strong>Shift Bidding</strong> tab in your portal shows open bidding windows with the LOB, date range, and time remaining.</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Bidding Cycles</strong> — When WFM opens a new schedule period for bidding, you'll see a window with the date range and deadline. Browse all available shifts, rank your top 3 in order of preference (1st, 2nd, 3rd choice), and submit before the deadline. After the lottery runs, you'll see which shift you were assigned. The lottery rotates priority each period for fairness.</li>
+        <li><strong>Bidding Cycles</strong> — Click on a window to see available shifts organized by <strong>week tabs</strong> and <strong>day tabs</strong>. For each day, pick your <strong>1st choice</strong> and optionally a <strong>2nd choice</strong> from the available time slots. A green dot on each day tab shows which days you've already picked for. A progress tracker at the bottom shows "X of Y days have preferences set." Click <strong>Submit All Preferences</strong> when done. After the deadline, the lottery assigns one shift per agent per day using rotating priority for fairness.</li>
         <li><strong>Open Shifts</strong> — Individual shifts posted for pickup (callouts, OT, extra coverage). Click <strong>Bid</strong> on any you're qualified for and wait for the admin to select a winner.</li>
       </ul>
       <p>All assigned shifts appear automatically in <strong>My Schedule</strong>.</p>

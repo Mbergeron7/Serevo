@@ -3145,15 +3145,23 @@ def get_demo_bidding_windows():
 
 
 def get_demo_bidding_shifts(window_id):
-    """Return demo shifts available for bidding."""
+    """Return demo shifts available for bidding (per-day model: 1st & 2nd choice per day)."""
     from datetime import datetime, timedelta
     now = datetime.utcnow()
     next_mon = (now + timedelta(days=(7 - now.weekday()))).date()
     shifts = []
     shift_times = [("07:00", "15:30"), ("08:00", "16:30"), ("09:00", "17:30"), ("10:00", "18:30")]
     sid = 9000
+    # Pre-set some demo picks to show the per-day UI in action
+    # Mon: 1st=07:00, 2nd=08:00; Tue: 1st=09:00, 2nd=10:00; Wed: 1st=08:00; Thu-Fri: no picks
+    demo_picks = {
+        0: {9001: 1, 9002: 2},   # Mon: 1st & 2nd choice set
+        1: {9007: 1, 9008: 2},   # Tue: 1st & 2nd choice set
+        2: {9010: 1},            # Wed: only 1st choice set
+    }
     for d in range(5):
         day = next_mon + timedelta(days=d)
+        day_picks = demo_picks.get(d, {})
         for start, end in shift_times:
             sid += 1
             shifts.append({
@@ -3163,6 +3171,6 @@ def get_demo_bidding_shifts(window_id):
                 "end": end,
                 "hours": 8.5,
                 "shift_type": "full",
-                "my_rank": None,
+                "my_rank": day_picks.get(sid),
             })
     return shifts
