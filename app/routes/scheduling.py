@@ -3079,8 +3079,22 @@ def publish_schedule():
 
 
 # ═══════════════════════════════════════════════════════════════
-# SHIFT BIDDING CYCLE ENDPOINTS
+# SHIFT BIDDING — PAGE + API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
+
+@scheduling_bp.route("/bidding")
+@login_required
+def bidding_page():
+    """Dedicated Shift Bidding page."""
+    user = get_current_user()
+    if user and user.get("is_demo"):
+        from app.demo_data import DEMO_LOBS
+        return render_template("scheduling/bidding.html",
+                               lobs=list(DEMO_LOBS))
+    from app.models import PlanningUnit
+    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    return render_template("scheduling/bidding.html",
+                           lobs=lobs)
 
 @scheduling_bp.route("/bidding/open", methods=["POST"])
 @login_required

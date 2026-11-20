@@ -1,0 +1,589 @@
+{% extends "base.html" %}
+{% block title %}Shift Bidding — {{ brand_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .bid-banner { background:var(--brand-accent,#6b21a8); color:#fff; padding:18px 24px; border-radius:var(--radius); margin-bottom:20px; }
+  .bid-banner h1 { font-size:1.35rem; margin:0 0 2px; }
+  .bid-banner .sub { font-size:.82rem; opacity:.85; }
+
+  .bid-controls {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 20px; margin-bottom:20px;
+  }
+  .bid-controls .row { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+  .bid-controls .grp { display:flex; flex-direction:column; }
+  .bid-controls .grp label {
+    font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--text-muted); margin-bottom:4px;
+  }
+  .bid-controls select, .bid-controls input {
+    padding:6px 10px; border:1px solid var(--border); border-radius:6px;
+    font-size:.85rem; background:var(--bg); color:var(--text);
+  }
+
+  .bid-btn { padding:7px 16px; border:none; border-radius:6px; font-size:.82rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .bid-btn:hover { opacity:.88; }
+  .bid-btn-primary { background:var(--brand-accent); color:#fff; }
+  .bid-btn-green { background:#059669; color:#fff; }
+  .bid-btn-red { background:#dc2626; color:#fff; }
+  .bid-btn-purple { background:#7c3aed; color:#fff; }
+  .bid-btn-outline { background:var(--surface); color:var(--text); border:1px solid var(--border); }
+
+  .bid-status-bar {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 20px; margin-bottom:20px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .bid-badge {
+    display:inline-block; padding:3px 12px; border-radius:12px;
+    font-size:.75rem; font-weight:700;
+  }
+
+  .bid-stats { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .bid-stat {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 18px; text-align:center; flex:1 1 0%; min-width:120px;
+  }
+  .bid-stat .v { font-size:1.5rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .bid-stat .l { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-top:2px; }
+
+  .bid-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    margin-bottom:20px; overflow:hidden;
+  }
+  .bid-card-header {
+    background:var(--bg); padding:10px 16px; font-weight:700; font-size:.9rem;
+    border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;
+  }
+
+  .shifts-table { width:100%; border-collapse:collapse; font-size:.82rem; font-variant-numeric:tabular-nums; }
+  .shifts-table th {
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+    padding:8px 12px; text-align:left; border-bottom:2px solid var(--border); background:var(--bg);
+  }
+  .shifts-table td { padding:7px 12px; border-bottom:1px solid var(--border); }
+  .shifts-table tr:hover { background:color-mix(in srgb, var(--brand-accent) 5%, var(--surface)); }
+
+  .bid-status-assigned { color:#059669; font-weight:600; }
+  .bid-status-generated { color:#2563eb; font-weight:600; }
+  .bid-status-unassigned { color:var(--text-muted); }
+
+  .bids-group { margin-bottom:14px; }
+  .bids-group-header {
+    font-weight:700; font-size:.82rem; padding:6px 12px; background:var(--bg);
+    border-bottom:1px solid var(--border); border-radius:6px 6px 0 0;
+  }
+  .bid-row {
+    display:flex; justify-content:space-between; padding:4px 12px; font-size:.78rem;
+    border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  }
+  .bid-row:last-child { border-bottom:none; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; justify-content:center; align-items:center; }
+  .modal-box { background:var(--surface); border-radius:12px; padding:24px; max-width:420px; width:95%; box-shadow:0 16px 48px rgba(0,0,0,.2); }
+  .modal-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-weight:700; font-size:1rem; }
+  .modal-close { background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--text-muted); }
+
+  .empty-msg { padding:40px; text-align:center; color:var(--text-muted); font-size:.9rem; }
+  @media(max-width:600px) {
+    .bid-controls .row { flex-direction:column; }
+    .bid-stats { flex-direction:column; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bid-banner">
+  <h1>🎯 Shift Bidding</h1>
+  <div class="sub">Generate schedules from requirements, open for agent bidding, run lottery, and publish</div>
+</div>
+
+<!-- ═══ Controls ═══ -->
+<div class="bid-controls">
+  <div class="row">
+    <div class="grp">
+      <label>LOB / Planning Unit</label>
+      <select id="bidLob">
+        <option value="">— Select LOB —</option>
+        {% for lob in lobs %}
+        <option value="{{ lob }}">{{ lob }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grp">
+      <label>Start Date</label>
+      <input type="date" id="bidStart">
+    </div>
+    <div class="grp">
+      <label>End Date</label>
+      <input type="date" id="bidEnd">
+    </div>
+    <button class="bid-btn bid-btn-primary" onclick="generateShifts()">🔄 Generate Shifts</button>
+    <button class="bid-btn bid-btn-outline" onclick="loadShifts()">📋 Load Existing</button>
+  </div>
+</div>
+
+<!-- ═══ Status Bar ═══ -->
+<div class="bid-status-bar" id="statusBar" style="display:none;">
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span style="font-weight:700; font-size:.85rem;">Bidding Status:</span>
+    <span class="bid-badge" id="statusBadge"></span>
+    <span id="statusDeadline" style="font-size:.75rem; color:var(--text-muted);"></span>
+  </div>
+  <div style="display:flex; gap:6px; flex-wrap:wrap;" id="statusActions"></div>
+</div>
+
+<!-- ═══ Stats Row ═══ -->
+<div class="bid-stats" id="statsRow" style="display:none;">
+  <div class="bid-stat"><div class="v" id="statShifts">0</div><div class="l">Shifts Generated</div></div>
+  <div class="bid-stat"><div class="v" id="statBids">0</div><div class="l">Total Bids</div></div>
+  <div class="bid-stat"><div class="v" id="statBidders">0</div><div class="l">Agents Bidding</div></div>
+  <div class="bid-stat"><div class="v" id="statAssigned">0</div><div class="l">Assigned (Lottery)</div></div>
+</div>
+
+<!-- ═══ Shifts Table ═══ -->
+<div class="bid-card" id="shiftsCard" style="display:none;">
+  <div class="bid-card-header">
+    <span>Generated Shifts</span>
+    <span id="shiftCount" style="font-size:.78rem; font-weight:400; color:var(--text-muted);"></span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="shifts-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Hours</th>
+          <th>Employee</th>
+          <th>Bids</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="shiftsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ Bids Panel ═══ -->
+<div class="bid-card" id="bidsCard" style="display:none;">
+  <div class="bid-card-header" style="cursor:pointer;" onclick="toggleBidsPanel()">
+    <span>📊 Bid Details</span>
+    <span id="bidsChevron" style="font-size:.8rem;">▸</span>
+  </div>
+  <div id="bidsPanel" style="display:none; padding:12px 16px; max-height:400px; overflow-y:auto;"></div>
+</div>
+
+<!-- ═══ Open Bidding Modal ═══ -->
+<div class="modal-overlay" id="openBidModal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span>Open Shift Bidding</span>
+      <button class="modal-close" onclick="closeModal('openBidModal')">&times;</button>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.78rem; font-weight:600; display:block; margin-bottom:4px;">Bidding Deadline</label>
+      <input type="datetime-local" id="bidDeadline" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-size:.85rem;">
+    </div>
+    <p style="font-size:.75rem; color:var(--text-muted); margin:8px 0;">Agents can submit up to 3 shift preferences until the deadline. After closing, run the lottery to fairly assign shifts.</p>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="bid-btn bid-btn-outline" onclick="closeModal('openBidModal')">Cancel</button>
+      <button class="bid-btn bid-btn-primary" onclick="submitOpenBidding()">Open Bidding</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+let _shifts = [];
+let _window = null;
+let _bidsExpanded = false;
+
+// ── Helpers ──
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function getLob() { return document.getElementById('bidLob').value; }
+function getStart() { return document.getElementById('bidStart').value; }
+function getEnd() { return document.getElementById('bidEnd').value; }
+
+// Set default dates (this Monday to Sunday)
+(function() {
+  const today = new Date();
+  const dow = today.getDay();
+  const mon = new Date(today); mon.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  document.getElementById('bidStart').value = mon.toISOString().slice(0,10);
+  document.getElementById('bidEnd').value = sun.toISOString().slice(0,10);
+})();
+
+// ── Generate Shifts ──
+async function generateShifts() {
+  const lob = getLob(), start = getStart(), end = getEnd();
+  if (!lob) { alert('Please select a LOB'); return; }
+  if (!start || !end) { alert('Please select date range'); return; }
+
+  const btn = event.target; btn.disabled = true; btn.textContent = '⏳ Generating...';
+  try {
+    // Use the existing schedule generation endpoint
+    const resp = await fetch('/scheduling/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ lob, start_date: start, end_date: end, mode: 'overwrite' })
+    });
+    const data = await resp.json();
+    if (data.poll && data.job_id) {
+      // Poll for completion
+      await pollGeneration(data.job_id);
+    } else if (data.success && data.days) {
+      processGeneratedDays(data.days);
+    } else {
+      alert(data.error || 'Generation failed');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '🔄 Generate Shifts'; }
+}
+
+async function pollGeneration(jobId) {
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const resp = await fetch(`/scheduling/generate/status?job_id=${jobId}`);
+    const data = await resp.json();
+    if (data.status === 'done' && data.result) {
+      // Save the generated schedule
+      await saveGeneratedSchedule(data.result);
+      await loadShifts();
+      return;
+    }
+    if (data.status === 'error') { alert('Generation error: ' + (data.error || 'Unknown')); return; }
+  }
+  alert('Generation timed out');
+}
+
+async function saveGeneratedSchedule(result) {
+  if (!result.days) return;
+  const lob = getLob(), start = getStart(), end = getEnd();
+  const shifts = [];
+  result.days.forEach(day => {
+    (day.shifts || []).forEach(s => {
+      shifts.push({
+        employee: s.employee || s.name || '',
+        employee_id: s.employee_id || '',
+        date: day.date || s.date,
+        start: s.start || s.shift_start || '',
+        end: s.end || s.shift_end || '',
+        type: s.type || s.shift_type || 'full',
+        hours: s.hours || 0,
+        status: 'scheduled',
+      });
+    });
+  });
+  if (!shifts.length) return;
+  await fetch('/scheduling/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ lob, start_date: start, end_date: end, shifts })
+  });
+}
+
+function processGeneratedDays(days) {
+  _shifts = [];
+  days.forEach(day => {
+    (day.shifts || []).forEach(s => {
+      _shifts.push({
+        date: day.date || s.date,
+        start: s.start || s.shift_start || '',
+        end: s.end || s.shift_end || '',
+        hours: s.hours || 0,
+        employee: s.employee || s.name || '',
+        status: 'generated',
+        bids: 0,
+      });
+    });
+  });
+  renderShifts();
+  checkBiddingStatus();
+}
+
+// ── Load Existing Shifts ──
+async function loadShifts() {
+  const lob = getLob(), start = getStart(), end = getEnd();
+  if (!lob || !start || !end) { alert('Select LOB and date range first'); return; }
+
+  try {
+    const resp = await fetch('/scheduling/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ lob, start_date: start, end_date: end })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      _shifts = (data.shifts || []).map(s => ({
+        id: s.id,
+        date: s.date,
+        start: s.start,
+        end: s.end,
+        hours: s.hours || 0,
+        employee: s.employee || '',
+        employee_id: s.employee_id || '',
+        status: 'generated',
+        bids: 0,
+      }));
+      renderShifts();
+      checkBiddingStatus();
+    } else {
+      alert(data.error || 'Failed to load');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Render Shifts Table ──
+function renderShifts() {
+  const card = document.getElementById('shiftsCard');
+  const tbody = document.getElementById('shiftsBody');
+  const count = document.getElementById('shiftCount');
+
+  if (!_shifts.length) {
+    card.style.display = 'none';
+    document.getElementById('statsRow').style.display = 'none';
+    return;
+  }
+
+  card.style.display = '';
+  document.getElementById('statsRow').style.display = '';
+  count.textContent = `${_shifts.length} shifts`;
+  document.getElementById('statShifts').textContent = _shifts.length;
+
+  _shifts.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+
+  tbody.innerHTML = _shifts.map(s => {
+    const sc = s.status === 'lottery_assigned' ? 'bid-status-assigned' :
+               s.status === 'generated' ? 'bid-status-generated' : 'bid-status-unassigned';
+    const statusLabel = s.status === 'lottery_assigned' ? 'Lottery Assigned' :
+                        s.status === 'generated' ? 'From Generation' : s.status;
+    return `<tr>
+      <td>${s.date}</td>
+      <td>${s.start}</td>
+      <td>${s.end}</td>
+      <td>${s.hours}</td>
+      <td>${s.employee || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${s.bids || 0}</td>
+      <td><span class="${sc}">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Bidding Status ──
+async function checkBiddingStatus() {
+  const lob = getLob(), start = getStart(), end = getEnd();
+  if (!start || !end) { document.getElementById('statusBar').style.display = 'none'; return; }
+
+  try {
+    const resp = await fetch(`/scheduling/bidding/status?lob=${encodeURIComponent(lob)}&start_date=${start}&end_date=${end}`);
+    const data = await resp.json();
+    _window = data.window;
+    renderStatusBar();
+  } catch {
+    _window = null;
+    renderStatusBar();
+  }
+}
+
+function renderStatusBar() {
+  const bar = document.getElementById('statusBar');
+  const badge = document.getElementById('statusBadge');
+  const deadline = document.getElementById('statusDeadline');
+  const actions = document.getElementById('statusActions');
+
+  bar.style.display = '';
+
+  const colors = {
+    bidding_open: ['#dbeafe','#1d4ed8'],
+    bidding_closed: ['#fef3c7','#92400e'],
+    lottery_complete: ['#ede9fe','#6d28d9'],
+    published: ['#d1fae5','#065f46'],
+  };
+  const labels = {
+    bidding_open: 'Bidding Open',
+    bidding_closed: 'Bidding Closed',
+    lottery_complete: 'Lottery Complete',
+    published: 'Published',
+  };
+
+  if (!_window) {
+    badge.textContent = 'No Bidding Window';
+    badge.style.background = 'var(--bg)'; badge.style.color = 'var(--text-muted)';
+    deadline.textContent = '';
+    actions.innerHTML = _shifts.length
+      ? '<button class="bid-btn bid-btn-primary" onclick="openBiddingModal()">🎯 Open Bidding</button>'
+      : '';
+    // Update stats
+    document.getElementById('statBids').textContent = '0';
+    document.getElementById('statBidders').textContent = '0';
+    document.getElementById('statAssigned').textContent = '0';
+    document.getElementById('bidsCard').style.display = 'none';
+    return;
+  }
+
+  const st = _window.status;
+  const c = colors[st] || ['var(--bg)','var(--text)'];
+  badge.textContent = labels[st] || st;
+  badge.style.background = c[0]; badge.style.color = c[1];
+
+  if (_window.deadline) {
+    const dl = new Date(_window.deadline);
+    deadline.textContent = `Deadline: ${dl.toLocaleString()}`;
+  } else { deadline.textContent = ''; }
+
+  // Stats
+  document.getElementById('statBids').textContent = _window.bid_count || 0;
+  document.getElementById('statBidders').textContent = _window.bidder_count || 0;
+  document.getElementById('statAssigned').textContent = _window.assigned_count || 0;
+
+  // Action buttons
+  let btns = '';
+  if (st === 'bidding_open') {
+    btns += '<button class="bid-btn bid-btn-red" onclick="closeBiddingNow()">⏹ Close Bidding</button>';
+    btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
+  }
+  if (st === 'bidding_closed') {
+    btns += '<button class="bid-btn bid-btn-purple" onclick="runLotteryNow()">🎲 Run Lottery</button>';
+    btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
+  }
+  if (st === 'lottery_complete') {
+    btns += '<button class="bid-btn bid-btn-green" onclick="publishNow()">📢 Publish Schedule</button>';
+    btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
+  }
+  if (st === 'published') {
+    btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
+  }
+  actions.innerHTML = btns;
+
+  // Show bids card
+  document.getElementById('bidsCard').style.display = '';
+}
+
+// ── Open Bidding ──
+function openBiddingModal() {
+  const dl = document.getElementById('bidDeadline');
+  const now = new Date(); now.setDate(now.getDate() + 3);
+  dl.value = now.toISOString().slice(0,16);
+  document.getElementById('openBidModal').style.display = 'flex';
+}
+
+async function submitOpenBidding() {
+  const lob = getLob(), start = getStart(), end = getEnd();
+  const deadline = document.getElementById('bidDeadline').value;
+  if (!deadline) { alert('Please set a deadline'); return; }
+
+  const resp = await fetch('/scheduling/bidding/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ lob, start_date: start, end_date: end, deadline })
+  });
+  const data = await resp.json();
+  closeModal('openBidModal');
+  if (data.success) { checkBiddingStatus(); }
+  else { alert(data.error || 'Error opening bidding'); }
+}
+
+// ── Close Bidding ──
+async function closeBiddingNow() {
+  if (!_window || !confirm('Close bidding early? No more bids will be accepted.')) return;
+  const resp = await fetch('/scheduling/bidding/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ window_id: _window.id })
+  });
+  const data = await resp.json();
+  if (data.success) { checkBiddingStatus(); }
+  else { alert(data.error || 'Error'); }
+}
+
+// ── Run Lottery ──
+async function runLotteryNow() {
+  if (!_window || !confirm('Run the lottery now? This will assign shifts based on agent preferences with rotating priority.')) return;
+  const resp = await fetch('/scheduling/bidding/lottery', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ window_id: _window.id })
+  });
+  const data = await resp.json();
+  if (data.success) {
+    alert(`Lottery complete!\n${data.assigned} shifts assigned by preference\n${data.unassigned} shifts remain from generation`);
+    checkBiddingStatus();
+    loadShifts(); // Refresh to show updated assignments
+  } else { alert(data.error || 'Error'); }
+}
+
+// ── Publish ──
+async function publishNow() {
+  if (!_window || !confirm('Publish the schedule and notify all agents?')) return;
+  const resp = await fetch('/scheduling/bidding/publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ window_id: _window.id })
+  });
+  const data = await resp.json();
+  if (data.success) {
+    alert(`Schedule published! ${data.notified} agents notified.`);
+    checkBiddingStatus();
+  } else { alert(data.error || 'Error'); }
+}
+
+// ── View Bids ──
+function toggleBidsPanel() {
+  _bidsExpanded = !_bidsExpanded;
+  document.getElementById('bidsPanel').style.display = _bidsExpanded ? '' : 'none';
+  document.getElementById('bidsChevron').textContent = _bidsExpanded ? '▾' : '▸';
+  if (_bidsExpanded) loadBids();
+}
+
+async function loadBids() {
+  if (!_window) return;
+  const panel = document.getElementById('bidsPanel');
+  panel.innerHTML = '<p style="color:var(--text-muted);">Loading bids...</p>';
+  if (!_bidsExpanded) {
+    _bidsExpanded = true;
+    document.getElementById('bidsPanel').style.display = '';
+    document.getElementById('bidsChevron').textContent = '▾';
+  }
+
+  try {
+    const resp = await fetch(`/scheduling/bidding/bids?window_id=${_window.id}`);
+    const data = await resp.json();
+    if (!data.bids || !data.bids.length) {
+      panel.innerHTML = '<p style="color:var(--text-muted);">No bids submitted yet.</p>';
+      return;
+    }
+
+    // Group by shift
+    const byShift = {};
+    data.bids.forEach(b => {
+      const key = `${b.schedule_date} ${b.shift_start}-${b.shift_end}`;
+      if (!byShift[key]) byShift[key] = { label: key, hours: b.hours, bids: [] };
+      byShift[key].bids.push(b);
+    });
+
+    let html = '';
+    for (const [key, group] of Object.entries(byShift)) {
+      group.bids.sort((a, b) => a.preference_rank - b.preference_rank);
+      html += `<div class="bids-group">
+        <div class="bids-group-header">${group.label} (${group.hours}h) — ${group.bids.length} bid${group.bids.length !== 1 ? 's' : ''}</div>`;
+      group.bids.forEach(b => {
+        const color = b.status === 'assigned' ? '#059669' : b.status === 'not_assigned' ? '#dc2626' : 'var(--text-muted)';
+        const rank = ['', '1st', '2nd', '3rd'][b.preference_rank] || b.preference_rank;
+        html += `<div class="bid-row">
+          <span>${b.employee_name} <span style="color:var(--text-muted);">(${rank} choice)</span></span>
+          <span style="color:${color}; font-weight:600;">${(b.status || 'pending').replace('_', ' ')}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = '<p style="color:#dc2626;">Failed to load bids.</p>'; }
+}
+</script>
+{% endblock %}

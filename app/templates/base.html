@@ -39,7 +39,8 @@
       <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/forecasting') or (request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources') or request.path.startswith('/realtime') or request.path.startswith('/team-calendar') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Operations <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
-          <a href="/scheduling/"{% if request.path.startswith('/scheduling') %} class="active"{% endif %}>Scheduling</a>
+          <a href="/scheduling/"{% if request.path.startswith('/scheduling') and '/bidding' not in request.path %} class="active"{% endif %}>Scheduling</a>
+          <a href="/scheduling/bidding"{% if '/scheduling/bidding' in request.path %} class="active"{% endif %}>Shift Bidding</a>
           <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
           <a href="/capacity/"{% if request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources' %} class="active"{% endif %}>Capacity</a>
           <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
