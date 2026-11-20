@@ -263,7 +263,7 @@
 <div class="p-panel" id="pp-shiftbidding">
   <div class="p-card">
     <div class="p-card-header">🎯 Shift Bidding
-      <span style="font-size:.72rem; color:var(--text-muted); font-weight:400; margin-left:8px;">Select up to 3 shifts in order of preference</span>
+      <span style="font-size:.72rem; color:var(--text-muted); font-weight:400; margin-left:8px;">Pick your 1st &amp; 2nd choice per day</span>
     </div>
     <div class="p-card-body" id="biddingBody">
       <p class="empty-msg">Loading bidding windows…</p>
@@ -1078,7 +1078,10 @@ async function claimShift(postId) {
 
 let _biddingWindows = [];
 let _selectedBiddingWindow = null;
-let _biddingPrefs = {};  // schedule_id -> rank
+let _biddingShifts = [];          // all shifts for window
+let _biddingPrefs = {};           // date -> { 1: schedule_id, 2: schedule_id }
+let _activeWeekIdx = 0;
+let _activeDayDate = null;
 
 async function loadBiddingWindows() {
   const el = document.getElementById('biddingBody');
@@ -1116,75 +1119,208 @@ async function loadBiddingWindows() {
 async function selectBiddingWindow(windowId) {
   _selectedBiddingWindow = windowId;
   _biddingPrefs = {};
+  _activeWeekIdx = 0;
+  _activeDayDate = null;
   const el = document.getElementById('biddingBody');
   el.innerHTML = '<p class="empty-msg">Loading shifts…</p>';
 
   try {
     const data = await api(`/portal/bidding-shifts/${windowId}`);
-    const shifts = data.shifts || [];
-    if (!shifts.length) {
+    _biddingShifts = data.shifts || [];
+    if (!_biddingShifts.length) {
       el.innerHTML = '<p class="empty-msg">No shifts available for this window.</p>';
       return;
     }
 
-    // Restore any existing bids
-    shifts.forEach(s => { if (s.my_rank) _biddingPrefs[s.schedule_id] = s.my_rank; });
+    // Restore existing bids — convert to per-day prefs
+    _biddingShifts.forEach(s => {
+      if (s.my_rank) {
+        if (!_biddingPrefs[s.date]) _biddingPrefs[s.date] = {};
+        _biddingPrefs[s.date][s.my_rank] = s.schedule_id;
+      }
+    });
 
-    renderBiddingShifts(shifts);
+    // Set first day as active
+    const dates = _getUniqueDates();
+    if (dates.length) _activeDayDate = dates[0];
+
+    renderBiddingUI();
   } catch(e) {
     el.innerHTML = '<p class="empty-msg">Error loading shifts.</p>';
   }
 }
 
-function renderBiddingShifts(shifts) {
-  const el = document.getElementById('biddingBody');
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function _getUniqueDates() {
+  const seen = new Set();
+  return _biddingShifts.map(s => s.date).filter(d => { if (seen.has(d)) return false; seen.add(d); return true; }).sort();
+}
 
-  let html = '<div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">';
+function _groupByWeek(dates) {
+  // Group dates into weeks (Mon-Sun)
+  const weeks = [];
+  let currentWeek = [];
+  let currentWeekStart = null;
+
+  dates.forEach(dateStr => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const day = d.getDay();
+    // Get Monday of this date's week
+    const mon = new Date(d);
+    mon.setDate(mon.getDate() - (day === 0 ? 6 : day - 1));
+    const monKey = mon.toISOString().slice(0, 10);
+
+    if (monKey !== currentWeekStart) {
+      if (currentWeek.length) weeks.push(currentWeek);
+      currentWeek = [];
+      currentWeekStart = monKey;
+    }
+    currentWeek.push(dateStr);
+  });
+  if (currentWeek.length) weeks.push(currentWeek);
+  return weeks;
+}
+
+function renderBiddingUI() {
+  const el = document.getElementById('biddingBody');
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dates = _getUniqueDates();
+  const weeks = _groupByWeek(dates);
+
+  if (!_activeDayDate || !dates.includes(_activeDayDate)) {
+    _activeDayDate = weeks[_activeWeekIdx] ? weeks[_activeWeekIdx][0] : dates[0];
+  }
+
+  let html = '';
+
+  // Top bar: back + submit
+  html += '<div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">';
   html += '<button class="btn btn-outline" style="font-size:.72rem; padding:4px 10px;" onclick="loadBiddingWindows()">← Back to Windows</button>';
-  html += '<button class="btn btn-primary" style="font-size:.75rem; padding:5px 16px;" onclick="submitBiddingPrefs()">Submit Preferences</button>';
+  html += '<button class="btn btn-primary" style="font-size:.75rem; padding:5px 16px;" onclick="submitBiddingPrefs()">Submit All Preferences</button>';
   html += '</div>';
 
-  // Show current selections
-  const selected = Object.entries(_biddingPrefs).sort((a,b) => a[1] - b[1]);
-  if (selected.length) {
-    html += '<div style="margin-bottom:12px; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">';
-    html += '<div style="font-weight:700; font-size:.75rem; margin-bottom:4px;">Your Preferences:</div>';
-    selected.forEach(([sid, rank]) => {
-      const s = shifts.find(x => x.schedule_id == sid);
-      if (s) {
-        const d = new Date(s.date + 'T00:00:00');
-        html += `<div style="font-size:.75rem; padding:2px 0;"><b>${rank}${rank===1?'st':rank===2?'nd':'rd'}</b> — ${days[d.getDay()]} ${s.date} ${s.start}–${s.end} (${s.hours}h)
-          <a href="#" onclick="_removePref(${sid}); renderBiddingShifts(window._lastBiddingShifts); return false;" style="color:#dc2626; margin-left:6px;">Remove</a></div>`;
-      }
+  // Week tabs (only if >1 week)
+  if (weeks.length > 1) {
+    html += '<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap;">';
+    weeks.forEach((wk, i) => {
+      const isActive = i === _activeWeekIdx;
+      const startD = wk[0];
+      const endD = wk[wk.length - 1];
+      html += `<button onclick="_activeWeekIdx=${i}; _activeDayDate='${wk[0]}'; renderBiddingUI();"
+        style="padding:4px 12px; border-radius:6px; font-size:.72rem; font-weight:600; border:1px solid var(--border); cursor:pointer;
+        ${isActive ? 'background:var(--primary); color:#fff; border-color:var(--primary);' : 'background:var(--bg); color:var(--text);'}">
+        Week ${i + 1} <span style="font-weight:400; font-size:.68rem;">(${startD} – ${endD})</span>
+      </button>`;
     });
     html += '</div>';
   }
 
-  html += '<div style="overflow-x:auto;"><table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Preference</th></tr></thead><tbody>';
-  shifts.forEach(s => {
-    const d = new Date(s.date + 'T00:00:00');
-    const rank = _biddingPrefs[s.schedule_id];
-    const rankLabel = rank ? `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; background:#dbeafe; color:#1d4ed8;">${rank}${rank===1?'st':rank===2?'nd':'rd'} choice</span>` : '';
-    const usedRanks = Object.values(_biddingPrefs);
-    const canAdd = !rank && usedRanks.length < 3;
-    const nextRank = canAdd ? ([1,2,3].find(r => !usedRanks.includes(r))) : null;
-    const btn = canAdd
-      ? `<button class="btn btn-outline" style="font-size:.68rem; padding:2px 8px;" onclick="_addPref(${s.schedule_id}, ${nextRank}); renderBiddingShifts(window._lastBiddingShifts);">Pick as ${nextRank}${nextRank===1?'st':nextRank===2?'nd':'rd'}</button>`
-      : (rank ? rankLabel : '<span style="color:var(--text-muted); font-size:.7rem;">Max reached</span>');
-    html += `<tr><td>${s.date}</td><td>${days[d.getDay()]}</td><td>${s.start}–${s.end}</td><td>${s.hours}</td><td>${btn}</td></tr>`;
+  // Day tabs for active week
+  const activeDays = weeks[_activeWeekIdx] || [];
+  html += '<div style="display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap;">';
+  activeDays.forEach(dateStr => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayName = dayNames[d.getDay()];
+    const isActive = dateStr === _activeDayDate;
+    const dayPrefs = _biddingPrefs[dateStr] || {};
+    const hasBids = Object.keys(dayPrefs).length > 0;
+    const dot = hasBids ? '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#22c55e; margin-left:4px; vertical-align:middle;"></span>' : '';
+    html += `<button onclick="_activeDayDate='${dateStr}'; renderBiddingUI();"
+      style="padding:6px 14px; border-radius:6px; font-size:.78rem; font-weight:600; border:1px solid var(--border); cursor:pointer;
+      ${isActive ? 'background:var(--primary); color:#fff; border-color:var(--primary);' : 'background:var(--bg); color:var(--text);'}">
+      ${dayName} ${dateStr.slice(5)}${dot}
+    </button>`;
   });
-  html += '</tbody></table></div>';
+  html += '</div>';
 
-  window._lastBiddingShifts = shifts;
+  // Shifts for active day
+  const dayShifts = _biddingShifts.filter(s => s.date === _activeDayDate);
+  const dayPrefs = _biddingPrefs[_activeDayDate] || {};
+
+  if (!dayShifts.length) {
+    html += '<p class="empty-msg">No shifts for this day.</p>';
+  } else {
+    // Show current picks for this day
+    if (Object.keys(dayPrefs).length) {
+      html += '<div style="margin-bottom:10px; padding:8px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">';
+      html += `<div style="font-weight:700; font-size:.75rem; margin-bottom:2px;">Your picks for ${_activeDayDate}:</div>`;
+      [1, 2].forEach(rank => {
+        const sid = dayPrefs[rank];
+        if (sid) {
+          const s = _biddingShifts.find(x => x.schedule_id === sid);
+          if (s) {
+            html += `<div style="font-size:.75rem; padding:2px 0;">
+              <b>${rank === 1 ? '1st' : '2nd'} choice</b> — ${s.start}–${s.end} (${s.hours}h)
+              <a href="#" onclick="_removeDayPref('${_activeDayDate}', ${rank}); return false;" style="color:#dc2626; margin-left:6px; font-size:.7rem;">Remove</a>
+            </div>`;
+          }
+        }
+      });
+      html += '</div>';
+    }
+
+    // Shifts table
+    html += '<div style="overflow-x:auto;"><table class="p-tbl"><thead><tr><th>Shift</th><th>Hours</th><th>Action</th></tr></thead><tbody>';
+    dayShifts.forEach(s => {
+      const rank = _getRankForShift(s.schedule_id, _activeDayDate);
+      let actionCell = '';
+      if (rank) {
+        actionCell = `<span style="display:inline-block; padding:2px 10px; border-radius:10px; font-size:.72rem; font-weight:700; background:${rank===1?'#dbeafe':'#e0e7ff'}; color:${rank===1?'#1d4ed8':'#4338ca'};">
+          ${rank === 1 ? '1st' : '2nd'} choice ✓</span>`;
+      } else {
+        const has1st = !!dayPrefs[1];
+        const has2nd = !!dayPrefs[2];
+        let btns = '';
+        if (!has1st) btns += `<button class="btn btn-outline" style="font-size:.68rem; padding:2px 8px; margin-right:4px;" onclick="_setDayPref('${_activeDayDate}', ${s.schedule_id}, 1);">1st choice</button>`;
+        if (!has2nd) btns += `<button class="btn btn-outline" style="font-size:.68rem; padding:2px 8px;" onclick="_setDayPref('${_activeDayDate}', ${s.schedule_id}, 2);">2nd choice</button>`;
+        actionCell = btns || '<span style="color:var(--text-muted); font-size:.7rem;">Both picked</span>';
+      }
+      html += `<tr><td style="font-weight:600;">${s.start}–${s.end}</td><td>${s.hours}</td><td>${actionCell}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Summary across all days
+  const allDates = _getUniqueDates();
+  const totalDays = allDates.length;
+  const daysWithBids = allDates.filter(d => _biddingPrefs[d] && Object.keys(_biddingPrefs[d]).length > 0).length;
+  html += `<div style="margin-top:14px; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; font-size:.75rem;">
+    <b>Progress:</b> ${daysWithBids} of ${totalDays} days have preferences set.
+    ${daysWithBids < totalDays ? '<span style="color:#b45309;"> You can still pick for the remaining days.</span>' : '<span style="color:#16a34a;"> ✓ All days covered!</span>'}
+  </div>`;
+
   el.innerHTML = html;
 }
 
-function _addPref(scheduleId, rank) { _biddingPrefs[scheduleId] = rank; }
-function _removePref(scheduleId) { delete _biddingPrefs[scheduleId]; }
+function _getRankForShift(scheduleId, dateStr) {
+  const dp = _biddingPrefs[dateStr];
+  if (!dp) return null;
+  if (dp[1] === scheduleId) return 1;
+  if (dp[2] === scheduleId) return 2;
+  return null;
+}
+
+function _setDayPref(dateStr, scheduleId, rank) {
+  if (!_biddingPrefs[dateStr]) _biddingPrefs[dateStr] = {};
+  _biddingPrefs[dateStr][rank] = scheduleId;
+  renderBiddingUI();
+}
+
+function _removeDayPref(dateStr, rank) {
+  if (_biddingPrefs[dateStr]) {
+    delete _biddingPrefs[dateStr][rank];
+    if (!Object.keys(_biddingPrefs[dateStr]).length) delete _biddingPrefs[dateStr];
+  }
+  renderBiddingUI();
+}
 
 async function submitBiddingPrefs() {
-  const prefs = Object.entries(_biddingPrefs).map(([sid, rank]) => ({schedule_id: parseInt(sid), rank}));
+  // Flatten per-day prefs into [{schedule_id, rank, date}]
+  const prefs = [];
+  for (const [dateStr, dayMap] of Object.entries(_biddingPrefs)) {
+    for (const [rank, sid] of Object.entries(dayMap)) {
+      prefs.push({ schedule_id: sid, rank: parseInt(rank), date: dateStr });
+    }
+  }
   if (!prefs.length) { alert('Select at least one shift preference.'); return; }
 
   try {

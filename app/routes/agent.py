@@ -1287,8 +1287,13 @@ def bidding_preference():
 
     if not window_id:
         return jsonify(success=False, error="window_id is required")
-    if len(preferences) > 3:
-        return jsonify(success=False, error="Maximum 3 preferences per window")
+    # Validate: max 2 preferences per day (1st & 2nd choice)
+    day_counts = {}
+    for p in preferences:
+        d = p.get("date", "")
+        day_counts[d] = day_counts.get(d, 0) + 1
+        if day_counts[d] > 2:
+            return jsonify(success=False, error=f"Maximum 2 preferences per day ({d})")
 
     from app.models import BiddingWindow, ShiftPreference
 
