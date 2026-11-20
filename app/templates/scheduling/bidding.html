@@ -445,10 +445,12 @@ function renderStatusBar() {
   }
   if (st === 'bidding_closed') {
     btns += '<button class="bid-btn bid-btn-purple" onclick="runLotteryNow()">🎲 Run Lottery</button>';
+    btns += '<button class="bid-btn bid-btn-outline" onclick="resetLottery()">🔄 Reopen Bidding</button>';
     btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
   }
   if (st === 'lottery_complete') {
     btns += '<button class="bid-btn bid-btn-green" onclick="publishNow()">📢 Publish Schedule</button>';
+    btns += '<button class="bid-btn bid-btn-outline" onclick="resetLottery()">🔄 Reset Lottery</button>';
     btns += '<button class="bid-btn bid-btn-outline" onclick="loadBids()">👁 View Bids</button>';
   }
   if (st === 'published') {
@@ -510,6 +512,22 @@ async function runLotteryNow() {
     alert(`Lottery complete!\n${data.assigned} shifts assigned by preference\n${data.unassigned} shifts remain from generation`);
     checkBiddingStatus();
     loadShifts(); // Refresh to show updated assignments
+  } else { alert(data.error || 'Error'); }
+}
+
+// ── Reset Lottery ──
+async function resetLottery() {
+  if (!_window || !confirm('Reset the lottery? This will unassign all employees from bidding shifts and reopen bidding. Agent bids are preserved.')) return;
+  const resp = await fetch('/scheduling/bidding/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ window_id: _window.id })
+  });
+  const data = await resp.json();
+  if (data.success) {
+    alert(data.message || 'Lottery reset. Bidding reopened.');
+    checkBiddingStatus();
+    loadShifts();
   } else { alert(data.error || 'Error'); }
 }
 

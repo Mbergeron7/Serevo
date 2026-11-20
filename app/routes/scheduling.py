@@ -3585,6 +3585,61 @@ def bidding_lottery():
         return jsonify(success=False, error=str(e))
 
 
+@scheduling_bp.route("/bidding/reset", methods=["POST"])
+@login_required
+def bidding_reset():
+    """Reset lottery — unassign employees from bidding shifts and reopen the window."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo: lottery reset")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import BiddingWindow, ShiftPreference
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+    if window.status not in ("lottery_complete", "bidding_closed"):
+        return jsonify(success=False, error=f"Window status is '{window.status}', nothing to reset")
+
+    try:
+        # Unassign employees from bidding shifts in this window's range
+        scheds = Schedule.query.filter(
+            Schedule.schedule_date >= window.start_date,
+            Schedule.schedule_date <= window.end_date,
+            Schedule.source == "bidding",
+        )
+        if window.planning_unit_id:
+            scheds = scheds.filter(Schedule.planning_unit_id == window.planning_unit_id)
+        reset_count = 0
+        for s in scheds.all():
+            if s.employee_id is not None:
+                s.employee_id = None
+                s.status = "open"
+                reset_count += 1
+
+        # Reset all preference statuses back to pending
+        ShiftPreference.query.filter_by(bidding_window_id=window.id).update(
+            {"status": "pending"}, synchronize_session="fetch")
+
+        window.status = "bidding_open"
+        db.session.commit()
+
+        return jsonify(success=True, reset=reset_count,
+                       message=f"Reset {reset_count} assignments. Bidding reopened — agent bids are preserved.")
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bidding reset error")
+        return jsonify(success=False, error=str(e))
+
+
 @scheduling_bp.route("/bidding/publish", methods=["POST"])
 @login_required
 def bidding_publish():
