@@ -715,6 +715,7 @@
 const ALL_LOBS = {{ all_lobs | tojson }};
 let chartOffered = null, chartAht = null, chartReq = null;
 let forecastData = {};  // {lob: {daily, totals}}
+let _loadedYears = new Set();  // track which years we've fetched data for
 const lobActivities = {{ lob_activities | default({}) | tojson }};
 let activeLob = null;
 let currentView = 'daily';
@@ -739,9 +740,47 @@ function setView(view, btn) {
     loadIntervalData();
   } else {
     intervalData = null;
-    renderCharts();
-    renderHeatmap();
+    // Check if we need to load data for the year navAnchor is in
+    const navYear = navAnchor.getFullYear();
+    if (!_loadedYears.has(navYear) && Object.keys(forecastData).length > 0) {
+      // Load the missing year's data, then render
+      _loadYearData(navYear).then(() => { renderCharts(); renderHeatmap(); });
+    } else {
+      renderCharts();
+      renderHeatmap();
+    }
   }
+}
+
+async function _loadYearData(year) {
+  // Load forecast data for a specific year for all currently-loaded LOBs, and merge into forecastData
+  const lobs = Object.keys(forecastData);
+  if (!lobs.length) return;
+  const sl = document.getElementById('slTarget').value;
+  const asa = document.getElementById('asaTarget').value;
+  const shrink = document.getElementById('shrinkage').value;
+  for (const lob of lobs) {
+    try {
+      const resp = await fetch('/forecasting/api/data', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ lob, year, service_level: sl, target_asa: asa, shrinkage: shrink })
+      });
+      const data = await resp.json();
+      if (data.success && data.daily && data.daily.length) {
+        // Merge: add new year's daily entries to existing data
+        const existing = forecastData[lob];
+        if (existing && existing.daily) {
+          const existingDates = new Set(existing.daily.map(d => d.date));
+          const newEntries = data.daily.filter(d => !existingDates.has(d.date));
+          existing.daily = existing.daily.concat(newEntries).sort((a, b) => a.date.localeCompare(b.date));
+        } else {
+          forecastData[lob] = data;
+        }
+      }
+    } catch (e) { console.warn(`Failed to load ${lob} for year ${year}:`, e); }
+  }
+  _loadedYears.add(year);
 }
 
 function updateNavLabel() {
@@ -1074,6 +1113,7 @@ async function loadLobData(lob, sl, asa, shrink) {
     if (!data.success || !data.daily.length) return false;
 
     forecastData[lob] = data;
+    _loadedYears.add(navAnchor.getFullYear());
     return true;
   } catch (e) {
     console.error(`Error loading ${lob}:`, e);
