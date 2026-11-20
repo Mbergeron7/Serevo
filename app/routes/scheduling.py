@@ -3096,6 +3096,186 @@ def bidding_page():
     return render_template("scheduling/bidding.html",
                            lobs=lobs)
 
+@scheduling_bp.route("/bidding/generate", methods=["POST"])
+@login_required
+def bidding_generate():
+    """Generate shift slots for bidding based on LOB hours and employee contracts.
+    Unlike regular scheduling which needs requirements data, this builds shifts
+    from operating hours and employee availability — designed for future weeks
+    where no forecast exists yet."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_shifts
+        return jsonify(success=True, shifts=get_demo_bidding_shifts(0),
+                       message="Demo: shifts generated", count=20)
+
+    payload = request.get_json(silent=True) or {}
+    lob_name = (payload.get("lob") or "").strip()
+    start_str = payload.get("start_date")
+    end_str = payload.get("end_date")
+
+    if not lob_name or not start_str or not end_str:
+        return jsonify(success=False, error="LOB, start_date, and end_date are required")
+
+    try:
+        start_date = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify(success=False, error="Invalid date format")
+
+    if (end_date - start_date).days > 42:
+        return jsonify(success=False, error="Max 6 weeks per bidding generation")
+
+    try:
+        from app.models import PlanningUnit, LOBSetting, EmployeePlanningUnit, PTOEntry
+        pu = PlanningUnit.query.filter(
+            db.func.lower(PlanningUnit.name) == lob_name.lower()
+        ).first()
+        if not pu:
+            return jsonify(success=False, error=f"Planning unit '{lob_name}' not found")
+
+        # Get operating hours
+        lob_set = pu.lob_setting
+        default_shift_hrs = lob_set.default_shift_hrs if lob_set else 8.0
+
+        # Get active employees in this LOB
+        direct_ids = {e.id for e in Employee.query.filter(
+            Employee.planning_unit_id == pu.id, Employee.status == "Active"
+        ).all()}
+        assigned_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            EmployeePlanningUnit.planning_unit_id == pu.id
+        ).all()}
+        all_emp_ids = list(direct_ids | assigned_ids)
+        employees = Employee.query.filter(
+            Employee.id.in_(all_emp_ids), Employee.status == "Active"
+        ).all() if all_emp_ids else []
+
+        if not employees:
+            return jsonify(success=False,
+                           error=f"No active employees found in {lob_name}")
+
+        # Get PTO entries for the date range
+        pto_dates = {}  # {emp_id: set of dates}
+        ptos = PTOEntry.query.filter(
+            PTOEntry.employee_id.in_([e.id for e in employees]),
+            PTOEntry.start_date <= end_date,
+            PTOEntry.end_date >= start_date,
+            PTOEntry.status == "approved"
+        ).all()
+        for p in ptos:
+            d = max(p.start_date, start_date)
+            while d <= min(p.end_date, end_date):
+                pto_dates.setdefault(p.employee_id, set()).add(d)
+                d += datetime.timedelta(days=1)
+
+        # Clear any existing generated schedules for this range/LOB
+        existing_ids = [s.id for s in Schedule.query.filter(
+            Schedule.planning_unit_id == pu.id,
+            Schedule.schedule_date >= start_date,
+            Schedule.schedule_date <= end_date,
+        ).all()]
+        if existing_ids:
+            from app.models import ShiftSegment
+            ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(existing_ids)).delete(synchronize_session=False)
+            Schedule.query.filter(Schedule.id.in_(existing_ids)).delete(synchronize_session=False)
+
+        # Generate shifts day by day
+        shifts_created = []
+        d = start_date
+        while d <= end_date:
+            dow = d.weekday()
+            # Get operating hours for this day
+            if lob_set:
+                op_start, op_end = lob_set.get_hours_for_day(dow)
+            else:
+                op_start, op_end = "08:00", "22:00"
+
+            if not op_start or not op_end:
+                d += datetime.timedelta(days=1)
+                continue
+
+            op_start_mins = int(op_start.split(":")[0]) * 60 + int(op_start.split(":")[1])
+            op_end_mins = int(op_end.split(":")[0]) * 60 + int(op_end.split(":")[1])
+            if op_end_mins <= op_start_mins:
+                op_end_mins += 1440  # overnight
+
+            shift_len_mins = int(default_shift_hrs * 60)
+            # Calculate how many staggered start times fit in the operating window
+            # Stagger by 30 min increments
+            stagger = 30
+            start_times = []
+            t = op_start_mins
+            while t + shift_len_mins <= op_end_mins:
+                start_times.append(t)
+                t += stagger
+
+            if not start_times:
+                start_times = [op_start_mins]
+
+            # For each available employee, assign a shift slot
+            emp_index = 0
+            for emp in employees:
+                # Skip if on PTO
+                if emp.id in pto_dates and d in pto_dates[emp.id]:
+                    continue
+                # Check days_per_week — simple round-robin off days
+                days_pw = emp.days_per_week or 5
+                if days_pw < 7:
+                    # Give consistent days off based on employee ID
+                    off_days = set()
+                    seed = emp.id % 7
+                    for i in range(7 - days_pw):
+                        off_days.add((seed + i) % 7)
+                    if dow in off_days:
+                        continue
+
+                # Assign a staggered start time
+                s_mins = start_times[emp_index % len(start_times)]
+                e_mins = s_mins + shift_len_mins
+                s_time = datetime.time(s_mins // 60, s_mins % 60)
+                e_hr = (e_mins // 60) % 24
+                e_min = e_mins % 60
+                e_time = datetime.time(e_hr, e_min)
+                hrs = round(shift_len_mins / 60, 1)
+
+                sched = Schedule(
+                    employee_id=emp.id,
+                    planning_unit_id=pu.id,
+                    schedule_date=d,
+                    shift_start=s_time,
+                    shift_end=e_time,
+                    shift_type="full",
+                    hours=hrs,
+                    status="scheduled",
+                    source="bidding",
+                )
+                db.session.add(sched)
+                shifts_created.append({
+                    "employee": emp.full_name,
+                    "employee_id": emp.employee_id,
+                    "date": d.isoformat(),
+                    "start": s_time.strftime("%H:%M"),
+                    "end": e_time.strftime("%H:%M"),
+                    "hours": hrs,
+                })
+                emp_index += 1
+
+            d += datetime.timedelta(days=1)
+
+        db.session.commit()
+        return jsonify(success=True, shifts=shifts_created,
+                       count=len(shifts_created),
+                       message=f"Generated {len(shifts_created)} shifts for {lob_name}")
+
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bidding generate failed")
+        return jsonify(success=False, error=str(e))
+
+
 @scheduling_bp.route("/bidding/open", methods=["POST"])
 @login_required
 def bidding_open():
