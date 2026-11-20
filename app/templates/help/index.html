@@ -181,6 +181,22 @@
 
       <h3>Recent Activity</h3>
       <p>The activity feed shows the latest changes across the system: new hires, schedule publications, approved/denied PTO, shift swap completions, configuration changes, and more. Each entry shows the action, the user who performed it, and a timestamp.</p>
+
+      <h3>Dashboard Customization</h3>
+      <p>You can rearrange dashboard widgets by dragging and dropping them into your preferred order. Your layout is saved to your browser automatically — it persists across sessions and page refreshes. Each user sees their own arrangement without affecting other users.</p>
+
+      <h3>Setup Wizard</h3>
+      <p>New installations see a <strong>Setup Wizard</strong> on the dashboard that guides you through the initial configuration in 7 steps:</p>
+      <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Company Info</strong> — set your organization name, branding, and time zone</li>
+        <li><strong>Planning Units</strong> — create your LOBs / departments</li>
+        <li><strong>Employees</strong> — add your workforce roster</li>
+        <li><strong>Skills</strong> — define skill groups and assignments</li>
+        <li><strong>Schedules</strong> — create or import your first schedule</li>
+        <li><strong>Routes / Data Sources</strong> — connect call data feeds (Google Sheets or file upload)</li>
+        <li><strong>Historical Data</strong> — import historical actuals for forecasting</li>
+      </ol>
+      <p>A progress bar tracks which steps are complete. You can revisit any step at any time. The wizard dismisses once all steps are done.</p>
     </div>
   </div>
 
@@ -811,6 +827,14 @@
       <h3>⚡ Optimizer</h3>
       <p>Suggests real-time schedule adjustments to improve service level or reduce costs. Based on current actuals and remaining forecast, it recommends actions like moving breaks, reassigning agents between LOBs, or extending/shortening shifts.</p>
 
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Smart VTO / OT Suggestions</h4>
+      <p>The Optimizer tab includes a <strong>Smart VTO/OT Suggestions</strong> panel that automatically analyzes current staffing levels against demand and recommends:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>VTO (Voluntary Time Off)</strong> — when staffing exceeds demand, the system suggests specific agents who could be released early, ranked by impact on coverage.</li>
+        <li><strong>OT (Overtime)</strong> — when demand exceeds staffing, the system suggests agents who could extend their shift or be called in, based on skills and availability.</li>
+      </ul>
+      <p>Suggestions are refreshed in real-time as conditions change throughout the day. Use these as starting points — the final decision is always with the WFM analyst.</p>
+
       <h3>Leaderboard</h3>
       <p>Ranks agents by key performance metrics for the selected date — calls handled, AHT, quality scores, and adherence. Use it for gamification, coaching conversations, or to identify top performers and those needing support.</p>
 
@@ -1123,47 +1147,97 @@
   <!-- ============================================================ -->
   <!-- WFM TICKETS -->
   <!-- ============================================================ -->
-  <div class="help-section" id="wfm-tickets" data-keywords="wfm tickets support request schedule change overtime time off shift swap headcount forecast lob agent roster priority assign track dashboard analytics csv export">
+  <div class="help-section" id="wfm-tickets" data-keywords="wfm tickets support request schedule change overtime time off shift swap accommodation training meeting skill update employee status break lunch offline segment lob agent roster priority assign track dashboard analytics csv export archive recycle bin history">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>WFM Tickets</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
       <h3>What Are WFM Tickets?</h3>
-      <p>WFM Tickets are structured workforce management requests — schedule changes, overtime approvals, time-off exceptions, shift swaps, headcount requests, and forecast adjustments. They replace free-text submissions with a portal-style form that uses dropdowns and date fields so every request contains the information WFM needs to act on it.</p>
+      <p>WFM Tickets are structured workforce management requests — schedule changes, accommodations, overtime inquiries, shift swaps, skill updates, employee status changes, and more. They replace free-text email submissions with a dynamic form that shows only the fields relevant to each request type, so every request contains exactly the information WFM needs to act on it.</p>
 
       <h3>Creating a Request</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Go to <strong>WFM Tickets</strong> from the navigation menu.</li>
         <li>Click <strong>+ New Request</strong>.</li>
-        <li>Select a <strong>Request Type</strong> — the form fields update automatically based on the type you choose (see Request Types below).</li>
+        <li>Select a <strong>Request Type</strong> — the form fields update automatically based on the type you choose (see Request Types below). Switching types resets all fields to prevent stale data.</li>
         <li>Set <strong>Priority</strong> (Low, Medium, High, or Urgent).</li>
         <li>Select the <strong>LOB / Department</strong> — this filters the agent list to employees rostered under that planning unit.</li>
         <li>Choose the <strong>Affected Agent(s)</strong> — a searchable multi-select dropdown showing only agents from the selected LOB. You can select multiple agents.</li>
         <li>Set the <strong>Effective Date</strong> and, if applicable, the <strong>End Date</strong>.</li>
-        <li>Fill in any additional fields that appear for your request type (shift/time, overtime hours, swap partner).</li>
+        <li>Fill in any additional fields that appear for your request type.</li>
         <li>The <strong>Subject</strong> line is auto-generated from your selections but can be edited.</li>
         <li>Add <strong>Details / Reason</strong> with any context or justification.</li>
         <li>Click <strong>Submit Request</strong>.</li>
       </ol>
 
-      <h3>Request Types</h3>
-      <p>Each request type shows only the fields relevant to that type:</p>
+      <h3>Request Types (14 Categories)</h3>
+      <p>Each request type shows only the fields relevant to that type. When you switch between types, all fields reset automatically so no data carries over from a previous selection.</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Schedule Change</strong> — change an agent's scheduled shift. Fields: affected agents, effective date, end date, shift/time.</li>
-        <li><strong>Overtime</strong> — request overtime hours for one or more agents. Fields: affected agents, date, end date, overtime hours.</li>
-        <li><strong>Time Off Exception</strong> — request an exception to standard time-off rules. Fields: affected agents, date range.</li>
-        <li><strong>Shift Swap</strong> — swap shifts between two agents in the same LOB. Fields: affected agents, swap date, shift/time, swap-with agent.</li>
-        <li><strong>Headcount</strong> — request additional headcount or report changes for a LOB. Fields: LOB, effective dates.</li>
-        <li><strong>Forecast Adjustment</strong> — flag a forecast that needs correction. Fields: LOB, dates.</li>
-        <li><strong>General</strong> — any other WFM request that doesn't fit the above categories.</li>
+        <li><strong>Accommodation Request/Update</strong> — schedule accommodations for personal, medical, or school needs. Fields: action (add/update/remove), accommodation type, date range, per-day available times (Mon–Sun weekly grid), contracted hours, documentation provided (yes/no).</li>
+        <li><strong>Add Additional Hours</strong> — request extra hours for one or more agents. Fields: single/multi-day toggle, date(s), start/end time (single day) or weekly grid with per-day start/end (multi-day), hours.</li>
+        <li><strong>Add/Remove/Change Team Meeting</strong> — manage meeting schedule blocks. Fields: action (add/remove/change), date, start/end time, meeting name.</li>
+        <li><strong>Add/Remove/Move Training</strong> — manage training schedule blocks. Fields: action (add/remove/move), date, start/end time, training name.</li>
+        <li><strong>Add Offline Segment</strong> — add non-queue time to an agent's schedule. Fields: segment type (Coaching, Meeting, Training, Project Work, Admin, System Issue, Other), date, start/end time.</li>
+        <li><strong>Advisor Arrived Late, Remove Absence</strong> — correct an attendance record when an advisor was incorrectly marked absent. Fields: date, notes/explanation.</li>
+        <li><strong>Skill Update</strong> — change an agent's skill or queue routing assignment. Fields: current skill/queue, new skill/queue (displayed as "Current → New" in the detail view).</li>
+        <li><strong>Employee Status Update</strong> — change an employee's employment status. Fields: new status dropdown (Active, Inactive, LOA, Transfer LOB, Part-Time, Full-Time, Probation, Return from LOA, Termination, Resignation).</li>
+        <li><strong>Is OT Available?</strong> — inquiry about overtime availability for a specific date. Fields: date.</li>
+        <li><strong>Move Break/Lunch</strong> — adjust break or lunch timing in an agent's schedule. Fields: action (Add/Delete/Adjust), current start/end times, new start/end times.</li>
+        <li><strong>Schedule Update</strong> — modify scheduled shift times. Fields: single/multi-day toggle, date(s), current start/end + new start/end (single day) or weekly grid with current and new times per day (multi-day).</li>
+        <li><strong>Shift Swap/Offer</strong> — swap or offer shifts between two agents. Fields: action (Offer/Swap), agent offering dropdown, agent receiving dropdown, single/multi-day toggle, start/end times (single) or weekly grids for offering and receiving agents (multi-day).</li>
+        <li><strong>Time Off / Vacation</strong> — request time off for an agent. Fields: action (Add/Remove/Adjust), time off type (Paid Vacation, Unpaid Time Off, Appointment), date range.</li>
+        <li><strong>WFM Department Work</strong> — internal WFM operational tasks and projects. Fields: notes/description only (no agent selection or scheduling fields).</li>
       </ul>
 
-      <h3>Dashboard &amp; Analytics</h3>
-      <p>The WFM Tickets page has three tabs:</p>
+      <h3>Page Tabs &amp; Navigation</h3>
+      <p>The WFM Tickets page has six tabs:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Dashboard</strong> — shows ticket counts by status (open, in progress, resolved) and recent activity.</li>
-        <li><strong>Analytics</strong> — charts showing ticket trends, resolution times, and breakdowns by category and priority.</li>
-        <li><strong>All Tickets</strong> — the full ticket list with search, filters (status, category, priority), and CSV export.</li>
+        <li><strong>Dashboard</strong> — the main ticket list view. Filter by status (All/Open/In Progress/Resolved/Closed) and category (all 14 types). Search tickets by subject, agent name, or description. Quick-assign tickets directly from the list (analyst/admin only). Auto-refresh with configurable countdown.</li>
+        <li><strong>Analytics</strong> — operational dashboard with KPIs, charts, and performance tables (analyst/admin only). See Analytics section below.</li>
+        <li><strong>Archive</strong> — resolved/closed tickets moved out of the active queue. Analysts can archive tickets to declutter the dashboard. Archived tickets retain all data and can be restored at any time.</li>
+        <li><strong>Recycle Bin</strong> — soft-deleted tickets. Can be restored or permanently deleted (admin only). Useful for removing test or accidental submissions.</li>
+        <li><strong>History</strong> — full audit trail of every action taken on any ticket: creation, status changes, priority changes, assignments, archiving, and comments. Searchable by ticket number.</li>
+      </ul>
+      <p>Additional page controls:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>+ New Request</strong> — opens the ticket creation form.</li>
+        <li><strong>Export CSV</strong> — downloads all non-deleted tickets with full field data as a CSV file (analyst/admin only).</li>
+        <li><strong>Manage Access</strong> — grants or revokes WFM analyst access for individual users. Admins and supervisors have access automatically; team leads must be explicitly granted the WFM checkmark (admin only).</li>
+      </ul>
+
+      <h3>Analytics Dashboard</h3>
+      <p>The Analytics tab provides operational insights for WFM management. Use the date range quick-select buttons (7 Days, 30 Days, 90 Days, All Time) or custom date pickers. All metrics update when the range changes.</p>
+      <p><strong>KPI Summary Cards (top row):</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Requests</strong> — total non-deleted tickets in the selected range</li>
+        <li><strong>Completed</strong> — tickets resolved or closed</li>
+        <li><strong>Same-Day Rate</strong> — percentage of completed tickets resolved on the same day they were created</li>
+        <li><strong>Avg Days to Complete</strong> — mean resolution time in days</li>
+        <li><strong>In Progress</strong> — tickets currently being worked</li>
+        <li><strong>Not Started</strong> — submitted but not yet picked up</li>
+        <li><strong>Late</strong> — open or in-progress tickets older than 24 hours (highlighted red when &gt; 0)</li>
+      </ul>
+      <p><strong>Charts &amp; Tables:</strong></p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Request Volume by Daily</strong> — line chart showing daily ticket creation with a 7-day moving average overlay</li>
+        <li><strong>By LOB</strong> — doughnut chart showing ticket distribution by LOB/Planning Unit</li>
+        <li><strong>Top Request Types</strong> — horizontal bar chart showing ticket counts per category, sorted by volume</li>
+        <li><strong>Priority Split</strong> — table showing ticket count per priority level (Urgent, High, Medium, Low)</li>
+        <li><strong>Team Performance</strong> — table with columns: Member, Assigned, Completed, In Prog, Not Started, Same-Day %. Sorted by assigned count. Same-Day % shows what percentage of each analyst's completed tickets were resolved on the day they were created.</li>
+        <li><strong>Completion — Last 14 Days</strong> — daily table with columns: Date, Created, Same-Day, In Prog, Pending. Shows the most recent 14 days of data.</li>
+        <li><strong>All Request Types</strong> — full table showing every category with its count and percentage of total volume</li>
+      </ul>
+
+      <h3>Ticket Detail View</h3>
+      <p>Click any ticket to open its detail view. The detail is organized into clearly labeled sections for easy scanning:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Header</strong> — ticket number, subject, status/priority/category pills, submitted by, assigned to, timestamps.</li>
+        <li><strong>Request Details</strong> — labeled rows showing the fields relevant to this ticket's category: agent(s), LOB, action type, accommodation/time-off type, status change, activity name, current/new skill, swap partner.</li>
+        <li><strong>Schedule &amp; Timing</strong> — dates, shift times, current vs. new schedule times, hours, contracted hours, documentation status. Weekly grids render as day cards (Mon–Sun) showing the time for each day.</li>
+        <li><strong>Details / Reason</strong> — the full ticket description.</li>
+        <li><strong>Resolution</strong> — shown only when populated. Contains the analyst's resolution summary.</li>
+        <li><strong>WFM Analyst Controls</strong> (analyst/admin only) — grid layout with labeled dropdowns for Status, Priority, and Assign To on one row with an Update button. Resolution Note and Internal Note textareas side-by-side below. Internal notes are never visible to the submitter.</li>
+        <li><strong>Comments</strong> — chronological comment thread. Public comments are visible to everyone; internal comments (marked with an "INTERNAL" badge and dashed border) are visible only to analysts. Add comments at the bottom with an optional "Internal only" checkbox.</li>
       </ul>
 
       <h3>Tracking &amp; Resolving Tickets</h3>
@@ -1171,10 +1245,10 @@
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Open</strong> — newly submitted, not yet picked up</li>
         <li><strong>In Progress</strong> — assigned and being worked on</li>
-        <li><strong>Resolved</strong> — completed with a resolution</li>
-        <li><strong>Closed</strong> — finalized and archived</li>
+        <li><strong>Resolved</strong> — completed with a resolution note</li>
+        <li><strong>Closed</strong> — finalized</li>
       </ul>
-      <p>Click a ticket to view its full details in a grid layout showing all submitted fields. From the detail view, admins can assign the ticket to a team member, add internal notes, update the status, or resolve and close the request. The submitting agent can see status updates and any responses in their portal.</p>
+      <p>Submitters (team leads) see only their own tickets with a simplified view — no internal notes, no analyst controls. They can track status updates and add public comments. Admins can assign, update status and priority, add resolution and internal notes, archive, soft-delete, or permanently delete tickets.</p>
     </div>
   </div>
 
@@ -1922,6 +1996,19 @@
       <p>After a break or lunch ends, you'll also receive a <strong>"Back on phones"</strong> notification reminding you to return to your scheduled activity.</p>
       <p>Notifications auto-dismiss after 60 seconds. You can also close them manually by clicking the × button. Each notification appears only once — if you dismiss it, it won't pop up again for the same activity.</p>
       <p><strong>Note:</strong> Notifications only appear while you have the agent portal open in your browser. They check your schedule every 60 seconds.</p>
+
+      <h3>Available Shifts (Self-Scheduling)</h3>
+      <p>When shifts are available for claiming, they appear in the <strong>Available Shifts</strong> section of your portal:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li>Browse open shifts that match your skills and LOB assignment</li>
+        <li>Each shift shows the date, start/end time, and planning unit</li>
+        <li>Click <strong>Claim</strong> to pick up a shift — it's immediately added to your schedule</li>
+        <li>Claimed shifts can be viewed in your My Schedule tab</li>
+      </ul>
+      <p>This feature allows agents to self-schedule for available time slots without waiting for a supervisor to assign them.</p>
+
+      <h3>Badges &amp; Gamification</h3>
+      <p>The Badges tab in the agent portal displays achievement badges earned through your work. Badges are awarded automatically based on performance milestones — consistent attendance, adherence targets, calls handled, and more. Each badge shows its name, description, and the date it was earned.</p>
 
       <h3>Announcements &amp; Training</h3>
       <p>View organization-wide announcements on the Self-Service page. Pinned announcements appear at the top. Your assigned training modules and their due dates are also visible here.</p>
