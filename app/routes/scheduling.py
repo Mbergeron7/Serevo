@@ -1008,6 +1008,8 @@ def load_schedule():
         start_str = payload.get("start_date", "")
         end_str = payload.get("end_date", "")
 
+        include_bidding = payload.get("include_bidding", False)
+
         if not start_str or not end_str:
             return jsonify({"success": False, "error": "Date range required"})
 
@@ -1063,7 +1065,7 @@ def load_schedule():
             # Show schedules assigned to this PU, plus schedules with no PU
             # for employees who belong to the PU (avoids pulling in their
             # schedules from other PUs like QA when filtering by Admin)
-            schedules = Schedule.query.filter(
+            q = Schedule.query.filter(
                 db.or_(
                     Schedule.planning_unit_id.in_(pu_ids),
                     db.and_(
@@ -1073,23 +1075,25 @@ def load_schedule():
                 ),
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
-                # Exclude unassigned bidding slots from regular schedule view
-                db.not_(db.and_(
+            )
+            if not include_bidding:
+                q = q.filter(db.not_(db.and_(
                     Schedule.source == "bidding",
                     Schedule.employee_id.is_(None),
-                )),
-            ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+                )))
+            schedules = q.order_by(Schedule.schedule_date, Schedule.shift_start).all()
         else:
             # All LOBs
-            schedules = Schedule.query.filter(
+            q = Schedule.query.filter(
                 Schedule.schedule_date >= start_date,
                 Schedule.schedule_date <= end_date,
-                # Exclude unassigned bidding slots from regular schedule view
-                db.not_(db.and_(
+            )
+            if not include_bidding:
+                q = q.filter(db.not_(db.and_(
                     Schedule.source == "bidding",
                     Schedule.employee_id.is_(None),
-                )),
-            ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
+                )))
+            schedules = q.order_by(Schedule.schedule_date, Schedule.shift_start).all()
 
         shifts = [s.to_dict() for s in schedules]
 

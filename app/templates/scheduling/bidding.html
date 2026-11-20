@@ -311,7 +311,7 @@ async function loadShifts() {
     const resp = await fetch('/scheduling/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-      body: JSON.stringify({ lob, start_date: start, end_date: end })
+      body: JSON.stringify({ lob, start_date: start, end_date: end, include_bidding: true })
     });
     const data = await resp.json();
     if (data.success) {
