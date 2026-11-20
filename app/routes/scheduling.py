@@ -3502,38 +3502,65 @@ def bidding_lottery():
             return jsonify(success=True, assigned=0, unassigned=0,
                            message="No bids submitted — lottery complete")
 
-        # Group preferences by employee
-        emp_prefs = {}
+        # Group preferences by DATE, then by employee within each date
+        # Each pref's schedule has a date — look it up
+        sched_cache = {}
         for p in prefs:
-            emp_prefs.setdefault(p.employee_id, []).append(p)
-        for eid in emp_prefs:
-            emp_prefs[eid].sort(key=lambda p: p.preference_rank)
+            if p.schedule_id not in sched_cache:
+                s = Schedule.query.get(p.schedule_id)
+                sched_cache[p.schedule_id] = s
 
-        # Build rotation order
-        emp_ids = list(emp_prefs.keys())
-        emp_count = len(emp_ids)
-        emp_ids.sort(key=lambda eid: (eid + window.rotation_seed) % emp_count)
+        # date_str -> { employee_id -> [pref sorted by rank] }
+        day_emp_prefs = {}
+        for p in prefs:
+            s = sched_cache.get(p.schedule_id)
+            if not s:
+                continue
+            d = s.schedule_date.strftime("%Y-%m-%d")
+            day_emp_prefs.setdefault(d, {}).setdefault(p.employee_id, []).append(p)
 
-        assigned_schedule_ids = set()
+        # Sort each employee's prefs by rank within each day
+        for d in day_emp_prefs:
+            for eid in day_emp_prefs[d]:
+                day_emp_prefs[d][eid].sort(key=lambda p: p.preference_rank)
+
         assigned_count = 0
         unassigned_count = 0
 
-        for eid in emp_ids:
-            got_one = False
-            for pref in emp_prefs[eid]:
-                if pref.schedule_id not in assigned_schedule_ids:
-                    pref.status = "assigned"
-                    assigned_schedule_ids.add(pref.schedule_id)
-                    got_one = True
-                    assigned_count += 1
-                    break
-            if not got_one:
-                for pref in emp_prefs[eid]:
-                    pref.status = "not_assigned"
-                unassigned_count += 1
-            else:
-                # Mark the remaining prefs for this employee as not_assigned
-                for pref in emp_prefs[eid]:
+        # Run lottery per day
+        for date_str in sorted(day_emp_prefs.keys()):
+            emp_prefs_today = day_emp_prefs[date_str]
+            emp_ids = list(emp_prefs_today.keys())
+            emp_count = len(emp_ids)
+            if not emp_count:
+                continue
+
+            # Rotation order — rotate by seed so it's fair across windows
+            emp_ids.sort(key=lambda eid: (eid + window.rotation_seed) % max(emp_count, 1))
+
+            assigned_today = set()  # schedule_ids already taken today
+            assigned_emps = set()   # employees who got a shift today
+
+            for eid in emp_ids:
+                got_one = False
+                for pref in emp_prefs_today[eid]:
+                    if pref.schedule_id not in assigned_today:
+                        # Assign this shift to this employee
+                        pref.status = "assigned"
+                        assigned_today.add(pref.schedule_id)
+                        assigned_emps.add(eid)
+                        assigned_count += 1
+
+                        # Actually update the Schedule record
+                        sched = sched_cache[pref.schedule_id]
+                        sched.employee_id = eid
+                        sched.status = "scheduled"
+                        got_one = True
+                        break
+                if not got_one:
+                    unassigned_count += 1
+                # Mark remaining prefs for this employee/day as not_assigned
+                for pref in emp_prefs_today[eid]:
                     if pref.status != "assigned":
                         pref.status = "not_assigned"
 
