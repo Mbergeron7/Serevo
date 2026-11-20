@@ -324,7 +324,7 @@ async function loadShifts() {
         employee: s.employee || '',
         employee_id: s.employee_id || '',
         status: s.employee ? 'assigned' : 'open',
-        bids: 0,
+        bids: s.bids || 0,
       }));
       renderShifts();
       checkBiddingStatus();

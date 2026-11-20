@@ -1157,6 +1157,23 @@ def load_schedule():
         except Exception:
             log.exception("Attendance enrichment failed — returning shifts without attendance")
 
+        # ── Enrich bidding shifts with per-shift bid counts ──
+        try:
+            from app.models import ShiftPreference
+            sched_ids = [s["id"] for s in shifts]
+            if sched_ids:
+                bid_rows = db.session.query(
+                    ShiftPreference.schedule_id,
+                    db.func.count(ShiftPreference.id)
+                ).filter(ShiftPreference.schedule_id.in_(sched_ids)).group_by(
+                    ShiftPreference.schedule_id
+                ).all()
+                bid_map = {row[0]: row[1] for row in bid_rows}
+                for s in shifts:
+                    s["bids"] = bid_map.get(s["id"], 0)
+        except Exception:
+            log.exception("Bid count enrichment failed")
+
         return jsonify({"success": True, "shifts": shifts})
 
     except Exception as e:
