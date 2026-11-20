@@ -831,6 +831,56 @@
     </div>
   </div><!-- /demand-heatmap-zone -->
 
+  <!-- ── SHIFT BIDDING PANEL ──────────────────────────────── -->
+  <div id="biddingPanel" style="display:none; margin:0 8px;">
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-weight:700; font-size:.85rem;">Shift Bidding</span>
+          <span id="biddingStatusBadge" style="display:inline-block; padding:2px 10px; border-radius:12px; font-size:.72rem; font-weight:600;"></span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span id="biddingSummary" style="font-size:.75rem; color:var(--text-muted);"></span>
+          <button class="btn-action" id="btnBiddingOpen" onclick="openBiddingModal()" style="display:none; background:var(--brand-accent); color:#fff; font-size:.72rem; padding:4px 12px;">Open Bidding</button>
+          <button class="btn-action" id="btnBiddingClose" onclick="closeBidding()" style="display:none; background:#dc2626; color:#fff; font-size:.72rem; padding:4px 12px;">Close Bidding</button>
+          <button class="btn-action" id="btnBiddingLottery" onclick="runLottery()" style="display:none; background:#7c3aed; color:#fff; font-size:.72rem; padding:4px 12px;">Run Lottery</button>
+          <button class="btn-action" id="btnBiddingPublish" onclick="publishBidding()" style="display:none; background:#059669; color:#fff; font-size:.72rem; padding:4px 12px;">Publish</button>
+          <button class="btn-action" id="btnBiddingViewBids" onclick="viewBids()" style="display:none; background:var(--surface); color:var(--text); border:1px solid var(--border); font-size:.72rem; padding:4px 12px;">View Bids</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bidding: Open modal -->
+  <div class="modal-overlay" id="biddingOpenModal" style="display:none;">
+    <div class="modal-box" style="max-width:380px;">
+      <div class="modal-title">
+        <span>Open Shift Bidding</span>
+        <button class="modal-close" onclick="document.getElementById('biddingOpenModal').style.display='none'">&times;</button>
+      </div>
+      <div class="form-group">
+        <label style="font-size:.78rem; font-weight:600;">Bidding Deadline</label>
+        <input type="datetime-local" id="biddingDeadline" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-size:.82rem;">
+      </div>
+      <p style="font-size:.72rem; color:var(--text-muted); margin:8px 0;">Agents can submit up to 3 shift preferences until the deadline. After closing, run the lottery to fairly assign shifts.</p>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button class="btn-modal btn-modal-secondary" onclick="document.getElementById('biddingOpenModal').style.display='none'">Cancel</button>
+        <button class="btn-modal btn-modal-primary" onclick="confirmOpenBidding()">Open Bidding</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bidding: View bids modal -->
+  <div class="modal-overlay" id="biddingBidsModal" style="display:none;">
+    <div class="modal-box" style="max-width:640px;">
+      <div class="modal-title">
+        <span>Shift Bids</span>
+        <button class="modal-close" onclick="document.getElementById('biddingBidsModal').style.display='none'">&times;</button>
+      </div>
+      <div id="biddingBidsList" style="max-height:400px; overflow-y:auto; font-size:.78rem;"></div>
+    </div>
+  </div>
+
   <!-- ── SCHEDULE GRID (fills remaining viewport, scrolls internally) ── -->
   <div class="sched-grid-zone" id="schedGridZone">
     <div id="resultsContainer" style="padding:8px 16px;"></div>
@@ -5062,6 +5112,181 @@ function demandCellClass(val, max) {
   if (endEl) endEl.addEventListener('change', loadDemandHeatmap);
   // Auto-load on page ready if LOB and dates are already set
   setTimeout(loadDemandHeatmap, 300);
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   SHIFT BIDDING CYCLE — Manager UI
+   ═══════════════════════════════════════════════════════════ */
+
+let _biddingWindow = null;
+
+function checkBiddingStatus() {
+  const lob = (typeof MSPicker !== 'undefined' && MSPicker.getSelected) ? MSPicker.getSelected('cfgLOB').join(',') : '';
+  const start = document.getElementById('cfgStart')?.value;
+  const end = document.getElementById('cfgEnd')?.value;
+  if (!start || !end) { document.getElementById('biddingPanel').style.display = 'none'; return; }
+
+  fetch(`/scheduling/bidding/status?lob=${encodeURIComponent(lob)}&start_date=${start}&end_date=${end}`)
+    .then(r => r.json()).then(d => {
+      const panel = document.getElementById('biddingPanel');
+      panel.style.display = '';
+      _biddingWindow = d.window;
+      renderBiddingPanel();
+    }).catch(() => {
+      document.getElementById('biddingPanel').style.display = 'none';
+    });
+}
+
+function renderBiddingPanel() {
+  const badge = document.getElementById('biddingStatusBadge');
+  const summary = document.getElementById('biddingSummary');
+  const btnOpen = document.getElementById('btnBiddingOpen');
+  const btnClose = document.getElementById('btnBiddingClose');
+  const btnLottery = document.getElementById('btnBiddingLottery');
+  const btnPublish = document.getElementById('btnBiddingPublish');
+  const btnViewBids = document.getElementById('btnBiddingViewBids');
+
+  [btnOpen, btnClose, btnLottery, btnPublish, btnViewBids].forEach(b => b.style.display = 'none');
+
+  if (!_biddingWindow) {
+    badge.textContent = 'No Bidding';
+    badge.style.background = 'var(--bg)'; badge.style.color = 'var(--text-muted)';
+    summary.textContent = '';
+    btnOpen.style.display = '';
+    return;
+  }
+
+  const st = _biddingWindow.status;
+  const colors = {
+    bidding_open: ['#dbeafe','#1d4ed8'], bidding_closed: ['#fef3c7','#92400e'],
+    lottery_complete: ['#ede9fe','#6d28d9'], published: ['#d1fae5','#065f46'],
+  };
+  const labels = {
+    bidding_open: 'Bidding Open', bidding_closed: 'Bidding Closed',
+    lottery_complete: 'Lottery Complete', published: 'Published',
+  };
+  badge.textContent = labels[st] || st;
+  badge.style.background = (colors[st]||['var(--bg)','var(--text)'])[0];
+  badge.style.color = (colors[st]||['var(--bg)','var(--text)'])[1];
+
+  const bc = _biddingWindow.bid_count || 0;
+  const brc = _biddingWindow.bidder_count || 0;
+  summary.textContent = `${bc} bids from ${brc} employees`;
+
+  if (st === 'bidding_open') { btnClose.style.display = ''; btnViewBids.style.display = ''; }
+  if (st === 'bidding_closed') { btnLottery.style.display = ''; btnViewBids.style.display = ''; }
+  if (st === 'lottery_complete') { btnPublish.style.display = ''; btnViewBids.style.display = ''; }
+  if (st === 'published') { btnViewBids.style.display = ''; }
+}
+
+function openBiddingModal() {
+  const dl = document.getElementById('biddingDeadline');
+  const now = new Date(); now.setDate(now.getDate() + 3);
+  dl.value = now.toISOString().slice(0, 16);
+  document.getElementById('biddingOpenModal').style.display = 'flex';
+}
+
+function confirmOpenBidding() {
+  const lob = (typeof MSPicker !== 'undefined' && MSPicker.getSelected) ? MSPicker.getSelected('cfgLOB').join(',') : '';
+  const start = document.getElementById('cfgStart')?.value;
+  const end = document.getElementById('cfgEnd')?.value;
+  const deadline = document.getElementById('biddingDeadline').value;
+  if (!deadline) { alert('Please set a deadline'); return; }
+
+  fetch('/scheduling/bidding/open', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({lob, start_date: start, end_date: end, deadline})
+  }).then(r => r.json()).then(d => {
+    document.getElementById('biddingOpenModal').style.display = 'none';
+    if (d.success) { checkBiddingStatus(); } else { alert(d.error || 'Error opening bidding'); }
+  });
+}
+
+function closeBidding() {
+  if (!_biddingWindow || !confirm('Close bidding early? No more bids will be accepted.')) return;
+  fetch('/scheduling/bidding/close', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({window_id: _biddingWindow.id})
+  }).then(r => r.json()).then(d => {
+    if (d.success) { checkBiddingStatus(); } else { alert(d.error || 'Error'); }
+  });
+}
+
+function runLottery() {
+  if (!_biddingWindow || !confirm('Run the lottery now? This will assign shifts based on preferences and rotation priority.')) return;
+  fetch('/scheduling/bidding/lottery', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({window_id: _biddingWindow.id})
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      alert(`Lottery complete: ${d.assigned} assigned, ${d.unassigned} unassigned`);
+      checkBiddingStatus();
+    } else { alert(d.error || 'Error'); }
+  });
+}
+
+function publishBidding() {
+  if (!_biddingWindow || !confirm('Publish the schedule and notify all agents?')) return;
+  fetch('/scheduling/bidding/publish', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({window_id: _biddingWindow.id})
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      alert(`Published! ${d.notified} agents notified.`);
+      checkBiddingStatus();
+    } else { alert(d.error || 'Error'); }
+  });
+}
+
+function viewBids() {
+  if (!_biddingWindow) return;
+  const container = document.getElementById('biddingBidsList');
+  container.innerHTML = '<p style="padding:12px; color:var(--text-muted);">Loading...</p>';
+  document.getElementById('biddingBidsModal').style.display = 'flex';
+
+  fetch(`/scheduling/bidding/bids?window_id=${_biddingWindow.id}`)
+    .then(r => r.json()).then(d => {
+      if (!d.bids || !d.bids.length) {
+        container.innerHTML = '<p style="padding:12px; color:var(--text-muted);">No bids submitted yet.</p>';
+        return;
+      }
+      // Group by schedule (date + shift)
+      const byShift = {};
+      d.bids.forEach(b => {
+        const key = `${b.schedule_date} ${b.shift_start}-${b.shift_end}`;
+        if (!byShift[key]) byShift[key] = [];
+        byShift[key].push(b);
+      });
+      let html = '';
+      for (const [shift, bids] of Object.entries(byShift)) {
+        html += `<div style="margin-bottom:12px;"><div style="font-weight:700; font-size:.78rem; padding:4px 0; border-bottom:1px solid var(--border);">${shift} (${bids[0].hours}h)</div>`;
+        bids.sort((a,b) => a.preference_rank - b.preference_rank);
+        bids.forEach(b => {
+          const sc = b.status === 'assigned' ? '#059669' : b.status === 'not_assigned' ? '#dc2626' : 'var(--text-muted)';
+          html += `<div style="display:flex; justify-content:space-between; padding:3px 8px; font-size:.75rem;">
+            <span>${b.employee_name} <span style="color:var(--text-muted);">(Rank ${b.preference_rank})</span></span>
+            <span style="color:${sc}; font-weight:600;">${b.status.replace('_',' ')}</span>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      container.innerHTML = html;
+    });
+}
+
+// Hook into schedule load to check bidding status
+(function hookBidding() {
+  const origLoad = window.loadSchedule;
+  if (origLoad) {
+    window.loadSchedule = function() {
+      const r = origLoad.apply(this, arguments);
+      setTimeout(checkBiddingStatus, 500);
+      return r;
+    };
+  }
+  // Also check on initial load after a delay
+  setTimeout(checkBiddingStatus, 800);
 })();
 </script>
 {% endblock %}

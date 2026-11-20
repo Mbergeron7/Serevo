@@ -110,6 +110,7 @@
   <button onclick="switchTab('swaps', this)">🔄 Shift Swaps</button>
   <button onclick="switchTab('vto', this)">🕐 VTO / OT</button>
   <button onclick="switchTab('mybids', this)">⭐ My Bids</button>
+  <button onclick="switchTab('shiftbidding', this); loadBiddingWindows();">🎯 Shift Bidding</button>
   <button onclick="switchTab('balances', this)">📊 My Balances</button>
   <button onclick="switchTab('quality', this)">🏆 My Quality</button>
   <button onclick="switchTab('punches', this); loadPunchHistory();">🕑 My Punches</button>
@@ -254,6 +255,18 @@
     </div>
     <div class="p-card-body" id="badgesBody">
       <p class="empty-msg">Loading badges…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Shift Bidding Panel ═══ -->
+<div class="p-panel" id="pp-shiftbidding">
+  <div class="p-card">
+    <div class="p-card-header">🎯 Shift Bidding
+      <span style="font-size:.72rem; color:var(--text-muted); font-weight:400; margin-left:8px;">Select up to 3 shifts in order of preference</span>
+    </div>
+    <div class="p-card-body" id="biddingBody">
+      <p class="empty-msg">Loading bidding windows…</p>
     </div>
   </div>
 </div>
@@ -1056,6 +1069,135 @@ async function claimShift(postId) {
       alert(data.error || 'Could not claim shift');
     }
   } catch(e) { alert('Error claiming shift: ' + e); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   SHIFT BIDDING — Agent UI
+   ═══════════════════════════════════════════════════════════ */
+
+let _biddingWindows = [];
+let _selectedBiddingWindow = null;
+let _biddingPrefs = {};  // schedule_id -> rank
+
+async function loadBiddingWindows() {
+  const el = document.getElementById('biddingBody');
+  try {
+    const data = await api('/portal/bidding-windows');
+    _biddingWindows = data.windows || [];
+    if (!_biddingWindows.length) {
+      el.innerHTML = '<p class="empty-msg">No open bidding windows right now. Check back when your manager opens bidding for the next schedule period.</p>';
+      return;
+    }
+    let html = '<div style="display:flex; flex-direction:column; gap:12px;">';
+    _biddingWindows.forEach(w => {
+      const dl = new Date(w.deadline);
+      const now = new Date();
+      const hoursLeft = Math.max(0, Math.round((dl - now) / 3600000));
+      html += `<div style="border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--bg); cursor:pointer;" onclick="selectBiddingWindow(${w.id})">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:.85rem;">${w.lob || 'All LOBs'}</div>
+            <div style="font-size:.75rem; color:var(--text-muted);">${w.start_date} to ${w.end_date}</div>
+          </div>
+          <div style="text-align:right;">
+            <span style="display:inline-block; padding:2px 10px; border-radius:12px; font-size:.72rem; font-weight:600; background:#dbeafe; color:#1d4ed8;">${hoursLeft}h left</span>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<p class="empty-msg">Error loading bidding windows.</p>';
+  }
+}
+
+async function selectBiddingWindow(windowId) {
+  _selectedBiddingWindow = windowId;
+  _biddingPrefs = {};
+  const el = document.getElementById('biddingBody');
+  el.innerHTML = '<p class="empty-msg">Loading shifts…</p>';
+
+  try {
+    const data = await api(`/portal/bidding-shifts/${windowId}`);
+    const shifts = data.shifts || [];
+    if (!shifts.length) {
+      el.innerHTML = '<p class="empty-msg">No shifts available for this window.</p>';
+      return;
+    }
+
+    // Restore any existing bids
+    shifts.forEach(s => { if (s.my_rank) _biddingPrefs[s.schedule_id] = s.my_rank; });
+
+    renderBiddingShifts(shifts);
+  } catch(e) {
+    el.innerHTML = '<p class="empty-msg">Error loading shifts.</p>';
+  }
+}
+
+function renderBiddingShifts(shifts) {
+  const el = document.getElementById('biddingBody');
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  let html = '<div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">';
+  html += '<button class="btn btn-outline" style="font-size:.72rem; padding:4px 10px;" onclick="loadBiddingWindows()">← Back to Windows</button>';
+  html += '<button class="btn btn-primary" style="font-size:.75rem; padding:5px 16px;" onclick="submitBiddingPrefs()">Submit Preferences</button>';
+  html += '</div>';
+
+  // Show current selections
+  const selected = Object.entries(_biddingPrefs).sort((a,b) => a[1] - b[1]);
+  if (selected.length) {
+    html += '<div style="margin-bottom:12px; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">';
+    html += '<div style="font-weight:700; font-size:.75rem; margin-bottom:4px;">Your Preferences:</div>';
+    selected.forEach(([sid, rank]) => {
+      const s = shifts.find(x => x.schedule_id == sid);
+      if (s) {
+        const d = new Date(s.date + 'T00:00:00');
+        html += `<div style="font-size:.75rem; padding:2px 0;"><b>${rank}${rank===1?'st':rank===2?'nd':'rd'}</b> — ${days[d.getDay()]} ${s.date} ${s.start}–${s.end} (${s.hours}h)
+          <a href="#" onclick="_removePref(${sid}); renderBiddingShifts(window._lastBiddingShifts); return false;" style="color:#dc2626; margin-left:6px;">Remove</a></div>`;
+      }
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="overflow-x:auto;"><table class="p-tbl"><thead><tr><th>Date</th><th>Day</th><th>Shift</th><th>Hours</th><th>Preference</th></tr></thead><tbody>';
+  shifts.forEach(s => {
+    const d = new Date(s.date + 'T00:00:00');
+    const rank = _biddingPrefs[s.schedule_id];
+    const rankLabel = rank ? `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; background:#dbeafe; color:#1d4ed8;">${rank}${rank===1?'st':rank===2?'nd':'rd'} choice</span>` : '';
+    const usedRanks = Object.values(_biddingPrefs);
+    const canAdd = !rank && usedRanks.length < 3;
+    const nextRank = canAdd ? ([1,2,3].find(r => !usedRanks.includes(r))) : null;
+    const btn = canAdd
+      ? `<button class="btn btn-outline" style="font-size:.68rem; padding:2px 8px;" onclick="_addPref(${s.schedule_id}, ${nextRank}); renderBiddingShifts(window._lastBiddingShifts);">Pick as ${nextRank}${nextRank===1?'st':nextRank===2?'nd':'rd'}</button>`
+      : (rank ? rankLabel : '<span style="color:var(--text-muted); font-size:.7rem;">Max reached</span>');
+    html += `<tr><td>${s.date}</td><td>${days[d.getDay()]}</td><td>${s.start}–${s.end}</td><td>${s.hours}</td><td>${btn}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  window._lastBiddingShifts = shifts;
+  el.innerHTML = html;
+}
+
+function _addPref(scheduleId, rank) { _biddingPrefs[scheduleId] = rank; }
+function _removePref(scheduleId) { delete _biddingPrefs[scheduleId]; }
+
+async function submitBiddingPrefs() {
+  const prefs = Object.entries(_biddingPrefs).map(([sid, rank]) => ({schedule_id: parseInt(sid), rank}));
+  if (!prefs.length) { alert('Select at least one shift preference.'); return; }
+
+  try {
+    const data = await api('/portal/bidding-preference', {
+      window_id: _selectedBiddingWindow,
+      preferences: prefs
+    });
+    if (data.success) {
+      alert(data.message || 'Preferences saved!');
+    } else {
+      alert(data.error || 'Error saving preferences');
+    }
+  } catch(e) { alert('Error: ' + e); }
 }
 </script>
 {% endblock %}

@@ -3085,3 +3085,84 @@ def get_demo_search_results(q):
                 "subtitle": "Navigate to page", "url": url,
             })
     return results[:15]
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT BIDDING CYCLE DEMO DATA
+# ═══════════════════════════════════════════════════════════════
+
+def get_demo_bidding_windows():
+    """Return demo bidding windows: one open, one completed."""
+    from datetime import datetime, timedelta, date as _date
+    now = datetime.utcnow()
+    next_mon = (now + timedelta(days=(7 - now.weekday()))).date()
+    next_fri = next_mon + timedelta(days=4)
+    prev_mon = (now - timedelta(days=now.weekday() + 7)).date()
+    prev_fri = prev_mon + timedelta(days=4)
+
+    return [
+        {
+            "id": 901,
+            "planning_unit_id": 1,
+            "lob": "Customer Service",
+            "start_date": next_mon.isoformat(),
+            "end_date": next_fri.isoformat(),
+            "deadline": (now + timedelta(days=3)).isoformat(),
+            "status": "bidding_open",
+            "rotation_seed": 2,
+            "bid_count": 8,
+            "bidder_count": 4,
+            "created_at": (now - timedelta(hours=6)).isoformat(),
+        },
+        {
+            "id": 902,
+            "planning_unit_id": 1,
+            "lob": "Customer Service",
+            "start_date": prev_mon.isoformat(),
+            "end_date": prev_fri.isoformat(),
+            "deadline": (now - timedelta(days=4)).isoformat(),
+            "status": "lottery_complete",
+            "rotation_seed": 1,
+            "bid_count": 12,
+            "bidder_count": 6,
+            "created_at": (now - timedelta(days=10)).isoformat(),
+            "preferences": [
+                {"id": 1, "employee_name": "Taylor Kim", "schedule_date": prev_mon.isoformat(),
+                 "shift_start": "08:00", "shift_end": "16:30", "hours": 8.5, "preference_rank": 1, "status": "assigned"},
+                {"id": 2, "employee_name": "Jordan Lee", "schedule_date": prev_mon.isoformat(),
+                 "shift_start": "09:00", "shift_end": "17:30", "hours": 8.5, "preference_rank": 1, "status": "assigned"},
+                {"id": 3, "employee_name": "Alex Chen", "schedule_date": (prev_mon + timedelta(days=1)).isoformat(),
+                 "shift_start": "07:00", "shift_end": "15:30", "hours": 8.5, "preference_rank": 2, "status": "assigned"},
+                {"id": 4, "employee_name": "Morgan Park", "schedule_date": (prev_mon + timedelta(days=1)).isoformat(),
+                 "shift_start": "10:00", "shift_end": "18:30", "hours": 8.5, "preference_rank": 1, "status": "assigned"},
+                {"id": 5, "employee_name": "Casey Brown", "schedule_date": (prev_mon + timedelta(days=2)).isoformat(),
+                 "shift_start": "08:00", "shift_end": "16:30", "hours": 8.5, "preference_rank": 1, "status": "assigned"},
+                {"id": 6, "employee_name": "Riley Hayes", "schedule_date": (prev_mon + timedelta(days=2)).isoformat(),
+                 "shift_start": "08:00", "shift_end": "16:30", "hours": 8.5, "preference_rank": 1, "status": "not_assigned"},
+            ],
+        },
+    ]
+
+
+def get_demo_bidding_shifts(window_id):
+    """Return demo shifts available for bidding."""
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    next_mon = (now + timedelta(days=(7 - now.weekday()))).date()
+    shifts = []
+    shift_times = [("07:00", "15:30"), ("08:00", "16:30"), ("09:00", "17:30"), ("10:00", "18:30")]
+    sid = 9000
+    for d in range(5):
+        day = next_mon + timedelta(days=d)
+        for start, end in shift_times:
+            sid += 1
+            shifts.append({
+                "schedule_id": sid,
+                "date": day.isoformat(),
+                "start": start,
+                "end": end,
+                "hours": 8.5,
+                "shift_type": "full",
+                "my_rank": None,
+            })
+    return shifts

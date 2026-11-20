@@ -2682,6 +2682,81 @@ class AnalyticsIntegration(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
+# SHIFT BIDDING CYCLES (Schedule-wide bidding — Phase 6.4)
+# ═══════════════════════════════════════════════════════════════
+
+class BiddingWindow(db.Model):
+    """A time-boxed window in which agents bid on generated schedule shifts."""
+    __tablename__ = "bidding_windows"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
+    start_date       = db.Column(db.Date, nullable=False)
+    end_date         = db.Column(db.Date, nullable=False)
+    deadline         = db.Column(db.DateTime, nullable=False)
+    status           = db.Column(db.String(20), default="draft")  # draft | bidding_open | bidding_closed | lottery_complete | published
+    rotation_seed    = db.Column(db.Integer, default=0)
+    created_by       = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
+    updated_at       = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    planning_unit = db.relationship("PlanningUnit", backref="bidding_windows")
+    preferences   = db.relationship("ShiftPreference", backref="bidding_window",
+                                    cascade="all, delete-orphan", lazy="dynamic")
+
+    def to_dict(self):
+        pu = self.planning_unit
+        return {
+            "id": self.id,
+            "planning_unit_id": self.planning_unit_id,
+            "lob": pu.name if pu else "",
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "status": self.status,
+            "rotation_seed": self.rotation_seed,
+            "created_at": self.created_at.isoformat() if self.created_at else "",
+        }
+
+
+class ShiftPreference(db.Model):
+    """An agent's ranked preference for a specific generated shift."""
+    __tablename__ = "shift_preferences"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    bidding_window_id = db.Column(db.Integer, db.ForeignKey("bidding_windows.id", ondelete="CASCADE"), nullable=False)
+    employee_id       = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    schedule_id       = db.Column(db.Integer, db.ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False)
+    preference_rank   = db.Column(db.Integer, nullable=False)  # 1=first, 2=second, 3=third
+    status            = db.Column(db.String(20), default="pending")  # pending | assigned | not_assigned
+    created_at        = db.Column(db.DateTime, default=_utcnow)
+
+    employee = db.relationship("Employee", backref=db.backref("shift_preferences", lazy="dynamic"))
+    schedule = db.relationship("Schedule", backref=db.backref("shift_preferences", lazy="dynamic"))
+
+    __table_args__ = (
+        db.UniqueConstraint("bidding_window_id", "employee_id", "schedule_id", name="uq_bid_emp_sched"),
+    )
+
+    def to_dict(self):
+        emp = self.employee
+        sched = self.schedule
+        return {
+            "id": self.id,
+            "bidding_window_id": self.bidding_window_id,
+            "employee_id": self.employee_id,
+            "employee_name": emp.full_name if emp else "",
+            "schedule_id": self.schedule_id,
+            "schedule_date": sched.schedule_date.isoformat() if sched else "",
+            "shift_start": sched.shift_start.strftime("%H:%M") if sched and sched.shift_start else "",
+            "shift_end": sched.shift_end.strftime("%H:%M") if sched and sched.shift_end else "",
+            "hours": sched.hours if sched else 0,
+            "preference_rank": self.preference_rank,
+            "status": self.status,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
 # SHIFT POSTS (Open-shift bidding — Phase 6.3)
 # ═══════════════════════════════════════════════════════════════
 

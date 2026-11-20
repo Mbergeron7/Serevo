@@ -1171,3 +1171,191 @@ def claim_shift():
         db.session.rollback()
         log.exception("Claim shift error")
         return jsonify({"success": False, "error": str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT BIDDING CYCLE (Agent-side)
+# ═══════════════════════════════════════════════════════════════
+
+@agent_bp.route("/portal/bidding-windows")
+@login_required
+def bidding_windows():
+    """Return open bidding windows for the agent's LOB."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_windows
+        windows = get_demo_bidding_windows()
+        return jsonify(success=True, windows=[
+            w for w in windows if w["status"] == "bidding_open"
+        ])
+
+    emp = _get_agent_employee(user)
+    if not emp:
+        return jsonify(success=True, windows=[])
+
+    from app.models import BiddingWindow
+    now = datetime.now()
+    q = BiddingWindow.query.filter(
+        BiddingWindow.status == "bidding_open",
+        BiddingWindow.deadline > now,
+    )
+    if emp.planning_unit_id:
+        q = q.filter(
+            db.or_(
+                BiddingWindow.planning_unit_id == emp.planning_unit_id,
+                BiddingWindow.planning_unit_id.is_(None),
+            )
+        )
+    windows = q.order_by(BiddingWindow.start_date).all()
+    return jsonify(success=True, windows=[w.to_dict() for w in windows])
+
+
+@agent_bp.route("/portal/bidding-shifts/<int:window_id>")
+@login_required
+def bidding_shifts(window_id):
+    """Get available shifts for a bidding window."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_shifts
+        return jsonify(success=True, shifts=get_demo_bidding_shifts(window_id))
+
+    from app.models import BiddingWindow, ShiftPreference
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+
+    emp = _get_agent_employee(user)
+    emp_id = emp.id if emp else None
+
+    schedules = Schedule.query.filter(
+        Schedule.schedule_date >= window.start_date,
+        Schedule.schedule_date <= window.end_date,
+        Schedule.status == "scheduled",
+    )
+    if window.planning_unit_id:
+        schedules = schedules.filter(Schedule.planning_unit_id == window.planning_unit_id)
+    schedules = schedules.order_by(Schedule.schedule_date, Schedule.shift_start).all()
+
+    # Find this agent's existing bids
+    my_bids = {}
+    if emp_id:
+        prefs = ShiftPreference.query.filter_by(
+            bidding_window_id=window_id, employee_id=emp_id).all()
+        for p in prefs:
+            my_bids[p.schedule_id] = p.preference_rank
+
+    result = []
+    for s in schedules:
+        result.append({
+            "schedule_id": s.id,
+            "date": s.schedule_date.isoformat(),
+            "start": s.shift_start.strftime("%H:%M") if s.shift_start else "",
+            "end": s.shift_end.strftime("%H:%M") if s.shift_end else "",
+            "hours": s.hours,
+            "shift_type": s.shift_type,
+            "my_rank": my_bids.get(s.id),
+        })
+    return jsonify(success=True, shifts=result)
+
+
+@agent_bp.route("/portal/bidding-preference", methods=["POST"])
+@login_required
+def bidding_preference():
+    """Submit or update shift preferences for a bidding window."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo: preferences saved")
+
+    emp = _get_agent_employee(user)
+    if not emp:
+        return jsonify(success=False, error="No linked employee record")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    preferences = payload.get("preferences", [])  # [{schedule_id, rank}]
+
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+    if len(preferences) > 3:
+        return jsonify(success=False, error="Maximum 3 preferences per window")
+
+    from app.models import BiddingWindow, ShiftPreference
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+    if window.status != "bidding_open":
+        return jsonify(success=False, error="Bidding is not open for this window")
+    if window.deadline and datetime.now() > window.deadline:
+        return jsonify(success=False, error="Bidding deadline has passed")
+
+    # Validate schedule_ids belong to this window
+    for pref in preferences:
+        s = Schedule.query.get(pref.get("schedule_id"))
+        if not s:
+            return jsonify(success=False, error=f"Schedule {pref.get('schedule_id')} not found")
+        if s.schedule_date < window.start_date or s.schedule_date > window.end_date:
+            return jsonify(success=False, error=f"Schedule {s.id} is outside this bidding window")
+        if window.planning_unit_id and s.planning_unit_id != window.planning_unit_id:
+            return jsonify(success=False, error=f"Schedule {s.id} is not in this LOB")
+
+    try:
+        # Remove existing preferences for this window/employee
+        ShiftPreference.query.filter_by(
+            bidding_window_id=window_id, employee_id=emp.id).delete()
+
+        # Add new ones
+        for pref in preferences:
+            sp = ShiftPreference(
+                bidding_window_id=window_id,
+                employee_id=emp.id,
+                schedule_id=pref["schedule_id"],
+                preference_rank=pref["rank"],
+                status="pending",
+            )
+            db.session.add(sp)
+
+        db.session.commit()
+        return jsonify(success=True, message=f"Saved {len(preferences)} preferences")
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bidding preference error")
+        return jsonify(success=False, error=str(e))
+
+
+@agent_bp.route("/portal/bidding-status/<int:window_id>")
+@login_required
+def bidding_pref_status(window_id):
+    """Get agent's bid status for a window."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_windows
+        windows = get_demo_bidding_windows()
+        for w in windows:
+            if w.get("id") == window_id and w.get("preferences"):
+                return jsonify(success=True, preferences=w["preferences"][:3])
+        return jsonify(success=True, preferences=[])
+
+    emp = _get_agent_employee(user)
+    if not emp:
+        return jsonify(success=True, preferences=[])
+
+    from app.models import ShiftPreference
+    prefs = ShiftPreference.query.filter_by(
+        bidding_window_id=window_id, employee_id=emp.id
+    ).order_by(ShiftPreference.preference_rank).all()
+
+    return jsonify(success=True, preferences=[p.to_dict() for p in prefs])

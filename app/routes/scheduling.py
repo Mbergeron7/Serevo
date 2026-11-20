@@ -3076,3 +3076,341 @@ def publish_schedule():
 
     db.session.commit()
     return jsonify(success=True, notified=notified, total_shifts=len(schedules))
+
+
+# ═══════════════════════════════════════════════════════════════
+# SHIFT BIDDING CYCLE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+@scheduling_bp.route("/bidding/open", methods=["POST"])
+@login_required
+def bidding_open():
+    """Open a bidding window for a generated schedule range."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, window_id=901,
+                       message="Demo: bidding window opened")
+
+    payload = request.get_json(silent=True) or {}
+    lob = payload.get("lob")
+    start = payload.get("start_date")
+    end = payload.get("end_date")
+    deadline_str = payload.get("deadline")
+
+    if not start or not end or not deadline_str:
+        return jsonify(success=False, error="start_date, end_date, and deadline are required")
+
+    try:
+        start_dt = datetime.datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.datetime.strptime(end, "%Y-%m-%d").date()
+        deadline_dt = datetime.datetime.fromisoformat(deadline_str)
+    except ValueError:
+        return jsonify(success=False, error="Invalid date format")
+
+    from app.models import PlanningUnit, BiddingWindow
+
+    pu = None
+    if lob and lob.lower() != "all":
+        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        if not pu:
+            return jsonify(success=False, error=f"Planning unit '{lob}' not found")
+
+    # Check schedules exist for this range
+    q = Schedule.query.filter(
+        Schedule.schedule_date >= start_dt,
+        Schedule.schedule_date <= end_dt,
+    )
+    if pu:
+        q = q.filter(Schedule.planning_unit_id == pu.id)
+    if q.count() == 0:
+        return jsonify(success=False, error="No generated schedules found for this range")
+
+    # Check for existing open window
+    existing = BiddingWindow.query.filter(
+        BiddingWindow.start_date == start_dt,
+        BiddingWindow.end_date == end_dt,
+        BiddingWindow.status.in_(["bidding_open", "bidding_closed", "lottery_complete"]),
+    )
+    if pu:
+        existing = existing.filter(BiddingWindow.planning_unit_id == pu.id)
+    if existing.first():
+        return jsonify(success=False, error="A bidding window already exists for this range")
+
+    try:
+        window = BiddingWindow(
+            planning_unit_id=pu.id if pu else None,
+            start_date=start_dt,
+            end_date=end_dt,
+            deadline=deadline_dt,
+            status="bidding_open",
+            created_by=user.get("id"),
+        )
+        db.session.add(window)
+        db.session.commit()
+        return jsonify(success=True, window_id=window.id)
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Error opening bidding window")
+        return jsonify(success=False, error=str(e))
+
+
+@scheduling_bp.route("/bidding/close", methods=["POST"])
+@login_required
+def bidding_close():
+    """Close bidding early."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo: bidding closed")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import BiddingWindow
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+    if window.status != "bidding_open":
+        return jsonify(success=False, error=f"Window is '{window.status}', not bidding_open")
+
+    try:
+        window.status = "bidding_closed"
+        db.session.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e))
+
+
+@scheduling_bp.route("/bidding/status", methods=["GET"])
+@login_required
+def bidding_status():
+    """Get bidding window status for a LOB/date range."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_windows
+        windows = get_demo_bidding_windows()
+        lob = request.args.get("lob", "")
+        start = request.args.get("start_date", "")
+        end = request.args.get("end_date", "")
+        # Return the first matching or open window
+        for w in windows:
+            if (not start or w["start_date"] == start) and (not end or w["end_date"] == end):
+                return jsonify(success=True, window=w)
+        return jsonify(success=True, window=None)
+
+    lob = request.args.get("lob", "")
+    start = request.args.get("start_date", "")
+    end = request.args.get("end_date", "")
+
+    if not start or not end:
+        return jsonify(success=False, error="start_date and end_date required")
+
+    try:
+        start_dt = datetime.datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.datetime.strptime(end, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify(success=False, error="Invalid date format")
+
+    from app.models import PlanningUnit, BiddingWindow, ShiftPreference
+
+    q = BiddingWindow.query.filter(
+        BiddingWindow.start_date == start_dt,
+        BiddingWindow.end_date == end_dt,
+    )
+    if lob and lob.lower() != "all":
+        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        if pu:
+            q = q.filter(BiddingWindow.planning_unit_id == pu.id)
+
+    window = q.order_by(BiddingWindow.created_at.desc()).first()
+    if not window:
+        return jsonify(success=True, window=None)
+
+    bid_count = ShiftPreference.query.filter_by(bidding_window_id=window.id).count()
+    bidder_count = db.session.query(db.func.count(db.distinct(ShiftPreference.employee_id))).filter_by(
+        bidding_window_id=window.id).scalar() or 0
+
+    result = window.to_dict()
+    result["bid_count"] = bid_count
+    result["bidder_count"] = bidder_count
+    return jsonify(success=True, window=result)
+
+
+@scheduling_bp.route("/bidding/lottery", methods=["POST"])
+@login_required
+def bidding_lottery():
+    """Run the fair lottery to assign shifts from preferences."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, assigned=5, unassigned=1,
+                       message="Demo: lottery complete")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import BiddingWindow, ShiftPreference
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+    if window.status not in ("bidding_open", "bidding_closed"):
+        return jsonify(success=False, error=f"Window status is '{window.status}', must be bidding_open or bidding_closed")
+
+    try:
+        prefs = ShiftPreference.query.filter_by(bidding_window_id=window.id).all()
+        if not prefs:
+            window.status = "lottery_complete"
+            db.session.commit()
+            return jsonify(success=True, assigned=0, unassigned=0,
+                           message="No bids submitted — lottery complete")
+
+        # Group preferences by employee
+        emp_prefs = {}
+        for p in prefs:
+            emp_prefs.setdefault(p.employee_id, []).append(p)
+        for eid in emp_prefs:
+            emp_prefs[eid].sort(key=lambda p: p.preference_rank)
+
+        # Build rotation order
+        emp_ids = list(emp_prefs.keys())
+        emp_count = len(emp_ids)
+        emp_ids.sort(key=lambda eid: (eid + window.rotation_seed) % emp_count)
+
+        assigned_schedule_ids = set()
+        assigned_count = 0
+        unassigned_count = 0
+
+        for eid in emp_ids:
+            got_one = False
+            for pref in emp_prefs[eid]:
+                if pref.schedule_id not in assigned_schedule_ids:
+                    pref.status = "assigned"
+                    assigned_schedule_ids.add(pref.schedule_id)
+                    got_one = True
+                    assigned_count += 1
+                    break
+            if not got_one:
+                for pref in emp_prefs[eid]:
+                    pref.status = "not_assigned"
+                unassigned_count += 1
+            else:
+                # Mark the remaining prefs for this employee as not_assigned
+                for pref in emp_prefs[eid]:
+                    if pref.status != "assigned":
+                        pref.status = "not_assigned"
+
+        window.status = "lottery_complete"
+        window.rotation_seed += 1
+        db.session.commit()
+
+        return jsonify(success=True, assigned=assigned_count, unassigned=unassigned_count)
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Lottery error")
+        return jsonify(success=False, error=str(e))
+
+
+@scheduling_bp.route("/bidding/publish", methods=["POST"])
+@login_required
+def bidding_publish():
+    """Publish a schedule after lottery and notify agents."""
+    user = get_current_user()
+    if not user or user.get("role") not in ("admin", "supervisor"):
+        return jsonify(success=False, error="Forbidden"), 403
+
+    if user.get("is_demo"):
+        return jsonify(success=True, message="Demo: schedule published")
+
+    payload = request.get_json(silent=True) or {}
+    window_id = payload.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import BiddingWindow, Notification, User
+
+    window = BiddingWindow.query.get(window_id)
+    if not window:
+        return jsonify(success=False, error="Window not found")
+    if window.status != "lottery_complete":
+        return jsonify(success=False, error=f"Window status is '{window.status}', must be lottery_complete")
+
+    try:
+        window.status = "published"
+
+        # Notify employees in this LOB range
+        q = Schedule.query.filter(
+            Schedule.schedule_date >= window.start_date,
+            Schedule.schedule_date <= window.end_date,
+        )
+        if window.planning_unit_id:
+            q = q.filter(Schedule.planning_unit_id == window.planning_unit_id)
+
+        emp_ids = set(s.employee_id for s in q.all())
+        notified = 0
+        for emp_id in emp_ids:
+            emp = Employee.query.get(emp_id)
+            if not emp:
+                continue
+            linked_user = User.query.filter_by(employee_id=emp.id).first()
+            if not linked_user:
+                continue
+            notif = Notification(
+                user_id=linked_user.id,
+                category="schedule",
+                title="Schedule Published (Bidding)",
+                message=f"Your schedule for {window.start_date.strftime('%b %d')} – {window.end_date.strftime('%b %d')} has been published after shift bidding.",
+                link="/my-schedule/",
+            )
+            db.session.add(notif)
+            notified += 1
+
+        db.session.commit()
+        return jsonify(success=True, notified=notified)
+    except Exception as e:
+        db.session.rollback()
+        log.exception("Bidding publish error")
+        return jsonify(success=False, error=str(e))
+
+
+@scheduling_bp.route("/bidding/bids", methods=["GET"])
+@login_required
+def bidding_bids():
+    """Get all bids for a window (manager view)."""
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Unauthorized"), 401
+
+    if user.get("is_demo"):
+        from app.demo_data import get_demo_bidding_windows
+        windows = get_demo_bidding_windows()
+        # Return prefs from the completed window
+        for w in windows:
+            if w.get("preferences"):
+                return jsonify(success=True, bids=w["preferences"])
+        return jsonify(success=True, bids=[])
+
+    window_id = request.args.get("window_id")
+    if not window_id:
+        return jsonify(success=False, error="window_id is required")
+
+    from app.models import ShiftPreference
+    prefs = ShiftPreference.query.filter_by(bidding_window_id=int(window_id)).order_by(
+        ShiftPreference.schedule_id, ShiftPreference.preference_rank).all()
+
+    return jsonify(success=True, bids=[p.to_dict() for p in prefs])
