@@ -45,6 +45,13 @@ def upgrade():
         ('skill_name', sa.String(100), True),
         ('status_change', sa.String(100), True),
         ('date_mode', sa.String(10), True),
+        # Columns that may also be missing from original table creation
+        ('resolution', sa.Text(), True),
+        ('internal_note', sa.Text(), True),
+        ('closed_at', sa.DateTime(), True),
+        ('closed_by', sa.Integer(), True),
+        ('is_archived', sa.Boolean(), True),
+        ('is_deleted', sa.Boolean(), True),
     ]
     for col_name, col_type, nullable in new_cols:
         if not _has_column(table, col_name):
@@ -58,6 +65,8 @@ def downgrade():
         'action_type', 'accommodation_type', 'has_documentation', 'day_times',
         'contracted_hours', 'current_start', 'current_end', 'new_start', 'new_end',
         'activity_name', 'skill_name', 'status_change', 'date_mode',
+        'resolution', 'internal_note', 'closed_at', 'closed_by',
+        'is_archived', 'is_deleted',
     ]):
         if _has_column(table, col_name):
             op.drop_column(table, col_name)
