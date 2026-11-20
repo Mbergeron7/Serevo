@@ -676,40 +676,31 @@
       <h2>Capacity Planning</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <p>Capacity Planning is organized into five sub-pages, accessible from the tab bar at the top:</p>
-
-      <h3>📊 Summary</h3>
-      <p>The Summary page provides a high-level overview of your capacity position. It displays:</p>
-      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Stat cards</strong> — total headcount, total required FTEs, overall variance, and average utilization at a glance</li>
-        <li><strong>Headcount trend chart</strong> — how headcount has changed month-over-month across the year</li>
-        <li><strong>Headcount table</strong> — monthly headcount per planning unit, showing current employees and any fluctuations from hires, terminations, and leaves</li>
-        <li><strong>Capacity plan table</strong> — required FTEs vs. available headcount per planning unit per month, with surplus/deficit highlighted</li>
-      </ul>
-
-      <h3>🛠 Control Panel</h3>
-      <p>The Control Panel shows current staffing levels against requirements for each planning unit. For every interval it displays:</p>
-      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Required staff</strong> — calculated from forecast volume, service level targets, AHT, and shrinkage</li>
-        <li><strong>Scheduled staff</strong> — how many employees are actually scheduled</li>
-        <li><strong>Variance</strong> — the difference (positive = overstaffed, negative = understaffed)</li>
-      </ul>
-      <p>Color coding highlights intervals that are significantly over or under the requirement. Use this to identify coverage gaps before publishing schedules.</p>
+      <p>Capacity Planning has three sub-pages accessible from the tab bar: <strong>Capacity Plan</strong>, <strong>Long-Range</strong>, and <strong>Headcount</strong>. Additional admin tools (API Integration and Data Sources) are under the <strong>Admin</strong> menu in the main navigation.</p>
 
       <h3>📋 Capacity Plan</h3>
-      <p>The Capacity Plan page shows a detailed per-planning-unit monthly table of required FTEs versus available headcount. This is the primary working view for capacity analysts — use it to compare staffing needs across months and export the data as CSV for sharing with finance or operations.</p>
+      <p>The main Capacity Plan page is an all-in-one view combining FTE analysis, what-if scenarios, and per-LOB detail tables. It includes:</p>
+      <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
+        <li><strong>Controls</strong> — year selector, LOB multi-select filter, shrinkage/occupancy/answer rate parameters, Apply button, and Excel export</li>
+        <li><strong>Summary cards</strong> — Current Headcount, FTE Required, Overall Gap, LOBs Need Hiring, LOBs Surplus</li>
+        <li><strong>What-If Scenario panel</strong> — volume and AHT sliders that let you model the impact of changes on FTE requirements in real time (e.g., "what if volume increases 20%?")</li>
+        <li><strong>Trend stats</strong> — Average Monthly Gap, Best Month, Worst Month at a glance</li>
+        <li><strong>Charts</strong> — HC vs FTE Required by LOB (bar chart) and Staffing Gap Trend (line chart with per-LOB lines)</li>
+        <li><strong>Per-LOB tables</strong> — Forecasted Calls, Answered, AHT, Occupancy, PSIH (with/without shrinkage), FTE Required (color-coded heatmap), Actual HC, Gap (green/red), Peak/Avg Agents, Working Days</li>
+      </ul>
 
       <h3>📈 Long-Range Planning</h3>
-      <p>Use long-range planning to project headcount needs weeks or months ahead:</p>
+      <p>Use long-range planning to project headcount needs across multiple years:</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Select the planning unit and the future date range.</li>
-        <li>The system combines your forecast data with planning unit parameters (service level targets, AHT, shrinkage) to calculate required FTEs.</li>
-        <li>Compare required FTEs against your current headcount to identify hiring needs.</li>
+        <li>Select the year range (start to end) and growth rate percentage.</li>
+        <li>The system projects FTE requirements based on your forecast data combined with growth assumptions.</li>
+        <li>Compare required FTEs against your current headcount to identify long-term hiring needs.</li>
         <li>Export the long-range plan for budgeting and workforce planning discussions.</li>
       </ol>
 
-      <h3>🔗 Data Sources</h3>
-      <p>The Data Sources page shows which data feeds capacity planning. It displays the connection status for Google Sheets, API integrations, and any other configured data sources. Use it to verify your data pipeline is healthy and to troubleshoot when capacity numbers look off.</p>
+      <h3>Admin Tools (under Admin menu)</h3>
+      <p><strong>API Integration</strong> (formerly Control Panel) — connect to external WFM APIs (e.g., Injixo/PeopleWare) to pull forecast data, requirements, and employee records. Shows connection status, cached data stats, and refresh controls. Only needed if you're importing data from an external WFM system.</p>
+      <p><strong>Data Sources</strong> — configure where historical interval data comes from (Google Sheets, CSV uploads). Shows configured sources with sync/delete actions. This is a setup-once configuration for your data pipeline.</p>
 
       <h3>How Headcount Is Calculated</h3>
       <p>Capacity planning calculates headcount per planning unit per month using employee records from the People roster:</p>
