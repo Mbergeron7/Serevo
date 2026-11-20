@@ -3168,7 +3168,7 @@ def bidding_generate():
             PTOEntry.employee_id.in_([e.id for e in employees]),
             PTOEntry.start_date <= end_date,
             PTOEntry.end_date >= start_date,
-            PTOEntry.status == "approved"
+            PTOEntry.approval_status == "approved"
         ).all()
         for p in ptos:
             d = max(p.start_date, start_date)
