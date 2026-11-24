@@ -1852,7 +1852,14 @@ function fetchCoverageForDays(sd) {
     }).catch(() => {});
   });
   Promise.all(promises).then(() => {
-    // Re-render current view so heatmaps appear
+    // Update totals.avg_coverage_pct from the per-day summaries
+    const daysWithCov = sd.days.filter(d => d.summary && d.summary.avg_coverage_pct > 0);
+    if (daysWithCov.length) {
+      sd.totals.avg_coverage_pct = Math.round(
+        daysWithCov.reduce((s, d) => s + d.summary.avg_coverage_pct, 0) / daysWithCov.length
+      );
+    }
+    // Re-render current view so heatmaps appear and stats bar updates
     if (scheduleData === sd) switchView(currentView);
   });
 }
@@ -3029,7 +3036,7 @@ function renderMonthView(container) {
     const totalShifts = days.reduce((s, d) => s + d.shifts.length, 0);
     const totalHours = days.reduce((s, d) => s + d.shifts.reduce((h, sh) => h + (sh.hours||0), 0), 0);
     const avgCov = avgCoverage(days);
-    const label = new Date(key + '-01').toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+    const label = new Date(key + '-01T12:00:00').toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
 
     html += `<div class="sched-card">
       <div class="sched-card-header">
