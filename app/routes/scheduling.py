@@ -297,6 +297,12 @@ def generate():
 
         user = get_current_user()
         emp_ids = payload.get("employee_ids") or None  # list or None
+        ss_id = payload.get("shift_sequence_id") or None
+        if ss_id:
+            try:
+                ss_id = int(ss_id)
+            except (TypeError, ValueError):
+                ss_id = None
 
         # Demo mode runs synchronously (fast, no DB)
         if user and user.get("is_demo"):
@@ -329,7 +335,8 @@ def generate():
             with app.app_context():
                 try:
                     result = _do_generate(lob, start_date, end_date,
-                                          shift_hrs, emp_ids, mode)
+                                          shift_hrs, emp_ids, mode,
+                                          shift_sequence_id=ss_id)
                     result["success"] = True
                     with _jobs_lock:
                         _schedule_jobs[job_id]["status"] = "done"
@@ -448,7 +455,7 @@ def _generate_demo_schedule(lob, start_date, end_date, emp_ids):
     }
 
 
-def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode):
+def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode, shift_sequence_id=None):
     """Run schedule generation (called from background thread)."""
     from app.scheduling.engine import generate_schedule_range
 
@@ -483,7 +490,7 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode):
                 existing_by_day.setdefault(s.schedule_date, []).append(s.to_dict())
 
     if not existing_by_day:
-        return generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids)
+        return generate_schedule_range(lob, start_date, end_date, shift_hrs, sheet, emp_ids, shift_sequence_id=shift_sequence_id)
 
     # Generate day by day, excluding employees who already have a saved shift
     from app.scheduling.engine import generate_shifts, analyze_coverage, coverage_summary, DAYS_OF_WEEK
@@ -502,7 +509,7 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode):
         todo = [i for i in lob_ids if i not in kept_ids]
         new_shifts, unassigned, warnings = ([], [], [])
         if todo:
-            new_shifts, unassigned, warnings = generate_shifts(lob, d, shift_hrs, sheet, todo)
+            new_shifts, unassigned, warnings = generate_shifts(lob, d, shift_hrs, sheet, todo, shift_sequence_id=shift_sequence_id)
         for k in kept:
             k["saved"] = True
         shifts = kept + new_shifts

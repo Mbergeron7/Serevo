@@ -770,6 +770,72 @@ def _get_shift_sequence_shift(employee_db_id, date_obj):
         return None
 
 
+def _get_lob_shift_sequence_shift(shift_sequence_id, date_obj):
+    """
+    Look up a day model from a LOB-level shift sequence for the given date.
+    Used as a fallback when the LOB has no forecast requirements and the
+    employee has no individual shift sequence / quartile assignment.
+
+    Uses the FIRST row of the shift sequence (row position 0) as the default
+    pattern for all employees.
+
+    Returns shift dict or None.
+    """
+    try:
+        import json as _json
+        from app.models import ShiftSequence, ShiftSequenceRow, DayModel
+
+        seq = ShiftSequence.query.get(int(shift_sequence_id))
+        if not seq or not seq.is_active:
+            return None
+
+        # Use the first row as the default pattern
+        row = ShiftSequenceRow.query.filter_by(
+            shift_sequence_id=seq.id
+        ).order_by(ShiftSequenceRow.position).first()
+        if not row:
+            return None
+
+        pattern = _json.loads(row.pattern_json) if row.pattern_json else {}
+        if not pattern:
+            return None
+
+        cycle_weeks = seq.cycle_weeks or 1
+
+        # Calculate which week in the cycle this date falls on
+        ref_date = seq.created_at.date() if seq.created_at else date_obj
+        days_elapsed = (date_obj - ref_date).days
+        if days_elapsed < 0:
+            days_elapsed = 0
+        weeks_elapsed = days_elapsed // 7
+        current_week = (weeks_elapsed % cycle_weeks) + 1
+
+        day_index = date_obj.weekday()
+        key = f"w{current_week}_d{day_index}"
+
+        dm_id = pattern.get(key)
+        if dm_id in (None, "", "off", "0", 0):
+            return {"off": True, "name": seq.name}
+
+        try:
+            dm = DayModel.query.get(int(dm_id))
+        except (TypeError, ValueError):
+            dm = None
+        if not dm:
+            return None
+
+        return {
+            "start": dm.start_time,
+            "end": dm.end_time,
+            "hours": dm.total_hours or dm.paid_hours or 8.0,
+            "type": "full" if (dm.total_hours or 8) > 5 else "half",
+            "name": dm.name,
+        }
+    except Exception as e:
+        log.warning(f"LOB shift sequence lookup error for seq {shift_sequence_id}: {e}")
+        return None
+
+
 def _resolve_employee_db_id(employee_ext_id):
     """Look up the DB primary key for an employee by their external employee_id."""
     try:
@@ -1324,7 +1390,7 @@ def _generate_segments(start_time, end_time, shift_type, stagger_index=0, total_
 
 
 def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_ids=None,
-                    use_proficiency=True):
+                    use_proficiency=True, shift_sequence_id=None):
     """
     Generate shift assignments for a LOB on a given date.
     Results are cached per (lob, date) within the same Flask request
@@ -1493,6 +1559,20 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         stype = "full"
                     else:
                         wtpm_shifts = []  # fall through to standard
+
+                # LOB-level shift sequence fallback
+                if not wtpm_shifts and shift_sequence_id:
+                    lob_ss = _get_lob_shift_sequence_shift(shift_sequence_id, date_obj)
+                    if lob_ss and lob_ss.get("off"):
+                        skip_reasons.append(f"{emp['name']}: shift sequence '{lob_ss.get('name')}' day off")
+                        unassigned.append(emp["name"])
+                        continue
+                    if lob_ss:
+                        start = lob_ss["start"].strftime("%H:%M") if hasattr(lob_ss["start"], "strftime") else str(lob_ss["start"])[:5]
+                        end = lob_ss["end"].strftime("%H:%M") if hasattr(lob_ss["end"], "strftime") else str(lob_ss["end"])[:5]
+                        hours = lob_ss.get("hours", shift_length_hrs)
+                        stype = lob_ss.get("type", "full")
+                        wtpm_shifts = [lob_ss]  # mark as resolved
 
                 if not wtpm_shifts:
                     start = avail.get("shift_start") or default_start
@@ -2058,7 +2138,7 @@ def coverage_summary(coverage_intervals):
 # MULTI-DAY AGGREGATION
 # ═════════════════════════════════════════════════════════════
 
-def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sheet=None, employee_ids=None):
+def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sheet=None, employee_ids=None, shift_sequence_id=None):
     """
     Generate shifts and coverage for a date range.
     Returns {
@@ -2081,7 +2161,8 @@ def generate_schedule_range(lob, start_date, end_date, shift_length_hrs=None, sh
     _temp_id_counter = 0
     while d <= end_date:
         shifts, unassigned, warnings = generate_shifts(
-            lob, d, shift_length_hrs, sheet, employee_ids)
+            lob, d, shift_length_hrs, sheet, employee_ids,
+            shift_sequence_id=shift_sequence_id)
         # Assign temporary IDs so the UI can reference unsaved shifts
         for s in shifts:
             if "id" not in s:
