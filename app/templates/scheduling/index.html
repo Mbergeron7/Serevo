@@ -3718,7 +3718,8 @@ async function runQuickOptimize() {
         seg.end = c.new_end;
       }
     });
-    renderSchedule();
+    switchView(currentView);
+    if (scheduleData) fetchCoverageForDays(scheduleData);
     showToast(`Optimized ${changes.length} break/lunch placement${changes.length !== 1 ? 's' : ''} across ${new Set(changes.map(c => c.shift_id)).size} employee${new Set(changes.map(c => c.shift_id)).size !== 1 ? 's' : ''}.`);
   } catch (e) {
     showToast('Optimize failed: ' + e, true);
@@ -4740,6 +4741,7 @@ function bulkApply() {
     closeBulkEditModal();
     showToast('Applied to ' + matchingShifts.length + ' shift(s).', 'success');
     switchView(currentView);
+    if (scheduleData) fetchCoverageForDays(scheduleData);
     return;
   }
 
