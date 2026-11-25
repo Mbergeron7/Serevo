@@ -36,30 +36,34 @@
       {# Admin / Supervisor nav — grouped dropdowns #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
 
-      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/team-calendar') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/team-calendar') or request.path == '/people/accommodations' or request.path == '/people/pto' or request.path == '/realtime/vto-ot' %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Scheduling <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/scheduling/"{% if request.path == '/scheduling/' or (request.path.startswith('/scheduling') and '/bidding' not in request.path and '/rosters' not in request.path and '/config' not in request.path) %} class="active"{% endif %}>Scheduling</a>
           <a href="/scheduling/rosters"{% if '/scheduling/rosters' in request.path %} class="active"{% endif %}>Specialty Schedules</a>
           <a href="/scheduling/bidding"{% if '/scheduling/bidding' in request.path %} class="active"{% endif %}>Shift Bidding</a>
           <a href="/team-calendar/"{% if request.path.startswith('/team-calendar') %} class="active"{% endif %}>Team Calendar</a>
+          <a href="/people/accommodations"{% if request.path == '/people/accommodations' %} class="active"{% endif %}>Accommodations</a>
+          <a href="/people/pto"{% if request.path == '/people/pto' %} class="active"{% endif %}>PTO</a>
+          <a href="/realtime/vto-ot"{% if request.path == '/realtime/vto-ot' %} class="active"{% endif %}>VTO / OT</a>
         </div>
       </div>
 
-      <div class="nav-dropdown{% if request.path.startswith('/forecasting') or (request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources') or request.path.startswith('/realtime') or request.path.startswith('/attendance') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/forecasting') or (request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources') or (request.path.startswith('/realtime') and request.path != '/realtime/vto-ot') or request.path.startswith('/attendance') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Workforce <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
           <a href="/capacity/"{% if request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources' %} class="active"{% endif %}>Capacity</a>
-          <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
+          <a href="/realtime/"{% if request.path.startswith('/realtime') and request.path != '/realtime/vto-ot' %} class="active"{% endif %}>Real-Time</a>
           <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
         </div>
       </div>
 
-      <div class="nav-dropdown{% if request.path.startswith('/people') or request.path.startswith('/quality') or request.path.startswith('/training') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if (request.path.startswith('/people') and request.path != '/people/accommodations' and request.path != '/people/pto') or request.path.startswith('/quality') or request.path.startswith('/training') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">People <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
-          <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>Roster</a>
+          <a href="/people/"{% if request.path == '/people/' or request.path == '/people' %} class="active"{% endif %}>Roster</a>
+          <a href="/people/loa"{% if request.path == '/people/loa' %} class="active"{% endif %}>Leave of Absence</a>
           <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
           <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
         </div>
