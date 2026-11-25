@@ -46,6 +46,7 @@
           <a href="/people/accommodations"{% if request.path == '/people/accommodations' %} class="active"{% endif %}>Accommodations</a>
           <a href="/people/pto"{% if request.path == '/people/pto' %} class="active"{% endif %}>PTO</a>
           <a href="/realtime/vto-ot"{% if request.path == '/realtime/vto-ot' %} class="active"{% endif %}>VTO / OT</a>
+          <a href="/scheduling/config/"{% if request.path.startswith('/scheduling/config') %} class="active"{% endif %}>Configuration</a>
         </div>
       </div>
 
