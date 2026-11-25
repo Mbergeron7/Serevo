@@ -36,45 +36,52 @@
       {# Admin / Supervisor nav — grouped dropdowns #}
       <a href="/"{% if request.path == '/' %} class="active"{% endif %}>Dashboard</a>
 
-      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/forecasting') or (request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources') or request.path.startswith('/realtime') or request.path.startswith('/team-calendar') %} has-active{% endif %}">
-        <button class="nav-dropdown-btn">Operations <span class="caret">▾</span></button>
+      <div class="nav-dropdown{% if request.path.startswith('/scheduling') or request.path.startswith('/team-calendar') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">Scheduling <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
-          <a href="/scheduling/"{% if request.path.startswith('/scheduling') and '/bidding' not in request.path %} class="active"{% endif %}>Scheduling</a>
+          <a href="/scheduling/"{% if request.path == '/scheduling/' or (request.path.startswith('/scheduling') and '/bidding' not in request.path and '/rosters' not in request.path and '/config' not in request.path) %} class="active"{% endif %}>Scheduling</a>
+          <a href="/scheduling/rosters"{% if '/scheduling/rosters' in request.path %} class="active"{% endif %}>Specialty Schedules</a>
           <a href="/scheduling/bidding"{% if '/scheduling/bidding' in request.path %} class="active"{% endif %}>Shift Bidding</a>
-          <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
-          <a href="/capacity/"{% if request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources' %} class="active"{% endif %}>Capacity</a>
-          <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
           <a href="/team-calendar/"{% if request.path.startswith('/team-calendar') %} class="active"{% endif %}>Team Calendar</a>
         </div>
       </div>
 
-      <div class="nav-dropdown{% if request.path.startswith('/people') or request.path.startswith('/attendance') or request.path.startswith('/quality') or request.path.startswith('/training') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/forecasting') or (request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources') or request.path.startswith('/realtime') or request.path.startswith('/attendance') %} has-active{% endif %}">
+        <button class="nav-dropdown-btn">Workforce <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/forecasting/"{% if request.path.startswith('/forecasting') %} class="active"{% endif %}>Forecasting</a>
+          <a href="/capacity/"{% if request.path.startswith('/capacity') and request.path != '/capacity/panel' and request.path != '/capacity/sources' %} class="active"{% endif %}>Capacity</a>
+          <a href="/realtime/"{% if request.path.startswith('/realtime') %} class="active"{% endif %}>Real-Time</a>
+          <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown{% if request.path.startswith('/people') or request.path.startswith('/quality') or request.path.startswith('/training') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">People <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/people/"{% if request.path.startswith('/people') %} class="active"{% endif %}>Roster</a>
-          <a href="/attendance/"{% if request.path.startswith('/attendance') %} class="active"{% endif %}>Attendance</a>
           <a href="/quality/"{% if request.path.startswith('/quality') %} class="active"{% endif %}>Quality</a>
           <a href="/training/"{% if request.path.startswith('/training') %} class="active"{% endif %}>Training</a>
         </div>
       </div>
 
-      <div class="nav-dropdown{% if request.path.startswith('/approvals') or request.path.startswith('/shift-notes') or request.path.startswith('/wfm-tickets') or request.path.startswith('/payroll') %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/approvals') or request.path.startswith('/shift-notes') or request.path.startswith('/wfm-tickets') or request.path.startswith('/payroll') or request.path.startswith('/reports') %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Tools <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/approvals/"{% if request.path.startswith('/approvals') %} class="active"{% endif %}>Approvals</a>
           <a href="/shift-notes/"{% if request.path.startswith('/shift-notes') %} class="active"{% endif %}>Shift Notes</a>
           <a href="/wfm-tickets/"{% if request.path.startswith('/wfm-tickets') %} class="active"{% endif %}>WFM Tickets</a>
           <a href="/payroll/"{% if request.path.startswith('/payroll') %} class="active"{% endif %}>Payroll</a>
+          <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
         </div>
       </div>
 
-      <div class="nav-dropdown{% if request.path.startswith('/data') or request.path.startswith('/reports') or request.path.startswith('/employee-docs') or request.path.startswith('/announcements') or request.path.startswith('/audit-log') or request.path.startswith('/settings') or request.path == '/capacity/panel' or request.path == '/capacity/sources' %} has-active{% endif %}">
+      <div class="nav-dropdown{% if request.path.startswith('/data') or request.path.startswith('/employee-docs') or request.path.startswith('/announcements') or request.path.startswith('/audit-log') or request.path.startswith('/settings') or request.path == '/capacity/panel' or request.path == '/capacity/sources' %} has-active{% endif %}">
         <button class="nav-dropdown-btn">Admin <span class="caret">▾</span></button>
         <div class="nav-dropdown-menu">
           <a href="/data/"{% if request.path.startswith('/data') %} class="active"{% endif %}>Data Import</a>
           <a href="/capacity/panel"{% if request.path == '/capacity/panel' %} class="active"{% endif %}>API Integration</a>
           <a href="/capacity/sources"{% if request.path == '/capacity/sources' %} class="active"{% endif %}>Data Sources</a>
-          <a href="/reports/"{% if request.path.startswith('/reports') %} class="active"{% endif %}>Reports</a>
           <a href="/employee-docs/"{% if request.path.startswith('/employee-docs') %} class="active"{% endif %}>Documents</a>
           <a href="/announcements/"{% if request.path.startswith('/announcements') %} class="active"{% endif %}>Announcements</a>
           <a href="/audit-log/"{% if request.path.startswith('/audit-log') %} class="active"{% endif %}>Audit Log</a>
