@@ -2140,8 +2140,9 @@ function showResults() {
   }
   renderScorePanel();
   switchView(currentView);
-  // Refresh demand heat map when schedule results are shown
+  // Refresh demand heat map and coverage when schedule results are shown
   if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 function toggleDemandCollapse() {
@@ -2542,6 +2543,7 @@ function confirmAddShift() {
     updateStats();
     switchView(currentView);
     if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
+    if (scheduleData) fetchCoverageForDays(scheduleData);
 
     // Auto-save to DB if viewing a saved schedule
     if (scheduleSource === 'saved') {
@@ -2807,6 +2809,7 @@ function applyShiftEdit() {
   updateStats();
   switchView(currentView);
   if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 function deleteShift() {
@@ -2837,6 +2840,7 @@ function deleteShift() {
   updateStats();
   switchView(currentView);
   if (typeof loadDemandHeatmap === 'function') loadDemandHeatmap();
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 // ═══════════════════════════════════════════════════════════
