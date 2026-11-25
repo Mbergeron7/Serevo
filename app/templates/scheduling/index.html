@@ -1180,7 +1180,7 @@
     </div>
 
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">
-      <button class="btn-modal btn-modal-secondary" onclick="closeOptimizeModal()">Cancel</button>
+      <button class="btn-modal btn-modal-secondary" id="optCloseBtn" onclick="closeOptimizeModal()">Cancel</button>
       <button class="btn-modal btn-modal-primary" id="optRunBtn" onclick="runOptimize()" style="background:#0891b2">
         Run Optimizer
       </button>
@@ -3531,6 +3531,8 @@ function openOptimizeModal() {
   }
   document.getElementById('optResults').style.display = 'none';
   document.getElementById('optRunBtn').style.display = '';
+  const _cb = document.getElementById('optCloseBtn');
+  if (_cb) { _cb.textContent = 'Cancel'; _cb.classList.add('btn-modal-secondary'); _cb.classList.remove('btn-modal-primary'); }
   document.getElementById('optBreaks').checked = true;
   document.getElementById('optLunches').checked = true;
   document.getElementById('optSelectAll').checked = true;
@@ -3655,6 +3657,9 @@ async function runOptimize() {
 
     document.getElementById('optResults').style.display = '';
     btn.style.display = 'none';
+    // Change Cancel → Done now that changes have been applied
+    const closeBtn = document.getElementById('optCloseBtn');
+    if (closeBtn) { closeBtn.textContent = 'Done'; closeBtn.classList.remove('btn-modal-secondary'); closeBtn.classList.add('btn-modal-primary'); }
 
     // Update in-memory schedule data so the timeline refreshes
     changes.forEach(c => {
