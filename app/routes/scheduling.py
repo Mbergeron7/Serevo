@@ -3102,7 +3102,7 @@ def publish_schedule():
             category="schedule",
             title="Schedule Published",
             message=f"Your schedule for {start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d')} has been published.",
-            link="/my-schedule/",
+            link="/portal/",
         )
         db.session.add(notif)
         notified += 1
@@ -3779,7 +3779,7 @@ def bidding_publish():
                 category="schedule",
                 title="Schedule Published (Bidding)",
                 message=f"Your schedule for {window.start_date.strftime('%b %d')} – {window.end_date.strftime('%b %d')} has been published after shift bidding.",
-                link="/my-schedule/",
+                link="/portal/",
             )
             db.session.add(notif)
             notified += 1

@@ -23,7 +23,7 @@ def index():
         return render_template("landing.html")
     # Agents go straight to their schedule
     if user and user.get("is_agent"):
-        return redirect("/my-schedule/")
+        return redirect("/portal/")
     demo_stats = None
     live_stats = None
     if user and user.get("is_demo"):

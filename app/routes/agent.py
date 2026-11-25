@@ -110,68 +110,8 @@ class _DemoSchedule:
 @agent_bp.route("/my-schedule/")
 @login_required
 def my_schedule():
-    user = get_current_user()
-    emp = _get_agent_employee(user)
-    is_demo = user.get("is_demo") and not emp
-    if is_demo:
-        emp = _PreviewEmployee()
-    elif not emp:
-        return render_template("agent/my_schedule.html", employee=None, days=[], week_start=date.today(), week_end=date.today(), prev_week="", next_week="", today=date.today())
-
-    # Default to current week (Mon–Sun)
-    today = date.today()
-    start_str = request.args.get("start")
-    if start_str:
-        try:
-            week_start = date.fromisoformat(start_str)
-        except ValueError:
-            week_start = today - timedelta(days=today.weekday())
-    else:
-        week_start = today - timedelta(days=today.weekday())
-
-    week_end = week_start + timedelta(days=6)
-
-    if is_demo:
-        schedules = []
-    else:
-        schedules = (
-            Schedule.query
-            .filter_by(employee_id=emp.id)
-            .filter(Schedule.schedule_date >= week_start)
-            .filter(Schedule.schedule_date <= week_end)
-            .order_by(Schedule.schedule_date, Schedule.shift_start)
-            .all()
-        )
-
-    # Build day-by-day data
-    days = []
-    for i in range(7):
-        d = week_start + timedelta(days=i)
-        day_schedules = [s for s in schedules if s.schedule_date == d]
-        # Add demo shifts for preview (Mon–Fri)
-        if is_demo and d.weekday() < 5:
-            day_schedules = [_DemoSchedule(d, "09:00", "17:00")]
-        days.append({
-            "date": d,
-            "day_name": d.strftime("%A"),
-            "short": d.strftime("%b %d"),
-            "is_today": d == today,
-            "schedules": day_schedules,
-        })
-
-    prev_week = (week_start - timedelta(days=7)).isoformat()
-    next_week = (week_start + timedelta(days=7)).isoformat()
-
-    return render_template(
-        "agent/my_schedule.html",
-        employee=emp,
-        days=days,
-        week_start=week_start,
-        week_end=week_end,
-        prev_week=prev_week,
-        next_week=next_week,
-        today=today,
-    )
+    """Legacy route — redirect to portal (My Schedule tab)."""
+    return redirect("/portal/")
 
 
 # ───────────────────────────────────────────────────────
@@ -181,44 +121,8 @@ def my_schedule():
 @agent_bp.route("/my-time-off/")
 @login_required
 def my_time_off():
-    user = get_current_user()
-    emp = _get_agent_employee(user)
-    is_demo = user.get("is_demo") and not emp
-    if is_demo:
-        emp = _PreviewEmployee()
-    elif not emp:
-        return render_template("agent/my_time_off.html", employee=None, requests=[], types=[])
-
-    # Get time-off types for the dropdown
-    try:
-        types = TimeOffType.query.filter_by(is_active=True).order_by(TimeOffType.sort_order).all()
-    except Exception:
-        log.warning("Failed to load time-off types", exc_info=True)
-        types = []
-
-    today = date.today()
-
-    if is_demo:
-        upcoming = [_DemoPTO(today + timedelta(days=14), today + timedelta(days=16), "Vacation", "approved")]
-        past = [_DemoPTO(today - timedelta(days=30), today - timedelta(days=30), "Personal", "approved")]
-    else:
-        entries = (
-            PTOEntry.query
-            .filter_by(employee_id=emp.id)
-            .order_by(PTOEntry.start_date.desc())
-            .all()
-        )
-        upcoming = [e for e in entries if e.end_date >= today]
-        past = [e for e in entries if e.end_date < today]
-
-    return render_template(
-        "agent/my_time_off.html",
-        employee=emp,
-        types=types,
-        upcoming=upcoming,
-        past=past,
-        today=today,
-    )
+    """Legacy route — redirect to portal (Time Off tab)."""
+    return redirect("/portal/")
 
 
 @agent_bp.route("/api/agent/time-off", methods=["POST"])
