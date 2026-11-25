@@ -2053,23 +2053,52 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     requirements = _get_requirements_for_date(lob, date_obj, sheet)
 
     # Build scheduled count per interval (with optional proficiency weighting)
+    # Non-productive segments (break, lunch, coaching, etc.) reduce the
+    # available headcount during those intervals.
     scheduled_map = defaultdict(float)
+
+    # Cache which segment types are non-productive
+    _nonprod_cache = {}
+    def _is_nonproductive(seg_type):
+        if seg_type not in _nonprod_cache:
+            try:
+                from app.models import SegmentCode
+                sc = SegmentCode.query.filter_by(code=seg_type).first()
+                _nonprod_cache[seg_type] = (sc and not sc.is_productive) if sc else (
+                    seg_type in ("break", "lunch", "ooq_break", "ooq_lunch",
+                                 "ooq_coaching", "ooq_training", "ooq_meeting",
+                                 "ooq_project", "ooq_one_on_one"))
+            except Exception:
+                _nonprod_cache[seg_type] = seg_type.startswith("ooq_") or seg_type in ("break", "lunch")
+        return _nonprod_cache[seg_type]
+
     for shift in shifts:
         s_min = _time_to_minutes(shift["start"])
         e_min = _time_to_minutes(shift["end"])
         weight = shift.get("effectiveness", 1.0)
+
+        # Build set of intervals where this employee is in a non-productive segment
+        nonprod_intervals = set()
+        for seg in shift.get("segments", []):
+            if _is_nonproductive(seg.get("type", "")):
+                seg_start = _time_to_minutes(seg.get("start", ""))
+                seg_end = _time_to_minutes(seg.get("end", ""))
+                if seg_start is not None and seg_end is not None and seg_end > seg_start:
+                    for m in range(seg_start, seg_end, DEFAULT_INTERVAL_MINS):
+                        nonprod_intervals.add(m)
+
         if e_min <= s_min:
-            # Overnight shift: cover from start to midnight, then midnight to end
+            # Overnight shift
             for m in range(s_min, 1440, DEFAULT_INTERVAL_MINS):
-                t = _minutes_to_time(m)
-                scheduled_map[t] += weight
+                if m not in nonprod_intervals:
+                    scheduled_map[_minutes_to_time(m)] += weight
             for m in range(0, e_min, DEFAULT_INTERVAL_MINS):
-                t = _minutes_to_time(m)
-                scheduled_map[t] += weight
+                if m not in nonprod_intervals:
+                    scheduled_map[_minutes_to_time(m)] += weight
         else:
             for m in range(s_min, e_min, DEFAULT_INTERVAL_MINS):
-                t = _minutes_to_time(m)
-                scheduled_map[t] += weight
+                if m not in nonprod_intervals:
+                    scheduled_map[_minutes_to_time(m)] += weight
 
     coverage = []
     if requirements:

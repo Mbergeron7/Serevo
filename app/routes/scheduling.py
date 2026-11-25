@@ -578,7 +578,21 @@ def coverage():
                         s_min = int(s_start[:2]) * 60 + int(s_start[3:])
                         e_min = int(s_end[:2]) * 60 + int(s_end[3:])
                         if s_min <= t_min < e_min:
-                            scheduled += 1
+                            # Check if employee is in a non-productive segment
+                            in_nonprod = False
+                            for seg in s.get("segments", []):
+                                seg_type = seg.get("type", "")
+                                if seg_type.startswith("ooq_") or seg_type in ("break", "lunch"):
+                                    seg_s = seg.get("start", "")
+                                    seg_e = seg.get("end", "")
+                                    if seg_s and seg_e:
+                                        seg_s_min = int(seg_s[:2]) * 60 + int(seg_s[3:])
+                                        seg_e_min = int(seg_e[:2]) * 60 + int(seg_e[3:])
+                                        if seg_s_min <= t_min < seg_e_min:
+                                            in_nonprod = True
+                                            break
+                            if not in_nonprod:
+                                scheduled += 1
                 req = r["agents_required"]
                 gap = scheduled - req
                 pct = round(scheduled / req * 100, 1) if req > 0 else (100.0 if scheduled > 0 else 0)

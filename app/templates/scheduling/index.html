@@ -1840,7 +1840,8 @@ function fetchCoverageForDays(sd) {
   if (!sd || !sd.days || !sd.days.length) return;
   const lob = sd.lob;
   const promises = sd.days.map(day => {
-    const shiftsPayload = day.shifts.map(s => ({start: s.start, end: s.end}));
+    const shiftsPayload = day.shifts.map(s => ({start: s.start, end: s.end,
+      segments: (s.segments || []).map(seg => ({type: seg.type, start: seg.start, end: seg.end}))}));
     return fetch('/scheduling/coverage', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -2653,6 +2654,7 @@ function removeSegment(segIdx) {
   recalcOncallClient(shift);
   renderSegmentList(shift.segments);
   switchView(currentView); // refresh timeline
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 function openAddSegment() {
@@ -2770,6 +2772,7 @@ function confirmAddSegment() {
   document.getElementById('addSegForm').style.display = 'none';
   document.getElementById('editSegIdx').value = '-1';
   switchView(currentView);
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 function applyShiftEdit() {
@@ -4276,6 +4279,7 @@ function ctxDelete(dayIdx, shiftIdx, segIdx) {
   clearSelection();
   switchView(currentView);
   showToast('Segment deleted');
+  if (scheduleData) fetchCoverageForDays(scheduleData);
 }
 
 // ── Paste onto a shift ──
