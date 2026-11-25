@@ -618,10 +618,23 @@ def coverage():
             cov = analyze_coverage(lob, date_obj, shifts, sheet)
             summary = coverage_summary(cov)
 
+        # Include coverage target from LOB settings
+        coverage_target = None
+        try:
+            from app.models import PlanningUnit, LOBSetting
+            from app.data_source import normalize_lob
+            lob_norm = normalize_lob(str(lob).strip())
+            pu = PlanningUnit.query.filter_by(name=lob_norm).first()
+            if pu and pu.lob_setting and pu.lob_setting.service_level_target:
+                coverage_target = round(pu.lob_setting.service_level_target * 100, 1)
+        except Exception:
+            pass
+
         return jsonify({
             "success": True,
             "coverage": cov,
             "summary": summary,
+            "coverage_target": coverage_target,
         })
 
     except Exception as e:

@@ -241,6 +241,11 @@
         <input type="date" id="fPtoEnd">
       </div>
     </div>
+    <!-- Impact Preview -->
+    <div id="ptoImpactPreview" style="display:none; margin-bottom:12px; padding:10px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:.82rem;">
+      <div style="font-weight:700; font-size:.75rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Coverage Impact</div>
+      <div id="ptoImpactContent"></div>
+    </div>
     <div class="form-row">
       <div class="form-group" style="min-width:100%">
         <label>Note</label>
@@ -399,9 +404,53 @@ function openPTOModal() {
   document.getElementById('fPtoEnd').value = '';
   document.getElementById('fPtoDayType').value = 'full';
   document.getElementById('fPtoNote').value = '';
+  document.getElementById('ptoImpactPreview').style.display = 'none';
   document.getElementById('ptoOverlay').classList.add('open');
 }
 function closePTOModal() { document.getElementById('ptoOverlay').classList.remove('open'); }
+
+/* ── PTO Impact Preview ── */
+function checkPTOImpact() {
+  const empId = document.getElementById('fPtoEmp').value;
+  const start = document.getElementById('fPtoStart').value;
+  const end = document.getElementById('fPtoEnd').value;
+  const preview = document.getElementById('ptoImpactPreview');
+  const content = document.getElementById('ptoImpactContent');
+
+  if (!empId || !start || !end) { preview.style.display = 'none'; return; }
+
+  fetch('/people/api/pto-impact', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ employee_id: +empId, start_date: start, end_date: end }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.success || !d.days || !d.days.length) { preview.style.display = 'none'; return; }
+    let html = `<div style="margin-bottom:4px"><strong>${d.lob}</strong> — ${d.total_employees} active employees</div>`;
+    let hasWarning = false;
+    d.days.forEach(day => {
+      const dt = new Date(day.date + 'T12:00:00');
+      const label = dt.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+      const warnIcon = day.warning ? ' ⚠️' : '';
+      if (day.warning) hasWarning = true;
+      html += `<div style="display:flex; justify-content:space-between; padding:2px 0; ${day.warning ? 'color:#dc2626; font-weight:600;' : ''}">
+        <span>${label}</span>
+        <span>${day.already_off} off now → ${day.already_off + 1} with this request (${day.pct_with_request}%)${warnIcon}</span>
+      </div>`;
+    });
+    if (hasWarning) {
+      html += '<div style="margin-top:6px; padding:6px 10px; background:color-mix(in srgb, #dc2626 10%, transparent); color:#dc2626; border-radius:6px; font-weight:600; font-size:.8rem;">⚠ Over 20% of the LOB would be off — coverage may be at risk</div>';
+    }
+    content.innerHTML = html;
+    preview.style.display = '';
+  })
+  .catch(() => { preview.style.display = 'none'; });
+}
+
+// Attach impact check to date and employee changes
+document.getElementById('fPtoEmp').addEventListener('change', checkPTOImpact);
+document.getElementById('fPtoStart').addEventListener('change', checkPTOImpact);
+document.getElementById('fPtoEnd').addEventListener('change', checkPTOImpact);
 
 function savePTOEntry() {
   const empId = document.getElementById('fPtoEmp').value;

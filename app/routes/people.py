@@ -1574,6 +1574,89 @@ def delete_pto_entry():
     return jsonify(success=True)
 
 
+@people_bp.route("/api/pto-impact", methods=["POST"])
+@login_required
+def pto_impact():
+    """Return coverage impact of PTO for a given employee and date range.
+
+    Returns how many employees in the same LOB already have approved PTO
+    on each date, the total active headcount, and a warning flag if
+    taking this PTO would put the LOB over 20% absent.
+    """
+    user = get_current_user()
+    if not user:
+        return jsonify(success=False, error="Not authenticated"), 401
+
+    payload = request.get_json(silent=True) or {}
+    employee_id = payload.get("employee_id")
+    start_str = payload.get("start_date")
+    end_str = payload.get("end_date")
+
+    if not employee_id or not start_str or not end_str:
+        return jsonify(success=False, error="Missing fields")
+
+    if user.get("is_demo"):
+        return jsonify(success=True, days=[], total_employees=20, lob="Demo LOB")
+
+    from datetime import date as _date, timedelta
+    try:
+        start = _date.fromisoformat(start_str)
+        end = _date.fromisoformat(end_str)
+    except (ValueError, TypeError):
+        return jsonify(success=False, error="Invalid date")
+
+    emp = Employee.query.get(employee_id)
+    if not emp:
+        return jsonify(success=False, error="Employee not found")
+
+    # Determine the employee's LOB
+    pu = emp.planning_unit
+    if not pu:
+        return jsonify(success=True, days=[], total_employees=0, lob="Unknown")
+
+    lob_name = pu.name
+
+    # Count active employees in this LOB
+    active_count = Employee.query.filter_by(
+        planning_unit_id=pu.id, status="Active"
+    ).count()
+
+    # For each date in range, count approved PTO entries for this LOB
+    days = []
+    d = start
+    while d <= end:
+        # Count employees with approved PTO overlapping this date in this LOB
+        off_count = db.session.query(db.func.count(db.distinct(PTOEntry.employee_id))).join(
+            Employee, PTOEntry.employee_id == Employee.id
+        ).filter(
+            Employee.planning_unit_id == pu.id,
+            PTOEntry.start_date <= d,
+            PTOEntry.end_date >= d,
+            PTOEntry.approval_status == "approved",
+            PTOEntry.employee_id != int(employee_id),  # exclude the employee being evaluated
+        ).scalar() or 0
+
+        pct_off = round(off_count / active_count * 100, 1) if active_count > 0 else 0
+        # Adding this employee would make it off_count + 1
+        pct_with = round((off_count + 1) / active_count * 100, 1) if active_count > 0 else 0
+
+        days.append({
+            "date": d.isoformat(),
+            "already_off": off_count,
+            "pct_off": pct_off,
+            "pct_with_request": pct_with,
+            "warning": pct_with > 20,
+        })
+        d += timedelta(days=1)
+
+    return jsonify(
+        success=True,
+        days=days,
+        total_employees=active_count,
+        lob=lob_name,
+    )
+
+
 @people_bp.route("/api/time-off-types", methods=["POST"])
 @login_required
 def list_time_off_types():

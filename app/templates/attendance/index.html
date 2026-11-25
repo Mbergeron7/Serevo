@@ -32,6 +32,14 @@
 
 <div class="att-controls">
   <label>Date: <input type="date" id="attDate" value="{{ today }}"></label>
+  <label>LOB:
+    <select id="attLob" onchange="loadAttendance()" style="padding:.4rem .8rem;border:1px solid #ccc;border-radius:6px;font-size:.9rem;">
+      <option value="">All LOBs</option>
+      {% for pu in planning_units|default([]) %}
+      <option value="{{ pu.name }}">{{ pu.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
   <button onclick="loadAttendance()">Load</button>
   <button onclick="document.getElementById('attDate').value=new Date().toISOString().slice(0,10); loadAttendance();">Today</button>
 </div>
@@ -50,10 +58,11 @@
 
   window.loadAttendance = function() {
     const dt = document.getElementById('attDate').value;
+    const lob = document.getElementById('attLob') ? document.getElementById('attLob').value : '';
     fetch('/attendance/api/dashboard', {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf},
-      body: JSON.stringify({date: dt})
+      body: JSON.stringify({date: dt, lob: lob || undefined})
     })
     .then(r => r.json())
     .then(data => {
@@ -78,12 +87,13 @@
       document.getElementById('attGrid').innerHTML = '<p style="color:#888;">No attendance records for this date.</p>';
       return;
     }
-    let html = '<div class="data-table-wrapper"><table class="att-table"><thead><tr><th>Employee</th><th>ID</th><th>Scheduled</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
+    let html = '<div class="data-table-wrapper"><table class="att-table"><thead><tr><th>Employee</th><th>LOB</th><th>ID</th><th>Scheduled</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>';
     rows.forEach(r => {
       const badge = r.status === 'active' ? 'badge-active' : 'badge-completed';
       const lateTag = r.late_minutes ? ` <span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:8px;font-size:.75rem;">${r.late_minutes}m late</span>` : '';
       html += `<tr>
         <td>${esc(r.employee_name)}</td>
+        <td>${esc(r.lob || '')}</td>
         <td>${esc(r.employee_id_str)}</td>
         <td>${r.scheduled_start || '—'}</td>
         <td>${r.clock_in}${lateTag}</td>

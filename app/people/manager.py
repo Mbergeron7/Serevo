@@ -367,13 +367,17 @@ def _save_accommodation_to_db(data):
         accom.shift_end = data.get("Shift End", "")
         accom.notes = data.get("Notes", "")
 
-        # Handle date fields
-        sd = data.get("start_date")
+        # Handle date fields (accept both "start_date" and "Start Date" keys)
+        sd = data.get("start_date") or data.get("Start Date") or ""
         if sd:
             accom.start_date = datetime.datetime.strptime(sd, "%Y-%m-%d").date() if isinstance(sd, str) else sd
-        ed = data.get("end_date")
+        else:
+            accom.start_date = None
+        ed = data.get("end_date") or data.get("End Date") or ""
         if ed:
             accom.end_date = datetime.datetime.strptime(ed, "%Y-%m-%d").date() if isinstance(ed, str) else ed
+        else:
+            accom.end_date = None
 
         db.session.commit()
         return None

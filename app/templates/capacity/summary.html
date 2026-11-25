@@ -127,6 +127,12 @@
 <div class="cap-banner">
   <h1>📊 Capacity Summary</h1>
   <div class="sub">FTE required vs headcount overview across all LOBs</div>
+  <div style="margin-top:8px; padding:8px 14px; background:var(--surface); border:1px solid var(--border); border-radius:6px; font-size:.78rem; color:var(--text-muted);">
+    📋 Data flow: <a href="/forecasting/" style="color:var(--brand-accent); text-decoration:none;">Forecast</a> →
+    <strong>Capacity</strong> →
+    <a href="/scheduling/" style="color:var(--brand-accent); text-decoration:none;">Scheduling</a> →
+    <a href="/realtime/" style="color:var(--brand-accent); text-decoration:none;">Real-Time</a>
+  </div>
 </div>
 
 <form method="get" action="/capacity/summary" id="filterForm">
@@ -247,11 +253,17 @@
 <!-- ═══ Summary Stats ═══ -->
 <div class="stats-row">
   <div class="stat-card"><div class="v">{{ all_lobs|length }}</div><div class="l">LOBs</div></div>
-  <div class="stat-card"><div class="v">{{ totals.actual_hc }}</div><div class="l">Total HC</div></div>
-  <div class="stat-card"><div class="v">{{ totals.fte_req }}</div><div class="l">Total FTE Required</div></div>
+  <div class="stat-card">
+    <div class="v">{{ totals.fte_req }}</div>
+    <div class="l">Required FTE</div>
+  </div>
+  <div class="stat-card">
+    <div class="v">{{ totals.actual_hc }}</div>
+    <div class="l">Actual HC</div>
+  </div>
   <div class="stat-card">
     <div class="v {% if totals.gap >= 0 %}pos{% else %}neg{% endif %}">{{ "%+.1f"|format(totals.gap) }}</div>
-    <div class="l">Total Gap</div>
+    <div class="l">HC Gap{% if totals.gap < 0 %} (Understaffed){% elif totals.gap > 0 %} (Overstaffed){% endif %}</div>
   </div>
   <div class="stat-card"><div class="v {% if lobs_in_deficit > 0 %}neg{% endif %}">{{ lobs_in_deficit }}</div><div class="l">LOBs in Deficit</div></div>
 </div>

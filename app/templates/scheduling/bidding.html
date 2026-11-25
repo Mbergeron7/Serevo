@@ -7,6 +7,45 @@
   .bid-banner h1 { font-size:1.35rem; margin:0 0 2px; }
   .bid-banner .sub { font-size:.82rem; opacity:.85; }
 
+  /* ── Bidding Progress Stepper ── */
+  .bid-stepper {
+    display:flex; align-items:flex-start; justify-content:space-between;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px 24px 16px; margin-bottom:20px; gap:4px; overflow-x:auto;
+  }
+  .bid-step {
+    display:flex; flex-direction:column; align-items:center; flex:1 1 0%; min-width:90px; position:relative;
+  }
+  .bid-step-circle {
+    width:32px; height:32px; border-radius:50%; border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:.75rem; font-weight:700; color:var(--text-muted);
+    background:var(--bg); position:relative; z-index:1; transition:all .2s;
+  }
+  .bid-step.completed .bid-step-circle {
+    background:#059669; border-color:#059669; color:#fff;
+  }
+  .bid-step.active .bid-step-circle {
+    background:var(--brand-accent,#6b21a8); border-color:var(--brand-accent,#6b21a8); color:#fff;
+    box-shadow:0 0 0 4px color-mix(in srgb, var(--brand-accent,#6b21a8) 20%, transparent);
+  }
+  .bid-step-label {
+    font-size:.7rem; font-weight:600; text-align:center; margin-top:6px;
+    color:var(--text-muted); line-height:1.2; white-space:nowrap;
+  }
+  .bid-step.completed .bid-step-label,
+  .bid-step.active .bid-step-label { color:var(--text); }
+  .bid-step-line {
+    position:absolute; top:16px; left:calc(50% + 18px); right:calc(-50% + 18px);
+    height:2px; background:var(--border); z-index:0;
+  }
+  .bid-step.completed .bid-step-line { background:#059669; }
+  .bid-step:last-child .bid-step-line { display:none; }
+  .bid-step-hint {
+    font-size:.68rem; color:var(--brand-accent,#6b21a8); text-align:center;
+    margin-top:4px; max-width:120px; line-height:1.2; min-height:28px;
+  }
+
   .bid-controls {
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
     padding:16px 20px; margin-bottom:20px;
@@ -97,6 +136,45 @@
 <div class="bid-banner">
   <h1>🎯 Shift Bidding</h1>
   <div class="sub">Generate schedules from requirements, open for agent bidding, run lottery, and publish</div>
+</div>
+
+<!-- ═══ Progress Stepper ═══ -->
+<div class="bid-stepper" id="biddingStepper">
+  <div class="bid-step" id="step-generate">
+    <div class="bid-step-line"></div>
+    <div class="bid-step-circle">1</div>
+    <div class="bid-step-label">Generate Shifts</div>
+    <div class="bid-step-hint" id="stepHint-generate"></div>
+  </div>
+  <div class="bid-step" id="step-open">
+    <div class="bid-step-line"></div>
+    <div class="bid-step-circle">2</div>
+    <div class="bid-step-label">Open Bidding</div>
+    <div class="bid-step-hint" id="stepHint-open"></div>
+  </div>
+  <div class="bid-step" id="step-collect">
+    <div class="bid-step-line"></div>
+    <div class="bid-step-circle">3</div>
+    <div class="bid-step-label">Collect Bids</div>
+    <div class="bid-step-hint" id="stepHint-collect"></div>
+  </div>
+  <div class="bid-step" id="step-close">
+    <div class="bid-step-line"></div>
+    <div class="bid-step-circle">4</div>
+    <div class="bid-step-label">Close Bidding</div>
+    <div class="bid-step-hint" id="stepHint-close"></div>
+  </div>
+  <div class="bid-step" id="step-lottery">
+    <div class="bid-step-line"></div>
+    <div class="bid-step-circle">5</div>
+    <div class="bid-step-label">Run Lottery</div>
+    <div class="bid-step-hint" id="stepHint-lottery"></div>
+  </div>
+  <div class="bid-step" id="step-publish">
+    <div class="bid-step-circle">6</div>
+    <div class="bid-step-label">Publish</div>
+    <div class="bid-step-hint" id="stepHint-publish"></div>
+  </div>
 </div>
 
 <!-- ═══ Controls ═══ -->
@@ -434,6 +512,7 @@ function renderStatusBar() {
     document.getElementById('statBidders').textContent = '0';
     document.getElementById('statAssigned').textContent = '0';
     document.getElementById('bidsCard').style.display = 'none';
+    updateStepper();
     return;
   }
 
@@ -479,6 +558,65 @@ function renderStatusBar() {
 
   // Show bids card
   document.getElementById('bidsCard').style.display = '';
+  updateStepper();
+}
+
+function updateStepper() {
+  const steps = ['generate','open','collect','close','lottery','publish'];
+  const st = _window ? _window.status : null;
+
+  // Determine the active step index
+  let activeIdx = 0;
+  if (!_shifts.length && !_window) {
+    activeIdx = 0; // Generate
+  } else if (_shifts.length && !_window) {
+    activeIdx = 1; // Open Bidding
+  } else if (st === 'bidding_open') {
+    activeIdx = 2; // Collect Bids
+  } else if (st === 'bidding_closed') {
+    activeIdx = 4; // Run Lottery
+  } else if (st === 'lottery_complete') {
+    activeIdx = 5; // Publish
+  } else if (st === 'published') {
+    activeIdx = 6; // All done
+  }
+
+  steps.forEach((key, i) => {
+    const el = document.getElementById('step-' + key);
+    const circle = el.querySelector('.bid-step-circle');
+    const hint = document.getElementById('stepHint-' + key);
+    el.classList.remove('completed', 'active');
+    hint.textContent = '';
+
+    if (activeIdx === 6) {
+      // All steps complete
+      el.classList.add('completed');
+      circle.innerHTML = '✓';
+    } else if (i < activeIdx) {
+      el.classList.add('completed');
+      circle.innerHTML = '✓';
+    } else if (i === activeIdx) {
+      el.classList.add('active');
+      circle.textContent = String(i + 1);
+    } else {
+      circle.textContent = String(i + 1);
+    }
+  });
+
+  // Set hint text for the active step
+  const hints = {
+    0: 'Select LOB and dates, then click Generate Shifts',
+    1: 'Shifts ready — click Open Bidding to let agents bid',
+    2: (_window && _window.bid_count ? _window.bid_count + ' bids received so far' : 'Waiting for agents to submit preferences'),
+    3: 'Close bidding when enough bids are in',
+    4: 'Run the lottery to assign shifts fairly',
+    5: 'Review assignments, then publish to agents',
+  };
+  if (activeIdx <= 5) {
+    const hintKeys = ['generate','open','collect','close','lottery','publish'];
+    const hintEl = document.getElementById('stepHint-' + hintKeys[activeIdx]);
+    if (hintEl) hintEl.textContent = hints[activeIdx] || '';
+  }
 }
 
 // ── Open Bidding ──
@@ -637,5 +775,8 @@ async function loadBids() {
     panel.innerHTML = html;
   } catch(e) { panel.innerHTML = '<p style="color:#dc2626;">Failed to load bids.</p>'; }
 }
+
+// Initial stepper state on page load
+updateStepper();
 </script>
 {% endblock %}

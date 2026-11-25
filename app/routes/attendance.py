@@ -180,7 +180,9 @@ def dashboard():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    return render_template("attendance/index.html", user=user)
+    from app.models import PlanningUnit
+    planning_units = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    return render_template("attendance/index.html", user=user, planning_units=planning_units)
 
 
 @attendance_bp.route("/api/dashboard", methods=["POST"])
@@ -204,7 +206,16 @@ def api_dashboard():
     except ValueError:
         return jsonify(success=False, error="Invalid date")
 
-    entries = TimeClock.query.filter_by(date=target_date).order_by(TimeClock.clock_in).all()
+    lob_filter = payload.get("lob", "").strip()
+    q = TimeClock.query.filter_by(date=target_date)
+    if lob_filter:
+        # Filter by LOB (planning unit name)
+        from app.models import PlanningUnit
+        pu = PlanningUnit.query.filter_by(name=lob_filter).first()
+        if pu:
+            lob_emp_ids = [e.id for e in Employee.query.filter_by(planning_unit_id=pu.id).all()]
+            q = q.filter(TimeClock.employee_id.in_(lob_emp_ids) if lob_emp_ids else db.false())
+    entries = q.order_by(TimeClock.clock_in).all()
 
     # Build schedule map for tardiness check
     sched_map = {}
@@ -226,10 +237,14 @@ def api_dashboard():
             diff = (ci_time.hour * 60 + ci_time.minute) - (sched_start.hour * 60 + sched_start.minute)
             if diff > 0:
                 late_minutes = diff
+        emp_lob = ""
+        if emp and emp.planning_unit:
+            emp_lob = emp.planning_unit.name
         rows.append({
             "id": e.id,
             "employee_name": emp.first_name + " " + emp.last_name if emp else "Unknown",
             "employee_id_str": emp.employee_id if emp else "",
+            "lob": emp_lob,
             "clock_in": e.clock_in.strftime("%H:%M") if e.clock_in else "",
             "clock_out": e.clock_out.strftime("%H:%M") if e.clock_out else "",
             "total_hours": e.total_hours,

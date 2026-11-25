@@ -317,9 +317,9 @@
 {% if not all_lobs %}
 <div class="card" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
   <div style="font-size:2rem; margin-bottom:.5rem;">📊</div>
-  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No planning units configured yet</p>
-  <p style="font-size:.85rem; margin-bottom:1rem;">Create planning units (LOBs) before entering forecast data.</p>
-  <a href="/settings/planning-units" class="btn btn-primary">Set Up Planning Units</a>
+  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No LOBs configured yet</p>
+  <p style="font-size:.85rem; margin-bottom:1rem;">Create LOBs before entering forecast data.</p>
+  <a href="/settings/planning-units" class="btn btn-primary">Set Up LOBs</a>
 </div>
 {% else %}
 <!-- ═══ Status bar ═══ -->
@@ -536,6 +536,13 @@
   </div>
 </div>
 
+<!-- ═══ Empty State ═══ -->
+<div id="fcEmptyState" style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+  <div style="font-size:2.5rem; margin-bottom:12px;">📈</div>
+  <div style="font-size:1rem; font-weight:600; color:var(--text-primary); margin-bottom:8px;">No forecast data loaded</div>
+  <div style="font-size:.85rem; max-width:420px; margin:0 auto;">Select one or more LOBs and a date range above, then click <strong>Load</strong> to view forecast data. Need to import data first? <a href="/data/" style="color:var(--brand-accent); text-decoration:none; font-weight:600;">Go to Data Import →</a></div>
+</div>
+
 <!-- ═══ Offered Calls chart ═══ -->
 <div class="chart-section" id="offeredSection" style="display:none;">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -581,6 +588,12 @@
     </table>
     </div>
   </div>
+</div>
+
+<!-- ═══ What's Next prompt ═══ -->
+<div id="fcNextStep" style="display:none; margin:12px 0 18px; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--brand-accent); border-radius:6px; font-size:.82rem; color:var(--text-muted);">
+  📋 <strong>Next:</strong> Use these requirements to generate schedules →
+  <a href="/scheduling/" style="color:var(--brand-accent); text-decoration:none; font-weight:600;">Go to Scheduling</a>
 </div>
 
 <!-- ═══ Mid-Day Reforecast ═══ -->
@@ -1416,6 +1429,9 @@ function renderCharts() {
     fcAht[boundaryIdx] = histAht[boundaryIdx];
   }
 
+  // Hide empty state, show charts
+  const fcEmpty = document.getElementById('fcEmptyState');
+  if (fcEmpty) fcEmpty.style.display = 'none';
   // Offered chart
   document.getElementById('offeredSection').style.display = '';
   if (chartOffered) chartOffered.destroy();
@@ -1515,6 +1531,9 @@ function renderIntervalCharts() {
   const histAht     = intervalData.map(iv => iv.hist_aht);
   const fcAht       = intervalData.map(iv => iv.fc_aht);
 
+  // Hide empty state, show charts
+  const fcEmpty2 = document.getElementById('fcEmptyState');
+  if (fcEmpty2) fcEmpty2.style.display = 'none';
   // Offered chart — grouped bar chart by time-of-day
   document.getElementById('offeredSection').style.display = '';
   if (chartOffered) chartOffered.destroy();
@@ -1699,6 +1718,7 @@ function renderHeatmap() {
   // Hide heatmap in daily view (interval data shown in charts instead)
   if (currentView === 'daily') {
     document.getElementById('heatmapSection').style.display = 'none';
+    const ns = document.getElementById('fcNextStep'); if (ns) ns.style.display = 'none';
     return;
   }
 
@@ -1717,6 +1737,8 @@ function renderHeatmap() {
   const displayKeys = keys.slice(-maxCols);
 
   document.getElementById('heatmapSection').style.display = '';
+  const nextStepEl = document.getElementById('fcNextStep');
+  if (nextStepEl) nextStepEl.style.display = '';
   const thead = document.getElementById('heatHead');
   const tbody = document.getElementById('heatBody');
 

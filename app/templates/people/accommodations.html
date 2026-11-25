@@ -44,6 +44,11 @@
   .day-fill { background: color-mix(in srgb, #059669 15%, transparent); color: #059669; }
   .day-off  { background: color-mix(in srgb, #dc2626 15%, transparent); color: #dc2626; }
   .day-half { background: color-mix(in srgb, #d97706 15%, transparent); color: #d97706; }
+  .expiry-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.7rem; font-weight:600; }
+  .expiry-expired { background:color-mix(in srgb, #dc2626 15%, transparent); color:#dc2626; }
+  .expiry-soon { background:color-mix(in srgb, #d97706 15%, transparent); color:#d97706; }
+  .expiry-active { color:var(--text-muted); font-size:.78rem; }
+  .expiry-none { color:var(--text-muted); font-size:.72rem; font-style:italic; }
 
   .btn-edit, .btn-del {
     border: none; padding: 4px 10px; border-radius: 5px;
@@ -171,6 +176,7 @@
           <th>Weekly Availability</th>
           <th>Shift Window</th>
           <th>Notes</th>
+          <th>Validity</th>
           <th>Updated</th>
           <th></th>
         </tr>
@@ -200,6 +206,17 @@
             {% endif %}
           </td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">{{ a.Notes|default('') }}</td>
+          <td>
+            {% set end_str = a['End Date']|default('') %}
+            {% if end_str %}
+              <span class="expiry-badge accom-expiry" data-end="{{ end_str }}"></span>
+            {% else %}
+              <span class="expiry-none">No Expiry</span>
+            {% endif %}
+            {% if a['Start Date'] %}
+              <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">From {{ a['Start Date'] }}</div>
+            {% endif %}
+          </td>
           <td style="color:var(--text-muted);font-size:.78rem">{{ a.Updated|default('') }}</td>
           <td>
             <button class="btn-edit" onclick='editAccom({{ a|tojson }})'>Edit</button>
@@ -279,6 +296,17 @@
       </div>
     </div>
 
+    <div class="form-row">
+      <div class="form-group">
+        <label>Effective From</label>
+        <input type="date" id="fStartDate">
+      </div>
+      <div class="form-group">
+        <label>Expires On</label>
+        <input type="date" id="fEndDate">
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="saveAccom()">Save</button>
@@ -303,6 +331,8 @@ function openModal() {
   document.getElementById('fShiftStart').value = '';
   document.getElementById('fShiftEnd').value = '';
   document.getElementById('fNotes').value = '';
+  document.getElementById('fStartDate').value = '';
+  document.getElementById('fEndDate').value = '';
   overlay.classList.add('open');
 }
 
@@ -320,6 +350,8 @@ function editAccom(a) {
   document.getElementById('fShiftStart').value = a['Shift Start'] || '';
   document.getElementById('fShiftEnd').value = a['Shift End'] || '';
   document.getElementById('fNotes').value = a.Notes || '';
+  document.getElementById('fStartDate').value = a['Start Date'] || '';
+  document.getElementById('fEndDate').value = a['End Date'] || '';
   overlay.classList.add('open');
 }
 
@@ -333,6 +365,8 @@ function saveAccom() {
     'Shift Start': document.getElementById('fShiftStart').value,
     'Shift End': document.getElementById('fShiftEnd').value,
     Notes: document.getElementById('fNotes').value,
+    'Start Date': document.getElementById('fStartDate').value,
+    'End Date': document.getElementById('fEndDate').value,
   };
   ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => {
     body[d] = document.getElementById('f'+d).value;
@@ -393,5 +427,28 @@ function filterAccom() {
     row.style.display = (nameOk && lobOk) ? '' : 'none';
   });
 }
+
+/* ── Expiry badges ────────────────────────── */
+(function computeExpiry() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const soon = new Date(today);
+  soon.setDate(soon.getDate() + 30);
+  document.querySelectorAll('.accom-expiry').forEach(el => {
+    const endStr = el.dataset.end;
+    if (!endStr) return;
+    const end = new Date(endStr + 'T12:00:00');
+    if (end < today) {
+      el.textContent = 'Expired';
+      el.classList.add('expiry-expired');
+    } else if (end <= soon) {
+      el.textContent = 'Expiring Soon';
+      el.classList.add('expiry-soon');
+    } else {
+      el.textContent = 'Until ' + endStr;
+      el.classList.add('expiry-active');
+    }
+  });
+})();
 </script>
 {% endblock %}

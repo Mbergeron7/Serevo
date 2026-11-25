@@ -450,6 +450,8 @@ class Accommodation(db.Model):
             "Shift Start": self.shift_start,
             "Shift End": self.shift_end,
             "Notes": self.notes,
+            "Start Date": self.start_date.isoformat() if self.start_date else "",
+            "End Date": self.end_date.isoformat() if self.end_date else "",
             "Updated": self.updated_at.strftime("%Y-%m-%d %H:%M") if self.updated_at else "",
         }
 

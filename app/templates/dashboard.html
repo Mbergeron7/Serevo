@@ -55,8 +55,8 @@
   {% if not stats or stats.total_employees == 0 %}
   {% set s = setup or {} %}
   {% set steps = [
-    (s.get('has_units', false), '/settings/planning-units', 'Set up Planning Units', 'Define your lines of business and teams. Each planning unit represents a group you schedule and forecast independently.', none),
-    (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to planning units and set their skills.', '/data/'),
+    (s.get('has_units', false), '/settings/planning-units', 'Set up LOBs', 'Define your lines of business and teams. Each LOB represents a group you schedule and forecast independently.', none),
+    (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to LOBs and set their skills.', '/data/'),
     (s.get('has_sheets', false), '/settings/google-sheets', 'Connect Google Sheets', 'Link your Google Sheet for real-time call data sync. This powers live monitoring and interval reports.', none),
     (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to planning units so call volume flows to the right LOB.', none),
     (s.get('has_history', false), '/data/bulk-actuals', 'Import Historical Data', 'Upload past call volume data to build accurate forecasts. At least 4-8 weeks recommended.', '/data/'),
@@ -106,6 +106,17 @@
       <div class="card"><div class="stat-val">{{ stats.planning_units }}</div><div class="stat-label">LOBs</div></div>
       <div class="card"><div class="stat-val">{{ stats.pto_today }}</div><div class="stat-label">On PTO Today</div></div>
       <div class="card"><div class="stat-val">{{ stats.clocked_in or 0 }}</div><div class="stat-label">Clocked In Now</div></div>
+      {% if coverage_stats %}
+      <div class="card" style="{% if coverage_stats.avg_pct is not none and coverage_stats.avg_pct < 90 %}border-left:3px solid #dc2626;{% elif coverage_stats.avg_pct is not none and coverage_stats.avg_pct < 95 %}border-left:3px solid #f59e0b;{% elif coverage_stats.avg_pct is not none %}border-left:3px solid #16a34a;{% endif %}">
+        <div class="stat-val">{{ coverage_stats.avg_pct|default('—', true) }}{% if coverage_stats.avg_pct is not none %}%{% endif %}</div>
+        <div class="stat-label">Coverage Today</div>
+        {% if coverage_stats.at_risk %}
+        <div style="font-size:.7rem; color:#dc2626; margin-top:4px;">⚠ {{ coverage_stats.at_risk|length }} LOB{{ 's' if coverage_stats.at_risk|length != 1 }} at risk</div>
+        {% elif coverage_stats.avg_pct is none %}
+        <div style="font-size:.7rem; color:var(--text-muted); margin-top:4px;">No schedules today</div>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </div>
   {% endif %}

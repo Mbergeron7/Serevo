@@ -93,11 +93,24 @@
   </div>
 </div>
 
-<!-- ═══ Hours This Week ═══ -->
+<!-- ═══ Today at a Glance + Hours This Week ═══ -->
 <div class="p-card" style="margin-bottom:16px;">
-  <div class="p-card-header">Hours This Week <span id="weeklyTotal" style="font-weight:800; color:var(--brand-accent);"></span></div>
-  <div class="p-card-body" id="weeklyHoursBody" style="padding:12px 20px;">
-    <p class="empty-msg" style="padding:4px 0;">Loading…</p>
+  <div class="p-card-body" style="padding:16px 20px;">
+    <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:stretch;">
+      <!-- Today's shift -->
+      <div id="todayGlance" style="flex:1; min-width:220px;">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:700; margin-bottom:6px;">Today</div>
+        <div id="todayShiftInfo" style="font-size:1rem; font-weight:700; color:var(--text);">Loading…</div>
+        <div id="todayNextActivity" style="font-size:.82rem; color:var(--text-muted); margin-top:4px;"></div>
+      </div>
+      <!-- Weekly hours -->
+      <div style="flex:2; min-width:260px;">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:700; margin-bottom:6px;">This Week <span id="weeklyTotal" style="font-weight:800; color:var(--brand-accent); text-transform:none; letter-spacing:0;"></span></div>
+        <div id="weeklyHoursBody" style="height:90px;">
+          <p class="empty-msg" style="padding:4px 0;">Loading…</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -105,19 +118,14 @@
 <div id="announceBanner" style="display:none; margin-bottom:16px;"></div>
 
 <div class="p-tabs">
-  <button class="active" onclick="switchTab('schedule', this)">📅 My Schedule</button>
-  <button onclick="switchTab('shifts', this)">📋 Open Shifts</button>
-  <button onclick="switchTab('swaps', this)">🔄 Shift Swaps</button>
-  <button onclick="switchTab('vto', this)">🕐 VTO / OT</button>
-  <button onclick="switchTab('mybids', this)">⭐ Open Shift Bids</button>
-  <button onclick="switchTab('shiftbidding', this); loadBiddingWindows();">🎯 Shift Bidding</button>
-  <button onclick="switchTab('balances', this)">📊 My Balances</button>
-  <button onclick="switchTab('quality', this)">🏆 My Quality</button>
-  <button onclick="switchTab('punches', this); loadPunchHistory();">🕑 My Punches</button>
-  <button onclick="switchTab('badges', this); loadBadges();">🎖 Badges</button>
+  <button class="active" onclick="switchTabGroup('schedule', this)">📅 My Schedule</button>
+  <button onclick="switchTabGroup('timeoff', this)">🕐 Time Off</button>
+  <button onclick="switchTabGroup('market', this); loadBiddingWindows();">🔄 Shift Market</button>
+  <button onclick="switchTabGroup('performance', this); loadBadges();">📊 Performance</button>
+  <button onclick="switchTabGroup('punches', this); loadPunchHistory();">⏱ My Punches</button>
 </div>
 
-<!-- ═══ My Schedule Panel ═══ -->
+<!-- ═══ My Schedule ═══ -->
 <div class="p-panel active" id="pp-schedule">
   <div class="p-card">
     <div class="p-card-header">
@@ -136,8 +144,7 @@
     </div>
   </div>
 </div>
-
-<!-- ═══ Open Shifts Panel ═══ -->
+<!-- ═══ Open Shifts ═══ -->
 <div class="p-panel" id="pp-shifts">
   <div class="p-card">
     <div class="p-card-header">Available Open Shifts
@@ -149,7 +156,7 @@
   </div>
 </div>
 
-<!-- ═══ Shift Swaps Panel ═══ -->
+<!-- ═══ Shift Swaps ═══ -->
 <div class="p-panel" id="pp-swaps">
   <div class="p-card">
     <div class="p-card-header">Swap Board
@@ -164,7 +171,7 @@
   </div>
 </div>
 
-<!-- ═══ VTO / OT Panel ═══ -->
+<!-- ═══ VTO / OT ═══ -->
 <div class="p-panel" id="pp-vto">
   <div class="p-card">
     <div class="p-card-header">Voluntary Time Off & Overtime Board
@@ -176,7 +183,7 @@
   </div>
 </div>
 
-<!-- ═══ Open Shift Bids Panel ═══ -->
+<!-- ═══ Open Shift Bids ═══ -->
 <div class="p-panel" id="pp-mybids">
   <div class="p-card">
     <div class="p-card-header">Open Shift Bids</div>
@@ -320,6 +327,9 @@
         <label>Note (optional)</label>
         <textarea id="pto_note" rows="2" style="resize:vertical;"></textarea>
       </div>
+      <div id="ptoDensityHint" style="display:none; padding:8px 12px; margin-top:4px; border-radius:6px; background:var(--warning-bg, #fef9c3); border:1px solid var(--warning-border, #f59e0b); font-size:.78rem; color:var(--warning-text, #854d0e);">
+        💡 <strong>Tip:</strong> Check with your supervisor about team availability before requesting popular dates like holidays or long weekends.
+      </div>
       <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
         <button type="button" class="btn btn-outline" onclick="closePtoModal()">Cancel</button>
         <button type="submit" class="btn btn-primary">Submit Request</button>
@@ -381,6 +391,8 @@ async function loadSchedule() {
     const scheds = data.schedules || [];
     if (!scheds.length) {
       el.innerHTML = '<p class="empty-msg">No shifts scheduled this week.</p>';
+      document.getElementById('todayShiftInfo').textContent = 'No shift today';
+      document.getElementById('todayShiftInfo').style.color = 'var(--text-muted)';
       return;
     }
     const SEG_COLORS = {'on-call':'#059669','On-Call':'#059669','break':'#f59e0b','Break':'#f59e0b','lunch':'#ef4444','Lunch':'#ef4444','meeting':'#8b5cf6','Meeting':'#8b5cf6','training':'#3b82f6','Training':'#3b82f6','other':'#6b7280','Other':'#6b7280'};
@@ -422,17 +434,71 @@ async function loadSchedule() {
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
+
+    // ── Populate "Today at a Glance" card ──
+    const todayStr = fmtDate(new Date());
+    const todayInfo = document.getElementById('todayShiftInfo');
+    const todayNext = document.getElementById('todayNextActivity');
+    const todaySched = scheds.find(s => s.date === todayStr);
+    if (todaySched && todaySched.status !== 'off' && todaySched.status !== 'pto') {
+      const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const d = new Date();
+      todayInfo.innerHTML = dayNames[d.getDay()] + ' &mdash; <span style="color:var(--brand-accent);">' + esc(todaySched.start || '') + ' – ' + esc(todaySched.end || '') + '</span> <span style="font-size:.82rem; font-weight:400; color:var(--text-muted);">(' + (todaySched.hours || 0) + 'h)</span>';
+      // Find next upcoming segment
+      const segs = todaySched.segments || [];
+      if (segs.length) {
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const upcoming = segs.filter(seg => {
+          const parts = (seg.start || '').split(':');
+          return parts.length === 2 && (parseInt(parts[0]) * 60 + parseInt(parts[1])) > nowMins;
+        });
+        if (upcoming.length) {
+          const next = upcoming[0];
+          todayNext.textContent = 'Next: ' + (next.type || 'Activity') + ' at ' + (next.start || '');
+        } else {
+          todayNext.textContent = 'All activities completed';
+        }
+      } else {
+        todayNext.textContent = '';
+      }
+    } else if (todaySched && (todaySched.status === 'pto')) {
+      todayInfo.textContent = 'Time Off';
+      todayInfo.style.color = 'var(--text-muted)';
+      todayNext.textContent = '';
+    } else {
+      todayInfo.textContent = 'No shift today';
+      todayInfo.style.color = 'var(--text-muted)';
+      todayNext.textContent = '';
+    }
   } catch(err) {
     el.innerHTML = '<p class="empty-msg">Error loading schedule.</p>';
+    document.getElementById('todayShiftInfo').textContent = '—';
   }
 }
 
-function switchTab(id, btn) {
+// Tab groups map consolidated tabs to their panel IDs
+const TAB_GROUPS = {
+  schedule:    ['pp-schedule'],
+  timeoff:     ['pp-balances'],
+  market:      ['pp-shifts', 'pp-swaps', 'pp-vto', 'pp-mybids', 'pp-shiftbidding'],
+  performance: ['pp-quality', 'pp-badges'],
+  punches:     ['pp-punches'],
+};
+
+function switchTabGroup(groupId, btn) {
   document.querySelectorAll('.p-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.p-tabs button').forEach(b => b.classList.remove('active'));
-  document.getElementById('pp-' + id).classList.add('active');
+  const panels = TAB_GROUPS[groupId] || [];
+  panels.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  });
   btn.classList.add('active');
 }
+
+// Legacy support — old switchTab calls still work
+function switchTab(id, btn) { switchTabGroup(id, btn); }
 
 async function api(url, body={}) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
@@ -683,6 +749,27 @@ function openPtoModal() {
   document.getElementById('pto_start').value = today;
   document.getElementById('pto_end').value = today;
   document.getElementById('pto_note').value = '';
+  document.getElementById('ptoDensityHint').style.display = 'none';
+  // Show density hint when dates are selected
+  const _showHintIfNeeded = () => {
+    const s = document.getElementById('pto_start').value;
+    const e = document.getElementById('pto_end').value;
+    if (s && e) {
+      const start = new Date(s + 'T12:00:00');
+      const end = new Date(e + 'T12:00:00');
+      const days = Math.round((end - start) / 86400000) + 1;
+      // Show hint for requests > 2 days or on Fri-Mon (long weekends)
+      const startDay = start.getDay();
+      const isLongWeekend = (startDay === 5 || startDay === 1) && days >= 2;
+      if (days > 2 || isLongWeekend) {
+        document.getElementById('ptoDensityHint').style.display = 'block';
+      } else {
+        document.getElementById('ptoDensityHint').style.display = 'none';
+      }
+    }
+  };
+  document.getElementById('pto_start').addEventListener('change', _showHintIfNeeded);
+  document.getElementById('pto_end').addEventListener('change', _showHintIfNeeded);
   document.getElementById('ptoModal').style.display = 'flex';
 }
 function closePtoModal() { document.getElementById('ptoModal').style.display = 'none'; }

@@ -12,35 +12,60 @@
     <input id="helpSearch" type="text" placeholder="Search help topics…" oninput="filterHelp()" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--surface);color:var(--text-primary);box-sizing:border-box;">
   </div>
 
-  <!-- Quick links -->
-  <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
-    <a href="#getting-started" class="help-chip" onclick="openSection('getting-started')">Getting Started</a>
-    <a href="#user-roles" class="help-chip" onclick="openSection('user-roles')">Roles</a>
-    <a href="#dashboard" class="help-chip" onclick="openSection('dashboard')">Dashboard</a>
-    <a href="#people" class="help-chip" onclick="openSection('people')">People</a>
-    <a href="#scheduling" class="help-chip" onclick="openSection('scheduling')">Scheduling</a>
-    <a href="#specialty-schedules" class="help-chip" onclick="openSection('specialty-schedules')">Specialty Schedules</a>
-    <a href="#shift-swaps" class="help-chip" onclick="openSection('shift-swaps')">Shift Swaps</a>
-    <a href="#forecasting" class="help-chip" onclick="openSection('forecasting')">Forecasting</a>
-    <a href="#capacity" class="help-chip" onclick="openSection('capacity')">Capacity</a>
-    <a href="#realtime" class="help-chip" onclick="openSection('realtime')">Real-Time</a>
-    <a href="#attendance" class="help-chip" onclick="openSection('attendance')">Attendance</a>
-    <a href="#quality" class="help-chip" onclick="openSection('quality')">Quality</a>
-    <a href="#approvals" class="help-chip" onclick="openSection('approvals')">Approvals</a>
-    <a href="#reports" class="help-chip" onclick="openSection('reports')">Reports</a>
-    <a href="#payroll" class="help-chip" onclick="openSection('payroll')">Payroll</a>
-    <a href="#training" class="help-chip" onclick="openSection('training')">Training</a>
-    <a href="#wfm-tickets" class="help-chip" onclick="openSection('wfm-tickets')">Tickets</a>
-    <a href="#settings" class="help-chip" onclick="openSection('settings')">Settings</a>
-    <a href="#shift-notes" class="help-chip" onclick="openSection('shift-notes')">Shift Notes</a>
-    <a href="#team-calendar" class="help-chip" onclick="openSection('team-calendar')">Calendar</a>
-    <a href="#announcements" class="help-chip" onclick="openSection('announcements')">Announcements</a>
-    <a href="#documents" class="help-chip" onclick="openSection('documents')">Documents</a>
-    <a href="#data-import" class="help-chip" onclick="openSection('data-import')">Data Import</a>
-    <a href="#global-search" class="help-chip" onclick="openSection('global-search')">Search</a>
-    <a href="#audit-log" class="help-chip" onclick="openSection('audit-log')">Audit Log</a>
-    <a href="#agent-portal" class="help-chip" onclick="openSection('agent-portal')">Agent Portal</a>
-    <a href="#support" class="help-chip" onclick="openSection('support')">Support</a>
+  <!-- Common Tasks FAQ -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:24px;">
+    <h3 style="margin:0 0 12px;font-size:.9rem;color:var(--text);">Common Tasks</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;">
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I generate a schedule?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">Go to <strong>Scheduling</strong>, select a LOB and date range, then click <strong>Generate</strong>. Review the shifts and coverage, then click <strong>Save</strong> to publish. <a href="#scheduling" onclick="openSection('scheduling')">Learn more</a></p></details>
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I add a coaching session?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">Open a shift in the schedule, click <strong>+ Add Segment</strong>, choose the activity type (e.g. coaching), and set the start/end times. The coverage heatmap updates immediately. <a href="#scheduling" onclick="openSection('scheduling')">Learn more</a></p></details>
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I approve time off?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">Go to <strong>People &rarr; Time Off</strong>. Pending requests show at the top. Click a request to review, then approve or deny. <a href="#people" onclick="openSection('people')">Learn more</a></p></details>
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I run the optimizer?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">With a schedule loaded, click the <strong>Optimize</strong> button in the toolbar. It redistributes breaks and lunches to maximize coverage. <a href="#scheduling" onclick="openSection('scheduling')">Learn more</a></p></details>
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I set up shift bidding?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">Go to <strong>Scheduling &rarr; Shift Bidding</strong>. Select a LOB and dates, generate shifts, then follow the step-by-step workflow to open bidding and run the lottery. <a href="#shift-bidding" onclick="openSection('shift-bidding')">Learn more</a></p></details>
+      <details style="font-size:.85rem;"><summary style="cursor:pointer;font-weight:600;padding:4px 0;">How do I log an absence?</summary><p style="margin:6px 0 0;color:var(--text-muted);font-size:.82rem;">Go to <strong>Workforce &rarr; Attendance</strong>. Select the date and LOB, then code the event (late, absence, early leave) for the employee. <a href="#attendance" onclick="openSection('attendance')">Learn more</a></p></details>
+    </div>
+  </div>
+
+  <!-- Quick links (grouped) -->
+  <div style="margin-bottom:24px;">
+    <div style="margin-bottom:6px;"><span style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;">Schedule Management</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <a href="#scheduling" class="help-chip" onclick="openSection('scheduling')">Scheduling</a>
+      <a href="#specialty-schedules" class="help-chip" onclick="openSection('specialty-schedules')">Specialty Schedules</a>
+      <a href="#shift-swaps" class="help-chip" onclick="openSection('shift-swaps')">Shift Swaps</a>
+      <a href="#team-calendar" class="help-chip" onclick="openSection('team-calendar')">Calendar</a>
+      <a href="#shift-notes" class="help-chip" onclick="openSection('shift-notes')">Shift Notes</a>
+    </div>
+    <div style="margin-bottom:6px;"><span style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;">Workforce Planning</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <a href="#forecasting" class="help-chip" onclick="openSection('forecasting')">Forecasting</a>
+      <a href="#capacity" class="help-chip" onclick="openSection('capacity')">Capacity</a>
+      <a href="#realtime" class="help-chip" onclick="openSection('realtime')">Real-Time</a>
+      <a href="#attendance" class="help-chip" onclick="openSection('attendance')">Attendance</a>
+    </div>
+    <div style="margin-bottom:6px;"><span style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;">People & HR</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <a href="#people" class="help-chip" onclick="openSection('people')">People</a>
+      <a href="#quality" class="help-chip" onclick="openSection('quality')">Quality</a>
+      <a href="#training" class="help-chip" onclick="openSection('training')">Training</a>
+      <a href="#approvals" class="help-chip" onclick="openSection('approvals')">Approvals</a>
+      <a href="#agent-portal" class="help-chip" onclick="openSection('agent-portal')">Agent Portal</a>
+    </div>
+    <div style="margin-bottom:6px;"><span style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;">Administration</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <a href="#getting-started" class="help-chip" onclick="openSection('getting-started')">Getting Started</a>
+      <a href="#user-roles" class="help-chip" onclick="openSection('user-roles')">Roles</a>
+      <a href="#dashboard" class="help-chip" onclick="openSection('dashboard')">Dashboard</a>
+      <a href="#settings" class="help-chip" onclick="openSection('settings')">Settings</a>
+      <a href="#reports" class="help-chip" onclick="openSection('reports')">Reports</a>
+      <a href="#payroll" class="help-chip" onclick="openSection('payroll')">Payroll</a>
+      <a href="#wfm-tickets" class="help-chip" onclick="openSection('wfm-tickets')">Tickets</a>
+      <a href="#data-import" class="help-chip" onclick="openSection('data-import')">Data Import</a>
+      <a href="#documents" class="help-chip" onclick="openSection('documents')">Documents</a>
+      <a href="#announcements" class="help-chip" onclick="openSection('announcements')">Announcements</a>
+      <a href="#audit-log" class="help-chip" onclick="openSection('audit-log')">Audit Log</a>
+      <a href="#global-search" class="help-chip" onclick="openSection('global-search')">Search</a>
+      <a href="#support" class="help-chip" onclick="openSection('support')">Support</a>
+    </div>
   </div>
 
   <!-- Sections -->
@@ -72,7 +97,7 @@
       <p>Sessions last 8 hours. After that, you'll need to sign in again.</p>
 
       <h3>Navigation</h3>
-      <p>The top navigation bar is organized into dropdown menus: <strong>Scheduling</strong> (Scheduling, Specialty Schedules, Shift Bidding, Team Calendar, Accommodations, PTO, VTO/OT, Configuration), <strong>Workforce</strong> (Forecasting, Capacity, Real-Time, Attendance), <strong>People</strong> (Roster, Leave of Absence, Quality, Training), <strong>Tools</strong> (Approvals, Shift Notes, WFM Tickets, Payroll, Reports), and <strong>Admin</strong> (Data Import, API Integration, Data Sources, Documents, Announcements, Audit Log, Settings).</p>
+      <p>The top navigation bar is organized into dropdown menus: <strong>Scheduling</strong> (Scheduling, Specialty Schedules, Shift Bidding, Team Calendar, Configuration), <strong>Workforce</strong> (Forecasting, Capacity, Real-Time, VTO/OT, Attendance), <strong>People</strong> (Roster, Leave of Absence, Accommodations, Time Off, Quality, Training), <strong>Tools</strong> (Approvals, Shift Notes, WFM Tickets, Payroll, Reports), and <strong>Admin</strong> (Data Import, API Integration, Data Sources, Documents, Announcements, Audit Log, Settings).</p>
       <p>Click your <strong>name</strong> in the top right for <strong>My Portal</strong>, <strong>Help</strong>, <strong>Support</strong>, and <strong>Sign Out</strong>.</p>
       <p>Use the search bar (or press <kbd>Ctrl+K</kbd> / <kbd>&#8984;K</kbd>) to quickly find employees, pages, or actions.</p>
 
@@ -118,19 +143,17 @@
         <li>Approve or deny shift bidding selections (if delegated by admin)</li>
         <li>Create and edit schedules for their team</li>
         <li>Post shift notes and announcements</li>
-        <li>Access their own agent portal (My Schedule, My Time Off, clock in/out)</li>
+        <li>Access their own agent portal (My Schedule, Time Off, Shift Market, clock in/out)</li>
       </ul>
       <p>Supervisors cannot change system settings, manage user accounts, or access the audit log.</p>
 
       <h3>Agent</h3>
       <p>Access is limited to the personal agent portal. Agents can:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>View their own schedule in <strong>My Schedule</strong></li>
-        <li>Request time off in <strong>My Time Off</strong> and view request status</li>
-        <li>Clock in and out from the <strong>Self-Service</strong> portal</li>
-        <li>Browse and bid on open shifts posted by admins/supervisors</li>
-        <li>Request shift swaps with other agents or accept open swap requests</li>
-        <li>Sign up for VTO (voluntary time off) or OT (overtime) opportunities</li>
+        <li>View their own schedule and today's shift at a glance in <strong>My Schedule</strong></li>
+        <li>Request time off and view balances in the <strong>Time Off</strong> tab</li>
+        <li>Clock in and out from the portal</li>
+        <li>Browse open shifts, shift swaps, VTO/OT, and shift bidding in the <strong>Shift Market</strong> tab</li>
         <li>View announcements and personal training assignments</li>
         <li>Submit WFM support tickets</li>
       </ul>
@@ -520,7 +543,7 @@
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Agent Workflow</h4>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Open your <strong>Agent Portal</strong> and go to the <strong>Shift Bidding</strong> tab.</li>
+        <li>Open your <strong>Agent Portal</strong> and go to the <strong>Shift Market</strong> tab.</li>
         <li>For <strong>bidding cycles</strong>: click on the open bidding window to see available shifts. Use the <strong>day tabs</strong> to navigate each day of the week. For each day, pick your <strong>1st choice</strong> and optionally a <strong>2nd choice</strong>. The progress bar shows how many days you've picked for. Click <strong>Submit All Preferences</strong> before the deadline.</li>
         <li>For <strong>open shifts</strong>: browse individual posted shifts and click <strong>Bid</strong> on any you want. Wait for the admin to select a winner.</li>
         <li>After the lottery runs, you'll be notified of your assigned shifts. They appear in <strong>My Schedule</strong>.</li>

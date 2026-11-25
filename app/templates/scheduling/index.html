@@ -220,6 +220,12 @@
     font-size: .72rem; color: var(--text-muted); border-radius: 3px;
   }
   .emp-action-btn:hover { background: var(--border); color: var(--text); }
+  .shift-reason-icon {
+    display: inline-block; margin-left: 4px; cursor: help;
+    font-size: .7rem; color: var(--brand-accent); opacity: .7;
+    vertical-align: middle;
+  }
+  .shift-reason-icon:hover { opacity: 1; }
 
   /* Attendance status indicators */
   .attn-badge { font-size:.62rem; padding:1px 5px; border-radius:3px; font-weight:700; margin-left:4px; white-space:nowrap; }
@@ -613,10 +619,10 @@
 {% if not lobs %}
 <div style="padding:2.5rem; text-align:center; color:var(--text-muted);">
   <div style="font-size:2rem; margin-bottom:.5rem;">📅</div>
-  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No planning units or employees yet</p>
-  <p style="font-size:.85rem; margin-bottom:1rem;">Set up planning units and add employees before generating schedules.</p>
+  <p style="font-size:1.1rem; margin-bottom:.5rem; color:var(--text-primary);">No LOBs or employees yet</p>
+  <p style="font-size:.85rem; margin-bottom:1rem;">Set up LOBs and add employees before generating schedules.</p>
   <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap;">
-    <a href="/settings/planning-units" class="btn btn-primary">Set Up Planning Units</a>
+    <a href="/settings/planning-units" class="btn btn-primary">Set Up LOBs</a>
     <a href="/people/" class="btn btn-outline">Add Employees</a>
   </div>
 </div>
@@ -663,8 +669,8 @@
       <div class="config-group">
         <label>Mode</label>
         <select id="cfgMode" title="What to do with schedules already saved for this LOB and date range" style="max-width:160px">
-          <option value="overwrite">Regenerate all</option>
-          <option value="fill">Fill gaps only</option>
+          <option value="overwrite">Overwrite — Replace all shifts</option>
+          <option value="fill">Fill Vacancies — Keep existing, fill empty slots</option>
         </select>
       </div>
 
@@ -684,9 +690,9 @@
 
       <!-- Tools group -->
       <span class="toolbar-group">
-        <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">Copy Wk</button>
-        <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">Mass</button>
-        <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">Bulk</button>
+        <button class="btn-action" id="btnCopyWeek" onclick="openCopyWeekModal()" style="background:#059669; color:#fff;">Copy Week</button>
+        <button class="btn-action" id="btnMassUpdate" onclick="openMassModal()" style="background:#7c3aed; color:#fff;">Mass Activity</button>
+        <button class="btn-action" id="btnBulkEdit" onclick="openBulkEditModal()" style="background:#2563eb; color:#fff;">Bulk Edit</button>
         <button class="btn-action" id="btnOptimize" onclick="runQuickOptimize()" style="background:#0891b2; color:#fff;">Optimize</button>
         <button class="btn-action" onclick="openOptimizeModal()" style="background:#0891b2; color:#fff; padding:3px 5px;" title="Customize optimization">⚙</button>
       </span>
@@ -787,7 +793,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-num" id="statCoverage">0%</div>
-        <div class="stat-label">Coverage</div>
+        <div class="stat-label">Coverage <span id="statCoverageTarget" style="font-size:.72rem; color:var(--text-muted);"></span></div>
       </div>
       <div class="stat-card">
         <div class="stat-num" id="statDays">0</div>
@@ -805,6 +811,10 @@
 
     <!-- Inline warnings -->
     <div class="inline-warnings" id="globalWarnings"></div>
+    <div id="schedNextStep" style="display:none; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--brand-accent); border-radius:6px; font-size:.82rem; color:var(--text-muted); margin-top:8px;">
+      📡 <strong>Schedules saved</strong> — monitor adherence in
+      <a href="/realtime/" style="color:var(--brand-accent); text-decoration:none; font-weight:600;">Real-Time →</a>
+    </div>
   </div><!-- /sched-middle-bar -->
 
   <!-- ── HEAT MAP BAND (always visible, collapsible) ─────── -->
@@ -816,9 +826,9 @@
         <button onclick="toggleDemandCollapse()" style="background:none; border:none; color:#fff; cursor:pointer; font-size:.82rem; padding:2px 6px;" title="Collapse/expand heat map" id="demandCollapseBtn">▼</button>
       </div>
       <div class="demand-heatmap-tabs">
-        <button class="demand-tab active" data-dtab="demand" onclick="switchDemandTab('demand')">Demand</button>
-        <button class="demand-tab" data-dtab="coverage" onclick="switchDemandTab('coverage')">Coverage</button>
-        <button class="demand-tab" data-dtab="staffing" onclick="switchDemandTab('staffing')">Staffing</button>
+        <button class="demand-tab active" data-dtab="demand" onclick="switchDemandTab('demand')">Required</button>
+        <button class="demand-tab" data-dtab="coverage" onclick="switchDemandTab('coverage')">Coverage %</button>
+        <button class="demand-tab" data-dtab="staffing" onclick="switchDemandTab('staffing')">Scheduled</button>
       </div>
       <div class="demand-heatmap-body" id="demandHeatmapBody">
         <div class="demand-scroll">
@@ -833,7 +843,13 @@
 
   <!-- ── SCHEDULE GRID (fills remaining viewport, scrolls internally) ── -->
   <div class="sched-grid-zone" id="schedGridZone">
-    <div id="resultsContainer" style="padding:8px 16px;"></div>
+    <div id="resultsContainer" style="padding:8px 16px;">
+      <div id="emptyState" style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+        <div style="font-size:2.5rem; margin-bottom:12px;">📅</div>
+        <div style="font-size:1rem; font-weight:600; color:var(--text-primary); margin-bottom:8px;">No schedules loaded</div>
+        <div style="font-size:.85rem; max-width:400px; margin:0 auto;">Select a LOB and date range above, then click <strong>Generate</strong> to create shifts or <strong>Load Saved</strong> to view existing schedules.</div>
+      </div>
+    </div>
   </div><!-- /sched-grid-zone -->
 
 </div><!-- /sched-viewport -->
@@ -857,7 +873,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>Type</label>
-        <select id="addType"><option value="full">Full</option><option value="half">Half</option></select>
+        <select id="addType"><option value="full">Full Day (8.5h)</option><option value="half">Half Day (4.25h)</option></select>
       </div>
       <div class="form-group">
         <label>Template (optional)</label>
@@ -904,8 +920,8 @@
       <div class="form-group">
         <label>Type</label>
         <select id="editType">
-          <option value="full">Full</option>
-          <option value="half">Half</option>
+          <option value="full">Full Day (8.5h)</option>
+          <option value="half">Half Day (4.25h)</option>
         </select>
       </div>
       <div class="form-group">
@@ -1030,11 +1046,16 @@
       <div class="form-group">
         <label>Segment Type</label>
         <select id="massSegType">
+          {% for sc in segment_codes %}
+          <option value="{{ sc.code }}">{{ sc.label }}</option>
+          {% endfor %}
+          {% if not segment_codes %}
           <option value="break">Break</option>
           <option value="lunch">Lunch</option>
           <option value="meeting">Meeting</option>
           <option value="training">Training</option>
           <option value="other">Other</option>
+          {% endif %}
         </select>
       </div>
       <div class="form-group">
@@ -1851,6 +1872,10 @@ function fetchCoverageForDays(sd) {
         day.coverage = data.coverage;
         if (data.summary) day.summary = data.summary;
       }
+      // Store coverage target from first response that has one
+      if (data.coverage_target != null && !sd._coverageTarget) {
+        sd._coverageTarget = data.coverage_target;
+      }
     }).catch(() => {});
   });
   Promise.all(promises).then(() => {
@@ -1927,15 +1952,21 @@ function saveSchedule() {
           showResults();
         }
         showToast(totalSaved + ' shifts saved to database.', 'success');
+        _showNextStepBanner();
       })
       .catch(() => {
         hideLoading();
         showToast(totalSaved + ' shifts saved. Reload to update IDs.', 'success');
+        _showNextStepBanner();
       });
     }
   }).catch(e => { hideLoading(); showToast('Save failed: ' + e, 'error'); });
 }
 
+function _showNextStepBanner() {
+  const el = document.getElementById('schedNextStep');
+  if (el) { el.style.display = ''; setTimeout(() => { el.style.display = 'none'; }, 15000); }
+}
 
 // ═══════════════════════════════════════════════════════════
 // CLEAR SAVED SCHEDULES
@@ -1961,7 +1992,7 @@ function clearSchedule() {
     const tse2 = document.getElementById('toolbarSaveExport');
     if (tse2) tse2.style.display = 'none';
     document.getElementById('btnClear').style.display = 'none';
-    document.getElementById('resultsContainer').innerHTML = '';
+    document.getElementById('resultsContainer').innerHTML = '<div id="emptyState" style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div style="font-size:2.5rem; margin-bottom:12px;">📅</div><div style="font-size:1rem; font-weight:600; color:var(--text-primary); margin-bottom:8px;">No schedules loaded</div><div style="font-size:.85rem; max-width:400px; margin:0 auto;">Select a LOB and date range above, then click <strong>Generate</strong> to create shifts or <strong>Load Saved</strong> to view existing schedules.</div></div>';
     showToast((r.deleted || 0) + ' shifts cleared.', 'success');
   }).catch(e => { hideLoading(); showToast('Clear failed: ' + e, 'error'); });
 }
@@ -2125,6 +2156,9 @@ async function _loadAttendanceOverlay(startDate, endDate) {
 
 function showResults() {
   updateStats();
+  // Hide empty state
+  const emptyEl = document.getElementById('emptyState');
+  if (emptyEl) emptyEl.style.display = 'none';
   // Show middle bar (view tabs + stats + approvals)
   document.getElementById('schedMiddleBar').classList.add('visible');
   const tse = document.getElementById('toolbarSaveExport');
@@ -2178,9 +2212,18 @@ function updateStats() {
   const covEl = document.getElementById('statCoverage');
   const t = scheduleData.totals || {};
   const cov = t.avg_coverage_pct ?? 0;
+  const target = scheduleData._coverageTarget;
   covEl.textContent = cov + '%';
-  covEl.className = 'stat-num ' + (cov >= 95 ? 'good' :
-                                     cov >= 80 ? 'warn' : 'danger');
+  // Color based on target if available, otherwise use default thresholds
+  if (target) {
+    covEl.className = 'stat-num ' + (cov >= target ? 'good' :
+                                       cov >= target * 0.9 ? 'warn' : 'danger');
+    document.getElementById('statCoverageTarget').textContent = '(Target: ' + target + '%)';
+  } else {
+    covEl.className = 'stat-num ' + (cov >= 95 ? 'good' :
+                                       cov >= 80 ? 'warn' : 'danger');
+    document.getElementById('statCoverageTarget').textContent = '';
+  }
 }
 
 function switchView(view) {
@@ -2261,7 +2304,7 @@ function renderTimelineView(container) {
       const origIdx = shift._origIdx != null ? shift._origIdx : shiftIdx;
       html += `<div class="tl-row ${attnTlClass(shift)}" data-day="${dayIdx}" data-shift="${origIdx}">
         <div class="tl-emp-name">
-          <span>${shift.employee}${attnBadge(shift)}</span>
+          <span>${shift.employee}${attnBadge(shift)}${shift.reason ? `<span class="shift-reason-icon" title="${shift.reason.replace(/"/g,'&quot;')}">ℹ</span>` : ''}</span>
           <span class="emp-actions">
             <button class="emp-action-btn" title="Edit shift" data-sid="${shift.id||''}" onclick="openEditModal(${dayIdx},${origIdx},this.dataset.sid)">&#9998;</button>
             <button class="emp-action-btn" title="Mark absent" onclick="showAbsencePopup(event,${dayIdx},${origIdx})" style="color:#dc2626">✕</button>
@@ -2512,6 +2555,17 @@ function openAddModal(dayIdx) {
   if (SHIFT_TEMPLATES) fill();
   else fetch('/scheduling/shift-templates', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
     .then(r => r.json()).then(d => { SHIFT_TEMPLATES = d.templates || []; fill(); }).catch(() => { SHIFT_TEMPLATES = []; fill(); });
+  // Smart defaults: use first shift's start time or LOB business hours instead of 09:00-17:30
+  const existingShifts = day.shifts || [];
+  if (existingShifts.length) {
+    const starts = existingShifts.map(s => s.start).filter(Boolean);
+    document.getElementById('addStart').value = starts.length ? starts.sort()[0] : '09:00';
+    const ends = existingShifts.map(s => s.end).filter(Boolean);
+    document.getElementById('addEnd').value = ends.length ? ends.sort().pop() : '17:30';
+  } else {
+    document.getElementById('addStart').value = '09:00';
+    document.getElementById('addEnd').value = '17:30';
+  }
   document.getElementById('addModal').classList.add('show');
 }
 function closeAddModal() { document.getElementById('addModal').classList.remove('show'); }
@@ -4918,7 +4972,7 @@ function renderDemandHeatmap() {
 
   if (showDaily) {
     subtitle.textContent = `${startStr} — ${tabLabel} per interval`;
-    thead.innerHTML = '<tr><th>Planning Unit</th>' +
+    thead.innerHTML = '<tr><th>LOB</th>' +
       times.map(t => `<th>${t}</th>`).join('') +
       '<th>Peak</th><th>Avg</th></tr>';
   } else {
@@ -4927,7 +4981,7 @@ function renderDemandHeatmap() {
       const dt = new Date(d + 'T12:00:00');
       return dt.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
     });
-    thead.innerHTML = '<tr><th>Planning Unit</th>' +
+    thead.innerHTML = '<tr><th>LOB</th>' +
       dayLabels.map(l => `<th>${l}</th>`).join('') +
       '<th>Peak</th><th>Avg</th></tr>';
   }

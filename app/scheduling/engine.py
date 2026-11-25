@@ -1523,6 +1523,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             # Check for rotation-assigned or shift-sequence-assigned shift
             db_id = _resolve_employee_db_id(emp.get("employee_id"))
             rot_shift = _get_shift_sequence_shift(db_id, date_obj) if db_id else None
+            shift_reason = ""
             if rot_shift and rot_shift.get("off"):
                 skip_reasons.append(f"{emp['name']}: rotation '{rot_shift.get('name')}' day off")
                 unassigned.append(emp["name"])
@@ -1533,6 +1534,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 end = rot_shift["end"].strftime("%H:%M") if hasattr(rot_shift["end"], "strftime") else str(rot_shift["end"])[:5]
                 hours = rot_shift.get("hours", shift_length_hrs)
                 stype = rot_shift.get("type", "full")
+                shift_reason = f"Shift sequence: {rot_shift.get('name', '')} ({start}-{end})"
             else:
                 # Check WTPM eligible shifts → quartile entity → contract allowed shifts
                 wtpm_shifts = _get_wtpm_eligible_shifts(db_id, date_obj) if db_id else []
@@ -1557,6 +1559,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         end = chosen_dm["end_time"]
                         hours = chosen_dm.get("total_hours", shift_length_hrs)
                         stype = "full"
+                        shift_reason = f"Day model: {chosen_dm.get('name', '')} ({start}-{end})"
                     else:
                         wtpm_shifts = []  # fall through to standard
 
@@ -1573,6 +1576,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         hours = lob_ss.get("hours", shift_length_hrs)
                         stype = lob_ss.get("type", "full")
                         wtpm_shifts = [lob_ss]  # mark as resolved
+                        shift_reason = f"LOB shift sequence: {lob_ss.get('name', '')} ({start}-{end})"
 
                 if not wtpm_shifts:
                     start = avail.get("shift_start") or default_start
@@ -1586,17 +1590,24 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                         end = _minutes_to_time(end_mins)
                         hours = shift_length_hrs / 2
                         stype = "half"
+                        shift_reason = f"Accommodation: half day ({start}-{end})"
                     else:
                         end_mins = _time_to_minutes(start) + shift_length_mins
                         end = avail.get("shift_end") or _minutes_to_time(end_mins)
                         hours = shift_length_hrs
                         stype = "full"
+                        if avail.get("shift_start") or avail.get("shift_end"):
+                            shift_reason = f"Accommodation: restricted to {start}-{end}"
+                        else:
+                            shift_reason = f"Default: LOB hours {default_start}-{default_end}"
                 # Cap end time at latest_end
                 if avail.get("latest_end"):
                     le_min = _time_to_minutes(avail["latest_end"])
                     if _time_to_minutes(end) > le_min:
                         end = avail["latest_end"]
                         hours = round((_time_to_minutes(end) - _time_to_minutes(start)) / 60, 1)
+                        if "Accommodation" not in shift_reason:
+                            shift_reason = f"Accommodation: capped at {end} latest end"
             eff = _emp_effectiveness(emp)
             shifts.append({
                 "employee": emp["name"],
@@ -1608,6 +1619,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 "status": "scheduled",
                 "team_lead": emp.get("team_lead", ""),
                 "effectiveness": eff,
+                "reason": shift_reason,
                 "segments": [],  # filled below with stagger
             })
 
@@ -1762,6 +1774,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
 
     shifts = []
     for emp, avail, rot_shift, wtpm_shifts, quartile in enriched:
+        shift_reason = ""
         # ── Priority 1: Rotation/shift sequence — static override ──
         if rot_shift:
             rs = rot_shift["start"]
@@ -1772,6 +1785,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             if length <= 0:
                 length = shift_length_mins
                 end_min = start_min + length
+            shift_reason = f"Shift sequence: {rot_shift.get('name', '')} ({_minutes_to_time(start_min)}-{_minutes_to_time(end_min)})"
 
         # ── Priority 2: WTPM day models — pick best-fitting eligible shift ──
         elif wtpm_shifts:
@@ -1814,6 +1828,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 best_dm, start_min, end_min, length, _ = candidates[0]
                 log.info(f"  WTPM: {emp['name']} → {best_dm['name']} "
                          f"({best_dm['start_time']}-{best_dm['end_time']})")
+                shift_reason = f"Day model: {best_dm['name']} ({best_dm['start_time']}-{best_dm['end_time']})"
             else:
                 # No WTPM day model fits availability — fall back to standard logic
                 log.info(f"  WTPM: {emp['name']} — no eligible day model fits availability, "
@@ -1850,6 +1865,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 if avail.get("shift_end"):
                     end_min = min(end_min, _time_to_minutes(avail["shift_end"]))
                     length = end_min - start_min
+                shift_reason = f"Accommodation: restricted to {_minutes_to_time(start_min)}-{_minutes_to_time(end_min)}"
             else:
                 # Find the best start time: maximize coverage of unmet demand
                 best_start = emp_possible_starts[0] if emp_possible_starts else ops_start_mins
@@ -1868,6 +1884,10 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
 
                 start_min = best_start
                 end_min = start_min + length
+                shift_reason = f"Optimized: best coverage at {_minutes_to_time(start_min)}-{_minutes_to_time(end_min)}"
+
+            if avail["day_type"] == "half":
+                shift_reason = f"Accommodation: half day ({_minutes_to_time(start_min)}-{_minutes_to_time(end_min)})"
 
             # Cap end time at latest_end from availability
             if avail.get("latest_end"):
@@ -1875,6 +1895,8 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
                 if end_min > le_min:
                     end_min = le_min
                     length = end_min - start_min
+                    if "Accommodation" not in shift_reason:
+                        shift_reason = f"Accommodation: capped at {_minutes_to_time(end_min)} latest end"
 
         # Record the shift — track effective headcount per interval
         eff = _emp_effectiveness(emp)
@@ -1894,6 +1916,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
             "status": "scheduled",
             "team_lead": emp.get("team_lead", ""),
             "effectiveness": eff,
+            "reason": shift_reason,
             "segments": [],  # filled below with stagger
         }
         if quartile:
@@ -2055,7 +2078,24 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     # Build scheduled count per interval (with optional proficiency weighting)
     # Non-productive segments (break, lunch, coaching, etc.) reduce the
     # available headcount during those intervals.
+    # Attendance events (absence, late, early leave) also affect coverage.
     scheduled_map = defaultdict(float)
+
+    # Load attendance events for this date to adjust coverage
+    _attendance_map = {}  # employee_id → list of events
+    try:
+        from app.models import AttendanceEvent, AdherenceException
+        events = AttendanceEvent.query.filter_by(event_date=date_obj).all()
+        for ev in events:
+            eid = ev.employee_id
+            exc = ev.adherence_exception
+            if exc:
+                _attendance_map.setdefault(eid, []).append({
+                    "category": exc.category,  # late, early_out, absence, break_overrun, other
+                    "code": exc.code,
+                })
+    except Exception as e:
+        log.debug(f"Attendance event lookup for coverage: {e}")
 
     # Cache which segment types are non-productive
     _nonprod_cache = {}
@@ -2076,6 +2116,25 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
         s_min = _time_to_minutes(shift["start"])
         e_min = _time_to_minutes(shift["end"])
         weight = shift.get("effectiveness", 1.0)
+
+        # Check attendance events for this employee
+        emp_id = shift.get("employee_id")
+        if emp_id and _attendance_map:
+            # Resolve DB id if we have an external employee_id
+            db_id = _resolve_employee_db_id(emp_id) if not isinstance(emp_id, int) else emp_id
+            emp_events = _attendance_map.get(db_id, [])
+            # Absence = skip this shift entirely (employee is not here)
+            if any(ev["category"] == "absence" for ev in emp_events):
+                continue
+            # Late = employee doesn't cover from shift start until a default late window
+            # (we don't have exact arrival time, so we mark the first hour as uncovered)
+            if any(ev["category"] == "late" for ev in emp_events):
+                late_end = min(s_min + 60, e_min)  # assume up to 1 hour late impact
+                s_min = late_end
+            # Early out = employee leaves early (reduce end by 1 hour)
+            if any(ev["category"] == "early_out" for ev in emp_events):
+                early_start = max(e_min - 60, s_min)
+                e_min = early_start
 
         # Build set of intervals where this employee is in a non-productive segment
         nonprod_intervals = set()
