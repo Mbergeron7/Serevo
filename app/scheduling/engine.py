@@ -2081,21 +2081,29 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
     # Attendance events (absence, late, early leave) also affect coverage.
     scheduled_map = defaultdict(float)
 
-    # Load attendance events for this date to adjust coverage
+    # Load attendance events and actual clock times for this date
     _attendance_map = {}  # employee_id → list of events
+    _clock_map = {}       # employee_id → {clock_in_min, clock_out_min}
     try:
-        from app.models import AttendanceEvent, AdherenceException
+        from app.models import AttendanceEvent, AdherenceException, TimeClock
         events = AttendanceEvent.query.filter_by(event_date=date_obj).all()
         for ev in events:
             eid = ev.employee_id
             exc = ev.adherence_exception
             if exc:
                 _attendance_map.setdefault(eid, []).append({
-                    "category": exc.category,  # late, early_out, absence, break_overrun, other
+                    "category": exc.category,
                     "code": exc.code,
                 })
+        # Load actual clock-in/out times for precise interval calculation
+        punches = TimeClock.query.filter_by(date=date_obj).all()
+        for p in punches:
+            if p.clock_in:
+                ci_min = p.clock_in.hour * 60 + p.clock_in.minute
+                co_min = (p.clock_out.hour * 60 + p.clock_out.minute) if p.clock_out else None
+                _clock_map[p.employee_id] = {"clock_in_min": ci_min, "clock_out_min": co_min}
     except Exception as e:
-        log.debug(f"Attendance event lookup for coverage: {e}")
+        log.debug(f"Attendance/clock lookup for coverage: {e}")
 
     # Cache which segment types are non-productive
     _nonprod_cache = {}
@@ -2119,22 +2127,30 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
 
         # Check attendance events for this employee
         emp_id = shift.get("employee_id")
-        if emp_id and _attendance_map:
+        if emp_id and (_attendance_map or _clock_map):
             # Resolve DB id if we have an external employee_id
             db_id = _resolve_employee_db_id(emp_id) if not isinstance(emp_id, int) else emp_id
             emp_events = _attendance_map.get(db_id, [])
+            clock = _clock_map.get(db_id)
             # Absence = skip this shift entirely (employee is not here)
             if any(ev["category"] == "absence" for ev in emp_events):
                 continue
-            # Late = employee doesn't cover from shift start until a default late window
-            # (we don't have exact arrival time, so we mark the first hour as uncovered)
+            # Late = use actual clock-in time if available, otherwise
+            # fall back to the interval the attendance was coded for
             if any(ev["category"] == "late" for ev in emp_events):
-                late_end = min(s_min + 60, e_min)  # assume up to 1 hour late impact
-                s_min = late_end
-            # Early out = employee leaves early (reduce end by 1 hour)
+                if clock and clock["clock_in_min"] > s_min:
+                    # Actual clock-in is after shift start — only the
+                    # missed intervals are uncovered (precise to interval)
+                    s_min = clock["clock_in_min"]
+                else:
+                    # No clock data — fall back to one interval (30 min)
+                    s_min = min(s_min + DEFAULT_INTERVAL_MINS, e_min)
+            # Early out = use actual clock-out time if available
             if any(ev["category"] == "early_out" for ev in emp_events):
-                early_start = max(e_min - 60, s_min)
-                e_min = early_start
+                if clock and clock["clock_out_min"] is not None and clock["clock_out_min"] < e_min:
+                    e_min = clock["clock_out_min"]
+                else:
+                    e_min = max(e_min - DEFAULT_INTERVAL_MINS, s_min)
 
         # Build set of intervals where this employee is in a non-productive segment
         nonprod_intervals = set()
