@@ -1381,14 +1381,29 @@ function renderAbsent(d) {
     </div>`;
   const coded = d.coded || [];
   if (coded.length) {
-    h += `<div class="wrap" style="margin-top:8px"><table class="rt sortable" id="_absTblCoded"><thead><tr><th>Employee</th><th style="text-align:left">Code</th><th style="text-align:left">Category</th><th>Excused</th><th style="text-align:left">Note</th><th>Coded by</th><th></th></tr></thead><tbody>`;
+    h += `<div style="margin-top:8px"><table class="rt sortable" id="_absTblCoded"><thead><tr><th>Employee</th><th style="text-align:left">Code</th><th style="text-align:left">Category</th><th>Excused</th><th style="text-align:left">Source</th><th style="text-align:left">Reason</th><th>Shift Window</th><th>Coded by</th><th></th></tr></thead><tbody>`;
     coded.forEach(c => {
+      // Parse note into source, reason, and shift window
+      // Format: "Auto: Not logged in (08:00–16:30)" or "Manual note text"
+      let noteSource = '', noteReason = '', noteShift = '';
+      const noteStr = c.note || '';
+      const autoMatch = noteStr.match(/^(Auto|Manual):\s*(.+?)(?:\s*\((\d{2}:\d{2}[–-]\d{2}:\d{2})\))?$/);
+      if (autoMatch) {
+        noteSource = autoMatch[1];
+        noteReason = autoMatch[2].trim();
+        noteShift = autoMatch[3] || '';
+      } else {
+        noteReason = noteStr;
+        noteSource = noteStr ? 'Manual' : '';
+      }
       h += `<tr>
         <td>${esc(c.employee_name)}</td>
         <td style="text-align:left"><span style="background:${esc(c.color)};color:#fff;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:600">${esc(c.code)}</span> ${esc(c.label)}</td>
         <td style="text-align:left">${esc(c.category)}</td>
         <td>${c.is_excused ? '✅ Yes' : '❌ No'}</td>
-        <td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.note)}</td>
+        <td style="text-align:left"><span style="background:${noteSource === 'Auto' ? '#dbeafe' : '#fef3c7'};color:${noteSource === 'Auto' ? '#1e40af' : '#92400e'};padding:2px 8px;border-radius:4px;font-size:.78rem">${esc(noteSource)}</span></td>
+        <td style="text-align:left">${esc(noteReason)}</td>
+        <td>${esc(noteShift)}</td>
         <td>${esc(c.coded_by)}</td>
         <td><button class="btn btn-xs" onclick="absDeleteEvent(${c.id})" title="Remove">🗑</button></td>
       </tr>`;
