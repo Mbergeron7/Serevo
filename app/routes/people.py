@@ -12,6 +12,7 @@ from datetime import datetime
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, abort)
 from app.auth import login_required, admin_required, get_current_user
+from app.constants import to_local
 from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
                         EmployeeContract, Selection, SelectionMember,
@@ -1268,8 +1269,8 @@ def profile_attendance():
         rows.append({
             "id": e.id,
             "date": e.date.isoformat() if e.date else "",
-            "clock_in": e.clock_in.strftime("%H:%M") if e.clock_in else "",
-            "clock_out": e.clock_out.strftime("%H:%M") if e.clock_out else "",
+            "clock_in": to_local(e.clock_in).strftime("%H:%M") if e.clock_in else "",
+            "clock_out": to_local(e.clock_out).strftime("%H:%M") if e.clock_out else "",
             "total_hours": e.total_hours,
             "status": e.status,
         })

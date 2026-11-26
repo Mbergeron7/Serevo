@@ -2099,8 +2099,13 @@ def analyze_coverage(lob, date_obj, shifts, sheet=None):
         punches = TimeClock.query.filter_by(date=date_obj).all()
         for p in punches:
             if p.clock_in:
-                ci_min = p.clock_in.hour * 60 + p.clock_in.minute
-                co_min = (p.clock_out.hour * 60 + p.clock_out.minute) if p.clock_out else None
+                from app.constants import to_local
+                ci_local = to_local(p.clock_in)
+                ci_min = ci_local.hour * 60 + ci_local.minute
+                co_min = None
+                if p.clock_out:
+                    co_local = to_local(p.clock_out)
+                    co_min = co_local.hour * 60 + co_local.minute
                 _clock_map[p.employee_id] = {"clock_in_min": ci_min, "clock_out_min": co_min}
     except Exception as e:
         log.debug(f"Attendance/clock lookup for coverage: {e}")

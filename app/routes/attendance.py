@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
 from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException
-from app.constants import DEFAULT_TIMEZONE
+from app.constants import DEFAULT_TIMEZONE, to_local
 
 log = logging.getLogger("serevo.attendance")
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")
@@ -233,7 +233,7 @@ def api_dashboard():
         if e.employee_id in sched_map and e.clock_in:
             sched_start = sched_map[e.employee_id]
             sched_start_str = sched_start.strftime("%H:%M")
-            ci_time = e.clock_in.time()
+            ci_time = to_local(e.clock_in).time()
             diff = (ci_time.hour * 60 + ci_time.minute) - (sched_start.hour * 60 + sched_start.minute)
             if diff > 0:
                 late_minutes = diff
@@ -245,8 +245,8 @@ def api_dashboard():
             "employee_name": emp.first_name + " " + emp.last_name if emp else "Unknown",
             "employee_id_str": emp.employee_id if emp else "",
             "lob": emp_lob,
-            "clock_in": e.clock_in.strftime("%H:%M") if e.clock_in else "",
-            "clock_out": e.clock_out.strftime("%H:%M") if e.clock_out else "",
+            "clock_in": to_local(e.clock_in).strftime("%H:%M") if e.clock_in else "",
+            "clock_out": to_local(e.clock_out).strftime("%H:%M") if e.clock_out else "",
             "total_hours": e.total_hours,
             "status": e.status,
             "scheduled_start": sched_start_str,

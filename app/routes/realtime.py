@@ -11,7 +11,7 @@ import threading
 
 from flask import (Blueprint, render_template, request, jsonify)
 from app.auth import login_required, get_current_user
-from app.constants import LOB_ALL_LABEL
+from app.constants import LOB_ALL_LABEL, to_local
 from app.utils.timezone import get_app_timezone
 
 log = logging.getLogger("serevo.realtime")
@@ -330,7 +330,7 @@ def _get_live_agents_from_sheet():
         )
         agent_now[uid] = {
             "status": last["status"],
-            "current_since": last["dt"].strftime("%H:%M"),
+            "current_since": to_local(last["dt"]).strftime("%H:%M"),
             "minutes_in_status": max(0, mins),
             "first_seen": first["dt"],  # for late detection
             "event_count": len(events),  # number of status events today
@@ -911,8 +911,8 @@ def _build_db_actuals(employee_id, date_obj, shift_start, shift_end):
                   .all())
         result = []
         for ev in events:
-            s = ev.start_ts.strftime("%H:%M")
-            e = ev.end_ts.strftime("%H:%M") if ev.end_ts else datetime.datetime.now().strftime("%H:%M")
+            s = to_local(ev.start_ts).strftime("%H:%M")
+            e = to_local(ev.end_ts).strftime("%H:%M") if ev.end_ts else to_local(datetime.datetime.now(datetime.timezone.utc)).strftime("%H:%M")
             status = (ev.status or "").lower()
             # Map ACD statuses to timeline types
             if status in ("available", "on call", "talking", "on-call"):
