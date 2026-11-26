@@ -1384,14 +1384,34 @@ function renderAbsent(d) {
     h += `<div style="margin-top:8px"><table class="rt sortable" id="_absTblCoded"><thead><tr><th>Employee</th><th style="text-align:left">Code</th><th style="text-align:left">Category</th><th>Excused</th><th style="text-align:left">Source</th><th style="text-align:left">Reason</th><th>Shift Window</th><th>Coded by</th><th></th></tr></thead><tbody>`;
     coded.forEach(c => {
       // Parse note into source, reason, and shift window
-      // Format: "Auto: Not logged in (08:00–16:30)" or "Manual note text"
+      // Formats:
+      //   "Auto: Not logged in (08:00–16:30)"
+      //   "Auto: 61m late (scheduled 08:30, actual 09:31)"
+      //   "Auto: Left 45m early (scheduled end 17:00, actual 16:15)"
       let noteSource = '', noteReason = '', noteShift = '';
       const noteStr = c.note || '';
-      const autoMatch = noteStr.match(/^(Auto|Manual):\s*(.+?)(?:\s*\((\d{2}:\d{2}[–-]\d{2}:\d{2})\))?$/);
-      if (autoMatch) {
-        noteSource = autoMatch[1];
-        noteReason = autoMatch[2].trim();
-        noteShift = autoMatch[3] || '';
+      const autoPrefix = noteStr.match(/^(Auto|Manual):\s*/);
+      if (autoPrefix) {
+        noteSource = autoPrefix[1];
+        const rest = noteStr.slice(autoPrefix[0].length);
+        // Absence: "Not logged in (08:00–16:30)"
+        const absMatch = rest.match(/^(.+?)\s*\((\d{2}:\d{2}[–-]\d{2}:\d{2})\)$/);
+        // Late: "61m late (scheduled 08:30, actual 09:31)"
+        const lateMatch = rest.match(/^(\d+m\s+late)\s*\(scheduled\s+(\d{2}:\d{2}),\s*actual\s+(\d{2}:\d{2})\)$/);
+        // Early: "Left 45m early (scheduled end 17:00, actual 16:15)"
+        const earlyMatch = rest.match(/^(Left\s+\d+m\s+early)\s*\(scheduled\s+end\s+(\d{2}:\d{2}),\s*actual\s+(\d{2}:\d{2})\)$/);
+        if (lateMatch) {
+          noteReason = lateMatch[1];
+          noteShift = `Sched: ${lateMatch[2]} → Actual: ${lateMatch[3]}`;
+        } else if (earlyMatch) {
+          noteReason = earlyMatch[1];
+          noteShift = `Sched end: ${earlyMatch[2]} → Actual: ${earlyMatch[3]}`;
+        } else if (absMatch) {
+          noteReason = absMatch[1].trim();
+          noteShift = absMatch[2];
+        } else {
+          noteReason = rest;
+        }
       } else {
         noteReason = noteStr;
         noteSource = noteStr ? 'Manual' : '';
