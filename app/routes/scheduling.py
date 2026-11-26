@@ -1376,7 +1376,9 @@ def add_segment(shift_id):
         # Validate activity type against SegmentCode table
         act_type = payload.get("type", "on-call")
         valid_code = SegmentCode.query.filter_by(code=act_type).first()
-        if not valid_code:
+        # Accept legacy bare types (break, lunch, meeting, training) from older segments
+        LEGACY_TYPES = {"break", "lunch", "meeting", "training", "on-call", "other"}
+        if not valid_code and act_type not in LEGACY_TYPES:
             return jsonify({"success": False, "error": f"Unknown activity type '{act_type}'"})
 
         dur = (end_t.hour * 60 + end_t.minute) - (start_t.hour * 60 + start_t.minute)
@@ -1421,7 +1423,8 @@ def update_segment(seg_id):
         payload = request.get_json(silent=True) or {}
         if "type" in payload:
             valid_code = SegmentCode.query.filter_by(code=payload["type"]).first()
-            if not valid_code:
+            LEGACY_TYPES = {"break", "lunch", "meeting", "training", "on-call", "other"}
+            if not valid_code and payload["type"] not in LEGACY_TYPES:
                 return jsonify({"success": False, "error": f"Unknown activity type '{payload['type']}'"})
             seg.activity_type = payload["type"]
         if "start" in payload:

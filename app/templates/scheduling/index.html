@@ -3962,6 +3962,7 @@ function segMouseUp(e) {
 
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
+  if (scheduleData) fetchCoverageForDays(scheduleData);
   showToast(`${ds.resizeEdge ? 'Resized' : 'Moved'} ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
 }
 
@@ -3986,6 +3987,7 @@ function persistSegUpdate(seg, shift) {
             }));
             shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
             switchView(currentView);
+            if (scheduleData) fetchCoverageForDays(scheduleData);
           }
         });
       }
@@ -4076,6 +4078,7 @@ function sepSave(dayIdx, shiftIdx, segIdx) {
   closeSegEditPop();
   shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
   switchView(currentView);
+  if (scheduleData) fetchCoverageForDays(scheduleData);
   showToast(`Updated ${segLabel(seg.type)} → ${seg.start}–${seg.end}`);
 }
 
@@ -4229,6 +4232,7 @@ function shiftMouseUp(e) {
             }));
             shift.segments.sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
             switchView(currentView);
+            if (scheduleData) fetchCoverageForDays(scheduleData);
           }
         });
       });
@@ -4237,6 +4241,7 @@ function shiftMouseUp(e) {
     }
 
     switchView(currentView);
+    if (scheduleData) fetchCoverageForDays(scheduleData);
     showToast(`Resized shift → ${shift.start}–${shift.end}`);
   } else {
     // ── Shift move ──
@@ -4266,6 +4271,7 @@ function shiftMouseUp(e) {
     }
 
     switchView(currentView);
+    if (scheduleData) fetchCoverageForDays(scheduleData);
     showToast(`Moved shift → ${shift.start}–${shift.end}`);
   }
 }
