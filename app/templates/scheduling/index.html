@@ -1862,6 +1862,7 @@ function fetchCoverageForDays(sd) {
   const lob = sd.lob;
   const promises = sd.days.map(day => {
     const shiftsPayload = day.shifts.map(s => ({start: s.start, end: s.end,
+      employee_id: s.employee_id,
       segments: (s.segments || []).map(seg => ({type: seg.type, start: seg.start, end: seg.end}))}));
     return fetch('/scheduling/coverage', {
       method: 'POST',
@@ -2344,6 +2345,46 @@ function renderTimelineView(container) {
           onmousedown="segMouseDown(event,${dayIdx},${origIdx},${segIdx})"
           oncontextmenu="segContextMenu(event,${dayIdx},${origIdx},${segIdx})"><span class="seg-handle seg-handle-l" data-handle="l"></span>${label}<span class="seg-handle seg-handle-r" data-handle="r"></span></div>`;
       });
+
+      // Attendance overlay segments: show late/absent/early leave as visual bars
+      if (shift.attendance) {
+        const shiftSMins = timeToMins(shift.start);
+        const shiftEMins = timeToMins(shift.end);
+        let attnLeft = 0, attnWidth = 0, attnColor = '', attnLabel = '', attnTitle = '';
+        if (shift.attendance === 'absent') {
+          // Full shift bar in red
+          attnLeft = ((shiftSMins - minH * 60) / 60) * TL_PX_PER_HOUR;
+          attnWidth = ((shiftEMins - shiftSMins) / 60) * TL_PX_PER_HOUR;
+          attnColor = 'rgba(220,38,38,.55)';
+          attnLabel = 'ABSENT';
+          attnTitle = shift._attnNote || 'Absent — not logged in';
+        } else if (shift.attendance === 'was_late') {
+          // Parse actual start from note if available
+          const lateM = (shift._attnNote || '').match(/actual\s+(\d{2}:\d{2})/i);
+          const actualStart = lateM ? timeToMins(lateM[1]) : shiftSMins + 30;
+          attnLeft = ((shiftSMins - minH * 60) / 60) * TL_PX_PER_HOUR;
+          attnWidth = ((Math.min(actualStart, shiftEMins) - shiftSMins) / 60) * TL_PX_PER_HOUR;
+          attnColor = 'rgba(234,88,12,.55)';
+          attnLabel = 'LATE';
+          attnTitle = shift._attnNote || 'Late arrival';
+        } else if (shift.attendance === 'left_early') {
+          // Parse actual departure from note if available
+          const earlyM = (shift._attnNote || '').match(/last\s+seen\s+(\d{2}:\d{2})/i);
+          const actualEnd = earlyM ? timeToMins(earlyM[1]) : shiftEMins - 30;
+          attnLeft = ((Math.max(actualEnd, shiftSMins) - minH * 60) / 60) * TL_PX_PER_HOUR;
+          attnWidth = ((shiftEMins - Math.max(actualEnd, shiftSMins)) / 60) * TL_PX_PER_HOUR;
+          attnColor = 'rgba(234,88,12,.55)';
+          attnLabel = 'LEFT EARLY';
+          attnTitle = shift._attnNote || 'Left before shift end';
+        }
+        if (attnWidth > 0) {
+          html += `<div style="position:absolute;left:${attnLeft}px;width:${Math.max(attnWidth,2)}px;top:0;height:100%;
+            background:${attnColor};border-radius:4px;display:flex;align-items:center;justify-content:center;
+            font-size:.62rem;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4);
+            pointer-events:none;z-index:6;border:1px solid rgba(255,255,255,.3)"
+            title="${attnTitle.replace(/"/g,'&quot;')}">${attnWidth > 35 ? attnLabel : ''}</div>`;
+        }
+      }
 
       html += `</div></div>`; // tl-bar-area, tl-row
     });
