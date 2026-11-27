@@ -101,7 +101,8 @@ def _get_or_create_planning_unit(name):
     name = str(name).strip()
     if not name:
         return None
-    pu = PlanningUnit.query.filter_by(name=name).first()
+    from app.models import org_scope_pu
+    pu = org_scope_pu().filter_by(name=name).first()
     if not pu:
         pu = PlanningUnit(name=name, is_active=True)
         db.session.add(pu)

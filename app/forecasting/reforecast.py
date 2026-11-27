@@ -337,12 +337,12 @@ def reforecast_all_lobs(strategy="blended", today=None):
     actuals data for today.
     Returns list of results per LOB.
     """
-    from app.models import PlanningUnit
+    from app.models import PlanningUnit, org_scope_pu
 
     if today is None:
         today = datetime.date.today()
 
-    units = PlanningUnit.query.filter_by(is_active=True).all()
+    units = org_scope_pu().filter_by(is_active=True).all()
     results = []
 
     for unit in units:
@@ -357,12 +357,12 @@ def get_variance_alerts(threshold_pct=10.0, today=None):
     Check all LOBs for significant variance between forecast and actuals.
     Returns alerts for LOBs where variance exceeds the threshold.
     """
-    from app.models import PlanningUnit
+    from app.models import PlanningUnit, org_scope_pu
 
     if today is None:
         today = datetime.date.today()
 
-    units = PlanningUnit.query.filter_by(is_active=True).all()
+    units = org_scope_pu().filter_by(is_active=True).all()
     alerts = []
 
     for unit in units:

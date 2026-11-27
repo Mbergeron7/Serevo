@@ -188,7 +188,8 @@ def _load_lob_to_pu():
         from app.models import LobMapping, PlanningUnit
         _lob_pu_cache = {m.source_name: m.planning_unit_name
                          for m in LobMapping.query.all()}
-        _pu_names_cache = {pu.name for pu in PlanningUnit.query.all()}
+        from app.models import org_scope_pu
+        _pu_names_cache = {pu.name for pu in org_scope_pu().all()}
         _lob_cache_ts = now
     except Exception:
         _lob_pu_cache = {}
@@ -635,7 +636,8 @@ def _month_aware_headcount(year):
     )
     # Build PU id→name cache
     pu_ids = {e.planning_unit_id for e in employees}
-    pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all() if pu_ids else []
+    from app.models import org_scope_pu
+    pus = org_scope_pu().filter(PlanningUnit.id.in_(pu_ids)).all() if pu_ids else []
     pu_names = {pu.id: pu.name for pu in pus}
 
     hc_by_pu = {}    # {pu_name: {month: int}}
@@ -881,7 +883,8 @@ def upsert_employees_to_db(employees):
         if not name:
             return None
         if name not in pu_cache:
-            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == name.lower()).first()
+            from app.models import org_scope_pu as _osp
+            pu = _osp().filter(db.func.lower(PlanningUnit.name) == name.lower()).first()
             if not pu:
                 pu = PlanningUnit(name=name)
                 db.session.add(pu)
@@ -913,7 +916,8 @@ def upsert_employees_to_db(employees):
         skills_txt = ", ".join(s.get("name", "") for s in skills if isinstance(s, dict)) if isinstance(skills, list) else ""
         unit = _unit(lob_name) or _unit("Unassigned")
 
-        row = Employee.query.filter_by(employee_id=ext_id).first()
+        from app.models import org_scope_emp as _ose
+        row = _ose().filter_by(employee_id=ext_id).first()
         if row:
             if row.manually_edited:
                 continue  # skip — user made manual changes
@@ -1123,13 +1127,14 @@ def upsert_pw_schedules(shifts, start_date=None, end_date=None):
 
     def _find_employee(ext_id):
         """Match a WFM employee_id against Serevo's employee_id, external_id_1, or external_id_2."""
-        emp = Employee.query.filter_by(employee_id=ext_id).first()
+        from app.models import org_scope_emp as _ose
+        emp = _ose().filter_by(employee_id=ext_id).first()
         if emp:
             return emp
-        emp = Employee.query.filter_by(external_id_1=ext_id).first()
+        emp = _ose().filter_by(external_id_1=ext_id).first()
         if emp:
             return emp
-        emp = Employee.query.filter_by(external_id_2=ext_id).first()
+        emp = _ose().filter_by(external_id_2=ext_id).first()
         return emp
 
     # First pass: resolve all employee IDs and count skipped
@@ -1291,7 +1296,8 @@ def build_capacity_plan_from_db(year, shrinkage=None, occupancy=None, answer_rat
         return []
 
     # Get planning unit names
-    pus = PlanningUnit.query.filter(PlanningUnit.id.in_(all_pu_ids)).all()
+    from app.models import org_scope_pu
+    pus = org_scope_pu().filter(PlanningUnit.id.in_(all_pu_ids)).all()
     pu_names = {pu.id: pu.name for pu in pus}
 
     # Build reverse map: pu_name → pu_id

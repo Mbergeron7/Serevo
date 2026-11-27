@@ -16,6 +16,15 @@ from collections import defaultdict
 
 log = logging.getLogger("serevo.scheduling")
 
+# Lazy import helpers for org-scoped queries
+def _org_emp():
+    from app.models import org_scope_emp
+    return org_scope_emp()
+
+def _org_pu():
+    from app.models import org_scope_pu
+    return org_scope_pu()
+
 # ── Shift defaults ──────────────────────────────────────────
 DEFAULT_SHIFT_LENGTH_HRS = 8.5
 DEFAULT_INTERVAL_MINS = 30
@@ -49,7 +58,7 @@ def _get_special_day_for_date(lob, date_obj):
         specials = SpecialDay.query.filter(SpecialDay.date == date_obj).all()
         if not specials:
             return None
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        pu = _org_pu().filter_by(name=lob).first()
         for sd in specials:
             if sd.applies_to_all:
                 return {"name": sd.name, "day_type": sd.day_type,
@@ -205,7 +214,7 @@ def get_multi_skill_requirements(lob, date_obj, sheet=None):
         lob_norm = normalize_lob(lob.strip()).lower()
 
         # Find the planning unit for this LOB
-        pu = PlanningUnit.query.filter(
+        pu = _org_pu().filter(
             db.func.lower(PlanningUnit.name) == lob_norm
         ).first()
 
@@ -213,7 +222,7 @@ def get_multi_skill_requirements(lob, date_obj, sheet=None):
             return {lob: base_reqs}
 
         # Get all employees in this LOB (primary FK + EmployeePlanningUnit)
-        emps = Employee.query.filter_by(planning_unit_id=pu.id).filter(
+        emps = _org_emp().filter_by(planning_unit_id=pu.id).filter(
             db.func.lower(Employee.status).notin_(["inactive", "terminated", "deleted"])
         ).all()
 
@@ -496,7 +505,7 @@ def _get_employees_for_lob(lob, sheet=None):
         # ── Path 2: DB join via PlanningUnit + EmployeePlanningUnit ──
         try:
             from app.models import db, Employee, PlanningUnit, EmployeePlanningUnit
-            pu = PlanningUnit.query.filter(
+            pu = _org_pu().filter(
                 db.func.lower(PlanningUnit.name) == lob_normalized
             ).first()
             if pu:
@@ -604,7 +613,7 @@ def _get_employees_for_lob(lob, sheet=None):
             if sheet_lob_map:
                 try:
                     from app.models import Employee
-                    all_emps = Employee.query.filter(
+                    all_emps = _org_emp().filter(
                         db.func.lower(Employee.status).notin_(
                             ["inactive", "terminated", "deleted"]
                         )
@@ -636,7 +645,7 @@ def _try_repair_pu(sheet_records):
     """Best-effort: set planning_unit_id on employees missing it."""
     try:
         from app.models import db, Employee, PlanningUnit
-        missing = Employee.query.filter(Employee.planning_unit_id.is_(None)).all()
+        missing = _org_emp().filter(Employee.planning_unit_id.is_(None)).all()
         if not missing:
             return
         lob_map = {}
@@ -652,7 +661,7 @@ def _try_repair_pu(sheet_records):
             if not lob_name:
                 continue
             if lob_name not in pu_cache:
-                pu = PlanningUnit.query.filter(
+                pu = _org_pu().filter(
                     db.func.lower(PlanningUnit.name) == lob_name.lower()
                 ).first()
                 if not pu:
@@ -840,7 +849,7 @@ def _resolve_employee_db_id(employee_ext_id):
     """Look up the DB primary key for an employee by their external employee_id."""
     try:
         from app.models import Employee
-        emp = Employee.query.filter_by(employee_id=employee_ext_id).first()
+        emp = _org_emp().filter_by(employee_id=employee_ext_id).first()
         return emp.id if emp else None
     except Exception:
         return None
@@ -1727,7 +1736,7 @@ def generate_shifts(lob, date_obj, shift_length_hrs=None, sheet=None, employee_i
         from app.models import PlanningUnit, db as _db
         from app.data_source import normalize_lob
         _lob_norm = normalize_lob(lob.strip()).lower()
-        _pu = PlanningUnit.query.filter(
+        _pu = _org_pu().filter(
             _db.func.lower(PlanningUnit.name) == _lob_norm
         ).first()
         pu_id = _pu.id if _pu else None
@@ -1984,7 +1993,7 @@ def _apply_fill_in_rules(lob, date_obj, shifts, employees, avail_map):
         if not rules:
             return notes
 
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu = _org_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         pu_id = pu.id if pu else None
         templates = ShiftTemplate.query.filter_by(is_active=True).all()
         day_name = ["weekday"] * 5 + ["saturday", "sunday"]

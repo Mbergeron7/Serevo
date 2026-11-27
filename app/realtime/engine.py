@@ -98,8 +98,8 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
     req_intervals = []
     fc_intervals = []
     try:
-        from app.models import PlanningUnit, RequirementInterval, ForecastInterval
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        from app.models import PlanningUnit, RequirementInterval, ForecastInterval, org_scope_pu
+        pu = org_scope_pu().filter_by(name=lob).first()
         if pu:
             day_start = datetime.datetime.combine(date_obj, datetime.time.min)
             day_end = datetime.datetime.combine(date_obj, datetime.time.max)
@@ -147,10 +147,10 @@ def get_intraday_snapshot(lob, date_obj=None, sheet=None):
     unassigned = []
     warnings = []
     try:
-        from app.models import db, Schedule, Employee, EmployeePlanningUnit
+        from app.models import db, Schedule, Employee, EmployeePlanningUnit, org_scope_emp
         if pu:
             # Same scope as the scheduling load endpoint: PU + null-PU for employees in PU
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
             assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                 EmployeePlanningUnit.planning_unit_id == pu.id).all()}
@@ -410,10 +410,10 @@ def get_adherence_snapshot(lob, date_obj=None, sheet=None):
     # Load saved schedules from DB first, fall back to generator
     shifts = []
     try:
-        from app.models import db, Schedule, Employee, PlanningUnit, EmployeePlanningUnit
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        from app.models import db, Schedule, Employee, PlanningUnit, EmployeePlanningUnit, org_scope_emp, org_scope_pu
+        pu = org_scope_pu().filter_by(name=lob).first()
         if pu:
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
             assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                 EmployeePlanningUnit.planning_unit_id == pu.id).all()}

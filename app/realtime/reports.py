@@ -66,8 +66,8 @@ def _parse_dt(s):
 def _lob_targets(lob):
     """Service level target and threshold for a LOB (defaults 80% / 20s)."""
     try:
-        from app.models import db, LOBSetting, PlanningUnit
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        from app.models import db, LOBSetting, PlanningUnit, org_scope_pu
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if pu:
             ls = LOBSetting.query.filter_by(planning_unit_id=pu.id).first()
             if ls:
@@ -115,8 +115,8 @@ def _shifts(lob, date_obj, user, sheet=None):
         return [s for s in get_demo_schedules(date_obj)
                 if s["employee_id"] in ids and s.get("status") != "off" and s.get("start")]
     try:
-        from app.models import db, Schedule, PlanningUnit
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        from app.models import db, Schedule, PlanningUnit, org_scope_pu
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if pu:
             rows = Schedule.query.filter_by(planning_unit_id=pu.id, schedule_date=date_obj).all()
             if rows:

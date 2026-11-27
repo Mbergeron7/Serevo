@@ -77,8 +77,8 @@ def get_interval_actuals(lob, date_obj, user=None, sheet=None):
 
 def _db_interval_actuals(lob, date_obj):
     try:
-        from app.models import db, IntervalActual, PlanningUnit
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        from app.models import db, IntervalActual, PlanningUnit, org_scope_pu
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if not pu:
             return []
         start = datetime.datetime.combine(date_obj, datetime.time.min)

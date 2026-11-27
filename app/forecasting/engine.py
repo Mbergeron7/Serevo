@@ -16,6 +16,10 @@ from collections import defaultdict
 
 log = logging.getLogger("serevo.forecasting")
 
+def _org_pu():
+    from app.models import org_scope_pu
+    return org_scope_pu()
+
 DEFAULT_INTERVAL_MINS = 30
 DEFAULT_SERVICE_LEVEL_TARGET = 0.80   # 80 %
 DEFAULT_TARGET_ASA = 30               # 30 seconds
@@ -32,9 +36,9 @@ def _resolve_pu_by_name(lob):
     from app.models import PlanningUnit
     from app.data_source import normalize_lob
     lob_stripped = str(lob).strip()
-    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    unit = _org_pu().filter_by(name=lob_stripped).first()
     if not unit:
-        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+        unit = _org_pu().filter_by(name=normalize_lob(lob_stripped)).first()
     return unit
 
 
@@ -97,9 +101,9 @@ def _get_lob_setting(lob):
         from app.models import PlanningUnit, LOBSetting
         from app.data_source import normalize_lob
         lob_stripped = str(lob).strip()
-        pu = PlanningUnit.query.filter_by(name=lob_stripped).first()
+        pu = _org_pu().filter_by(name=lob_stripped).first()
         if not pu:
-            pu = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+            pu = _org_pu().filter_by(name=normalize_lob(lob_stripped)).first()
         if pu:
             return pu.lob_setting, pu
     except Exception as e:
@@ -311,10 +315,10 @@ def get_forecast_data(lob, start_date, end_date, sheet=None):
             from sqlalchemy import func as sa_func
             lob_stripped = str(lob).strip()
             # Exact match first — so "PS Care FR" finds that PU, not the parent
-            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            unit = _org_pu().filter_by(name=lob_stripped).first()
             if not unit:
                 normalized = normalize_lob(lob_stripped)
-                unit = PlanningUnit.query.filter_by(name=normalized).first()
+                unit = _org_pu().filter_by(name=normalized).first()
             if not unit:
                 return [], f"No planning unit found for '{lob}'"
             start_str = start_date.strftime("%Y-%m-%d")
@@ -396,10 +400,10 @@ def get_requirements_data(lob, start_date, end_date, sheet=None):
             from app.models import RequirementInterval, PlanningUnit
             from sqlalchemy import func as sa_func
             lob_stripped = str(lob).strip()
-            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            unit = _org_pu().filter_by(name=lob_stripped).first()
             if not unit:
                 normalized = normalize_lob(lob_stripped)
-                unit = PlanningUnit.query.filter_by(name=normalized).first()
+                unit = _org_pu().filter_by(name=normalized).first()
             if not unit:
                 return [], None  # No requirements yet, not an error
             start_str = start_date.strftime("%Y-%m-%d")
@@ -1510,7 +1514,7 @@ def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
                     result.add(sd.date.isoformat() if hasattr(sd.date, 'isoformat') else str(sd.date))
                 elif planning_unit_name:
                     from app.models import PlanningUnit
-                    pu = PlanningUnit.query.filter_by(name=planning_unit_name).first()
+                    pu = _org_pu().filter_by(name=planning_unit_name).first()
                     if pu and pu in sd.planning_units:
                         result.add(sd.date.isoformat() if hasattr(sd.date, 'isoformat') else str(sd.date))
             if result:
@@ -1519,7 +1523,7 @@ def _get_holidays_in_range(start_date, end_date, planning_unit_name=None):
         # ── Fallback: legacy PlanningCalendar system ──
         if planning_unit_name:
             from app.models import PlanningUnit, CalendarEntry, DayType
-            pu = PlanningUnit.query.filter_by(name=planning_unit_name).first()
+            pu = _org_pu().filter_by(name=planning_unit_name).first()
             if pu and pu.calendar_id:
                 entries = (
                     CalendarEntry.query
@@ -2010,10 +2014,10 @@ def compute_accuracy(lob, start_date, end_date, sheet=None):
             from app.data_source import normalize_lob
             from sqlalchemy import func as sa_func
             lob_stripped = str(lob).strip()
-            unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+            unit = _org_pu().filter_by(name=lob_stripped).first()
             if not unit:
                 normalized = normalize_lob(lob_stripped)
-                unit = PlanningUnit.query.filter_by(name=normalized).first()
+                unit = _org_pu().filter_by(name=normalized).first()
             if unit:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
@@ -2393,10 +2397,10 @@ def generate_and_save_forecast(lob, method="weighted", historical_days=90,
     # Exact match first, then normalize — so sub-activities like "PS Care FR"
     # resolve to their own PU rather than the parent "PS Care"
     lob_stripped = str(lob).strip()
-    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    unit = _org_pu().filter_by(name=lob_stripped).first()
     if not unit:
         lob_normalized = normalize_lob(lob_stripped)
-        unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+        unit = _org_pu().filter_by(name=lob_normalized).first()
     if not unit:
         unit = PlanningUnit(name=lob_normalized)
         db.session.add(unit)
@@ -2514,9 +2518,9 @@ def generate_retrospective_forecast(lob, start_date, end_date,
     from sqlalchemy import func as sa_func
 
     lob_stripped = str(lob).strip()
-    unit = PlanningUnit.query.filter_by(name=lob_stripped).first()
+    unit = _org_pu().filter_by(name=lob_stripped).first()
     if not unit:
-        unit = PlanningUnit.query.filter_by(name=normalize_lob(lob_stripped)).first()
+        unit = _org_pu().filter_by(name=normalize_lob(lob_stripped)).first()
     if not unit:
         return {"ok": False, "error": f"No planning unit '{lob}'"}
 
@@ -2699,7 +2703,7 @@ def generate_all_forecasts(method="weighted", historical_days=90,
     """
     from app.models import PlanningUnit
 
-    units = PlanningUnit.query.filter_by(is_active=True).all()
+    units = _org_pu().filter_by(is_active=True).all()
     results = []
     for unit in units:
         result = generate_and_save_forecast(
