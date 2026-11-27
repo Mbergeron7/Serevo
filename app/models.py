@@ -252,13 +252,9 @@ class PlanningUnit(db.Model):
         When org_id is None, attempts to read the active org from the session.
         """
         q = cls.query.filter_by(is_active=True)
-        # Resolve org filter
+        # Resolve org filter — use same logic as other org_scope functions
         if org_id is None:
-            try:
-                from flask import session as flask_session
-                org_id = flask_session.get("active_org_id")
-            except RuntimeError:
-                pass  # outside request context
+            org_id = _get_active_org_id()
         if org_id:
             q = q.filter(db.or_(cls.organization_id == org_id, cls.organization_id.is_(None)))
         if not include_children:

@@ -131,9 +131,9 @@
         </div>
         {% endif %}
         {% if current_user and current_user.get('is_superadmin') %}
-        <span style="font-size:.72rem;background:var(--brand-accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px;">
+        <a href="/admin/orgs/" style="font-size:.72rem;background:var(--brand-accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px;text-decoration:none;" title="Click to manage organizations">
           {{ current_user.organization_name or 'Platform' }}
-        </span>
+        </a>
         {% endif %}
         <span class="user-name">{{ current_user.name if current_user else '' }}</span>
         <a href="/logout">Sign out</a>
