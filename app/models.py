@@ -17,9 +17,14 @@ db = SQLAlchemy()
 
 
 def _get_active_org_id():
-    """Return the active org_id from the Flask session, or None."""
+    """Return the active org_id from the Flask session, or None.
+    Cached per-request via Flask g to avoid repeated DB lookups."""
     try:
-        from flask import session as flask_session
+        from flask import session as flask_session, g
+        # Per-request cache
+        cached = getattr(g, '_active_org_id_cached', None)
+        if cached is not None:
+            return cached if cached != -1 else None
         org_id = flask_session.get("active_org_id")
         if not org_id:
             user_id = flask_session.get("user_id")
@@ -30,6 +35,7 @@ def _get_active_org_id():
                 ).first()
                 if row:
                     org_id = row[0]
+        g._active_org_id_cached = org_id if org_id else -1
         return org_id
     except (RuntimeError, Exception):
         return None

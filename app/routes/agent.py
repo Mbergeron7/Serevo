@@ -37,9 +37,10 @@ def _get_agent_employee(user):
     emp = Employee.query.get(user["employee_id"])
     if emp:
         # Check org scope — if switched to a different org, don't show this employee
+        # NULL organization_id means "default org" (backward compat) — always allow
         from app.models import _get_active_org_id
         org_id = _get_active_org_id()
-        if org_id and emp.organization_id and emp.organization_id != org_id:
+        if org_id and emp.organization_id is not None and emp.organization_id != org_id:
             return None
     return emp
 

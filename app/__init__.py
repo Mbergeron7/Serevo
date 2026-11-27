@@ -214,13 +214,13 @@ def create_app():
         except Exception:
             pass
 
-    # Backfill organization_id on employees and planning_units that have none
+    # Backfill organization_id — assign all NULL records to the default org
     try:
         with app.app_context():
             from app.models import Organization
             default_org = Organization.query.filter_by(slug="default").first()
             if default_org:
-                for tbl in [
+                _backfill_tables = [
                     "employees", "planning_units", "users",
                     "data_uploads", "data_feeds", "data_sources", "api_connections",
                     "segment_codes", "shift_templates", "contracts", "day_models",
@@ -232,14 +232,22 @@ def create_app():
                     "time_off_types", "overtime_rules", "schedule_rules",
                     "alert_configs", "brand_settings", "adherence_exceptions",
                     "schema_mappings", "training_modules", "shift_notes", "roster_groups",
-                ]:
+                ]
+                total_updated = 0
+                for tbl in _backfill_tables:
                     try:
-                        db.session.execute(db.text(
+                        result = db.session.execute(db.text(
                             f"UPDATE {tbl} SET organization_id = :oid WHERE organization_id IS NULL"
                         ), {"oid": default_org.id})
+                        count = result.rowcount
                         db.session.commit()
+                        if count > 0:
+                            log.info(f"Backfill: set organization_id={default_org.id} on {count} rows in {tbl}")
+                            total_updated += count
                     except Exception:
                         db.session.rollback()
+                if total_updated > 0:
+                    log.info(f"Backfill complete: {total_updated} total rows assigned to org '{default_org.name}'")
     except Exception as e:
         log.warning(f"org backfill failed: {e}")
         try:
