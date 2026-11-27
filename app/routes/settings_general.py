@@ -744,6 +744,7 @@ def save_user():
     role = data.get("role", "supervisor")
     password = data.get("password", "")
     is_demo = bool(data.get("is_demo", False))
+    is_superadmin = bool(data.get("is_superadmin", False))
 
     if not email:
         return jsonify({"success": False, "error": "Email is required"})
@@ -775,11 +776,11 @@ def save_user():
         except Exception:
             pass
         db.session.commit()
-        # Set is_demo via raw SQL to avoid ORM column-missing issues
+        # Set is_demo and is_superadmin via raw SQL to avoid ORM column-missing issues
         try:
             db.session.execute(
-                db.text("UPDATE users SET is_demo = :val WHERE id = :uid"),
-                {"val": is_demo, "uid": user.id},
+                db.text("UPDATE users SET is_demo = :demo, is_superadmin = :sa WHERE id = :uid"),
+                {"demo": is_demo, "sa": is_superadmin, "uid": user.id},
             )
             db.session.commit()
         except Exception:
@@ -828,11 +829,11 @@ def save_user():
             pass
         db.session.add(user)
         db.session.commit()
-        # Set is_demo via raw SQL
+        # Set is_demo and is_superadmin via raw SQL
         try:
             db.session.execute(
-                db.text("UPDATE users SET is_demo = :val WHERE id = :uid"),
-                {"val": is_demo, "uid": user.id},
+                db.text("UPDATE users SET is_demo = :demo, is_superadmin = :sa WHERE id = :uid"),
+                {"demo": is_demo, "sa": is_superadmin, "uid": user.id},
             )
             db.session.commit()
         except Exception:
