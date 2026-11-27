@@ -142,9 +142,21 @@ def create_app():
             except Exception as e2:
                 log.warning(f"db.create_all() retry also failed: {e2}")
                 db.session.rollback()
-        # All columns are now managed by Flask-Migrate / Alembic migrations.
-        # The legacy _ensure_columns block was removed — run
-        # `flask db upgrade` to apply any pending schema changes.
+        # Ensure new columns exist on existing tables (db.create_all doesn't add columns)
+        _new_columns = [
+            ("users", "organization_id", "INTEGER"),
+            ("users", "is_superadmin", "BOOLEAN DEFAULT FALSE"),
+            ("organizations", "domain", "VARCHAR(200) DEFAULT ''"),
+            ("organizations", "logo_url", "VARCHAR(500) DEFAULT ''"),
+            ("organizations", "settings_json", "TEXT DEFAULT ''"),
+        ]
+        for table, col, col_type in _new_columns:
+            try:
+                db.session.execute(db.text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                db.session.commit()
+                log.info(f"Added column {table}.{col}")
+            except Exception:
+                db.session.rollback()  # column already exists
 
     # Seed default organization if none exists
     try:

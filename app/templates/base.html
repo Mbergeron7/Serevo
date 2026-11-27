@@ -93,7 +93,7 @@
           {% if current_user.is_admin %}
           <a href="/settings/"{% if request.path.startswith('/settings') %} class="active"{% endif %}>Settings</a>
           {% endif %}
-          {% if current_user.is_superadmin %}
+          {% if current_user.get('is_superadmin') %}
           <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
           <a href="/admin/orgs/"{% if request.path.startswith('/admin/orgs') %} class="active"{% endif %}>Organizations</a>
           {% endif %}
@@ -130,7 +130,7 @@
           🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
         </div>
         {% endif %}
-        {% if current_user and current_user.is_superadmin %}
+        {% if current_user and current_user.get('is_superadmin') %}
         <span style="font-size:.72rem;background:var(--brand-accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px;">
           {{ current_user.organization_name or 'Platform' }}
         </span>
