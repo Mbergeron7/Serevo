@@ -457,6 +457,38 @@ def create_app():
     def health():
         return {"status": "ok", "brand": cfg.BRAND_NAME, "demo": cfg.is_demo}
 
+    @app.route("/health/org-debug")
+    def org_debug():
+        """Diagnostic endpoint — shows org column status and record counts."""
+        from flask import session as s
+        info = {
+            "session_active_org_id": s.get("active_org_id"),
+            "session_user_id": s.get("user_id"),
+            "tables": {},
+        }
+        for tbl in ["employees", "planning_units", "users", "organizations"]:
+            try:
+                # Check if org_id column exists
+                db.session.execute(db.text(f"SELECT organization_id FROM {tbl} LIMIT 0"))
+                has_col = True
+                # Count by org_id
+                rows = db.session.execute(db.text(
+                    f"SELECT organization_id, COUNT(*) FROM {tbl} GROUP BY organization_id"
+                )).fetchall()
+                info["tables"][tbl] = {"has_org_column": True, "counts": {str(r[0]): r[1] for r in rows}}
+            except Exception as e:
+                db.session.rollback()
+                info["tables"][tbl] = {"has_org_column": False, "error": str(e)[:100]}
+        # User's org_id
+        try:
+            uid = s.get("user_id")
+            if uid:
+                row = db.session.execute(db.text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": uid}).first()
+                info["user_org_id"] = row[0] if row else None
+        except Exception:
+            db.session.rollback()
+        return jsonify(info)
+
     # ---- global DB session cleanup ----
     @app.teardown_appcontext
     def _shutdown_session(exc):

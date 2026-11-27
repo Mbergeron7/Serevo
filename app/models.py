@@ -16,6 +16,7 @@ from app.constants import DEFAULT_TIMEZONE
 db = SQLAlchemy()
 
 
+
 def _get_active_org_id():
     """Return the active org_id from the Flask session, or None.
     Cached per-request via Flask g to avoid repeated DB lookups."""
