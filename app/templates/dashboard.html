@@ -51,29 +51,32 @@
 
   {% set stats = demo_stats or live_stats %}
 
-  {# ═══ Setup Wizard (shown when no employees yet) ═══ #}
-  {% if not stats or stats.total_employees == 0 %}
+  {# ═══ Setup Wizard ═══ #}
   {% set s = setup or {} %}
   {% set steps = [
-    (s.get('has_units', false), '/settings/planning-units', 'Set up LOBs', 'Define your lines of business and teams. Each LOB represents a group you schedule and forecast independently.', none),
-    (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to LOBs and set their skills.', '/data/'),
-    (s.get('has_sheets', false), '/settings/google-sheets', 'Connect Google Sheets', 'Link your Google Sheet for real-time call data sync. This powers live monitoring and interval reports.', none),
-    (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to LOBs so call volume flows to the right LOB.', none),
-    (s.get('has_history', false), '/data/bulk-actuals', 'Import Historical Data', 'Upload past call volume data to build accurate forecasts. At least 4-8 weeks recommended.', '/data/'),
-    (s.get('has_forecast', false), '/forecasting/', 'Generate Forecasts', 'Create interval-level volume and AHT forecasts using your historical data. Multiple methods available.', none),
-    (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', 'Build optimized schedules based on your forecasts, employee availability, and coverage requirements.', none),
+    (s.get('has_units', false), '/settings/planning-units', 'Set up LOBs', 'Define your lines of business and teams. Each LOB represents a group you schedule and forecast independently.', none, '~2 min'),
+    (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to LOBs and set their skills.', '/data/', '~5 min'),
+    (s.get('has_sheets', false), '/settings/google-sheets', 'Connect Data Source', 'Link your Google Sheet or API for real-time data sync. This powers live monitoring and interval reports.', none, '~3 min'),
+    (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to LOBs so call volume flows to the right LOB.', none, '~2 min'),
+    (s.get('has_history', false), '/data/bulk-actuals', 'Import Historical Data', 'Upload past call volume data to build accurate forecasts. At least 4-8 weeks recommended.', '/data/', '~5 min'),
+    (s.get('has_forecast', false), '/forecasting/', 'Generate Forecasts', 'Create interval-level volume and AHT forecasts using your historical data. Multiple methods available.', none, '~3 min'),
+    (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', 'Build optimized schedules based on your forecasts, employee availability, and coverage requirements.', none, '~5 min'),
   ] %}
   {% set done_count = steps|selectattr(0)|list|length %}
   {% set total_steps = steps|length %}
+  {% set all_done = done_count == total_steps %}
+
+  {# Full wizard (no employees yet) #}
+  {% if not stats or stats.total_employees == 0 %}
   <div class="card" style="padding:2.5rem;" data-widget="setup">
     <div style="text-align:center; margin-bottom:1.2rem;">
       <div style="font-size:2rem; margin-bottom:.5rem;">🚀</div>
-      <p style="font-size:1.1rem; font-weight:600; margin-bottom:.3rem; color:var(--text-primary);">Getting Started</p>
-      <p style="font-size:.85rem; color:var(--text-muted);">Set up your workspace in {{ total_steps }} steps. {{ done_count }} of {{ total_steps }} complete.</p>
+      <p style="font-size:1.1rem; font-weight:600; margin-bottom:.3rem; color:var(--text-primary);">Welcome to {{ brand_name }}</p>
+      <p style="font-size:.85rem; color:var(--text-muted);">Let's get your workspace set up. {{ done_count }} of {{ total_steps }} steps complete — estimated {{ 25 - done_count * 3 }} minutes remaining.</p>
     </div>
     <div class="setup-progress"><div class="setup-progress-fill" style="width:{{ (done_count / total_steps * 100)|round }}%;"></div></div>
     <div style="max-width:540px; margin:0 auto;">
-      {% for done, url, label, desc, alt_url in steps %}
+      {% for done, url, label, desc, alt_url, time_est in steps %}
       <div class="setup-step">
         {% if done %}
         <span class="step-icon done">✓</span>
@@ -86,10 +89,40 @@
         <div class="step-body">
           <div class="step-label">
             <a href="{{ url }}">{{ label }}</a>
+            <span style="font-size:.72rem; font-weight:400; color:var(--text-muted); margin-left:8px;">{{ time_est }}</span>
             {% if alt_url %}<span style="font-size:.82rem; font-weight:400; color:var(--text-muted);"> or <a href="{{ alt_url }}" style="color:var(--brand-accent); text-decoration:none;">bulk import</a></span>{% endif %}
           </div>
           <div class="step-desc">{{ desc }}</div>
         </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# Compact progress banner (employees exist but not all steps done) #}
+  {% elif setup and not all_done %}
+  {% set ns = namespace(next_url='', next_label='', next_time='', found=false) %}
+  {% for done, url, label, desc, alt_url, time_est in steps %}
+    {% if not done and not ns.found %}{% set ns.next_url = url %}{% set ns.next_label = label %}{% set ns.next_time = time_est %}{% set ns.found = true %}{% endif %}
+  {% endfor %}
+  <div class="card" style="margin-bottom:1.5rem; border-left:4px solid var(--brand-accent);" data-widget="setup">
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <span style="font-size:1.4rem;">🚀</span>
+      <div style="flex:1; min-width:200px;">
+        <div style="font-weight:700; font-size:.95rem;">Setup Progress: {{ done_count }}/{{ total_steps }} complete</div>
+        <div class="setup-progress" style="margin:6px 0 4px; height:6px;"><div class="setup-progress-fill" style="width:{{ (done_count / total_steps * 100)|round }}%;"></div></div>
+        {% if ns.found %}
+        <div style="font-size:.82rem; color:var(--text-muted);">Next: <a href="{{ ns.next_url }}" style="color:var(--brand-accent); text-decoration:none; font-weight:600;">{{ ns.next_label }}</a> <span style="font-size:.72rem;">({{ ns.next_time }})</span></div>
+        {% endif %}
+      </div>
+      <a href="#" onclick="document.getElementById('setupDetail').style.display=document.getElementById('setupDetail').style.display==='none'?'block':'none';return false;" style="font-size:.78rem; color:var(--brand-accent); text-decoration:none;">Show all steps</a>
+    </div>
+    <div id="setupDetail" style="display:none; margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+      {% for done, url, label, desc, alt_url, time_est in steps %}
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 0; font-size:.85rem;">
+        {% if done %}<span style="color:#16a34a;">✓</span><span style="color:var(--text-muted); text-decoration:line-through;">{{ label }}</span>
+        {% else %}<span style="color:var(--brand-accent);">○</span><a href="{{ url }}" style="color:var(--brand-accent); text-decoration:none;">{{ label }}</a><span style="font-size:.72rem; color:var(--text-muted);">{{ time_est }}</span>
         {% endif %}
       </div>
       {% endfor %}
