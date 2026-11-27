@@ -14,8 +14,8 @@ from collections import defaultdict
 log = logging.getLogger("serevo.people")
 
 # ── Employee list cache (avoid re-querying 460+ rows per LOB) ──
-_emp_cache = None
-_emp_cache_ts = 0
+_emp_cache = {}      # keyed by org_id
+_emp_cache_ts = {}   # keyed by org_id
 _EMP_CACHE_TTL = 60  # seconds
 
 # ── Sheet tab names ──────────────────────────────────────────
@@ -106,11 +106,22 @@ def _get_employees_from_db():
     """Read employees from the PostgreSQL database (cached for 60s)."""
     global _emp_cache, _emp_cache_ts
     now = _time.time()
-    if _emp_cache is not None and now - _emp_cache_ts < _EMP_CACHE_TTL:
-        return _emp_cache, None
+    # Resolve org for cache key
+    _org_id = None
     try:
-        from app.models import Employee
-        emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        from app.auth import get_active_org_id
+        _org_id = get_active_org_id()
+    except Exception:
+        pass
+    cache_key = _org_id or "__all__"
+    if cache_key in _emp_cache and now - _emp_cache_ts.get(cache_key, 0) < _EMP_CACHE_TTL:
+        return _emp_cache[cache_key], None
+    try:
+        from app.models import db, Employee
+        q = Employee.query
+        if _org_id:
+            q = q.filter(db.or_(Employee.organization_id == _org_id, Employee.organization_id.is_(None)))
+        emps = q.order_by(Employee.last_name, Employee.first_name).all()
         if emps:
             # One-time back-fill: if some employees lack a planning_unit_id,
             # try to repair from the Google Sheet's "Latest Skill Name" column.
@@ -119,12 +130,12 @@ def _get_employees_from_db():
                 try:
                     _backfill_planning_units(missing)
                     # Re-query after possible updates
-                    emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+                    emps = q.order_by(Employee.last_name, Employee.first_name).all()
                 except Exception as bf_err:
                     log.warning(f"Backfill planning units failed (non-fatal): {bf_err}")
         result = [e.to_legacy_dict() for e in emps]
-        _emp_cache = result
-        _emp_cache_ts = now
+        _emp_cache[cache_key] = result
+        _emp_cache_ts[cache_key] = now
         return result, None
     except Exception as e:
         return [], str(e)

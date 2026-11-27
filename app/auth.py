@@ -79,6 +79,16 @@ def get_current_user():
         return None
 
 
+def get_active_org_id():
+    """Return the active organization_id from session, or None."""
+    org_id = session.get("active_org_id")
+    if not org_id:
+        user = get_current_user()
+        if user:
+            org_id = user.get("organization_id")
+    return org_id
+
+
 def _is_api_request():
     """True when the caller expects JSON, not a page redirect."""
     if request.path.startswith("/api/") or "/api/" in request.path:

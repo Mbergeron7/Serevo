@@ -149,6 +149,8 @@ def create_app():
             ("organizations", "domain", "VARCHAR(200) DEFAULT ''"),
             ("organizations", "logo_url", "VARCHAR(500) DEFAULT ''"),
             ("organizations", "settings_json", "TEXT DEFAULT ''"),
+            ("employees", "organization_id", "INTEGER"),
+            ("planning_units", "organization_id", "INTEGER"),
         ]
         for table, col, col_type in _new_columns:
             try:
@@ -173,6 +175,27 @@ def create_app():
                 log.info("Seeded default organization: %s", default_org.name)
     except Exception as e:
         log.warning(f"seed_default_org() failed (may be expected on first run): {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+    # Backfill organization_id on employees and planning_units that have none
+    try:
+        with app.app_context():
+            from app.models import Organization
+            default_org = Organization.query.filter_by(slug="default").first()
+            if default_org:
+                for tbl in ["employees", "planning_units", "users"]:
+                    try:
+                        db.session.execute(db.text(
+                            f"UPDATE {tbl} SET organization_id = :oid WHERE organization_id IS NULL"
+                        ), {"oid": default_org.id})
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+    except Exception as e:
+        log.warning(f"org backfill failed: {e}")
         try:
             db.session.rollback()
         except Exception:

@@ -91,16 +91,18 @@ class User(db.Model):
 class PlanningUnit(db.Model):
     __tablename__ = "planning_units"
 
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(120), unique=True, nullable=False)
-    is_active  = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=_utcnow)
+    id              = db.Column(db.Integer, primary_key=True)
+    name            = db.Column(db.String(120), unique=True, nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
+    is_active       = db.Column(db.Boolean, default=True)
+    created_at      = db.Column(db.DateTime, default=_utcnow)
 
     description  = db.Column(db.String(255), nullable=True)
     timezone     = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
     calendar_id  = db.Column(db.Integer, db.ForeignKey("planning_calendars.id"), nullable=True)
 
     calendar     = db.relationship("PlanningCalendar", backref="planning_units")
+    organization = db.relationship("Organization", backref="planning_units")
 
     # Multi-activity: a parent PU (e.g. "Sales Support") with child PUs
     # (e.g. "Sales EN", "Sales FR") that represent skill/language splits.
@@ -114,12 +116,23 @@ class PlanningUnit(db.Model):
 
     # ── Canonical LOB helpers (single source of truth) ──────────
     @classmethod
-    def get_all_active(cls, include_children=True):
+    def get_all_active(cls, include_children=True, org_id=None):
         """Return all active PlanningUnits, optionally excluding children.
 
         This is the ONE canonical source for every LOB dropdown in the app.
+        When org_id is provided, filters to that organization's LOBs only.
+        When org_id is None, attempts to read the active org from the session.
         """
         q = cls.query.filter_by(is_active=True)
+        # Resolve org filter
+        if org_id is None:
+            try:
+                from flask import session as flask_session
+                org_id = flask_session.get("active_org_id")
+            except RuntimeError:
+                pass  # outside request context
+        if org_id:
+            q = q.filter(db.or_(cls.organization_id == org_id, cls.organization_id.is_(None)))
         if not include_children:
             q = q.filter(cls.parent_id.is_(None))
         return q.order_by(cls.name).all()
@@ -256,6 +269,7 @@ class Employee(db.Model):
 
     id               = db.Column(db.Integer, primary_key=True)
     employee_id      = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    organization_id  = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     external_id_1    = db.Column(db.String(50), nullable=True, index=True)   # e.g. external system ID
     external_id_2    = db.Column(db.String(50), nullable=True, index=True)   # secondary external system ID
     first_name       = db.Column(db.String(80), nullable=False)
