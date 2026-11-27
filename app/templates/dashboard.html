@@ -58,7 +58,7 @@
     (s.get('has_units', false), '/settings/planning-units', 'Set up LOBs', 'Define your lines of business and teams. Each LOB represents a group you schedule and forecast independently.', none),
     (s.get('has_employees', false), '/people/', 'Add Employees', 'Import your roster via CSV or add employees manually. Assign them to LOBs and set their skills.', '/data/'),
     (s.get('has_sheets', false), '/settings/google-sheets', 'Connect Google Sheets', 'Link your Google Sheet for real-time call data sync. This powers live monitoring and interval reports.', none),
-    (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to planning units so call volume flows to the right LOB.', none),
+    (s.get('has_routes', false), '/settings/', 'Set Up Call Routing', 'Map queue IDs from your ACD to LOBs so call volume flows to the right LOB.', none),
     (s.get('has_history', false), '/data/bulk-actuals', 'Import Historical Data', 'Upload past call volume data to build accurate forecasts. At least 4-8 weeks recommended.', '/data/'),
     (s.get('has_forecast', false), '/forecasting/', 'Generate Forecasts', 'Create interval-level volume and AHT forecasts using your historical data. Multiple methods available.', none),
     (s.get('has_schedules', false), '/scheduling/', 'Generate Schedules', 'Build optimized schedules based on your forecasts, employee availability, and coverage requirements.', none),
@@ -230,7 +230,7 @@
       </a>
       <a href="/settings/" class="card" style="text-decoration:none; color:inherit;">
         <h3>⚙️ Settings</h3>
-        <p>API connections, planning units, branding, and platform configuration.</p>
+        <p>API connections, LOBs, branding, and platform configuration.</p>
       </a>
       {% endif %}
     </div>

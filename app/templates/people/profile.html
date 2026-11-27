@@ -465,17 +465,17 @@
 <!-- ══════════════════════════════════════════════════════════════ -->
 <div class="tab-panel" id="tab-planning">
 
-  <!-- Planning Units -->
+  <!-- LOBs -->
   <div class="section-card">
     <div class="section-card-header">
-      Planning Units
+      LOBs
       <button class="btn-add" onclick="openAssignModal('planning_unit')">+ Add</button>
     </div>
     <div class="section-card-body">
       {% if pu_assignments %}
       <div style="overflow-x:auto"><table class="assign-table">
         <thead>
-          <tr><th>Planning Unit</th><th>Priority</th><th>Valid From</th><th>Valid To</th><th></th></tr>
+          <tr><th>LOB</th><th>Priority</th><th>Valid From</th><th>Valid To</th><th></th></tr>
         </thead>
         <tbody>
           {% for pa in pu_assignments %}
@@ -497,9 +497,9 @@
       </table></div>
       {% elif emp.planning_unit %}
       <p style="font-size:.85rem;">Legacy assignment: <strong>{{ emp.planning_unit.name }}</strong></p>
-      <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign planning units with priority &amp; validity.</p>
+      <p style="font-size:.78rem; color:var(--text-muted);">Use "+ Add" above to assign LOBs with priority &amp; validity.</p>
       {% else %}
-      <p style="color:var(--text-muted); font-size:.85rem;">No planning unit assigned.</p>
+      <p style="color:var(--text-muted); font-size:.85rem;">No LOB assigned.</p>
       {% endif %}
       {% if pu_history %}
       <details style="margin-top:.75rem;">
@@ -508,7 +508,7 @@
         </summary>
         <div style="overflow-x:auto; margin-top:.5rem;">
         <table class="assign-table" style="opacity:.7; font-size:.85rem;">
-          <thead><tr><th>Planning Unit</th><th>Priority</th><th>From</th><th>To</th><th></th></tr></thead>
+          <thead><tr><th>LOB</th><th>Priority</th><th>From</th><th>To</th><th></th></tr></thead>
           <tbody>
           {% for pa in pu_history %}
           <tr>
@@ -1195,7 +1195,7 @@ function openAssignModal(type, editData) {
   document.getElementById('assign_to').value = (isEdit && editData.valid_to) ? editData.valid_to : '';
 
   const addTitles = {
-    planning_unit: 'Add Planning Unit',
+    planning_unit: 'Add LOB',
     contract: 'Add Contract',
     selection: 'Add to Selection',
     shift_sequence: 'Add Shift Sequence',
@@ -1203,7 +1203,7 @@ function openAssignModal(type, editData) {
     work_time_pattern: 'Add Rotation Model',
   };
   const editTitles = {
-    planning_unit: 'Edit Planning Unit',
+    planning_unit: 'Edit LOB',
     contract: 'Edit Contract',
     selection: 'Edit Selection',
     shift_sequence: 'Edit Shift Sequence',

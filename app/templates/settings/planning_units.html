@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Planning Units — {{ brand_name }}{% endblock %}
+{% block title %}LOBs — {{ brand_name }}{% endblock %}
 
 {% block content %}
 <style>
@@ -18,13 +18,13 @@
 </style>
 
 <div class="page-header">
-  <h1>Planning Units</h1>
+  <h1>LOBs</h1>
   <p style="color:var(--text-muted);margin:0.25rem 0 0;">Manage LOBs and workload groups — configure business hours, assign activities, and set scheduling parameters.</p>
 </div>
 
 <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
   <a href="/settings/" style="color:var(--accent);text-decoration:none;font-size:.9rem;">← Back to Settings</a>
-  <button class="btn btn-primary" onclick="openModal()">+ Add Planning Unit</button>
+  <button class="btn btn-primary" onclick="openModal()">+ Add LOB</button>
 </div>
 
 <div style="overflow-x:auto"><table class="data-table" id="main-table">
@@ -38,7 +38,7 @@
 <dialog id="editModal" style="border-radius:12px;border:1px solid var(--border);padding:0;max-width:720px;width:95vw;background:var(--surface);color:var(--text);max-height:92vh;overflow:hidden;">
   <div style="padding:20px 24px 0;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 id="modalTitle" style="margin:0;">Add Planning Unit</h3>
+      <h3 id="modalTitle" style="margin:0;">Add LOB</h3>
       <button type="button" onclick="document.getElementById('editModal').close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
     </div>
     <div id="tabBar" class="tab-strip" style="display:flex;gap:0;margin-top:16px;border-bottom:2px solid var(--border);">
@@ -106,17 +106,17 @@
             <strong>This is a Multi-Activity (parent)</strong>
           </label>
           <div id="multiParentSection">
-            <label>Parent Planning Unit
+            <label>Parent LOB
               <select id="f_parent_id" class="form-input">
                 <option value="">— None (top-level) —</option>
               </select>
             </label>
-            <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Select a parent to make this a sub-activity (child) of another planning unit.</p>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Select a parent to make this a sub-activity (child) of another LOB.</p>
           </div>
           <div id="multiChildrenSection" style="display:none;">
             <p style="font-size:0.85rem;font-weight:600;margin:0 0 6px;">Children (sub-activities):</p>
             <div id="childrenContainer" style="font-size:0.85rem;"></div>
-            <p style="font-size:0.78rem;color:var(--text-muted);margin:8px 0 0;">To add children, edit another planning unit and set its Parent to this one.</p>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin:8px 0 0;">To add children, edit another LOB and set its Parent to this one.</p>
           </div>
           <label style="margin-top:12px;">Planning Calendar
             <select id="f_calendar_id" class="form-input">
@@ -139,7 +139,7 @@
 
       <!-- ── TAB: Activities ── -->
       <div class="tab-panel" data-panel="activities">
-        <div class="info-box">Assign activities to this planning unit with optional time windows and validity dates.</div>
+        <div class="info-box">Assign activities to this LOB with optional time windows and validity dates.</div>
         <div style="margin-bottom:12px;">
           <button type="button" class="btn btn-sm" onclick="addPuActivity()">+ Assign Activity</button>
         </div>
@@ -149,7 +149,7 @@
 
       <!-- ── TAB: Call Routes ── -->
       <div class="tab-panel" data-panel="routes">
-        <div class="info-box">Map phone system call routes/queues to this planning unit. The Route ID is what appears in the incoming real-time data — Serevo uses it to automatically route data to the right planning unit.</div>
+        <div class="info-box">Map phone system call routes/queues to this LOB. The Route ID is what appears in the incoming real-time data — Serevo uses it to automatically route data to the right LOB.</div>
         <div style="margin-bottom:12px;">
           <button type="button" class="btn btn-sm" onclick="addCallRoute()">+ Add Route</button>
         </div>
@@ -213,7 +213,7 @@ function render() {
   // Second pass: everything else
   DATA.forEach(r => { if (!rendered.has(r.id)) { rendered.add(r.id); appendPuRow(r, false, false); } });
 
-  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No planning units yet.</td></tr>';
+  if (!DATA.length) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No LOBs yet.</td></tr>';
 }
 
 function appendPuRow(r, isChild, isParent) {
@@ -265,7 +265,7 @@ function renderChildren(parentId) {
 
 /* ── Modal open ── */
 function openModal(item) {
-  document.getElementById('modalTitle').textContent = item ? 'Edit Planning Unit' : 'Add Planning Unit';
+  document.getElementById('modalTitle').textContent = item ? 'Edit LOB' : 'Add LOB';
   document.getElementById('f_id').value = item ? item.id : '';
   document.getElementById('f_name').value = item ? item.name : '';
   document.getElementById('f_description').value = item ? (item.description || '') : '';
@@ -475,7 +475,7 @@ async function saveItem() {
 
 /* ── Delete ── */
 async function deleteItem(id) {
-  if (!confirm('Delete this planning unit? Associated employees will become unassigned.')) return;
+  if (!confirm('Delete this LOB? Associated employees will become unassigned.')) return;
   const res = await fetch('/settings/planning-units/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
   const data = await res.json();
   if (data.success) { location.reload(); } else { alert(data.error||'Delete failed'); }

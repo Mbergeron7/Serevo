@@ -329,7 +329,7 @@
         <input id="grp-name" placeholder="e.g. Sales Team Leads">
       </div>
       <div class="form-group">
-        <label>Planning Unit</label>
+        <label>LOB</label>
         <select id="grp-pu"></select>
       </div>
     </div>
@@ -597,7 +597,7 @@ function switchTab(name) {
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 
-// ── Load planning units ───────────────────
+// ── Load LOBs ───────────────────
 async function loadPUs() {
   const r = await fetch(API + '/planning-units');
   _pus = await r.json();

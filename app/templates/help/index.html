@@ -86,10 +86,10 @@
         <li>Go to <strong>Settings &rarr; General</strong> and set your organization's brand name, accent color, and tagline.</li>
         <li>Go to <strong>Settings &rarr; Activities</strong> and configure the activities your workforce performs (calls, emails, breaks, lunch, etc.).</li>
         <li>Go to <strong>Settings &rarr; Contracts</strong> and set up at least one contract template (e.g., Full-Time 40hr).</li>
-        <li>Go to <strong>Settings &rarr; Planning Units</strong> and create your lines of business.</li>
+        <li>Go to <strong>Settings &rarr; LOBs</strong> and create your lines of business.</li>
         <li>Go to <strong>Settings &rarr; Day Models</strong> and create your shift templates.</li>
         <li>Go to <strong>Settings &rarr; Users</strong> to add supervisor and agent accounts.</li>
-        <li>Go to <strong>People</strong> and add your employees, assigning them contracts, skills, and planning units.</li>
+        <li>Go to <strong>People</strong> and add your employees, assigning them contracts, skills, and LOBs.</li>
       </ol>
 
       <h3>Logging In</h3>
@@ -124,7 +124,7 @@
       <p>Full access to every feature in {{ brand_name }}. Admins can:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Create, edit, and deactivate user accounts and assign roles</li>
-        <li>Configure all system settings (activities, contracts, planning units, day models, skills, schedule rules, API connections, Google Sheets, OAuth)</li>
+        <li>Configure all system settings (activities, contracts, LOBs, day models, skills, schedule rules, API connections, Google Sheets, OAuth)</li>
         <li>Add, edit, and remove employees from the roster</li>
         <li>Build, generate, and publish schedules</li>
         <li>Approve or deny PTO requests, shift swaps, and other approval workflows</li>
@@ -211,7 +211,7 @@
       <p>New installations see a <strong>Setup Wizard</strong> on the dashboard that guides you through the initial configuration in 7 steps:</p>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Company Info</strong> — set your organization name, branding, and time zone</li>
-        <li><strong>Planning Units</strong> — create your LOBs / departments</li>
+        <li><strong>LOBs</strong> — create your lines of business / departments</li>
         <li><strong>Employees</strong> — add your workforce roster</li>
         <li><strong>Skills</strong> — define skill groups and assignments</li>
         <li><strong>Schedules</strong> — create or import your first schedule</li>
@@ -234,7 +234,7 @@
       <p>The People page shows all employees in a sortable, filterable table. Use the filter controls at the top to narrow the list:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Search by Name</strong> — type any part of the employee's first or last name</li>
-        <li><strong>LOB / Planning Unit</strong> — filter to a specific line of business</li>
+        <li><strong>LOB</strong> — filter to a specific line of business</li>
         <li><strong>Status</strong> — filter by Active, Inactive, On Leave, or Terminated</li>
         <li><strong>Team Lead</strong> — show only employees assigned to a specific team lead</li>
         <li><strong>Contract</strong> — filter by contract type (e.g., Full-Time, Part-Time)</li>
@@ -245,7 +245,7 @@
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Click <strong>+ Add Employee</strong> at the top of the roster.</li>
         <li>Fill in required fields: First Name, Last Name, Employee ID, and Status.</li>
-        <li>Set optional fields: hire date, email, phone, LOB/planning unit, team lead, contract type, weekly hours target.</li>
+        <li>Set optional fields: hire date, email, phone, LOB/LOB, team lead, contract type, weekly hours target.</li>
         <li>Click <strong>Save</strong>. The employee is now in the roster and can be scheduled.</li>
       </ol>
 
@@ -280,7 +280,7 @@
         <li>In the <strong>Skills</strong> section, check the skills that apply to this employee.</li>
         <li>Click <strong>Save</strong>.</li>
       </ol>
-      <p>Skills are used by the auto-scheduler to match employees to planning units and activities that require specific qualifications. Manage the skills inventory in <strong>Settings &rarr; Skills</strong>.</p>
+      <p>Skills are used by the auto-scheduler to match employees to LOBs and activities that require specific qualifications. Manage the skills inventory in <strong>Settings &rarr; Skills</strong>.</p>
 
       <h3>PTO &amp; Accommodations</h3>
       <p>From the People submenu or an employee's profile, you can:</p>
@@ -343,7 +343,7 @@
         <li><strong>Daily View</strong> — shows all employees and their shifts for a single date. Useful for seeing coverage at a glance.</li>
         <li><strong>Weekly View</strong> — shows seven days across columns with employees as rows. Useful for spotting gaps and patterns.</li>
       </ul>
-      <p>Use the filter controls to narrow by LOB/planning unit, team lead, or employee name. The schedule grid color-codes shifts by day model or activity type.</p>
+      <p>Use the filter controls to narrow by LOB/LOB, team lead, or employee name. The schedule grid color-codes shifts by day model or activity type.</p>
 
       <h3>Creating Individual Shifts</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -359,7 +359,7 @@
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Click <strong>Generate</strong> at the top of the scheduling page.</li>
         <li>Select the date range to generate (typically one week).</li>
-        <li>Select the planning units / LOBs to include.</li>
+        <li>Select the LOBs / LOBs to include.</li>
         <li>The auto-scheduler uses: demand forecasts, employee availability, assigned contracts (hour limits, rest rules, consecutive day limits), skills, accommodations, PTO, and day model templates.</li>
         <li>Review the generated schedule. Shifts appear in draft mode.</li>
         <li>Make manual adjustments as needed (drag to move, click to edit).</li>
@@ -424,14 +424,14 @@
       <p>Hover over any bar to see the exact numbers and gap for that interval.</p>
 
       <h3>Forecast Demand Heat Map</h3>
-      <p>A sticky heat-map band sits at the top of the scheduling page, showing forecast demand across all planning units. When you select a parent LOB (e.g., Sales Support), the heat map automatically displays the parent and its child planning units (e.g., Sales Combined, Sales FR, Sales EN) so you can see all demand simultaneously.</p>
+      <p>A sticky heat-map band sits at the top of the scheduling page, showing forecast demand across all LOBs. When you select a parent LOB (e.g., Sales Support), the heat map automatically displays the parent and its child LOBs (e.g., Sales Combined, Sales FR, Sales EN) so you can see all demand simultaneously.</p>
       <p>The heat map has three tabs:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Demand</strong> — agents required per interval (single day) or peak agents required per day (multi-day). Cells are color-coded from green (low) through yellow to red (high demand).</li>
         <li><strong>Coverage</strong> — the difference between scheduled agents and required agents. <span style="color:#059669;font-weight:600;">Green positive values</span> mean surplus; <span style="color:#dc2626;font-weight:600;">red negative values</span> mean deficit.</li>
         <li><strong>Staffing</strong> — how many agents are actually scheduled per interval or day, regardless of demand.</li>
       </ul>
-      <p>Each tab shows Peak and Average summary columns on the right. When multiple planning units are displayed, a TOTAL row aggregates values across all units.</p>
+      <p>Each tab shows Peak and Average summary columns on the right. When multiple LOBs are displayed, a TOTAL row aggregates values across all units.</p>
       <p>The heat map updates automatically whenever you change the LOB or date range in the configuration panel.</p>
 
       <h3>Importing Schedules from a Connected WFM System</h3>
@@ -448,9 +448,9 @@
 
       <h3>End-to-End: Creating a Full Schedule</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
-        <li><strong>Prerequisites</strong> — Ensure you have: a forecast generated for the target period, contracts configured for all employees, day models set up for each shift type, and activities assigned to your planning units.</li>
+        <li><strong>Prerequisites</strong> — Ensure you have: a forecast generated for the target period, contracts configured for all employees, day models set up for each shift type, and activities assigned to your LOBs.</li>
         <li><strong>Check your forecast</strong> — Go to <em>Forecasting</em> and verify the agents-required numbers look right for the week you want to schedule. If needed, adjust using a scenario or reforecast.</li>
-        <li><strong>Navigate to Scheduling</strong> — Select the target planning unit (LOB) and switch to the desired view (Daily or Weekly).</li>
+        <li><strong>Navigate to Scheduling</strong> — Select the target LOB and switch to the desired view (Daily or Weekly).</li>
         <li><strong>Auto-generate</strong> — Click <em>Generate</em>, select the date range and LOBs. The scheduler builds shifts respecting contracts, availability, and demand.</li>
         <li><strong>Review coverage</strong> — In Daily View, check the Coverage overlay. Green bars mean you're covered; amber/red bars indicate gaps that need manual attention.</li>
         <li><strong>Adjust manually</strong> — Click any shift to edit. Move agents to fill coverage gaps. Add individual shifts for specific intervals that are short-staffed.</li>
@@ -471,7 +471,7 @@
       <p><strong>Specialty Schedules</strong> handles role-based assignments that follow rules different from regular scheduling — closer rotations, weekend coverage, and stat-day assignments. The output feeds into the same schedule your agents see, so attendance, adherence, and PTO all work automatically.</p>
 
       <h3>Key Concepts</h3>
-      <p><strong>Groups</strong> — A group is a set of team members who share the same rotation rules within a planning unit. For example, "Sales TL Closers" might contain every team lead in Sales Support who rotates through closing shifts. Each group defines how many closers are needed on weekdays and weekends, the weekend-coverage mode (rotate, fixed, or volunteer), and an optional stat-day role.</p>
+      <p><strong>Groups</strong> — A group is a set of team members who share the same rotation rules within an LOB. For example, "Sales TL Closers" might contain every team lead in Sales Support who rotates through closing shifts. Each group defines how many closers are needed on weekdays and weekends, the weekend-coverage mode (rotate, fixed, or volunteer), and an optional stat-day role.</p>
 
       <p><strong>Members</strong> — Employees added to a group. Each member can have individual settings: whether they are a weekend primary, which days they're excluded from closing, maximum closings per week, accommodation hours (e.g. cannot close after a certain time), their regular work days, <strong>contracted days per week</strong> (default 5), and <strong>contracted hours per week</strong>. Members can also be flagged as <strong>Fill-In Eligible</strong> — these are part-time or relief staff who only get assigned when regular members are unavailable.</p>
 
@@ -480,8 +480,8 @@
       <h3>Getting Started</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Navigate to <strong>Scheduling → Specialty Schedules</strong> (or use the link on the main Scheduling page).</li>
-        <li>On the <strong>Groups &amp; Members</strong> tab, click <strong>New Group</strong>. Choose a planning unit, name the group, and set your closer and weekend requirements.</li>
-        <li>Add members to the group by selecting employees from that planning unit. Configure each member's work-day preferences and any accommodations.</li>
+        <li>On the <strong>Groups &amp; Members</strong> tab, click <strong>New Group</strong>. Choose an LOB, name the group, and set your closer and weekend requirements.</li>
+        <li>Add members to the group by selecting employees from that LOB. Configure each member's work-day preferences and any accommodations.</li>
         <li>Switch to the <strong>Shift Slots</strong> tab. Select your group and fill in the start/end times for each day-type and role combination (weekday opener, weekday closer, Saturday opener, etc.). Click <strong>Save All Slots</strong>.</li>
         <li>Once groups, members, and slots are configured, use the <strong>Generate &amp; Calendar</strong> tab to produce the specialty schedule for a date range. The generated shifts appear in the main schedule with a <em>roster</em> source tag.</li>
       </ol>
@@ -590,7 +590,7 @@
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Navigate to <strong>Real-Time Management</strong> or <strong>Scheduling</strong>.</li>
         <li>Click <strong>Post VTO</strong> or <strong>Post OT</strong>.</li>
-        <li>Select the date, time window, planning unit, and number of slots available.</li>
+        <li>Select the date, time window, LOB, and number of slots available.</li>
         <li>Click <strong>Post</strong>. The opportunity appears in agents' portals.</li>
         <li>As agents sign up, review the list and confirm selections. Slots are filled on a first-come basis or by admin selection, depending on your configuration.</li>
       </ol>
@@ -618,7 +618,7 @@
       <p>The Forecasting module helps predict future workload demand. Upload historical volume data to generate forecasts that feed into capacity planning and schedule generation.</p>
 
       <h3>Viewing Forecasts</h3>
-      <p>Select a planning unit (LOB) and date range to view forecast data. Charts show predicted vs. actual volumes by interval. Toggle between daily totals and interval-level detail (15-minute or 30-minute granularity).</p>
+      <p>Select an LOB (LOB) and date range to view forecast data. Charts show predicted vs. actual volumes by interval. Toggle between daily totals and interval-level detail (15-minute or 30-minute granularity).</p>
 
       <h3>Importing Data</h3>
       <p>Use the <strong>Data Import</strong> section to upload historical contact volumes. The system uses this data to calculate trends and generate forecasts. You can import via CSV upload or configure an API connection for automated data feeds (see <strong>Settings &rarr; API Connections</strong>).</p>
@@ -672,7 +672,7 @@
         <li><strong>OTF (Offer to Forecast)</strong> — the ratio of total offered to total forecasted, expressed as a percentage. An OTF of 100% means actuals are tracking exactly to forecast. Above 100% means volume is higher than predicted; below 100% means lower. The detail line shows the absolute difference (e.g., "+500 over" or "-200 under").</li>
         <li><strong>Avg AHT</strong> — the weighted average handle time across all intervals.</li>
         <li><strong>Person-hours Required</strong> — total agent-hours needed to handle the forecasted volume at your configured service level and AHT.</li>
-        <li><strong>Service Level</strong> — your planning unit's service level target (e.g., 80/20 means 80% of contacts answered within 20 seconds).</li>
+        <li><strong>Service Level</strong> — your LOB's service level target (e.g., 80/20 means 80% of contacts answered within 20 seconds).</li>
         <li><strong>Shrinkage</strong> — the shrinkage factor applied to staffing calculations (accounts for breaks, meetings, absenteeism, etc.).</li>
       </ul>
 
@@ -681,12 +681,12 @@
 
       <h3>Coverage Heatmap</h3>
       <p>When viewing forecasts in <strong>Weekly</strong>, <strong>Monthly</strong>, or <strong>Yearly</strong> view, the Coverage Heatmap appears below the charts. It shows average daily agents required per LOB, color-coded from green (low demand) through yellow (medium) to red (high demand).</p>
-      <p><strong>Activity breakdown:</strong> Click any LOB row to expand and see the activities assigned to that planning unit. Each activity shows its share of the LOB's staffing requirement along with its color indicator. This lets you see which activities drive the most demand in each planning unit.</p>
+      <p><strong>Activity breakdown:</strong> Click any LOB row to expand and see the activities assigned to that LOB. Each activity shows its share of the LOB's staffing requirement along with its color indicator. This lets you see which activities drive the most demand in each LOB.</p>
       <p>The <strong>TOTAL</strong> row at the bottom sums all LOBs for each period, giving you an enterprise-wide view of staffing needs over time.</p>
 
       <h3>End-to-End: From Data to Forecast</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.8;">
-        <li><strong>Set up your planning units</strong> — Go to <em>Settings &rarr; Planning Units</em> and create a unit for each LOB. Assign activities and configure business hours.</li>
+        <li><strong>Set up your LOBs</strong> — Go to <em>Settings &rarr; LOBs</em> and create a unit for each LOB. Assign activities and configure business hours.</li>
         <li><strong>Import historical data</strong> — Upload at least 4–8 weeks of historical contact volumes via CSV upload or pull them from your connected WFM system using <em>Import from WFM</em> (leave LOB blank to import all LOBs at once). The more data, the better the forecast accuracy.</li>
         <li><strong>Select forecast method</strong> — Choose a LOB, set a date range, and pick a forecast method. <em>Auto (Best Fit)</em> is recommended for your first run.</li>
         <li><strong>Generate the forecast</strong> — Click <em>Generate</em>. The system produces interval-level predictions and calculates agents required using Erlang C.</li>
@@ -733,9 +733,9 @@
       <p><strong>Data Sources</strong> — configure where historical interval data comes from (Google Sheets, CSV uploads). Shows configured sources with sync/delete actions. This is a setup-once configuration for your data pipeline.</p>
 
       <h3>How Headcount Is Calculated</h3>
-      <p>Capacity planning calculates headcount per planning unit per month using employee records from the People roster:</p>
+      <p>Capacity planning calculates headcount per LOB per month using employee records from the People roster:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Historical months</strong> — counts all employees who were assigned to the planning unit during that month, based on their hire date and end date. Employees who were terminated during a past month are still counted for the months they were active.</li>
+        <li><strong>Historical months</strong> — counts all employees who were assigned to the LOB during that month, based on their hire date and end date. Employees who were terminated during a past month are still counted for the months they were active.</li>
         <li><strong>Current and future months</strong> — counts only employees with an <strong>Active</strong> status. Terminated employees are excluded from the current month forward.</li>
       </ul>
       <p>This means historical headcount accurately reflects who was actually working each month, while current/future headcount reflects your real available workforce.</p>
@@ -759,7 +759,7 @@
       <h2>Real-Time Management</h2><span class="help-chevron">▸</span>
     </div>
     <div class="help-body">
-      <p>The Real-Time Management page is organized into tabbed views, each focused on a different aspect of intraday operations. Select a planning unit (LOB) and date at the top — all tabs share the same context. Data refreshes automatically from your connected Google Sheets or ACD integration.</p>
+      <p>The Real-Time Management page is organized into tabbed views, each focused on a different aspect of intraday operations. Select an LOB (LOB) and date at the top — all tabs share the same context. Data refreshes automatically from your connected Google Sheets or ACD integration.</p>
 
       <h3>Page Features</h3>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -809,7 +809,7 @@
       <h3>SVL Calculator</h3>
       <p>The Service Level Calculator shows actual service level performance for each LOB. It pulls answered and answered-within-threshold data from your connected data source and calculates the SL percentage.</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Displays SL % for each planning unit with the target threshold (e.g., 80/20 means 80% of calls answered within 20 seconds)</li>
+        <li>Displays SL % for each LOB with the target threshold (e.g., 80/20 means 80% of calls answered within 20 seconds)</li>
         <li>LOBs that have not received any calls show "—" instead of 0%</li>
         <li>Color-coded: green when meeting target, red when below</li>
       </ul>
@@ -1074,7 +1074,7 @@
   <!-- ============================================================ -->
   <!-- PAYROLL -->
   <!-- ============================================================ -->
-  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export overtime regular hours scheduled clock aggregate submit punches approval adjust edit filter planning unit active inactive">
+  <div class="help-section" id="payroll" data-keywords="payroll hours wages pay period export overtime regular hours scheduled clock aggregate submit punches approval adjust edit filter LOB active inactive">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Payroll</h2><span class="help-chevron">▸</span>
     </div>
@@ -1093,7 +1093,7 @@
         <li>Go to <strong>Payroll</strong> from the navigation menu.</li>
         <li>Select the pay period start and end dates.</li>
         <li>Use the <strong>Employee</strong> dropdown to filter to a specific person, or leave it on "All Employees".</li>
-        <li>Use the <strong>Planning Unit</strong> dropdown to filter by team/LOB (e.g., Sales Support, Tech Help Desk, Billing).</li>
+        <li>Use the <strong>LOB</strong> dropdown to filter by team/LOB (e.g., Sales Support, Tech Help Desk, Billing).</li>
         <li>The system calculates totals for every matching employee: regular hours, overtime hours, PTO hours, and total payable hours.</li>
       </ol>
 
@@ -1120,7 +1120,7 @@
 
       <h3>CSV Export</h3>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Configure your filters (date range, employee, planning unit).</li>
+        <li>Configure your filters (date range, employee, LOB).</li>
         <li>Click the <strong>Export CSV</strong> button.</li>
         <li>The CSV file downloads with all visible payroll data, including regular hours, overtime, PTO, and total payable hours per employee.</li>
         <li>Import the file into your payroll system (compatible with Excel, Google Sheets, or any spreadsheet application).</li>
@@ -1182,7 +1182,7 @@
         <li>Click <strong>+ New Request</strong>.</li>
         <li>Select a <strong>Request Type</strong> — the form fields update automatically based on the type you choose (see Request Types below). Switching types resets all fields to prevent stale data.</li>
         <li>Set <strong>Priority</strong> (Low, Medium, High, or Urgent).</li>
-        <li>Select the <strong>LOB / Department</strong> — this filters the agent list to employees rostered under that planning unit.</li>
+        <li>Select the <strong>LOB / Department</strong> — this filters the agent list to employees rostered under that LOB.</li>
         <li>Choose the <strong>Affected Agent(s)</strong> — a searchable multi-select dropdown showing only agents from the selected LOB. You can select multiple agents.</li>
         <li>Set the <strong>Effective Date</strong> and, if applicable, the <strong>End Date</strong>.</li>
         <li>Fill in any additional fields that appear for your request type.</li>
@@ -1241,7 +1241,7 @@
       <p><strong>Charts &amp; Tables:</strong></p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Request Volume by Daily</strong> — line chart showing daily ticket creation with a 7-day moving average overlay</li>
-        <li><strong>By LOB</strong> — doughnut chart showing ticket distribution by LOB/Planning Unit</li>
+        <li><strong>By LOB</strong> — doughnut chart showing ticket distribution by LOB</li>
         <li><strong>Top Request Types</strong> — horizontal bar chart showing ticket counts per category, sorted by volume</li>
         <li><strong>Priority Split</strong> — table showing ticket count per priority level (Urgent, High, Medium, Low)</li>
         <li><strong>Team Performance</strong> — table with columns: Member, Assigned, Completed, In Prog, Not Started, Same-Day %. Sorted by assigned count. Same-Day % shows what percentage of each analyst's completed tickets were resolved on the day they were created.</li>
@@ -1276,7 +1276,7 @@
   <!-- ============================================================ -->
   <!-- SETTINGS -->
   <!-- ============================================================ -->
-  <div class="help-section" id="settings" data-keywords="settings configuration branding users skills contracts day models api google sheets oauth activities planning units schedule rules general customization brand color tagline accent code label productive paid default offset duration flexibility window external id multi-activity parent child category status lob line of business contract type full time part time daily hours weekly hours monthly hours workdays calculation flexible fixed target min max work time scheduling parameters auto-scheduler rest hours consecutive days night shift overtime threshold holiday weekend saturday sunday rotation shift sequence planning calendar selections">
+  <div class="help-section" id="settings" data-keywords="settings configuration branding users skills contracts day models api google sheets oauth activities lobs schedule rules general customization brand color tagline accent code label productive paid default offset duration flexibility window external id multi-activity parent child category status lob line of business contract type full time part time daily hours weekly hours monthly hours workdays calculation flexible fixed target min max work time scheduling parameters auto-scheduler rest hours consecutive days night shift overtime threshold holiday weekend saturday sunday rotation shift sequence planning calendar selections">
     <div class="help-header" onclick="toggleSection(this)">
       <h2>Settings</h2><span class="help-chevron">▸</span>
     </div>
@@ -1437,23 +1437,23 @@
         <li>Click <strong>Save</strong>.</li>
       </ol>
 
-      <!-- Planning Units -->
-      <h3>Planning Units</h3>
-      <p>Planning units represent your workload groups or lines of business (LOBs). Each planning unit is a distinct queue or work type that can be forecasted, staffed, and scheduled independently.</p>
+      <!-- LOBs -->
+      <h3>LOBs</h3>
+      <p>Planning units represent your workload groups or lines of business (LOBs). Each LOB is a distinct queue or work type that can be forecasted, staffed, and scheduled independently.</p>
 
-      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Setting Up a Planning Unit</h4>
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Setting Up an LOB</h4>
       <ol style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li>Go to <strong>Settings &rarr; Planning Units</strong>.</li>
-        <li>Click <strong>+ Add Planning Unit</strong>.</li>
+        <li>Go to <strong>Settings &rarr; LOBs</strong>.</li>
+        <li>Click <strong>+ Add LOB</strong>.</li>
         <li>Enter the name (e.g., "Inbound Sales", "Technical Support", "Billing").</li>
         <li>Set the <strong>business hours</strong> for each day of the week — the hours during which this LOB operates. For example, Mon-Fri 08:00-20:00, Sat 09:00-17:00, Sun closed.</li>
         <li>Click <strong>Save</strong>.</li>
       </ol>
 
-      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Assigning Activities to Planning Units</h4>
-      <p>Each planning unit should have activities associated with it — these define what work happens in this LOB. From the planning unit's settings, add the relevant activities (e.g., inbound calls, email, chat). This lets the scheduler know which activities to assign agents to when they are scheduled into this planning unit.</p>
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Assigning Activities to LOBs</h4>
+      <p>Each LOB should have activities associated with it — these define what work happens in this LOB. From the LOB's settings, add the relevant activities (e.g., inbound calls, email, chat). This lets the scheduler know which activities to assign agents to when they are scheduled into this LOB.</p>
 
-      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Planning Unit Parameters</h4>
+      <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">LOB Parameters</h4>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Minimum Staffing</strong> — the minimum number of agents that must be scheduled at all times during business hours, regardless of forecast demand</li>
         <li><strong>Service Level Target</strong> — the percentage of contacts that should be answered within the target time (e.g., 80% of calls answered within 20 seconds)</li>
@@ -1464,20 +1464,20 @@
 
       <!-- LOB Mappings -->
       <h3>LOB Mappings</h3>
-      <p>LOB Mappings let you map source line-of-business names from external systems (ACD platforms, telephony, CRM exports) to your internal planning units. This is essential when imported data uses different naming conventions than your planning units — for example, your ACD might label queues as "Sales EN", "Sales FR", and "Sales Combined", but all three should roll up to your "Sales Support" planning unit.</p>
+      <p>LOB Mappings let you map source line-of-business names from external systems (ACD platforms, telephony, CRM exports) to your internal LOBs. This is essential when imported data uses different naming conventions than your LOBs — for example, your ACD might label queues as "Sales EN", "Sales FR", and "Sales Combined", but all three should roll up to your "Sales Support" LOB.</p>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">How LOB Mappings Work</h4>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li><strong>Source Name</strong> — the LOB name exactly as it appears in your imported data (e.g., "Sales EN", "Tech_Support_L2", "Billing-Collections")</li>
-        <li><strong>Planning Unit</strong> — the planning unit this source name maps to. Multiple source names can map to the same planning unit.</li>
+        <li><strong>LOB</strong> — the LOB this source name maps to. Multiple source names can map to the same LOB.</li>
       </ul>
-      <p>Capacity planning uses these mappings to aggregate forecast hours and headcount from multiple source LOBs into a single planning unit view. Without mappings, imported LOB names that don't exactly match a planning unit name will be ignored in capacity calculations.</p>
+      <p>Capacity planning uses these mappings to aggregate forecast hours and headcount from multiple source LOBs into a single LOB view. Without mappings, imported LOB names that don't exactly match an LOB name will be ignored in capacity calculations.</p>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Common Patterns</h4>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
-        <li><strong>Language suffixes</strong> — map "Sales EN", "Sales FR", and "Sales Combined" to a single "Sales" planning unit</li>
-        <li><strong>System prefixes</strong> — map "ACD_Billing" or "CRM-Billing" to your "Billing" planning unit</li>
-        <li><strong>Legacy names</strong> — map old queue names to current planning unit names after a reorg</li>
+        <li><strong>Language suffixes</strong> — map "Sales EN", "Sales FR", and "Sales Combined" to a single "Sales" LOB</li>
+        <li><strong>System prefixes</strong> — map "ACD_Billing" or "CRM-Billing" to your "Billing" LOB</li>
+        <li><strong>Legacy names</strong> — map old queue names to current LOB names after a reorg</li>
       </ul>
 
       <h4 style="font-size:.88rem;margin:12px 0 4px;color:var(--text-primary);">Setting Up LOB Mappings</h4>
@@ -1485,7 +1485,7 @@
         <li>Go to <strong>Settings &rarr; LOB Mappings</strong>.</li>
         <li>Click <strong>+ Add Mapping</strong>.</li>
         <li>Enter the <strong>Source Name</strong> exactly as it appears in your imported data.</li>
-        <li>Select the <strong>Planning Unit</strong> it should map to.</li>
+        <li>Select the <strong>LOB</strong> it should map to.</li>
         <li>Click <strong>Save</strong>. Repeat for each source LOB name that needs mapping.</li>
       </ol>
 
@@ -1687,13 +1687,13 @@
         <li>Go to <strong>Shift Notes</strong> from the navigation bar.</li>
         <li>Click <strong>+ New Note</strong>.</li>
         <li>Enter a title and the note body. Use the rich text formatting if needed.</li>
-        <li>Optionally select a <strong>planning unit</strong> to target the note to a specific team.</li>
+        <li>Optionally select an <strong>LOB</strong> to target the note to a specific team.</li>
         <li>Choose a priority level: Normal or Urgent. Urgent notes display with a highlighted border.</li>
         <li>Click <strong>Save</strong>. The note appears immediately for anyone viewing that team's notes.</li>
       </ol>
 
       <h3>Viewing &amp; Filtering Notes</h3>
-      <p>All active shift notes display in reverse chronological order (newest first). Use the planning unit dropdown to filter notes for a specific team. Urgent notes always appear at the top.</p>
+      <p>All active shift notes display in reverse chronological order (newest first). Use the LOB dropdown to filter notes for a specific team. Urgent notes always appear at the top.</p>
 
       <h3>Resolving a Note</h3>
       <p>When a note is no longer relevant (the issue was fixed, the shift handoff is complete), click <strong>Resolve</strong> on the note. Resolved notes move to the <em>Resolved</em> tab so they're preserved for reference but don't clutter the active view.</p>
@@ -1724,7 +1724,7 @@
       </ul>
 
       <h3>Filtering the Calendar</h3>
-      <p>Use the filter bar to narrow the calendar to a specific planning unit, team lead, or employee status. This is especially useful for large teams where the full roster would be too crowded.</p>
+      <p>Use the filter bar to narrow the calendar to a specific LOB, team lead, or employee status. This is especially useful for large teams where the full roster would be too crowded.</p>
 
       <h3>Understanding the Colors</h3>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
@@ -1906,7 +1906,7 @@
         <li>Shift swap requests and resolutions</li>
         <li>Shift bidding posts and selections</li>
         <li>Data imports and bulk operations</li>
-        <li>Settings changes (activities, contracts, planning units, day models, etc.)</li>
+        <li>Settings changes (activities, contracts, LOBs, day models, etc.)</li>
         <li>Login and logout events</li>
         <li>Document uploads and deletions</li>
       </ul>
@@ -1954,7 +1954,7 @@
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Shift start and end time</li>
         <li>Assigned activities and break placement</li>
-        <li>Planning unit / LOB</li>
+        <li>LOB</li>
         <li>Any special notes from your supervisor</li>
       </ul>
       <p>Only published schedules are visible. If you don't see a schedule for a future week, it may not have been published yet — check with your supervisor.</p>
@@ -2021,7 +2021,7 @@
       <p>When shifts are available for claiming, they appear in the <strong>Available Shifts</strong> section of your portal:</p>
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Browse open shifts that match your skills and LOB assignment</li>
-        <li>Each shift shows the date, start/end time, and planning unit</li>
+        <li>Each shift shows the date, start/end time, and LOB</li>
         <li>Click <strong>Claim</strong> to pick up a shift — it's immediately added to your schedule</li>
         <li>Claimed shifts can be viewed in your My Schedule tab</li>
       </ul>
@@ -2078,7 +2078,7 @@
       <ul style="margin:6px 0 12px 20px;font-size:.88rem;line-height:1.7;">
         <li>Ensure employees have contracts assigned (People &rarr; employee profile).</li>
         <li>Verify day models are configured (Settings &rarr; Day Models).</li>
-        <li>Check that planning units have business hours set and activities assigned.</li>
+        <li>Check that LOBs have business hours set and activities assigned.</li>
         <li>Review the error messages — the scheduler reports specific constraint violations.</li>
       </ul>
 

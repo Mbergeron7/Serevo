@@ -211,7 +211,7 @@ async function loadPlanningUnits() {
     _puIdMap = {};
     items.forEach(p => { _puIdMap[p.name] = p.id; });
     MSPicker.init('filterPU', items.map(p => p.name), null, true);
-  } catch(err) { console.error('Failed to load planning units', err); }
+  } catch(err) { console.error('Failed to load LOBs', err); }
 }
 
 async function loadPayroll() {

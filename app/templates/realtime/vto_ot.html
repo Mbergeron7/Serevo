@@ -100,7 +100,7 @@
       <div style="flex:1"><label>Hours</label><input type="number" id="fHours" step="0.5" min="0" value="0"></div>
       <div style="flex:1"><label>Slots</label><input type="number" id="fSlots" min="1" value="1"></div>
     </div>
-    <label>LOB (Planning Unit)</label>
+    <label>LOB</label>
     <select id="fLob"><option value="">— Any —</option>{% for lob in lobs %}<option value="{{ lob }}">{{ lob }}</option>{% endfor %}</select>
     <label>Notes</label>
     <textarea id="fNotes" placeholder="Optional details for agents…"></textarea>

@@ -723,7 +723,7 @@ async function previewSync() {
       html += `<p>Statuses: ${Object.entries(data.statuses).map(([k,v]) => `${k}: ${v}`).join(', ')}</p>`;
       html += `<p><strong>${data.new_employees}</strong> new employees, <strong>${data.existing_employees}</strong> updates</p>`;
       if (Object.keys(data.active_planning_units).length) {
-        html += `<details><summary>Active by Planning Unit</summary><ul>`;
+        html += `<details><summary>Active by LOB</summary><ul>`;
         Object.entries(data.active_planning_units).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => {
           html += `<li>${k}: ${v}</li>`;
         });

@@ -139,7 +139,7 @@
   <div style="overflow-x:auto;">
     <table class="data-table" id="dm-table">
       <thead>
-        <tr><th>Color</th><th>Name</th><th>Abbr</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>Planning Unit</th><th></th></tr>
+        <tr><th>Color</th><th>Name</th><th>Abbr</th><th>Start</th><th>End</th><th>Hours</th><th>Type</th><th>LOB</th><th></th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -156,7 +156,7 @@
   <div style="overflow-x:auto;">
     <table class="data-table" id="wtp-table">
       <thead>
-        <tr><th>Name</th><th>Abbr</th><th>Planning Unit</th><th>Max Exception Days</th><th>Assigned Day Models</th><th></th></tr>
+        <tr><th>Name</th><th>Abbr</th><th>LOB</th><th>Max Exception Days</th><th>Assigned Day Models</th><th></th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -185,7 +185,7 @@
      ═══════════════════════════════════════════════════════════════ -->
 <div id="panel-eq" class="tab-panel">
   <div class="filter-bar">
-    <label>Planning Unit</label>
+    <label>LOB</label>
     <div class="ms-picker" id="eq-pu-filter" data-placeholder="All PUs">
       <div class="ms-picker-btn" onclick="MSPicker.toggle('eq-pu-filter')"><span class="ms-label">All PUs</span></div>
       <div class="ms-dropdown">
@@ -240,7 +240,7 @@
             <option value="Flexible">Flexible</option>
           </select>
         </label>
-        <label>Planning Unit
+        <label>LOB
           <select id="dm_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
         </label>
       </div>
@@ -267,7 +267,7 @@
         <label>Abbreviation<input id="wtp_f_abbreviation" class="form-input" maxlength="10"></label>
       </div>
       <div class="form-row2">
-        <label>Planning Unit
+        <label>LOB
           <select id="wtp_f_planning_unit_id" class="form-input"><option value="">— None —</option></select>
         </label>
         <label>Max Exception Days<input id="wtp_f_max_exception_days" type="number" class="form-input" min="0" value="0"></label>

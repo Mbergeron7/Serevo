@@ -177,7 +177,7 @@ function switchTab(name, btn) {
   document.getElementById('panel-' + name).classList.add('active');
 }
 
-// ── Load planning units for datalists ──
+// ── Load LOBs for datalists ──
 async function loadUnits() {
   try {
     const resp = await fetch('/api/planning-units');
@@ -230,7 +230,7 @@ function addFcDay() {
 
 async function saveForecast() {
   const unit = document.getElementById('fc_unit').value.trim();
-  if (!unit) return showResult('fcResult', 'error', 'Planning unit is required.');
+  if (!unit) return showResult('fcResult', 'error', 'LOB is required.');
 
   const rows = document.querySelectorAll('#fcRows .interval-row');
   const intervals = [];
@@ -289,7 +289,7 @@ function addRqDay() {
 
 async function saveRequirements() {
   const unit = document.getElementById('rq_unit').value.trim();
-  if (!unit) return showResult('rqResult', 'error', 'Planning unit is required.');
+  if (!unit) return showResult('rqResult', 'error', 'LOB is required.');
 
   const rows = document.querySelectorAll('#rqRows .interval-row');
   const intervals = [];

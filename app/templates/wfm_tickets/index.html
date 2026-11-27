@@ -1287,7 +1287,7 @@ async function viewTicket(id){
   {
     let rows='';
     if(t.affected_agents) rows+=_row('Agent(s)',esc(t.affected_agents));
-    if(t.lob) rows+=_row('LOB / Planning Unit',esc(t.lob));
+    if(t.lob) rows+=_row('LOB',esc(t.lob));
     if(t.action_type) rows+=_row('Action',esc(t.action_type));
     if(t.accommodation_type) rows+=_row('Type',esc(t.accommodation_type));
     if(t.status_change) rows+=_row('Status Change',esc(t.status_change));
