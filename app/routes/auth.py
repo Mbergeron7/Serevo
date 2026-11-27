@@ -145,6 +145,7 @@ def admin_setup():
         password = request.form.get("password") or ""
 
         is_demo_account = request.form.get("is_demo") == "on"
+        is_superadmin = request.form.get("is_superadmin") == "on"
 
         if not email or not password:
             error = "Email and password are required."
@@ -161,6 +162,10 @@ def admin_setup():
                         existing.display_name = name
                     try:
                         existing.is_demo = is_demo_account
+                        try:
+                            existing.is_superadmin = is_superadmin
+                        except Exception:
+                            pass
                         db.session.commit()
                     except Exception:
                         db.session.rollback()
@@ -182,6 +187,7 @@ def admin_setup():
                             role="admin",
                             is_active=True,
                             is_demo=is_demo_account,
+                            is_superadmin=is_superadmin,
                         )
                         db.session.add(user)
                         db.session.commit()
@@ -218,6 +224,7 @@ def admin_setup():
     <label>Display Name</label><input name="name" placeholder="Optional">
     <label>Password</label><input name="password" type="password" required>
     <label class="check"><input name="is_demo" type="checkbox"> Demo account (shows sample data)</label>
+    <label class="check"><input name="is_superadmin" type="checkbox"> Super-admin (manage all organizations)</label>
     <button type="submit">Create Admin Account</button>
     </form></body></html>
     """
