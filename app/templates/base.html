@@ -130,9 +130,9 @@
           🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px;"></span>
         </div>
         {% endif %}
-        {% if current_user and current_user.get('is_superadmin') %}
-        <a href="/admin/orgs/" style="font-size:.72rem;background:var(--brand-accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px;text-decoration:none;" title="Click to manage organizations">
-          {{ current_user.organization_name or 'Platform' }}
+        {% if current_user and current_user.get('organization_name') %}
+        <a href="{% if current_user.get('is_superadmin') %}/admin/orgs/{% else %}/admin/orgs/reset{% endif %}" style="font-size:.72rem;background:var(--brand-accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px;text-decoration:none;" title="{% if current_user.get('is_superadmin') %}Manage organizations{% else %}Click to return to your organization{% endif %}">
+          {{ current_user.organization_name }}
         </a>
         {% endif %}
         <span class="user-name">{{ current_user.name if current_user else '' }}</span>

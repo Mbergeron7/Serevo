@@ -6,8 +6,8 @@ Provides CRUD for organizations (tenants) and user assignment.
 
 import re
 import logging
-from flask import Blueprint, render_template, request, session, jsonify
-from app.auth import superadmin_required
+from flask import Blueprint, render_template, request, session, jsonify, redirect
+from app.auth import login_required, superadmin_required
 
 log = logging.getLogger("serevo.orgs")
 
@@ -59,6 +59,15 @@ def create():
     db.session.commit()
     log.info("Organization created: id=%s name=%s slug=%s", org.id, org.name, org.slug)
     return jsonify({"success": True, "id": org.id, "name": org.name, "slug": org.slug})
+
+
+@org_bp.route("/admin/orgs/reset")
+@login_required
+def reset_org():
+    """Clear the active org override and return to the user's home org."""
+    session.pop("active_org_id", None)
+    log.info("User cleared active_org_id, returning to home org")
+    return redirect("/")
 
 
 @org_bp.route("/admin/orgs/switch", methods=["POST"])
