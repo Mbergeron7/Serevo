@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
-from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu
+from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu, org_scope_schedule
 from app.constants import DEFAULT_TIMEZONE, to_local
 
 log = logging.getLogger("serevo.attendance")
@@ -219,7 +219,7 @@ def api_dashboard():
 
     # Build schedule map for tardiness check
     sched_map = {}
-    scheds = Schedule.query.filter_by(schedule_date=target_date).all()
+    scheds = org_scope_schedule().filter_by(schedule_date=target_date).all()
     for s in scheds:
         if s.shift_start:
             sched_map[s.employee_id] = s.shift_start

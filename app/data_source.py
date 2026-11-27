@@ -283,8 +283,8 @@ class PostgresSource:
 
     def get_employees(self):
         try:
-            from app.models import Employee
-            emps = Employee.query.all()
+            from app.models import Employee, org_scope_emp
+            emps = org_scope_emp().all()
             return [e.to_legacy_dict() for e in emps], None
         except Exception as e:
             self._rollback()
@@ -292,8 +292,8 @@ class PostgresSource:
 
     def get_planning_units(self):
         try:
-            from app.models import PlanningUnit
-            units = PlanningUnit.query.filter_by(is_active=True).all()
+            from app.models import PlanningUnit, org_scope_pu
+            units = org_scope_pu().filter_by(is_active=True).all()
             return [{"id": u.name, "name": u.name} for u in units], None
         except Exception as e:
             self._rollback()
@@ -301,9 +301,9 @@ class PostgresSource:
 
     def get_requirements(self, unit_id, day):
         try:
-            from app.models import RequirementInterval, PlanningUnit
+            from app.models import RequirementInterval, PlanningUnit, org_scope_pu
             normalized = normalize_lob(str(unit_id).strip())
-            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            unit = org_scope_pu().filter_by(name=normalized).first()
             if not unit:
                 return [], None
             target = _date_str(day)
@@ -318,9 +318,9 @@ class PostgresSource:
 
     def get_forecast(self, workload_id, day):
         try:
-            from app.models import ForecastInterval, PlanningUnit
+            from app.models import ForecastInterval, PlanningUnit, org_scope_pu
             normalized = normalize_lob(str(workload_id).strip())
-            unit = PlanningUnit.query.filter_by(name=normalized).first()
+            unit = org_scope_pu().filter_by(name=normalized).first()
             if not unit:
                 return [], None
             target = _date_str(day)

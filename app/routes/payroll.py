@@ -9,7 +9,7 @@ from datetime import date, timedelta, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User, org_scope_emp
+from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User, org_scope_emp, org_scope_schedule
 
 log = logging.getLogger(__name__)
 payroll_bp = Blueprint("payroll", __name__, url_prefix="/payroll")
@@ -148,7 +148,7 @@ def payroll_summary():
             emp_data[eid]["edited_entries"] += 1
 
     # Get scheduled hours for comparison
-    sched_q = Schedule.query.filter(
+    sched_q = org_scope_schedule().filter(
         Schedule.schedule_date >= start, Schedule.schedule_date <= end
     )
     if filter_employee:

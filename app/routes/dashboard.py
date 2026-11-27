@@ -33,14 +33,14 @@ def index():
         from app.models import ForecastInterval
         today = date.today()
         try:
-            from app.models import org_scope_emp
+            from app.models import org_scope_emp, org_scope_schedule
             emp_count = org_scope_emp().count()
             pu_count = len(PlanningUnit.get_all_active())
             from app.models import TimeClock
             live_stats = {
                 "total_employees": emp_count,
                 "planning_units": pu_count,
-                "on_today": Schedule.query.filter_by(schedule_date=today).count(),
+                "on_today": org_scope_schedule().filter_by(schedule_date=today).count(),
                 "pto_today": PTOEntry.query.filter(
                     PTOEntry.start_date <= today,
                     PTOEntry.end_date >= today,
@@ -55,7 +55,7 @@ def index():
                 "has_routes": CallRoute.query.first() is not None,
                 "has_forecast": ForecastInterval.query.first() is not None,
                 "has_history": IntervalActual.query.filter(IntervalActual.timestamp < today).first() is not None,
-                "has_schedules": Schedule.query.first() is not None,
+                "has_schedules": org_scope_schedule().first() is not None,
             }
             # Today's coverage stats
             coverage_stats = {"avg_pct": None, "at_risk": []}
@@ -69,7 +69,7 @@ def index():
                 except Exception:
                     pass
                 lobs_with_schedules = set()
-                today_schedules = Schedule.query.filter_by(schedule_date=today).filter(
+                today_schedules = org_scope_schedule().filter_by(schedule_date=today).filter(
                     Schedule.employee_id.isnot(None)
                 ).all()
                 for s in today_schedules:

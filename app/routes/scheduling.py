@@ -16,7 +16,7 @@ from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode, PlanningUnit, org_scope_emp, org_scope_pu
+from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode, PlanningUnit, org_scope_emp, org_scope_pu, org_scope_schedule
 from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.scheduling")
@@ -73,7 +73,7 @@ def _query_schedules_for_lob(lob, start_date, end_date):
         direct_emp_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
         ).all()}
-        assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
             EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
         ).all()}
         emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -90,7 +90,7 @@ def _query_schedules_for_lob(lob, start_date, end_date):
         ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
     else:
         # All LOBs
-        return Schedule.query.filter(
+        return org_scope_schedule().filter(
             Schedule.schedule_date >= start_date,
             Schedule.schedule_date <= end_date,
         ).order_by(Schedule.schedule_date, Schedule.shift_start).all()
@@ -471,7 +471,7 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode, shift_sequ
             direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id == pu.id, Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                 EmployeePlanningUnit.planning_unit_id == pu.id,
             ).all()}
             emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -928,7 +928,7 @@ def save_schedule():
                 direct_emp_ids = {e.id for e in org_scope_emp().filter(
                     Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
                 ).all()}
-                assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+                assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                     EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
                 ).all()}
                 emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -945,8 +945,8 @@ def save_schedule():
             else:
                 old_ids = []
         else:
-            # All LOBs — delete all schedules for this date
-            old_ids = [s.id for s in Schedule.query.filter_by(schedule_date=sched_date).all()]
+            # All LOBs — delete all schedules for this date (org-scoped)
+            old_ids = [s.id for s in org_scope_schedule().filter_by(schedule_date=sched_date).all()]
 
         if old_ids:
             ShiftSegment.query.filter(ShiftSegment.schedule_id.in_(old_ids)).delete(synchronize_session=False)
@@ -1090,7 +1090,7 @@ def load_schedule():
             direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                 EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
                 db.or_(EmployeePlanningUnit.valid_to.is_(None),
                        EmployeePlanningUnit.valid_to >= start_date),
@@ -1758,7 +1758,7 @@ def clear_schedule():
             direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
                 EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
             ).all()}
             emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -1838,7 +1838,7 @@ def copy_week():
         direct_emp_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id == pu.id, Employee.status == "Active"
         ).all()}
-        assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
             EmployeePlanningUnit.planning_unit_id == pu.id,
         ).all()}
         emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -3214,7 +3214,7 @@ def bidding_generate():
         direct_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id == pu.id, Employee.status == "Active"
         ).all()}
-        assigned_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
+        assigned_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
             EmployeePlanningUnit.planning_unit_id == pu.id
         ).all()}
         all_emp_ids = list(direct_ids | assigned_ids)

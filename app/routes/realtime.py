@@ -1793,7 +1793,7 @@ def api_live_agents():
                 return jsonify(_la_data)
 
     try:
-        from app.models import db, Employee, Schedule, ShiftSegment, org_scope_emp
+        from app.models import db, Employee, Schedule, ShiftSegment, org_scope_emp, org_scope_schedule
 
         agent_now, now_est = _get_live_agents_from_sheet()
 
@@ -1820,7 +1820,7 @@ def api_live_agents():
         # ── Load today's schedules ─────────────────────────────
         today = now_est.date()
         now_time = now_est.time()
-        schedules = Schedule.query.filter(
+        schedules = org_scope_schedule().filter(
             Schedule.schedule_date == today,
             Schedule.status == "scheduled",
         ).all()  # segments are eager-loaded (lazy="joined" on model)

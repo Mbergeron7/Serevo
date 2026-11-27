@@ -53,6 +53,25 @@ def org_scope_pu(query=None):
     return q
 
 
+def org_scope_schedule(query=None):
+    """Return a Schedule query scoped to the active org via planning_unit."""
+    from app.models import Schedule, PlanningUnit
+    q = query if query is not None else Schedule.query
+    org_id = _get_active_org_id()
+    if org_id:
+        q = q.filter(
+            db.or_(
+                Schedule.planning_unit_id.in_(
+                    db.session.query(PlanningUnit.id).filter(
+                        db.or_(PlanningUnit.organization_id == org_id, PlanningUnit.organization_id.is_(None))
+                    )
+                ),
+                Schedule.planning_unit_id.is_(None)
+            )
+        )
+    return q
+
+
 # ═══════════════════════════════════════════════════════════════
 # ORGANIZATION — Multi-tenancy foundation
 # ═══════════════════════════════════════════════════════════════
