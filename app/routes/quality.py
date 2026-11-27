@@ -43,7 +43,8 @@ def api_evaluations():
         return jsonify({"evaluations": evals})
 
     try:
-        q = QualityEvaluation.query
+        from app.models import org_scope_by_employee
+        q = org_scope_by_employee(QualityEvaluation.query, QualityEvaluation)
         if lob_list:
             q = q.filter(QualityEvaluation.lob.in_(lob_list))
         if date_from:
@@ -77,7 +78,7 @@ def api_dashboard():
         return jsonify(get_demo_quality_dashboard(lob_raw))
 
     try:
-        q = QualityEvaluation.query
+        q = org_scope_by_employee(QualityEvaluation.query, QualityEvaluation)
         if lob_list:
             q = q.filter(QualityEvaluation.lob.in_(lob_list))
 

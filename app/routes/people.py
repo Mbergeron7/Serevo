@@ -23,7 +23,7 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         AttendanceEvent, AdherenceException,
                         PTOEntry, TimeOffType,
                         LeaveOfAbsence, LEAVE_TYPES, Accommodation,
-                        org_scope_emp)
+                        org_scope_emp, org_scope_by_employee)
 
 log = logging.getLogger("serevo.people")
 
@@ -318,7 +318,7 @@ def loa():
 
     loa_records = []
     try:
-        all_loa = LeaveOfAbsence.query.order_by(LeaveOfAbsence.start_date.desc()).all()
+        all_loa = org_scope_by_employee(LeaveOfAbsence.query, LeaveOfAbsence).order_by(LeaveOfAbsence.start_date.desc()).all()
         for rec in all_loa:
             d = rec.to_dict()
             d["employee_name"] = rec.employee.full_name if rec.employee else "Unknown"
@@ -1187,7 +1187,7 @@ def expiry_warnings():
 
     # LOA records with expected_return_date approaching
     try:
-        loas = LeaveOfAbsence.query.filter(
+        loas = org_scope_by_employee(LeaveOfAbsence.query, LeaveOfAbsence).filter(
             LeaveOfAbsence.status == "Active",
             LeaveOfAbsence.expected_return_date.isnot(None),
             LeaveOfAbsence.expected_return_date <= horizon,
@@ -1209,7 +1209,7 @@ def expiry_warnings():
 
     # Accommodation records with end_date approaching
     try:
-        accoms = Accommodation.query.filter(
+        accoms = org_scope_by_employee(Accommodation.query, Accommodation).filter(
             Accommodation.end_date.isnot(None),
             Accommodation.end_date <= horizon,
             Accommodation.end_date >= today,
@@ -1473,7 +1473,7 @@ def list_pto_entries():
     from datetime import date, timedelta
     cutoff = date.today() - timedelta(days=days)
 
-    q = PTOEntry.query.filter(PTOEntry.start_date >= cutoff)
+    q = org_scope_by_employee(PTOEntry.query, PTOEntry).filter(PTOEntry.start_date >= cutoff)
     if employee_id:
         q = q.filter(PTOEntry.employee_id == employee_id)
     if status_filter:

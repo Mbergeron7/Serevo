@@ -207,7 +207,8 @@ def api_dashboard():
         return jsonify(success=False, error="Invalid date")
 
     lob_filter = payload.get("lob", "").strip()
-    q = TimeClock.query.filter_by(date=target_date)
+    from app.models import org_scope_by_employee
+    q = org_scope_by_employee(TimeClock.query, TimeClock).filter_by(date=target_date)
     if lob_filter:
         # Filter by LOB (planning unit name)
         from app.models import PlanningUnit
@@ -358,7 +359,7 @@ def events_for_range():
     except (ValueError, TypeError):
         return jsonify(error="Invalid date"), 400
 
-    events = AttendanceEvent.query.filter(
+    events = org_scope_by_employee(AttendanceEvent.query, AttendanceEvent).filter(
         AttendanceEvent.event_date >= d_start,
         AttendanceEvent.event_date <= d_end,
     ).all()
@@ -577,7 +578,7 @@ def auto_detect():
     # If clear mode, remove all auto-coded events for this date first
     cleared = 0
     if clear_first:
-        auto_events = AttendanceEvent.query.filter(
+        auto_events = org_scope_by_employee(AttendanceEvent.query, AttendanceEvent).filter(
             AttendanceEvent.event_date == d,
             AttendanceEvent.note.like("Auto:%"),
         ).all()

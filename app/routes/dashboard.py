@@ -9,7 +9,9 @@ from datetime import date
 
 from flask import Blueprint, render_template, redirect, session
 from app.auth import get_current_user
-from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest, CallRoute, IntervalActual, AppSetting
+from app.models import (Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest,
+                        CallRoute, IntervalActual, AppSetting, ForecastInterval, TimeClock,
+                        org_scope_emp, org_scope_schedule, org_scope_by_employee, org_scope_by_pu)
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -30,31 +32,28 @@ def index():
         from app.demo_data import get_demo_dashboard_stats
         demo_stats = get_demo_dashboard_stats()
     else:
-        from app.models import ForecastInterval
         today = date.today()
         try:
-            from app.models import org_scope_emp, org_scope_schedule
             emp_count = org_scope_emp().count()
             pu_count = len(PlanningUnit.get_all_active())
-            from app.models import TimeClock
             live_stats = {
                 "total_employees": emp_count,
                 "planning_units": pu_count,
                 "on_today": org_scope_schedule().filter_by(schedule_date=today).count(),
-                "pto_today": PTOEntry.query.filter(
+                "pto_today": org_scope_by_employee(PTOEntry.query, PTOEntry).filter(
                     PTOEntry.start_date <= today,
                     PTOEntry.end_date >= today,
                 ).count(),
-                "clocked_in": TimeClock.query.filter_by(status="active").count(),
+                "clocked_in": org_scope_by_employee(TimeClock.query, TimeClock).filter_by(status="active").count(),
             }
             # Setup progress for getting-started checklist
             setup = {
                 "has_units": pu_count > 0,
                 "has_employees": emp_count > 0,
                 "has_sheets": bool(AppSetting.get("google_sheet_key")),
-                "has_routes": CallRoute.query.first() is not None,
-                "has_forecast": ForecastInterval.query.first() is not None,
-                "has_history": IntervalActual.query.filter(IntervalActual.timestamp < today).first() is not None,
+                "has_routes": org_scope_by_pu(CallRoute.query, CallRoute).first() is not None,
+                "has_forecast": org_scope_by_pu(ForecastInterval.query, ForecastInterval).first() is not None,
+                "has_history": org_scope_by_pu(IntervalActual.query, IntervalActual).first() is not None,
                 "has_schedules": org_scope_schedule().first() is not None,
             }
             # Today's coverage stats
@@ -108,16 +107,16 @@ def index():
             pending = {}
             if user and user.get("role") in ("admin", "supervisor"):
                 pending = {
-                    "pto": PTOEntry.query.filter_by(approval_status="pending").count(),
-                    "bids": ShiftBid.query.filter_by(status="pending").count(),
-                    "swaps": ShiftSwapRequest.query.filter(
+                    "pto": org_scope_by_employee(PTOEntry.query, PTOEntry).filter_by(approval_status="pending").count(),
+                    "bids": org_scope_by_employee(ShiftBid.query, ShiftBid).filter_by(status="pending").count(),
+                    "swaps": org_scope_by_employee(ShiftSwapRequest.query, ShiftSwapRequest).filter(
                         ShiftSwapRequest.status.in_(["pending", "accepted"])
                     ).count(),
                 }
             # Upcoming PTO (next 7 days)
             from datetime import timedelta
             week_end = today + timedelta(days=7)
-            upcoming_pto = PTOEntry.query.filter(
+            upcoming_pto = org_scope_by_employee(PTOEntry.query, PTOEntry).filter(
                 PTOEntry.start_date >= today,
                 PTOEntry.start_date <= week_end,
                 PTOEntry.approval_status == "approved",

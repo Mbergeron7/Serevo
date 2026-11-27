@@ -38,7 +38,8 @@ def active_announcements():
         from app.demo_data import get_demo_announcements
         return jsonify(success=True, announcements=get_demo_announcements())
     now = _utcnow()
-    query = Announcement.query.filter(
+    from app.models import org_scope_by_user
+    query = org_scope_by_user(Announcement.query, Announcement, "created_by").filter(
         db.or_(Announcement.expires_at.is_(None), Announcement.expires_at > now)
     ).order_by(Announcement.is_pinned.desc(), Announcement.created_at.desc())
 
@@ -72,7 +73,7 @@ def list_announcements():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
-    entries = Announcement.query.order_by(
+    entries = org_scope_by_user(Announcement.query, Announcement, "created_by").order_by(
         Announcement.created_at.desc()
     ).limit(50).all()
 

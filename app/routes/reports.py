@@ -172,7 +172,8 @@ def summary():
             pto_days += (e.end_date - e.start_date).days + 1
 
         # -- Quality --
-        qual_q = QualityEvaluation.query.filter(
+        from app.models import org_scope_by_employee
+        qual_q = org_scope_by_employee(QualityEvaluation.query, QualityEvaluation).filter(
             QualityEvaluation.eval_date >= start_d, QualityEvaluation.eval_date <= end_d,
         )
         if emp_ids:
@@ -426,7 +427,7 @@ def summary_csv():
         func.avg(QualityEvaluation.overall_score)
     ).filter(QualityEvaluation.eval_date >= cutoff,
              QualityEvaluation.employee_id.in_(emp_ids) if emp_ids else db.false()).scalar() if emp_ids else None
-    quality_count = QualityEvaluation.query.filter(
+    quality_count = org_scope_by_employee(QualityEvaluation.query, QualityEvaluation).filter(
         QualityEvaluation.eval_date >= cutoff,
         QualityEvaluation.employee_id.in_(emp_ids) if emp_ids else db.false()
     ).count() if emp_ids else 0

@@ -72,6 +72,64 @@ def org_scope_schedule(query=None):
     return q
 
 
+def _org_emp_ids():
+    """Return a subquery of Employee.id values scoped to the active org.
+    Use with: Model.query.filter(Model.employee_id.in_(_org_emp_ids()))
+    """
+    org_id = _get_active_org_id()
+    if org_id:
+        return db.session.query(Employee.id).filter(
+            db.or_(Employee.organization_id == org_id, Employee.organization_id.is_(None))
+        )
+    return None
+
+
+def _org_pu_ids():
+    """Return a subquery of PlanningUnit.id values scoped to the active org."""
+    org_id = _get_active_org_id()
+    if org_id:
+        return db.session.query(PlanningUnit.id).filter(
+            db.or_(PlanningUnit.organization_id == org_id, PlanningUnit.organization_id.is_(None))
+        )
+    return None
+
+
+def org_scope_by_employee(query, model):
+    """Filter any model with employee_id FK through Employee's org."""
+    emp_ids = _org_emp_ids()
+    if emp_ids is not None:
+        return query.filter(model.employee_id.in_(emp_ids))
+    return query
+
+
+def org_scope_by_pu(query, model):
+    """Filter any model with planning_unit_id FK through PlanningUnit's org."""
+    pu_ids = _org_pu_ids()
+    if pu_ids is not None:
+        return query.filter(model.planning_unit_id.in_(pu_ids))
+    return query
+
+
+def _org_user_ids():
+    """Return a subquery of User.id values scoped to the active org."""
+    org_id = _get_active_org_id()
+    if org_id:
+        return db.session.query(User.id).filter(
+            db.or_(User.organization_id == org_id, User.organization_id.is_(None))
+        )
+    return None
+
+
+def org_scope_by_user(query, model, user_col="submitted_by"):
+    """Filter any model with a user FK through User's org."""
+    user_ids = _org_user_ids()
+    if user_ids is not None:
+        col = getattr(model, user_col, None)
+        if col is not None:
+            return query.filter(col.in_(user_ids))
+    return query
+
+
 # ═══════════════════════════════════════════════════════════════
 # ORGANIZATION — Multi-tenancy foundation
 # ═══════════════════════════════════════════════════════════════

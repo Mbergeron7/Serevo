@@ -46,8 +46,9 @@ def list_modules():
     modules = TrainingModule.query.filter(TrainingModule.is_active == True).order_by(TrainingModule.title).all()
     rows = []
     for m in modules:
-        assigned = TrainingAssignment.query.filter_by(module_id=m.id).count()
-        completed = TrainingAssignment.query.filter_by(module_id=m.id, status="completed").count()
+        from app.models import org_scope_by_employee
+        assigned = org_scope_by_employee(TrainingAssignment.query, TrainingAssignment).filter_by(module_id=m.id).count()
+        completed = org_scope_by_employee(TrainingAssignment.query, TrainingAssignment).filter_by(module_id=m.id, status="completed").count()
         rows.append({
             "id": m.id,
             "title": m.title,
@@ -136,7 +137,7 @@ def list_assignments():
     employee_id = data.get("employee_id")
     status_filter = data.get("status", "")
 
-    q = TrainingAssignment.query.join(TrainingModule).filter(TrainingModule.is_active == True)
+    q = org_scope_by_employee(TrainingAssignment.query, TrainingAssignment).join(TrainingModule).filter(TrainingModule.is_active == True)
     if module_id:
         q = q.filter(TrainingAssignment.module_id == module_id)
     if employee_id:

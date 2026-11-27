@@ -1076,7 +1076,8 @@ def activity_log_data():
         per_page = min(int(payload.get("per_page", 50)), 100)
         action_filter = payload.get("action", "")
 
-        q = AuditLog.query.order_by(AuditLog.created_at.desc())
+        from app.models import org_scope_by_user
+        q = org_scope_by_user(AuditLog.query, AuditLog, "user_id").order_by(AuditLog.created_at.desc())
         if action_filter:
             q = q.filter(AuditLog.action == action_filter)
 

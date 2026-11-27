@@ -529,26 +529,28 @@ def save_skill_group():
         mapped_emp_ids = [m.employee_id for m in
                          SkillMapping.query.filter_by(skill_group_id=g.id).all()]
         if mapped_emp_ids:
-            for emp in Employee.query.filter(Employee.id.in_(mapped_emp_ids)).all():
+            from app.models import org_scope_emp
+            for emp in org_scope_emp().filter(Employee.id.in_(mapped_emp_ids)).all():
                 if emp.all_skills:
                     skills = [s.strip() for s in emp.all_skills.split(",")]
                     skills = [name if s == old_name else s for s in skills]
                     emp.all_skills = ", ".join(skills)
                 # Update planning_unit_id if it pointed at the old name
                 if emp.planning_unit and emp.planning_unit.name == old_name:
-                    new_pu = PlanningUnit.query.filter_by(name=name).first()
+                    from app.models import org_scope_pu
+                    new_pu = org_scope_pu().filter_by(name=name).first()
                     if new_pu:
                         emp.planning_unit_id = new_pu.id
 
         # Rename the PlanningUnit itself if one matches the old name
-        old_pu = PlanningUnit.query.filter_by(name=old_name).first()
+        old_pu = org_scope_pu().filter_by(name=old_name).first()
         if old_pu:
-            existing_new = PlanningUnit.query.filter_by(name=name).first()
+            existing_new = org_scope_pu().filter_by(name=name).first()
             if not existing_new:
                 old_pu.name = name
             else:
                 # Merge: reassign employees from old PU to existing new PU
-                Employee.query.filter_by(planning_unit_id=old_pu.id).update(
+                org_scope_emp().filter_by(planning_unit_id=old_pu.id).update(
                     {"planning_unit_id": existing_new.id})
 
         # Update LobMapping targets that reference the old name
@@ -739,7 +741,7 @@ def save_lob_mapping():
     m.source_name = source
     m.planning_unit_name = target
     # Resolve FK from name
-    pu = PlanningUnit.query.filter_by(name=target).first()
+    pu = org_scope_pu().filter_by(name=target).first()
     if pu:
         m.planning_unit_id = pu.id
     db.session.commit()

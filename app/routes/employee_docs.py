@@ -55,7 +55,8 @@ def list_docs():
     emp_id = data.get("employee_id")
     category = data.get("category", "")
 
-    q = EmployeeDocument.query
+    from app.models import org_scope_by_employee
+    q = org_scope_by_employee(EmployeeDocument.query, EmployeeDocument)
     if emp_id:
         q = q.filter(EmployeeDocument.employee_id == emp_id)
     if category:

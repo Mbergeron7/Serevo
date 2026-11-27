@@ -12,7 +12,7 @@ from datetime import datetime, timezone, date, timedelta
 
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, get_current_user
-from app.models import db, WfmTicket, WfmTicketComment, WfmTicketHistory, User
+from app.models import db, WfmTicket, WfmTicketComment, WfmTicketHistory, User, org_scope_by_user
 from sqlalchemy import func, case
 
 log = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ def list_tickets():
     show_deleted = data.get("deleted", False)
     search_text = (data.get("search") or "").strip()
 
-    query = WfmTicket.query
+    query = org_scope_by_user(WfmTicket.query, WfmTicket, "submitted_by")
 
     # Team leads (non-analyst) see only their own tickets
     if not _is_wfm_analyst(user):
@@ -489,7 +489,7 @@ def ticket_analytics():
     date_from = data.get("from")
     date_to = data.get("to")
 
-    query = WfmTicket.query.filter_by(is_deleted=False)
+    query = org_scope_by_user(WfmTicket.query, WfmTicket, "submitted_by").filter_by(is_deleted=False)
     if date_from:
         try:
             query = query.filter(WfmTicket.created_at >= datetime.fromisoformat(date_from))
@@ -719,7 +719,7 @@ def download_csv():
     if not _is_wfm_analyst(user):
         return jsonify(success=False, error="Analyst only"), 403
 
-    tickets = WfmTicket.query.filter_by(is_deleted=False).order_by(WfmTicket.created_at.desc()).all()
+    tickets = org_scope_by_user(WfmTicket.query, WfmTicket, "submitted_by").filter_by(is_deleted=False).order_by(WfmTicket.created_at.desc()).all()
 
     output = io.StringIO()
     writer = csv.writer(output)

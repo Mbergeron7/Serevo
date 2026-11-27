@@ -274,8 +274,8 @@ def get_accommodations(sheet=None):
 def _get_accommodations_from_db():
     """Read accommodations from the PostgreSQL database."""
     try:
-        from app.models import Accommodation
-        accoms = Accommodation.query.all()
+        from app.models import Accommodation, org_scope_by_employee
+        accoms = org_scope_by_employee(Accommodation.query, Accommodation).all()
         return [a.to_legacy_dict() for a in accoms], None
     except Exception as e:
         return [], str(e)
@@ -474,8 +474,8 @@ def get_pto(sheet=None):
 def _get_pto_from_db():
     """Read PTO entries from the PostgreSQL database."""
     try:
-        from app.models import PTOEntry
-        entries = PTOEntry.query.order_by(PTOEntry.start_date).all()
+        from app.models import PTOEntry, org_scope_by_employee
+        entries = org_scope_by_employee(PTOEntry.query, PTOEntry).order_by(PTOEntry.start_date).all()
         return [p.to_legacy_dict() for p in entries], None
     except Exception as e:
         return [], str(e)
