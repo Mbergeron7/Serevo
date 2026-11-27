@@ -30,10 +30,18 @@ BADGE_DEFS = {
 
 
 def _get_agent_employee(user):
-    """Resolve the Employee record for the logged-in agent."""
+    """Resolve the Employee record for the logged-in agent.
+    Returns None if the employee doesn't belong to the active org."""
     if not user or not user.get("employee_id"):
         return None
-    return Employee.query.get(user["employee_id"])
+    emp = Employee.query.get(user["employee_id"])
+    if emp:
+        # Check org scope — if switched to a different org, don't show this employee
+        from app.models import _get_active_org_id
+        org_id = _get_active_org_id()
+        if org_id and emp.organization_id and emp.organization_id != org_id:
+            return None
+    return emp
 
 
 class _PreviewPU:
