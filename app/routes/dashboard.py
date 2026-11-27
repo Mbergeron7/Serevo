@@ -51,9 +51,9 @@ def index():
                 "has_units": pu_count > 0,
                 "has_employees": emp_count > 0,
                 "has_sheets": bool(AppSetting.get("google_sheet_key")),
-                "has_routes": org_scope(CallRoute.query, CallRoute).first() is not None,
-                "has_forecast": org_scope(ForecastInterval.query, ForecastInterval).first() is not None,
-                "has_history": org_scope(IntervalActual.query, IntervalActual).first() is not None,
+                "has_routes": CallRoute.query.first() is not None,
+                "has_forecast": ForecastInterval.query.first() is not None,
+                "has_history": IntervalActual.query.first() is not None,
                 "has_schedules": org_scope_schedule().first() is not None,
             }
             # Today's coverage stats
