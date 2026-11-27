@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, supervisor_required, get_current_user
 from sqlalchemy import func
-from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu, org_scope_schedule
+from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu, org_scope_schedule, org_scope_by_employee
 from app.constants import DEFAULT_TIMEZONE, to_local
 
 log = logging.getLogger("serevo.attendance")
