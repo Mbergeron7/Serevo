@@ -11,7 +11,7 @@ from flask import Blueprint, render_template, redirect, session
 from app.auth import get_current_user
 from app.models import (Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest,
                         CallRoute, IntervalActual, AppSetting, ForecastInterval, TimeClock,
-                        org_scope_emp, org_scope_schedule, org_scope_by_employee, org_scope_by_pu)
+                        org_scope_emp, org_scope_schedule, org_scope_by_employee, org_scope_by_pu, org_scope)
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -51,9 +51,9 @@ def index():
                 "has_units": pu_count > 0,
                 "has_employees": emp_count > 0,
                 "has_sheets": bool(AppSetting.get("google_sheet_key")),
-                "has_routes": org_scope_by_pu(CallRoute.query, CallRoute).first() is not None,
-                "has_forecast": org_scope_by_pu(ForecastInterval.query, ForecastInterval).first() is not None,
-                "has_history": org_scope_by_pu(IntervalActual.query, IntervalActual).first() is not None,
+                "has_routes": org_scope(CallRoute.query, CallRoute).first() is not None,
+                "has_forecast": org_scope(ForecastInterval.query, ForecastInterval).first() is not None,
+                "has_history": org_scope(IntervalActual.query, IntervalActual).first() is not None,
                 "has_schedules": org_scope_schedule().first() is not None,
             }
             # Today's coverage stats
