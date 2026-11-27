@@ -392,7 +392,10 @@ function loadPTO() {
         <td>${r.pto_type === 'full' ? 'Full Day' : 'Partial'}</td>
         <td><span class="badge-sm ${stClass}">${r.approval_status}</span></td>
         <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(r.note)}</td>
-        <td><button class="btn-del" onclick="deletePTOEntry(${r.id}, '${esc(r.employee_name)}')">Delete</button></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${r.approval_status === 'pending' ? `<button class="btn btn-sm btn-primary" style="font-size:.7rem;padding:2px 8px;" onclick="approvePTO(${r.id})">Approve</button><button class="btn btn-sm btn-outline" style="font-size:.7rem;padding:2px 8px;color:#dc2626;border-color:#dc2626;" onclick="denyPTO(${r.id})">Deny</button>` : ''}
+          <button class="btn-del" onclick="deletePTOEntry(${r.id}, '${esc(r.employee_name)}')">Delete</button>
+        </td>
       </tr>`;
     }).join('');
   });
@@ -487,6 +490,30 @@ function deletePTOEntry(id, name) {
   .then(r => r.json())
   .then(d => {
     if (d.success) { loadPTO(); showToast('Entry deleted.', 'success'); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  });
+}
+
+function approvePTO(id) {
+  fetch('/approvals/api/pto/action', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: id, action: 'approve' }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { loadPTO(); showToast('Time off approved.', 'success'); }
+    else showToast('Error: ' + (d.error || 'Unknown'), 'error');
+  });
+}
+function denyPTO(id) {
+  if (!confirm('Deny this time-off request?')) return;
+  fetch('/approvals/api/pto/action', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: id, action: 'deny' }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { loadPTO(); showToast('Time off denied.', 'success'); }
     else showToast('Error: ' + (d.error || 'Unknown'), 'error');
   });
 }

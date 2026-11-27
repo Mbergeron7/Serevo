@@ -47,10 +47,9 @@ def pending_counts():
         from app.demo_data import get_demo_approvals_counts
         return jsonify(success=True, **get_demo_approvals_counts())
     try:
-        from app.models import org_scope_by_employee
-        pto = org_scope_by_employee(PTOEntry.query, PTOEntry).filter_by(approval_status="pending").count()
-        bids = org_scope_by_employee(ShiftBid.query, ShiftBid).filter_by(status="pending").count()
-        swaps = org_scope_by_employee(ShiftSwapRequest.query, ShiftSwapRequest).filter(
+        pto = PTOEntry.query.filter_by(approval_status="pending").count()
+        bids = ShiftBid.query.filter_by(status="pending").count()
+        swaps = ShiftSwapRequest.query.filter(
             ShiftSwapRequest.status.in_(["accepted", "pending"])
         ).count()
         return jsonify({
@@ -77,7 +76,7 @@ def list_pto():
         return jsonify(success=True, entries=get_demo_approvals_pto(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "pending")
-        q = org_scope_by_employee(PTOEntry.query, PTOEntry)
+        q = PTOEntry.query
         if status_filter != "all":
             q = q.filter(PTOEntry.approval_status == status_filter)
         entries = q.order_by(PTOEntry.start_date.desc()).limit(100).all()
@@ -146,7 +145,7 @@ def list_bids():
         return jsonify(success=True, bids=get_demo_approvals_bids(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "pending")
-        q = org_scope_by_employee(ShiftBid.query, ShiftBid)
+        q = ShiftBid.query
         if status_filter != "all":
             q = q.filter(ShiftBid.status == status_filter)
         bids = q.order_by(ShiftBid.created_at.desc()).limit(100).all()
@@ -224,7 +223,7 @@ def list_swaps():
         return jsonify(success=True, swaps=get_demo_approvals_swaps(status_filter))
     try:
         status_filter = (request.json or {}).get("status", "accepted")
-        q = org_scope_by_employee(ShiftSwapRequest.query, ShiftSwapRequest)
+        q = ShiftSwapRequest.query
         if status_filter == "needs_approval":
             q = q.filter(ShiftSwapRequest.status.in_(["accepted", "pending"]))
         elif status_filter != "all":
