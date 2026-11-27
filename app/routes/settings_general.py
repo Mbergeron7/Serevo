@@ -575,8 +575,82 @@ def test_data_feed():
             feed.last_error = err
             db.session.commit()
             return jsonify({"success": False, "error": err})
+    elif feed.source_type == "api":
+        # Test API feed by making a GET request to the configured URL
+        if not feed.api_url:
+            feed.last_status = "error"
+            feed.last_error = "No API URL configured"
+            db.session.commit()
+            return jsonify({"success": False, "error": "No API URL configured for this feed."})
+
+        import urllib.request
+        import urllib.error
+
+        try:
+            headers_dict = {}
+            if feed.api_headers:
+                try:
+                    headers_dict = json.loads(feed.api_headers)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+            req = urllib.request.Request(feed.api_url, headers=headers_dict, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                status_code = resp.getcode()
+                body = resp.read(4096).decode("utf-8", errors="replace")
+
+                # Try to parse as JSON for a preview
+                preview_headers = []
+                sample_row = []
+                try:
+                    parsed = json.loads(body if len(body) < 4096 else resp.read().decode("utf-8", errors="replace"))
+                    if isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+                        preview_headers = list(parsed[0].keys())[:10]
+                        sample_row = [str(v)[:50] for v in list(parsed[0].values())[:10]]
+                    elif isinstance(parsed, dict):
+                        # Could be wrapped: {"data": [...], "results": [...]}
+                        for key in ("data", "results", "records", "items", "rows"):
+                            if key in parsed and isinstance(parsed[key], list) and len(parsed[key]) > 0:
+                                first = parsed[key][0]
+                                if isinstance(first, dict):
+                                    preview_headers = list(first.keys())[:10]
+                                    sample_row = [str(v)[:50] for v in list(first.values())[:10]]
+                                break
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+                feed.last_status = "ok"
+                feed.last_error = ""
+                feed.last_sync_at = datetime.utcnow()
+                db.session.commit()
+                return jsonify({
+                    "success": True,
+                    "title": f"API: {feed.api_url[:60]}",
+                    "tabs": [f"HTTP {status_code}"],
+                    "headers": preview_headers,
+                    "sample_row": sample_row,
+                })
+
+        except urllib.error.HTTPError as e:
+            err = f"HTTP {e.code}: {e.reason}"
+            feed.last_status = "error"
+            feed.last_error = err
+            db.session.commit()
+            return jsonify({"success": False, "error": err})
+        except urllib.error.URLError as e:
+            err = f"Connection failed: {e.reason}"
+            feed.last_status = "error"
+            feed.last_error = err
+            db.session.commit()
+            return jsonify({"success": False, "error": err})
+        except Exception as e:
+            err = f"API test failed: {str(e)[:200]}"
+            feed.last_status = "error"
+            feed.last_error = err
+            db.session.commit()
+            return jsonify({"success": False, "error": err})
     else:
-        return jsonify({"success": False, "error": "API feed testing not yet implemented"})
+        return jsonify({"success": False, "error": f"Unknown source type: {feed.source_type}"})
 
 
 @settings_bp.route("/data-feeds/delete", methods=["POST"])
