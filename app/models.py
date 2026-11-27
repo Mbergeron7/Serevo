@@ -41,11 +41,35 @@ def _get_active_org_id():
         return None
 
 
+def _has_org_column(table_name):
+    """Check if the organization_id column exists in the DB table (cached)."""
+    cache_key = f"_org_col_{table_name}"
+    try:
+        from flask import g
+        cached = getattr(g, cache_key, None)
+        if cached is not None:
+            return cached
+    except RuntimeError:
+        pass
+    try:
+        db.session.execute(db.text(f"SELECT organization_id FROM {table_name} LIMIT 0"))
+        result = True
+    except Exception:
+        db.session.rollback()
+        result = False
+    try:
+        from flask import g
+        setattr(g, cache_key, result)
+    except RuntimeError:
+        pass
+    return result
+
+
 def org_scope_emp(query=None):
     """Return an Employee query scoped to the active org."""
     q = query if query is not None else Employee.query
     org_id = _get_active_org_id()
-    if org_id:
+    if org_id and _has_org_column("employees"):
         q = q.filter(db.or_(Employee.organization_id == org_id, Employee.organization_id.is_(None)))
     return q
 
@@ -54,7 +78,7 @@ def org_scope_pu(query=None):
     """Return a PlanningUnit query scoped to the active org."""
     q = query if query is not None else PlanningUnit.query
     org_id = _get_active_org_id()
-    if org_id:
+    if org_id and _has_org_column("planning_units"):
         q = q.filter(db.or_(PlanningUnit.organization_id == org_id, PlanningUnit.organization_id.is_(None)))
     return q
 
@@ -64,7 +88,7 @@ def org_scope_schedule(query=None):
     from app.models import Schedule, PlanningUnit
     q = query if query is not None else Schedule.query
     org_id = _get_active_org_id()
-    if org_id:
+    if org_id and _has_org_column("planning_units"):
         q = q.filter(
             db.or_(
                 Schedule.planning_unit_id.in_(
@@ -79,11 +103,9 @@ def org_scope_schedule(query=None):
 
 
 def _org_emp_ids():
-    """Return a subquery of Employee.id values scoped to the active org.
-    Use with: Model.query.filter(Model.employee_id.in_(_org_emp_ids()))
-    """
+    """Return a subquery of Employee.id values scoped to the active org."""
     org_id = _get_active_org_id()
-    if org_id:
+    if org_id and _has_org_column("employees"):
         return db.session.query(Employee.id).filter(
             db.or_(Employee.organization_id == org_id, Employee.organization_id.is_(None))
         )
@@ -93,7 +115,7 @@ def _org_emp_ids():
 def _org_pu_ids():
     """Return a subquery of PlanningUnit.id values scoped to the active org."""
     org_id = _get_active_org_id()
-    if org_id:
+    if org_id and _has_org_column("planning_units"):
         return db.session.query(PlanningUnit.id).filter(
             db.or_(PlanningUnit.organization_id == org_id, PlanningUnit.organization_id.is_(None))
         )

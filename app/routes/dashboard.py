@@ -34,17 +34,17 @@ def index():
     else:
         today = date.today()
         try:
-            emp_count = org_scope_emp().count()
-            pu_count = len(PlanningUnit.get_all_active())
+            emp_count = Employee.query.filter(Employee.status != "Terminated").count()
+            pu_count = PlanningUnit.query.filter_by(is_active=True).count()
             live_stats = {
                 "total_employees": emp_count,
                 "planning_units": pu_count,
-                "on_today": org_scope_schedule().filter_by(schedule_date=today).count(),
-                "pto_today": org_scope_by_employee(PTOEntry.query, PTOEntry).filter(
+                "on_today": Schedule.query.filter_by(schedule_date=today).count(),
+                "pto_today": PTOEntry.query.filter(
                     PTOEntry.start_date <= today,
                     PTOEntry.end_date >= today,
                 ).count(),
-                "clocked_in": org_scope_by_employee(TimeClock.query, TimeClock).filter_by(status="active").count(),
+                "clocked_in": TimeClock.query.filter_by(status="active").count(),
             }
             # Setup progress for getting-started checklist
             setup = {
@@ -54,7 +54,7 @@ def index():
                 "has_routes": CallRoute.query.first() is not None,
                 "has_forecast": ForecastInterval.query.first() is not None,
                 "has_history": IntervalActual.query.first() is not None,
-                "has_schedules": org_scope_schedule().first() is not None,
+                "has_schedules": Schedule.query.first() is not None,
             }
             # Today's coverage stats
             coverage_stats = {"avg_pct": None, "at_risk": []}
@@ -68,7 +68,7 @@ def index():
                 except Exception:
                     pass
                 lobs_with_schedules = set()
-                today_schedules = org_scope_schedule().filter_by(schedule_date=today).filter(
+                today_schedules = Schedule.query.filter_by(schedule_date=today).filter(
                     Schedule.employee_id.isnot(None)
                 ).all()
                 for s in today_schedules:
@@ -107,16 +107,16 @@ def index():
             pending = {}
             if user and user.get("role") in ("admin", "supervisor"):
                 pending = {
-                    "pto": org_scope_by_employee(PTOEntry.query, PTOEntry).filter_by(approval_status="pending").count(),
-                    "bids": org_scope_by_employee(ShiftBid.query, ShiftBid).filter_by(status="pending").count(),
-                    "swaps": org_scope_by_employee(ShiftSwapRequest.query, ShiftSwapRequest).filter(
+                    "pto": PTOEntry.query.filter_by(approval_status="pending").count(),
+                    "bids": ShiftBid.query.filter_by(status="pending").count(),
+                    "swaps": ShiftSwapRequest.query.filter(
                         ShiftSwapRequest.status.in_(["pending", "accepted"])
                     ).count(),
                 }
             # Upcoming PTO (next 7 days)
             from datetime import timedelta
             week_end = today + timedelta(days=7)
-            upcoming_pto = org_scope_by_employee(PTOEntry.query, PTOEntry).filter(
+            upcoming_pto = PTOEntry.query.filter(
                 PTOEntry.start_date >= today,
                 PTOEntry.start_date <= week_end,
                 PTOEntry.approval_status == "approved",
