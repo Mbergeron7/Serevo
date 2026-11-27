@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
-from app.models import db, Announcement, User
+from app.models import db, Announcement, User, org_scope
 
 log = logging.getLogger(__name__)
 announce_bp = Blueprint("announcements", __name__, url_prefix="/announcements")
@@ -38,8 +38,7 @@ def active_announcements():
         from app.demo_data import get_demo_announcements
         return jsonify(success=True, announcements=get_demo_announcements())
     now = _utcnow()
-    from app.models import org_scope_by_user
-    query = org_scope_by_user(Announcement.query, Announcement, "created_by").filter(
+    query = org_scope(Announcement.query, Announcement).filter(
         db.or_(Announcement.expires_at.is_(None), Announcement.expires_at > now)
     ).order_by(Announcement.is_pinned.desc(), Announcement.created_at.desc())
 
@@ -69,11 +68,10 @@ def list_announcements():
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_announcements
         return jsonify(success=True, announcements=get_demo_announcements())
-    user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
 
-    entries = org_scope_by_user(Announcement.query, Announcement, "created_by").order_by(
+    entries = org_scope(Announcement.query, Announcement).order_by(
         Announcement.created_at.desc()
     ).limit(50).all()
 
@@ -115,6 +113,9 @@ def save_announcement():
             return jsonify(success=False, error="Not found")
     else:
         ann = Announcement(created_by=user["id"])
+        # Set organization_id on new announcements
+        from app.models import _get_active_org_id
+        ann.organization_id = _get_active_org_id()
         db.session.add(ann)
 
     ann.title = title

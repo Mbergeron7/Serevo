@@ -27,7 +27,7 @@ def customization():
     from app.models import (SegmentCode,
                             PlanningUnit, TimeOffType, OvertimeRule, ScheduleRule,
                             AdherenceException, AlertConfig,
-                            BrandSetting, LobMapping)
+                            BrandSetting, LobMapping, org_scope)
     from app.models import db as _db
 
     def _safe_query(fn, label="query"):
@@ -38,23 +38,23 @@ def customization():
             _db.session.rollback()
             return []
 
-    segments = _safe_query(lambda: [s.to_dict() for s in SegmentCode.query.order_by(SegmentCode.sort_order, SegmentCode.label).all()], "segments")
+    segments = _safe_query(lambda: [s.to_dict() for s in org_scope(SegmentCode.query, SegmentCode).order_by(SegmentCode.sort_order, SegmentCode.label).all()], "segments")
     all_lobs = _safe_query(lambda: [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.get_all_active()], "all_lobs")
 
-    time_off_types = _safe_query(lambda: [t.to_dict() for t in TimeOffType.query.order_by(TimeOffType.sort_order).all()], "time_off_types")
-    ot_rules = _safe_query(lambda: [r.to_dict() for r in OvertimeRule.query.order_by(OvertimeRule.name).all()], "ot_rules")
-    sched_rules = _safe_query(lambda: [r.to_dict() for r in ScheduleRule.query.order_by(ScheduleRule.name).all()], "sched_rules")
-    adherence_codes = _safe_query(lambda: [a.to_dict() for a in AdherenceException.query.order_by(AdherenceException.sort_order).all()], "adherence_codes")
-    alerts = _safe_query(lambda: [a.to_dict() for a in AlertConfig.query.order_by(AlertConfig.name).all()], "alerts")
+    time_off_types = _safe_query(lambda: [t.to_dict() for t in org_scope(TimeOffType.query, TimeOffType).order_by(TimeOffType.sort_order).all()], "time_off_types")
+    ot_rules = _safe_query(lambda: [r.to_dict() for r in org_scope(OvertimeRule.query, OvertimeRule).order_by(OvertimeRule.name).all()], "ot_rules")
+    sched_rules = _safe_query(lambda: [r.to_dict() for r in org_scope(ScheduleRule.query, ScheduleRule).order_by(ScheduleRule.name).all()], "sched_rules")
+    adherence_codes = _safe_query(lambda: [a.to_dict() for a in org_scope(AdherenceException.query, AdherenceException).order_by(AdherenceException.sort_order).all()], "adherence_codes")
+    alerts = _safe_query(lambda: [a.to_dict() for a in org_scope(AlertConfig.query, AlertConfig).order_by(AlertConfig.name).all()], "alerts")
     brand_data = {}
     try:
-        brand = BrandSetting.query.first()
+        brand = org_scope(BrandSetting.query, BrandSetting).first()
         brand_data = brand.to_dict() if brand else {}
     except Exception:
         _db.session.rollback()
     lob_mappings = _safe_query(lambda: [{"id": m.id, "source_name": m.source_name,
                      "planning_unit_name": m.planning_unit_name}
-                    for m in LobMapping.query.order_by(LobMapping.source_name).all()], "lob_mappings")
+                    for m in org_scope(LobMapping.query, LobMapping).order_by(LobMapping.source_name).all()], "lob_mappings")
 
     return render_template("settings/customization.html",
         user=user,

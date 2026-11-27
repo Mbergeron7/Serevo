@@ -253,7 +253,7 @@ def skills_page():
         return render_template("settings/skills.html", items=get_demo_skills_config())
     from app.models import SkillGroup, SkillMapping
     try:
-        groups = SkillGroup.query.order_by(SkillGroup.name).all()
+        groups = org_scope(SkillGroup.query, SkillGroup).order_by(SkillGroup.name).all()
         items = []
         for g in groups:
             items.append({
@@ -324,7 +324,7 @@ def selections_page():
         return render_template("settings/selections.html", items=get_demo_selections())
     from app.models import Selection, SelectionMember
     try:
-        sels = Selection.query.order_by(Selection.name).all()
+        sels = org_scope(Selection.query, Selection).order_by(Selection.name).all()
         items = []
         for s in sels:
             items.append({
@@ -400,14 +400,15 @@ def shift_sequences_page():
     from app.models import ShiftSequence, ShiftTemplate, DayModel
     items, shift_templates, day_models = [], [], []
     try:
-        seqs = ShiftSequence.query.order_by(ShiftSequence.name).all()
+        seqs = org_scope(ShiftSequence.query, ShiftSequence).order_by(ShiftSequence.name).all()
         items = [s.to_dict() for s in seqs]
     except Exception as e:
         log.warning(f"shift_sequences query failed: {e}")
         from app.models import db
         db.session.rollback()
     try:
-        templates = ShiftTemplate.query.filter_by(is_active=True).order_by(ShiftTemplate.name).all()
+        from app.models import org_scope
+        templates = org_scope(ShiftTemplate.query, ShiftTemplate).filter_by(is_active=True).order_by(ShiftTemplate.name).all()
         shift_templates = [{"id": t.id, "name": t.name, "start": t.start_time, "end": t.end_time} for t in templates]
     except Exception:
         from app.models import db
@@ -528,7 +529,7 @@ def special_days_page():
         return dg
     try:
         from app.models import SpecialDay, PlanningUnit
-        special_days = [sd.to_dict() for sd in SpecialDay.query.order_by(SpecialDay.date).all()]
+        special_days = [sd.to_dict() for sd in org_scope(SpecialDay.query, SpecialDay).order_by(SpecialDay.date).all()]
         planning_units = [{"id": pu.id, "name": pu.name} for pu in PlanningUnit.get_all_active(include_children=False)]
     except Exception as e:
         log.warning(f"special_days query failed: {e}")

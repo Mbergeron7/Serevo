@@ -361,8 +361,8 @@ def index():
     if user and user.get("is_demo"):
         return render_template("data_import/index.html",
             user=user, upload_types=UPLOAD_TYPES, recent_uploads=[])
-    from app.models import DataUpload
-    recent = DataUpload.query.order_by(DataUpload.created_at.desc()).limit(20).all()
+    from app.models import DataUpload, org_scope
+    recent = org_scope(DataUpload.query, DataUpload).order_by(DataUpload.created_at.desc()).limit(20).all()
     return render_template("data_import/index.html",
         user=user,
         upload_types=UPLOAD_TYPES,
@@ -775,7 +775,7 @@ def debug_employee(emp_id_str):
     ).limit(10).all()
 
     # Recent uploads
-    recent_uploads = DataUpload.query.filter_by(upload_type="employees")\
+    recent_uploads = org_scope(DataUpload.query, DataUpload).filter_by(upload_type="employees")\
         .order_by(DataUpload.uploaded_at.desc()).limit(5).all()
 
     # Check temp files for pending imports
@@ -908,7 +908,7 @@ def _debug_capacity_alignment_inner():
                     for m in LobMapping.query.all()}
 
     # 2. Planning Units
-    from app.models import org_scope_pu
+    from app.models import org_scope_pu, org_scope
     pus = org_scope_pu().order_by(PlanningUnit.name).all()
     pu_id_to_name = {pu.id: pu.name for pu in pus}
     pu_info = {}
@@ -917,9 +917,9 @@ def _debug_capacity_alignment_inner():
                             "active_this_month": 0, "skill_groups": []}
 
     # 3. Skill Groups — link to PUs via employees who have both
-    sg_names = {sg.id: sg.name for sg in SkillGroup.query.all()}
+    sg_names = {sg.id: sg.name for sg in org_scope(SkillGroup.query, SkillGroup).all()}
     sg_to_pus = {}  # skill_group_name -> set of PU names
-    for sm in SkillMapping.query.filter_by(is_active=True).all():
+    for sm in org_scope(SkillMapping.query, SkillMapping).filter_by(is_active=True).all():
         sg_name = sg_names.get(sm.skill_group_id)
         if not sg_name:
             continue

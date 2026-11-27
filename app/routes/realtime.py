@@ -548,7 +548,7 @@ def index():
             from app.models import Selection
             selections = [{"id": s.id, "name": s.name,
                            "member_ids": [m.employee_id for m in s.members]}
-                          for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+                          for s in org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()]
         except Exception:
             pass
     return render_template("realtime/index.html", user=user, lobs=lobs,

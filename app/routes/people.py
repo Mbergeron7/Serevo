@@ -168,7 +168,7 @@ def roster():
         contracts = []
     else:
         try:
-            contracts = [c.to_dict() for c in Contract.query.order_by(Contract.name).all()]
+            contracts = [c.to_dict() for c in org_scope(Contract.query, Contract).order_by(Contract.name).all()]
         except Exception:
             db.session.rollback()
             contracts = []
@@ -629,21 +629,21 @@ def employee_profile(emp_id):
 @people_bp.route("/api/profile/contracts-list")
 @login_required
 def profile_contracts_list():
-    items = Contract.query.filter_by(is_active=True).order_by(Contract.name).all()
+    items = org_scope(Contract.query, Contract).filter_by(is_active=True).order_by(Contract.name).all()
     return jsonify({"items": [{"id": c.id, "name": c.name} for c in items]})
 
 
 @people_bp.route("/api/profile/selections-list")
 @login_required
 def profile_selections_list():
-    items = Selection.query.filter_by(is_active=True).order_by(Selection.name).all()
+    items = org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
 
 
 @people_bp.route("/api/profile/shift-sequences-list")
 @login_required
 def profile_shift_sequences_list():
-    items = ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()
+    items = org_scope(ShiftSequence.query, ShiftSequence).filter_by(is_active=True).order_by(ShiftSequence.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
 
 

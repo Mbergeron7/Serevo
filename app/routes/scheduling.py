@@ -123,7 +123,7 @@ def index():
         sheet = _get_sheet()
         lobs = get_available_lobs(sheet)
         try:
-            selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+            selections = [{"id": s.id, "name": s.name} for s in org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()]
         except Exception:
             log.warning("Failed to load selections", exc_info=True)
             selections = []
@@ -185,7 +185,7 @@ def filter_options():
         lob_list = [l.strip() for l in lob.split(",") if l.strip()] if lob else []
         if not lob_list:
             # No LOB filter — return all active items
-            selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+            selections = [{"id": s.id, "name": s.name} for s in org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()]
             skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
             shift_sequences = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
         else:
@@ -207,7 +207,7 @@ def filter_options():
             ).all()]
 
             # All active items (fallback when no employee relationships exist)
-            all_selections = [{"id": s.id, "name": s.name} for s in Selection.query.filter_by(is_active=True).order_by(Selection.name).all()]
+            all_selections = [{"id": s.id, "name": s.name} for s in org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()]
             all_skills = [{"id": s.id, "name": s.name} for s in SkillGroup.query.filter_by(is_active=True).order_by(SkillGroup.name).all()]
             all_shift_seqs = [{"id": s.id, "name": s.name} for s in ShiftSequence.query.filter_by(is_active=True).order_by(ShiftSequence.name).all()]
 

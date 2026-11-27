@@ -45,9 +45,9 @@ def list_notes():
         end = date.today()
         start = end - timedelta(days=6)
 
-    from app.models import org_scope_by_user
+    from app.models import org_scope
     notes = (
-        org_scope_by_user(ShiftNote.query, ShiftNote, "created_by")
+        org_scope(ShiftNote.query, ShiftNote)
         .filter(ShiftNote.note_date >= start, ShiftNote.note_date <= end)
         .order_by(ShiftNote.note_date.desc(), ShiftNote.created_at.desc())
         .limit(100)

@@ -130,6 +130,14 @@ def org_scope_by_user(query, model, user_col="submitted_by"):
     return query
 
 
+def org_scope(query, model):
+    """Generic org scope for any model with organization_id."""
+    org_id = _get_active_org_id()
+    if org_id and hasattr(model, 'organization_id'):
+        return query.filter(db.or_(model.organization_id == org_id, model.organization_id.is_(None)))
+    return query
+
+
 # ═══════════════════════════════════════════════════════════════
 # ORGANIZATION — Multi-tenancy foundation
 # ═══════════════════════════════════════════════════════════════
@@ -931,6 +939,7 @@ class APIConnection(db.Model):
     __tablename__ = "api_connections"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name          = db.Column(db.String(120), nullable=False)
     provider      = db.Column(db.String(60), nullable=False)   # e.g. "generic", "nice", "genesys", "five9"
     base_url      = db.Column(db.String(500), default="")
@@ -954,6 +963,7 @@ class DataFeed(db.Model):
     __tablename__ = "data_feeds"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name          = db.Column(db.String(200), nullable=False)          # e.g. "Acme Corp - Call Volume"
     feed_type     = db.Column(db.String(30), nullable=False)           # call_volume | agent_status
     source_type   = db.Column(db.String(30), nullable=False, default="google_sheet")  # google_sheet | api
@@ -1012,6 +1022,7 @@ class SchemaMapping(db.Model):
     __tablename__ = "schema_mappings"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name        = db.Column(db.String(120), nullable=False)
     upload_type = db.Column(db.String(30), nullable=False)
     mapping     = db.Column(db.Text, nullable=False, default="{}")  # JSON: {"their_header": "our_field", …}
@@ -1042,6 +1053,7 @@ class DataUpload(db.Model):
     __tablename__ = "data_uploads"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     filename     = db.Column(db.String(255), nullable=False)
     upload_type  = db.Column(db.String(30), nullable=False)  # employees | forecast | requirements | pto | accommodations
     rows_total   = db.Column(db.Integer, default=0)
@@ -1067,6 +1079,7 @@ class DataSource(db.Model):
     __tablename__ = "data_sources"
 
     id                = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name              = db.Column(db.String(200), nullable=False)
     source_type       = db.Column(db.String(50), nullable=False)  # google_sheet | api | csv_upload
 
@@ -1151,6 +1164,7 @@ class SegmentCode(db.Model):
     __tablename__ = "segment_codes"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     code         = db.Column(db.String(40), unique=True, nullable=False)  # internal key
     label        = db.Column(db.String(80), nullable=False)               # display name
     # Synonyms so Activity.name / Activity.short_name work in queries and Python
@@ -1299,6 +1313,7 @@ class ShiftTemplate(db.Model):
     __tablename__ = "shift_templates"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name        = db.Column(db.String(80), nullable=False)           # e.g. "SS TL Weekday Closing"
     start_time  = db.Column(db.String(5), nullable=False)            # "13:30"
     end_time    = db.Column(db.String(5), nullable=False)            # "22:00"
@@ -1385,6 +1400,7 @@ class LOBSetting(db.Model):
     __tablename__ = "lob_settings"
 
     id                    = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     planning_unit_id      = db.Column(db.Integer, db.ForeignKey("planning_units.id"),
                                       unique=True, nullable=False, index=True)
     service_level_target  = db.Column(db.Float, default=0.80)        # 80%
@@ -1446,6 +1462,7 @@ class TimeOffType(db.Model):
     __tablename__ = "time_off_types"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     code          = db.Column(db.String(40), unique=True, nullable=False)
     label         = db.Column(db.String(80), nullable=False)
     color         = db.Column(db.String(20), default="#6b7280")
@@ -1479,6 +1496,7 @@ class OvertimeRule(db.Model):
     __tablename__ = "overtime_rules"
 
     id                = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name              = db.Column(db.String(80), nullable=False)
     rule_type         = db.Column(db.String(20), default="voluntary")    # voluntary | mandatory | restricted
     max_ot_hours_week = db.Column(db.Float, default=10.0)
@@ -1515,6 +1533,7 @@ class ScheduleRule(db.Model):
     __tablename__ = "schedule_rules"
 
     id                    = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name                  = db.Column(db.String(80), nullable=False)
     min_hours_week        = db.Column(db.Float, default=20.0)
     max_hours_week        = db.Column(db.Float, default=40.0)
@@ -1552,6 +1571,7 @@ class Holiday(db.Model):
     __tablename__ = "holidays"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name          = db.Column(db.String(100), nullable=False)
     date          = db.Column(db.Date, nullable=False, index=True)
     is_full_day   = db.Column(db.Boolean, default=True)
@@ -1585,6 +1605,7 @@ class SkillGroup(db.Model):
     __tablename__ = "skill_groups"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name        = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.String(255), default="")
     is_active   = db.Column(db.Boolean, default=True)
@@ -1606,6 +1627,7 @@ class SkillMapping(db.Model):
     __tablename__ = "skill_mappings"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     skill_group_id = db.Column(db.Integer, db.ForeignKey("skill_groups.id", ondelete="CASCADE"),
                                nullable=False, index=True)
     employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
@@ -1638,6 +1660,7 @@ class AdherenceException(db.Model):
     __tablename__ = "adherence_exceptions"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     code         = db.Column(db.String(40), unique=True, nullable=False)
     label        = db.Column(db.String(80), nullable=False)
     color        = db.Column(db.String(20), default="#ef4444")
@@ -1713,6 +1736,7 @@ class AlertConfig(db.Model):
     __tablename__ = "alert_configs"
 
     id                = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name              = db.Column(db.String(80), nullable=False)
     alert_type        = db.Column(db.String(40), nullable=False)        # sl_breach | understaffed | overstaffed | adherence | forecast_variance
     threshold_value   = db.Column(db.Float, nullable=False)             # e.g. 0.80 for SL, 10.0 for % variance
@@ -1750,6 +1774,7 @@ class BrandSetting(db.Model):
     __tablename__ = "brand_settings"
 
     id            = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     company_name  = db.Column(db.String(120), default="")
     tagline       = db.Column(db.String(255), default="")
     accent_color  = db.Column(db.String(20), default="#2563eb")
@@ -1935,6 +1960,7 @@ class Selection(db.Model):
     __tablename__ = "selections"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name        = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(255), default="")
     is_active   = db.Column(db.Boolean, default=True)
@@ -1957,6 +1983,7 @@ class SelectionMember(db.Model):
     __tablename__ = "selection_members"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     selection_id = db.Column(db.Integer, db.ForeignKey("selections.id", ondelete="CASCADE"),
                              nullable=False, index=True)
     employee_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
@@ -2036,6 +2063,7 @@ class LobMapping(db.Model):
     __tablename__ = "lob_mappings"
 
     id               = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     source_name      = db.Column(db.String(200), unique=True, nullable=False, index=True)
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True, index=True)
     planning_unit_name = db.Column(db.String(200), nullable=False)  # kept for compat; prefer FK
@@ -2097,6 +2125,7 @@ class Contract(db.Model):
     __tablename__ = "contracts"
 
     id                  = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name                = db.Column(db.String(100), unique=True, nullable=False)
     abbreviation        = db.Column(db.String(50), nullable=True)
     color               = db.Column(db.String(7), default="#000000")
@@ -2218,6 +2247,7 @@ class DayModel(db.Model):
     __tablename__ = "day_models"
 
     id               = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name             = db.Column(db.String(100), unique=True, nullable=False)
     abbreviation     = db.Column(db.String(20), nullable=True)       # e.g. "FT 10.5"
     shift_template_id = db.Column(db.Integer, db.ForeignKey("shift_templates.id"), nullable=True)
@@ -2442,6 +2472,7 @@ class EmployeeQuartile(db.Model):
     __tablename__ = "employee_quartiles"
 
     id               = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     employee_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
                                   nullable=False, index=True)
     planning_unit_id = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=True)
@@ -2498,6 +2529,7 @@ class ShiftSequence(db.Model):
     __tablename__ = "shift_sequences"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name        = db.Column(db.String(120), unique=True, nullable=False)
     cycle_weeks = db.Column(db.Integer, default=1)
     is_active   = db.Column(db.Boolean, default=True)
@@ -2522,6 +2554,7 @@ class ShiftSequenceRow(db.Model):
     __tablename__ = "shift_sequence_rows"
 
     id                = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     shift_sequence_id = db.Column(db.Integer,
                                   db.ForeignKey("shift_sequences.id", ondelete="CASCADE"),
                                   nullable=False, index=True)
@@ -2557,6 +2590,7 @@ class SpecialDay(db.Model):
     __tablename__ = "special_days"
 
     id             = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     name           = db.Column(db.String(120), nullable=False)
     date           = db.Column(db.Date, nullable=False, index=True)
     day_type       = db.Column(db.String(20), nullable=False, default="holiday")  # holiday, half_day, campaign, custom
@@ -2668,6 +2702,7 @@ class EmployeeShiftSequence(db.Model):
     __tablename__ = "employee_shift_sequences"
 
     id                = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     employee_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
                                   nullable=False, index=True)
     shift_sequence_id = db.Column(db.Integer, db.ForeignKey("shift_sequences.id", ondelete="CASCADE"),
@@ -3104,6 +3139,7 @@ class AuditLog(db.Model):
     __tablename__ = "audit_log"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     user_id     = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action      = db.Column(db.String(80), nullable=False)
     # Actions: schedule_generated, schedule_published, pto_approved, pto_denied,
@@ -3167,6 +3203,7 @@ class Announcement(db.Model):
     __tablename__ = "announcements"
 
     id         = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     title      = db.Column(db.String(200), nullable=False)
     body       = db.Column(db.Text, nullable=True)
     category   = db.Column(db.String(40), default="general")  # general, urgent, schedule, policy
@@ -3183,6 +3220,7 @@ class ShiftNote(db.Model):
     __tablename__ = "shift_notes"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     note_date   = db.Column(db.Date, nullable=False, index=True)
     shift_label = db.Column(db.String(40), default="")          # e.g. "AM", "PM", "Night"
     body        = db.Column(db.Text, nullable=False)
@@ -3220,6 +3258,7 @@ class TrainingModule(db.Model):
     __tablename__ = "training_modules"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     title        = db.Column(db.String(200), nullable=False)
     description  = db.Column(db.Text, default="")
     category     = db.Column(db.String(60), default="general")  # general, compliance, safety, product, soft-skills
@@ -3265,6 +3304,7 @@ class SupportTicket(db.Model):
     __tablename__ = "support_tickets"
 
     id          = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     subject     = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=False)
     category    = db.Column(db.String(60), default="general")  # general, bug, feature, access, data
@@ -3331,6 +3371,7 @@ class WfmTicket(db.Model):
     __tablename__ = "wfm_tickets"
 
     id           = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     subject      = db.Column(db.String(255), nullable=False)
     description  = db.Column(db.Text, nullable=False)
     category     = db.Column(db.String(50), nullable=False, default="general")
@@ -3486,6 +3527,7 @@ class RosterGroup(db.Model):
     __tablename__ = "roster_groups"
 
     id                      = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
     planning_unit_id        = db.Column(db.Integer, db.ForeignKey("planning_units.id"), nullable=False, index=True)
     name                    = db.Column(db.String(100), nullable=False)
     closers_required_weekday = db.Column(db.Integer, default=1)

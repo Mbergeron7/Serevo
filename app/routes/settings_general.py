@@ -17,13 +17,13 @@ def index():
     if user and user.get("is_demo"):
         return render_template("settings/index.html",
             user=user, feeds_active=2, conns_active=1)
-    from app.models import AppSetting, DataFeed, APIConnection
+    from app.models import AppSetting, DataFeed, APIConnection, org_scope
     try:
-        feeds_active = DataFeed.query.filter_by(is_active=True).count()
+        feeds_active = org_scope(DataFeed.query, DataFeed).filter_by(is_active=True).count()
     except Exception:
         feeds_active = 0
     try:
-        conns_active = APIConnection.query.filter_by(is_active=True).count()
+        conns_active = org_scope(APIConnection.query, APIConnection).filter_by(is_active=True).count()
     except Exception:
         conns_active = 0
     return render_template("settings/index.html",
@@ -60,9 +60,9 @@ def connections():
             user=user, feeds=[], feeds_json=demo_feeds,
             api_conns=[], conns_json=demo_conns,
             providers=PROVIDERS, global_sa=True)
-    from app.models import DataFeed, APIConnection, AppSetting
-    feeds = DataFeed.query.order_by(DataFeed.created_at.desc()).all()
-    api_conns = APIConnection.query.order_by(APIConnection.created_at.desc()).all()
+    from app.models import DataFeed, APIConnection, AppSetting, org_scope
+    feeds = org_scope(DataFeed.query, DataFeed).order_by(DataFeed.created_at.desc()).all()
+    api_conns = org_scope(APIConnection.query, APIConnection).order_by(APIConnection.created_at.desc()).all()
     feeds_json = _json.dumps([f.to_dict() for f in feeds])
     # Build API connections JSON (safe subset — no raw credentials)
     conns_json = _json.dumps([{
@@ -712,9 +712,9 @@ def users():
         ]
         return render_template("settings/users.html",
             user=user, users=demo_users, employees=[])
-    from app.models import User, Employee
+    from app.models import User, Employee, org_scope
     try:
-        all_users = User.query.order_by(User.created_at.desc()).all()
+        all_users = org_scope(User.query, User).order_by(User.created_at.desc()).all()
         from app.models import org_scope_emp
         all_employees = org_scope_emp().filter_by(status="Active").order_by(Employee.last_name).all()
     except Exception as e:

@@ -53,7 +53,8 @@ def list_day_models():
     user = get_current_user()
     if user and user.get("is_demo"):
         return jsonify(success=True, items=_demo_day_models())
-    items = [dm.to_dict() for dm in DayModel.query.order_by(DayModel.sort_order, DayModel.name).all()]
+    from app.models import org_scope
+    items = [dm.to_dict() for dm in org_scope(DayModel.query, DayModel).order_by(DayModel.sort_order, DayModel.name).all()]
     return jsonify(success=True, items=items)
 
 
@@ -115,6 +116,7 @@ def list_week_time_patterns():
     user = get_current_user()
     if user and user.get("is_demo"):
         return jsonify(success=True, items=_demo_week_time_patterns())
+    from app.models import org_scope
     items = [wtp.to_dict() for wtp in WeekTimePattern.query.order_by(WeekTimePattern.name).all()]
     return jsonify(success=True, items=items)
 
@@ -258,7 +260,8 @@ def list_quartiles():
         return jsonify(success=True, items=_demo_quartiles())
 
     pu_id = request.args.get("planning_unit_id")
-    q = EmployeeQuartile.query
+    from app.models import org_scope
+    q = org_scope(EmployeeQuartile.query, EmployeeQuartile)
     if pu_id:
         q = q.filter_by(planning_unit_id=int(pu_id))
     items = [eq.to_dict() for eq in q.order_by(EmployeeQuartile.quartile, EmployeeQuartile.employee_id).all()]

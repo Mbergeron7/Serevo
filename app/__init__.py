@@ -151,6 +151,40 @@ def create_app():
             ("organizations", "settings_json", "TEXT DEFAULT ''"),
             ("employees", "organization_id", "INTEGER"),
             ("planning_units", "organization_id", "INTEGER"),
+            ("data_uploads", "organization_id", "INTEGER"),
+            ("data_feeds", "organization_id", "INTEGER"),
+            ("data_sources", "organization_id", "INTEGER"),
+            ("api_connections", "organization_id", "INTEGER"),
+            ("segment_codes", "organization_id", "INTEGER"),
+            ("shift_templates", "organization_id", "INTEGER"),
+            ("contracts", "organization_id", "INTEGER"),
+            ("day_models", "organization_id", "INTEGER"),
+            ("employee_quartiles", "organization_id", "INTEGER"),
+            ("selections", "organization_id", "INTEGER"),
+            ("selection_members", "organization_id", "INTEGER"),
+            ("skill_groups", "organization_id", "INTEGER"),
+            ("skill_mappings", "organization_id", "INTEGER"),
+            ("shift_sequences", "organization_id", "INTEGER"),
+            ("shift_sequence_rows", "organization_id", "INTEGER"),
+            ("employee_shift_sequences", "organization_id", "INTEGER"),
+            ("lob_settings", "organization_id", "INTEGER"),
+            ("lob_mappings", "organization_id", "INTEGER"),
+            ("holidays", "organization_id", "INTEGER"),
+            ("special_days", "organization_id", "INTEGER"),
+            ("announcements", "organization_id", "INTEGER"),
+            ("wfm_tickets", "organization_id", "INTEGER"),
+            ("support_tickets", "organization_id", "INTEGER"),
+            ("audit_log", "organization_id", "INTEGER"),
+            ("time_off_types", "organization_id", "INTEGER"),
+            ("overtime_rules", "organization_id", "INTEGER"),
+            ("schedule_rules", "organization_id", "INTEGER"),
+            ("alert_configs", "organization_id", "INTEGER"),
+            ("brand_settings", "organization_id", "INTEGER"),
+            ("adherence_exceptions", "organization_id", "INTEGER"),
+            ("schema_mappings", "organization_id", "INTEGER"),
+            ("training_modules", "organization_id", "INTEGER"),
+            ("shift_notes", "organization_id", "INTEGER"),
+            ("roster_groups", "organization_id", "INTEGER"),
         ]
         for table, col, col_type in _new_columns:
             try:
@@ -186,7 +220,19 @@ def create_app():
             from app.models import Organization
             default_org = Organization.query.filter_by(slug="default").first()
             if default_org:
-                for tbl in ["employees", "planning_units", "users"]:
+                for tbl in [
+                    "employees", "planning_units", "users",
+                    "data_uploads", "data_feeds", "data_sources", "api_connections",
+                    "segment_codes", "shift_templates", "contracts", "day_models",
+                    "employee_quartiles", "selections", "selection_members",
+                    "skill_groups", "skill_mappings", "shift_sequences",
+                    "shift_sequence_rows", "employee_shift_sequences",
+                    "lob_settings", "lob_mappings", "holidays", "special_days",
+                    "announcements", "wfm_tickets", "support_tickets", "audit_log",
+                    "time_off_types", "overtime_rules", "schedule_rules",
+                    "alert_configs", "brand_settings", "adherence_exceptions",
+                    "schema_mappings", "training_modules", "shift_notes", "roster_groups",
+                ]:
                     try:
                         db.session.execute(db.text(
                             f"UPDATE {tbl} SET organization_id = :oid WHERE organization_id IS NULL"

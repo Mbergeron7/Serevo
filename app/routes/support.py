@@ -39,8 +39,8 @@ def list_tickets():
     status_filter = data.get("status")
     category_filter = data.get("category")
 
-    from app.models import org_scope_by_user
-    query = org_scope_by_user(SupportTicket.query, SupportTicket, "submitted_by")
+    from app.models import org_scope
+    query = org_scope(SupportTicket.query, SupportTicket)
 
     # Non-admins see only their own tickets
     if user.get("role") != "admin":

@@ -40,8 +40,8 @@ def list_entries():
     per_page = 50
 
     cutoff = date.today() - timedelta(days=days)
-    from app.models import org_scope_by_user
-    q = org_scope_by_user(AuditLog.query, AuditLog, "user_id").filter(AuditLog.created_at >= cutoff.isoformat())
+    from app.models import org_scope
+    q = org_scope(AuditLog.query, AuditLog).filter(AuditLog.created_at >= cutoff.isoformat())
 
     if action_filter:
         q = q.filter(AuditLog.action == action_filter)
