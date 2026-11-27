@@ -11,7 +11,7 @@ import logging
 import datetime
 
 from flask import Blueprint, render_template, request, jsonify, Response
-from app.auth import login_required, admin_required, get_current_user
+from app.auth import login_required, admin_required, supervisor_required, get_current_user
 from app.models import (db, RosterGroup, RosterMember, RosterSlot,
                          RosterRotationState, Employee, PlanningUnit, Schedule,
                          SpecialDay, org_scope_emp)
@@ -28,7 +28,7 @@ rosters_bp = Blueprint("rosters", __name__, url_prefix="/scheduling/rosters")
 
 @rosters_bp.route("/")
 @rosters_bp.route("")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     return render_template("rosters.html", user=user)
@@ -37,7 +37,7 @@ def index():
 # ── Planning Units (for dropdowns) ───────────────────────────
 
 @rosters_bp.route("/api/planning-units")
-@login_required
+@supervisor_required
 def api_planning_units():
     pus = PlanningUnit.get_all_active()
     return jsonify([{"id": p.id, "name": p.name} for p in pus])
@@ -46,7 +46,7 @@ def api_planning_units():
 # ── Employees (for member picker) ────────────────────────────
 
 @rosters_bp.route("/api/employees")
-@login_required
+@supervisor_required
 def api_employees():
     pu_id = request.args.get("planning_unit_id", type=int)
     q = org_scope_emp().filter_by(status="Active")
@@ -60,14 +60,14 @@ def api_employees():
 # ── Groups CRUD ──────────────────────────────────────────────
 
 @rosters_bp.route("/api/groups")
-@login_required
+@supervisor_required
 def api_groups():
     groups = RosterGroup.query.filter_by(active=True).order_by(RosterGroup.name).all()
     return jsonify([g.to_dict() for g in groups])
 
 
 @rosters_bp.route("/api/groups", methods=["POST"])
-@login_required
+@supervisor_required
 def api_create_group():
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -93,7 +93,7 @@ def api_create_group():
 
 
 @rosters_bp.route("/api/groups/<int:gid>", methods=["PUT"])
-@login_required
+@supervisor_required
 def api_update_group(gid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -114,7 +114,7 @@ def api_update_group(gid):
 
 
 @rosters_bp.route("/api/groups/<int:gid>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def api_delete_group(gid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -128,7 +128,7 @@ def api_delete_group(gid):
 # ── Members CRUD ─────────────────────────────────────────────
 
 @rosters_bp.route("/api/groups/<int:gid>/members", methods=["POST"])
-@login_required
+@supervisor_required
 def api_add_member(gid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -177,7 +177,7 @@ def api_add_member(gid):
 
 
 @rosters_bp.route("/api/members/<int:mid>", methods=["PUT"])
-@login_required
+@supervisor_required
 def api_update_member(mid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -210,7 +210,7 @@ def api_update_member(mid):
 
 
 @rosters_bp.route("/api/members/<int:mid>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def api_delete_member(mid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -224,7 +224,7 @@ def api_delete_member(mid):
 # ── Slots CRUD ───────────────────────────────────────────────
 
 @rosters_bp.route("/api/groups/<int:gid>/slots", methods=["POST"])
-@login_required
+@supervisor_required
 def api_add_slot(gid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -246,7 +246,7 @@ def api_add_slot(gid):
 
 
 @rosters_bp.route("/api/slots/<int:sid>", methods=["PUT"])
-@login_required
+@supervisor_required
 def api_update_slot(sid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -270,7 +270,7 @@ def api_update_slot(sid):
 
 
 @rosters_bp.route("/api/slots/<int:sid>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def api_delete_slot(sid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -284,7 +284,7 @@ def api_delete_slot(sid):
 # ── Bulk slot save (save all slots for a group at once) ──────
 
 @rosters_bp.route("/api/groups/<int:gid>/slots/bulk", methods=["POST"])
-@login_required
+@supervisor_required
 def api_bulk_save_slots(gid):
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -312,7 +312,7 @@ def api_bulk_save_slots(gid):
 # ── Generation / Publish / Clear ─────────────────────────────
 
 @rosters_bp.route("/api/generate", methods=["POST"])
-@login_required
+@supervisor_required
 def api_generate():
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -340,7 +340,7 @@ def api_generate():
 
 
 @rosters_bp.route("/api/publish", methods=["POST"])
-@login_required
+@supervisor_required
 def api_publish():
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -358,7 +358,7 @@ def api_publish():
 
 
 @rosters_bp.route("/api/debug-groups")
-@login_required
+@supervisor_required
 def api_debug_groups():
     """List all roster groups with their IDs."""
     groups = RosterGroup.query.all()
@@ -366,7 +366,7 @@ def api_debug_groups():
 
 
 @rosters_bp.route("/api/debug-slots/<int:gid>")
-@login_required
+@supervisor_required
 def api_debug_slots(gid):
     """Debug endpoint: dump what the engine sees for a group."""
     g = RosterGroup.query.get_or_404(gid)
@@ -412,7 +412,7 @@ def api_debug_slots(gid):
 
 
 @rosters_bp.route("/api/clear", methods=["POST"])
-@login_required
+@supervisor_required
 def api_clear():
     user = get_current_user()
     if getattr(user, 'is_demo', False):
@@ -430,7 +430,7 @@ def api_clear():
 
 
 @rosters_bp.route("/api/calendar")
-@login_required
+@supervisor_required
 def api_calendar():
     group_id = request.args.get("group_id", type=int)
     start = _parse_date(request.args.get("start_date"))
@@ -446,7 +446,7 @@ def api_calendar():
 # ── Export Groups & Members CSV ─────────────────────────────
 
 @rosters_bp.route("/api/export-groups-csv")
-@login_required
+@supervisor_required
 def api_export_groups_csv():
     """Export all roster groups and their members as CSV."""
     groups = RosterGroup.query.order_by(RosterGroup.name).all()
@@ -506,7 +506,7 @@ def api_export_groups_csv():
 # ── Export CSV ──────────────────────────────────────────────
 
 @rosters_bp.route("/api/export-csv", methods=["POST"])
-@login_required
+@supervisor_required
 def api_export_csv():
     d = request.get_json(force=True)
     group_id = d.get("group_id")
@@ -601,7 +601,7 @@ def api_export_csv():
 
 
 @rosters_bp.route("/api/export-xlsx", methods=["POST"])
-@login_required
+@supervisor_required
 def api_export_xlsx():
     d = request.get_json(force=True)
     group_id = d.get("group_id")

@@ -10,7 +10,7 @@ import json
 import logging
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import (db, DayModel, WeekTimePattern, WeekTimePatternDayModel,
                         WorkTimePatternModel, WorkTimePatternModelPattern,
                         EmployeeQuartile,
@@ -37,7 +37,7 @@ def _admin_or_supervisor():
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     return render_template("scheduling/config.html", user=user)
@@ -48,7 +48,7 @@ def index():
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/api/day-models")
-@login_required
+@supervisor_required
 def list_day_models():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -59,7 +59,7 @@ def list_day_models():
 
 
 @scheduling_config_bp.route("/api/day-models", methods=["POST"])
-@login_required
+@supervisor_required
 def save_day_model():
     user, err = _admin_or_supervisor()
     if err:
@@ -90,7 +90,7 @@ def save_day_model():
 
 
 @scheduling_config_bp.route("/api/day-models/<int:item_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_day_model(item_id):
     user, err = _admin_or_supervisor()
     if err:
@@ -111,7 +111,7 @@ def delete_day_model(item_id):
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/api/week-time-patterns")
-@login_required
+@supervisor_required
 def list_week_time_patterns():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -122,7 +122,7 @@ def list_week_time_patterns():
 
 
 @scheduling_config_bp.route("/api/week-time-patterns", methods=["POST"])
-@login_required
+@supervisor_required
 def save_week_time_pattern():
     user, err = _admin_or_supervisor()
     if err:
@@ -161,7 +161,7 @@ def save_week_time_pattern():
 
 
 @scheduling_config_bp.route("/api/week-time-patterns/<int:item_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_week_time_pattern(item_id):
     user, err = _admin_or_supervisor()
     if err:
@@ -182,7 +182,7 @@ def delete_week_time_pattern(item_id):
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/api/work-time-pattern-models")
-@login_required
+@supervisor_required
 def list_work_time_pattern_models():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -192,7 +192,7 @@ def list_work_time_pattern_models():
 
 
 @scheduling_config_bp.route("/api/work-time-pattern-models", methods=["POST"])
-@login_required
+@supervisor_required
 def save_work_time_pattern_model():
     user, err = _admin_or_supervisor()
     if err:
@@ -232,7 +232,7 @@ def save_work_time_pattern_model():
 
 
 @scheduling_config_bp.route("/api/work-time-pattern-models/<int:item_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_work_time_pattern_model(item_id):
     user, err = _admin_or_supervisor()
     if err:
@@ -253,7 +253,7 @@ def delete_work_time_pattern_model(item_id):
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/api/quartiles")
-@login_required
+@supervisor_required
 def list_quartiles():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -269,7 +269,7 @@ def list_quartiles():
 
 
 @scheduling_config_bp.route("/api/quartiles", methods=["POST"])
-@login_required
+@supervisor_required
 def save_quartile():
     user, err = _admin_or_supervisor()
     if err:
@@ -296,7 +296,7 @@ def save_quartile():
 
 
 @scheduling_config_bp.route("/api/quartiles/bulk", methods=["POST"])
-@login_required
+@supervisor_required
 def bulk_save_quartiles():
     """Bulk assign quartiles: {assignments: [{employee_id, schedule_quartile_id, planning_unit_id?}]}"""
     user, err = _admin_or_supervisor()
@@ -330,7 +330,7 @@ def bulk_save_quartiles():
 
 
 @scheduling_config_bp.route("/api/quartiles/<int:item_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_quartile(item_id):
     user, err = _admin_or_supervisor()
     if err:
@@ -355,7 +355,7 @@ def delete_quartile(item_id):
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_config_bp.route("/api/supporting-data")
-@login_required
+@supervisor_required
 def supporting_data():
     """Return planning units, shift templates, activities for the config forms."""
     user = get_current_user()

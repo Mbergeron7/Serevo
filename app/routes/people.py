@@ -11,7 +11,7 @@ from datetime import datetime
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, abort)
-from app.auth import login_required, admin_required, get_current_user
+from app.auth import login_required, admin_required, supervisor_required, get_current_user
 from app.constants import to_local
 from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         Employee, EmployeePlanningUnit,
@@ -71,7 +71,7 @@ def _sync_planning_units():
 
 
 @people_bp.route("/api/sync-planning-units", methods=["POST"])
-@login_required
+@supervisor_required
 def sync_planning_units():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -83,7 +83,7 @@ def sync_planning_units():
 
 # ── Roster View ──────────────────────────────────────────────
 @people_bp.route("/")
-@login_required
+@supervisor_required
 def roster():
     user = get_current_user()
 
@@ -194,7 +194,7 @@ def roster():
 
 # ── Export ───────────────────────────────────────────────────
 @people_bp.route("/export")
-@login_required
+@supervisor_required
 def export_roster():
     """Download the employee roster as an Excel file."""
     import io
@@ -275,7 +275,7 @@ def export_roster():
 
 # ── Accommodations ───────────────────────────────────────────
 @people_bp.route("/accommodations")
-@login_required
+@supervisor_required
 def accommodations():
     user = get_current_user()
 
@@ -300,7 +300,7 @@ def accommodations():
 
 # ── Leave of Absence ─────────────────────────────────────────
 @people_bp.route("/loa")
-@login_required
+@supervisor_required
 def loa():
     user = get_current_user()
 
@@ -342,7 +342,7 @@ def loa():
 
 
 @people_bp.route("/accommodations/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_accommodation():
     dg = _demo_guard()
     if dg:
@@ -359,7 +359,7 @@ def save_accommodation():
 
 
 @people_bp.route("/accommodations/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_accommodation():
     dg = _demo_guard()
     if dg:
@@ -378,14 +378,14 @@ def delete_accommodation():
 
 # ── PTO ──────────────────────────────────────────────────────
 @people_bp.route("/pto")
-@login_required
+@supervisor_required
 def pto():
     user = get_current_user()
     return render_template("people/pto.html", user=user)
 
 
 @people_bp.route("/pto/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_pto():
     dg = _demo_guard()
     if dg:
@@ -402,7 +402,7 @@ def save_pto():
 
 
 @people_bp.route("/pto/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_pto():
     dg = _demo_guard()
     if dg:
@@ -424,7 +424,7 @@ def delete_pto():
 # ── Availability ────────────────────────────────────────────
 # ── API: employee names (for other modules to use) ───────────
 @people_bp.route("/api/names")
-@login_required
+@supervisor_required
 def api_names():
     # Return DB employees with IDs for dropdowns
     emps = org_scope_emp().filter(Employee.status.in_(["Active", "active"])).order_by(Employee.last_name, Employee.first_name).all()
@@ -450,7 +450,7 @@ def _demo_guard():
 # ═══════════════════════════════════════════════════════════════
 
 @people_bp.route("/<emp_id>/profile")
-@login_required
+@supervisor_required
 def employee_profile(emp_id):
     user = get_current_user()
 
@@ -627,35 +627,35 @@ def employee_profile(emp_id):
 # ═══════════════════════════════════════════════════════════════
 
 @people_bp.route("/api/profile/contracts-list")
-@login_required
+@supervisor_required
 def profile_contracts_list():
     items = org_scope(Contract.query, Contract).filter_by(is_active=True).order_by(Contract.name).all()
     return jsonify({"items": [{"id": c.id, "name": c.name} for c in items]})
 
 
 @people_bp.route("/api/profile/selections-list")
-@login_required
+@supervisor_required
 def profile_selections_list():
     items = org_scope(Selection.query, Selection).filter_by(is_active=True).order_by(Selection.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
 
 
 @people_bp.route("/api/profile/shift-sequences-list")
-@login_required
+@supervisor_required
 def profile_shift_sequences_list():
     items = org_scope(ShiftSequence.query, ShiftSequence).filter_by(is_active=True).order_by(ShiftSequence.name).all()
     return jsonify({"items": [{"id": s.id, "name": s.name} for s in items]})
 
 
 @people_bp.route("/api/profile/rotation-models-list")
-@login_required
+@supervisor_required
 def profile_rotation_models_list():
     items = WorkTimePatternModel.query.filter_by(is_active=True).order_by(WorkTimePatternModel.name).all()
     return jsonify({"items": [{"id": m.id, "name": m.name} for m in items]})
 
 
 @people_bp.route("/api/profile/assign", methods=["POST"])
-@login_required
+@supervisor_required
 def profile_assign():
     dg = _demo_guard()
     if dg:
@@ -894,7 +894,7 @@ def profile_assign():
 
 
 @people_bp.route("/api/profile/unassign", methods=["POST"])
-@login_required
+@supervisor_required
 def profile_unassign():
     dg = _demo_guard()
     if dg:
@@ -952,7 +952,7 @@ def profile_unassign():
 
 
 @people_bp.route("/api/profile/delete-assignment", methods=["POST"])
-@login_required
+@supervisor_required
 def profile_delete_assignment():
     dg = _demo_guard()
     if dg:
@@ -987,7 +987,7 @@ def profile_delete_assignment():
 
 
 @people_bp.route("/api/profile/availability", methods=["POST"])
-@login_required
+@supervisor_required
 def profile_availability():
     dg = _demo_guard()
     if dg:
@@ -1032,7 +1032,7 @@ def profile_availability():
 # ── Coaching Sessions ─────────────────────────────────────────
 
 @people_bp.route("/api/coaching/list", methods=["POST"])
-@login_required
+@supervisor_required
 def coaching_list():
     data = request.get_json(silent=True) or {}
     emp_id = data.get("employee_id")
@@ -1057,7 +1057,7 @@ def coaching_list():
 
 
 @people_bp.route("/api/coaching/save", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def coaching_save():
     dg = _demo_guard()
@@ -1094,7 +1094,7 @@ def coaching_save():
 
 
 @people_bp.route("/api/coaching/delete", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def coaching_delete():
     dg = _demo_guard()
@@ -1115,7 +1115,7 @@ def coaching_delete():
 # ── Leave of Absence CRUD ─────────────────────────────────────────
 
 @people_bp.route("/api/loa/list", methods=["POST"])
-@login_required
+@supervisor_required
 def loa_list():
     data = request.get_json(silent=True) or {}
     emp_id = data.get("employee_id")
@@ -1127,7 +1127,7 @@ def loa_list():
 
 
 @people_bp.route("/api/loa/save", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def loa_save():
     dg = _demo_guard()
@@ -1159,7 +1159,7 @@ def loa_save():
 
 
 @people_bp.route("/api/loa/delete", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def loa_delete():
     dg = _demo_guard()
@@ -1178,7 +1178,7 @@ def loa_delete():
 # ── Expiry Warnings (LOA + Accommodations) ────────────────────────
 
 @people_bp.route("/api/expiry-warnings")
-@login_required
+@supervisor_required
 def expiry_warnings():
     """Return LOA and accommodation records expiring within 14 days."""
     today = _dt.date.today()
@@ -1235,7 +1235,7 @@ def expiry_warnings():
 # ── Attendance history for profile ───────────────────────────────
 
 @people_bp.route("/api/profile/attendance", methods=["POST"])
-@login_required
+@supervisor_required
 def profile_attendance():
     """Return recent attendance entries for an employee profile."""
     user = get_current_user()
@@ -1340,7 +1340,7 @@ def profile_attendance():
 # ── Attendance Event CRUD ───────────────────────────────────────
 
 @people_bp.route("/api/attendance-events", methods=["POST"])
-@login_required
+@supervisor_required
 def list_attendance_events():
     """List attendance events, optionally filtered by employee."""
     user = get_current_user()
@@ -1363,7 +1363,7 @@ def list_attendance_events():
 
 
 @people_bp.route("/api/attendance-events/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_attendance_event():
     """Create or update an attendance event."""
     user = get_current_user()
@@ -1423,7 +1423,7 @@ def save_attendance_event():
 
 
 @people_bp.route("/api/attendance-events/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_attendance_event():
     """Delete an attendance event."""
     user = get_current_user()
@@ -1447,7 +1447,7 @@ def delete_attendance_event():
 
 
 @people_bp.route("/api/adherence-codes", methods=["POST"])
-@login_required
+@supervisor_required
 def list_adherence_codes():
     """Return active adherence exception codes for dropdowns."""
     codes = AdherenceException.query.filter_by(is_active=True)\
@@ -1458,7 +1458,7 @@ def list_adherence_codes():
 # ── PTO / Time Off (DB-backed) ──────────────────────────────────
 
 @people_bp.route("/api/pto-entries", methods=["POST"])
-@login_required
+@supervisor_required
 def list_pto_entries():
     """Return PTO entries, optionally filtered."""
     user = get_current_user()
@@ -1505,7 +1505,7 @@ def list_pto_entries():
 
 
 @people_bp.route("/api/pto-entries/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_pto_entry():
     """Create a PTO entry (admin/supervisor adding directly)."""
     user = get_current_user()
@@ -1553,7 +1553,7 @@ def save_pto_entry():
 
 
 @people_bp.route("/api/pto-entries/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_pto_entry():
     """Delete a PTO entry."""
     user = get_current_user()
@@ -1577,7 +1577,7 @@ def delete_pto_entry():
 
 
 @people_bp.route("/api/pto-impact", methods=["POST"])
-@login_required
+@supervisor_required
 def pto_impact():
     """Return coverage impact of PTO for a given employee and date range.
 
@@ -1660,7 +1660,7 @@ def pto_impact():
 
 
 @people_bp.route("/api/time-off-types", methods=["POST"])
-@login_required
+@supervisor_required
 def list_time_off_types():
     """Return active time-off types for dropdowns."""
     types = TimeOffType.query.filter_by(is_active=True)\

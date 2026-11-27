@@ -9,7 +9,7 @@ import datetime
 from datetime import date
 
 from flask import (Blueprint, render_template, request, jsonify)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 
 log = logging.getLogger("serevo.forecasting")
 
@@ -32,7 +32,7 @@ from app.routes._utils import get_sheet as _get_sheet
 
 # ── Main view (forecast dashboard) ───────────────────────────
 @forecasting_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     from datetime import datetime as dt
     try:
@@ -74,7 +74,7 @@ def index():
 
 # ── View existing forecast data (API) ──────────────────────
 @forecasting_bp.route("/data", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_data():
     """
     POST JSON: {lob, start_date, end_date}
@@ -152,7 +152,7 @@ def forecast_data():
 
 # ── Generate forecast (API) ────────────────────────────────
 @forecasting_bp.route("/generate", methods=["POST"])
-@login_required
+@supervisor_required
 def generate():
     """
     POST JSON: {lob, method, historical_days, forecast_days, window?, service_level?, target_asa?, shrinkage?}
@@ -317,7 +317,7 @@ def generate():
 
 # ── What-if scenario (API) ─────────────────────────────────
 @forecasting_bp.route("/what-if", methods=["POST"])
-@login_required
+@supervisor_required
 def what_if():
     """
     POST JSON: {lob, start_date, end_date, volume_pct, aht_pct, service_level?, target_asa?, shrinkage?}
@@ -385,7 +385,7 @@ def what_if():
 
 # ── Accuracy (API) ─────────────────────────────────────────
 @forecasting_bp.route("/accuracy", methods=["POST"])
-@login_required
+@supervisor_required
 def accuracy():
     """
     POST JSON: {lob, start_date, end_date}
@@ -436,7 +436,7 @@ def accuracy():
 
 # ── Erlang C calculator (API) ──────────────────────────────
 @forecasting_bp.route("/erlang", methods=["POST"])
-@login_required
+@supervisor_required
 def erlang():
     """
     Standalone Erlang C calculator.
@@ -463,7 +463,7 @@ def erlang():
 
 # ── Generate & Save forecast from DB historical data ─────────
 @forecasting_bp.route("/generate-from-history", methods=["POST"])
-@login_required
+@supervisor_required
 def generate_from_history():
     """
     Generate a Serevo forecast from historical actuals in the database,
@@ -521,7 +521,7 @@ def generate_from_history():
 
 # ── Daily aggregated data API (for dashboard charts) ────────
 @forecasting_bp.route("/api/data", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_api_data():
     """Return daily aggregated forecast + requirements data for a LOB.
 
@@ -754,7 +754,7 @@ def forecast_api_data():
 
 # ── Interval-level data API (for daily intraday chart) ────────
 @forecasting_bp.route("/api/intervals", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_api_intervals():
     """Return interval-level forecast + requirements data for a LOB on a single day.
 
@@ -928,7 +928,7 @@ def forecast_api_intervals():
 # ═══════════════════════════════════════════════════════════════
 
 @forecasting_bp.route("/generate-retrospective", methods=["POST"])
-@login_required
+@supervisor_required
 def generate_retrospective():
     """Generate forecast data for past dates so the intraday view can
     show forecast-vs-actual comparisons on historical days.
@@ -984,7 +984,7 @@ def generate_retrospective():
 # ═══════════════════════════════════════════════════════════════
 
 @forecasting_bp.route("/reforecast", methods=["POST"])
-@login_required
+@supervisor_required
 def run_reforecast():
     """
     Generate a mid-day reforecast for a LOB.
@@ -1027,7 +1027,7 @@ def run_reforecast():
 
 
 @forecasting_bp.route("/reforecast/all", methods=["POST"])
-@login_required
+@supervisor_required
 def run_reforecast_all():
     """
     Run reforecasting for all active LOBs.
@@ -1057,7 +1057,7 @@ def run_reforecast_all():
 
 
 @forecasting_bp.route("/reforecast/alerts", methods=["POST"])
-@login_required
+@supervisor_required
 def reforecast_alerts():
     """
     Check for LOBs where actuals deviate significantly from forecast.
@@ -1090,7 +1090,7 @@ def reforecast_alerts():
 # ══════════════════════════════════════════════════════════════
 
 @forecasting_bp.route("/scenarios", methods=["POST"])
-@login_required
+@supervisor_required
 def list_scenarios():
     """List saved forecast scenarios for a LOB + year."""
     from app.models import ForecastScenario, PlanningUnit, org_scope_pu
@@ -1125,7 +1125,7 @@ def list_scenarios():
 
 
 @forecasting_bp.route("/scenarios/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_scenario():
     """Save current forecast settings as a named scenario."""
     from app.models import db, ForecastScenario, PlanningUnit, org_scope_pu
@@ -1194,7 +1194,7 @@ def save_scenario():
 
 
 @forecasting_bp.route("/scenarios/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_scenario():
     """Delete a saved scenario."""
     from app.models import db, ForecastScenario
@@ -1217,7 +1217,7 @@ def delete_scenario():
 
 
 @forecasting_bp.route("/scenarios/push", methods=["POST"])
-@login_required
+@supervisor_required
 def push_scenario():
     """Push a saved scenario to staffing requirements.
 

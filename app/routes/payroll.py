@@ -8,7 +8,7 @@ import logging
 from datetime import date, timedelta, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify, Response
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User, org_scope_emp, org_scope_schedule
 
 log = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ payroll_bp = Blueprint("payroll", __name__, url_prefix="/payroll")
 
 
 @payroll_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -25,7 +25,7 @@ def index():
 
 
 @payroll_bp.route("/api/employees", methods=["GET"])
-@login_required
+@supervisor_required
 def list_employees():
     """Return employees for filter dropdowns."""
     user = get_current_user()
@@ -52,7 +52,7 @@ def list_employees():
 
 
 @payroll_bp.route("/api/planning-units", methods=["GET"])
-@login_required
+@supervisor_required
 def list_planning_units():
     """Return distinct planning units for filter dropdown."""
     user = get_current_user()
@@ -71,7 +71,7 @@ def list_planning_units():
 
 
 @payroll_bp.route("/api/summary", methods=["POST"])
-@login_required
+@supervisor_required
 def payroll_summary():
     """Aggregate hours by employee for a date range."""
     user = get_current_user()
@@ -240,7 +240,7 @@ def payroll_summary():
 
 
 @payroll_bp.route("/api/export-csv", methods=["POST"])
-@login_required
+@supervisor_required
 def export_csv():
     """Export payroll summary as CSV."""
     user = get_current_user()
@@ -315,7 +315,7 @@ def export_csv():
 # ═══════════════════════════════════════════════════════════════
 
 @payroll_bp.route("/admin")
-@login_required
+@supervisor_required
 def punch_admin():
     """Admin page for reviewing / adjusting punch times."""
     user = get_current_user()
@@ -338,7 +338,7 @@ def _utc_iso(dt):
 
 
 @payroll_bp.route("/api/punches", methods=["POST"])
-@login_required
+@supervisor_required
 def list_punches():
     """List individual punch records for admin review."""
     user = get_current_user()
@@ -427,7 +427,7 @@ def list_punches():
 
 
 @payroll_bp.route("/api/punch/<int:punch_id>/adjust", methods=["POST"])
-@login_required
+@supervisor_required
 def adjust_punch(punch_id):
     """Admin adjusts clock_in / clock_out for a punch entry."""
     user = get_current_user()
@@ -482,7 +482,7 @@ def adjust_punch(punch_id):
 
 
 @payroll_bp.route("/api/punch/<int:punch_id>/approve", methods=["POST"])
-@login_required
+@supervisor_required
 def approve_punch(punch_id):
     """Admin approves or flags a punch entry."""
     user = get_current_user()
@@ -511,7 +511,7 @@ def approve_punch(punch_id):
 
 
 @payroll_bp.route("/api/punches/bulk-approve", methods=["POST"])
-@login_required
+@supervisor_required
 def bulk_approve():
     """Approve multiple punch entries at once."""
     user = get_current_user()

@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from sqlalchemy import func
 from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu, org_scope_schedule
 from app.constants import DEFAULT_TIMEZONE, to_local
@@ -33,7 +33,7 @@ def _resolve_employee(user):
 # ── Agent: clock in / out ─────────────────────────────────────────────
 
 @attendance_bp.route("/api/clock-in", methods=["POST"])
-@login_required
+@supervisor_required
 def clock_in():
     """Agent clocks in."""
     user = get_current_user()
@@ -71,7 +71,7 @@ def clock_in():
 
 
 @attendance_bp.route("/api/clock-out", methods=["POST"])
-@login_required
+@supervisor_required
 def clock_out():
     """Agent clocks out."""
     user = get_current_user()
@@ -102,7 +102,7 @@ def clock_out():
 
 
 @attendance_bp.route("/api/status", methods=["POST"])
-@login_required
+@supervisor_required
 def clock_status():
     """Get current clock status for the logged-in agent."""
     user = get_current_user()
@@ -131,7 +131,7 @@ def clock_status():
 
 
 @attendance_bp.route("/api/history", methods=["POST"])
-@login_required
+@supervisor_required
 def clock_history():
     """Get clock history for the logged-in agent."""
     user = get_current_user()
@@ -175,7 +175,7 @@ def clock_history():
 # ── Supervisor: attendance dashboard ──────────────────────────────────
 
 @attendance_bp.route("/")
-@login_required
+@supervisor_required
 def dashboard():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -186,7 +186,7 @@ def dashboard():
 
 
 @attendance_bp.route("/api/dashboard", methods=["POST"])
-@login_required
+@supervisor_required
 def api_dashboard():
     """Attendance dashboard data for supervisors."""
     user = get_current_user()
@@ -276,7 +276,7 @@ def api_dashboard():
 
 
 @attendance_bp.route("/api/weekly-hours", methods=["POST"])
-@login_required
+@supervisor_required
 def weekly_hours():
     """Return daily hours breakdown for the current week for the logged-in agent."""
     user = get_current_user()
@@ -345,7 +345,7 @@ def weekly_hours():
 # ═══════════════════════════════════════════════════════════════
 
 @attendance_bp.route("/api/events/range", methods=["POST"])
-@login_required
+@supervisor_required
 def events_for_range():
     """Return coded attendance events for a date range, keyed by employee_id+date."""
     data = request.get_json(silent=True) or {}
@@ -424,7 +424,7 @@ def seed_adherence_codes(app=None):
 # ── API: list exception codes ─────────────────────────────────
 
 @attendance_bp.route("/api/codes", methods=["GET"])
-@login_required
+@supervisor_required
 def list_codes():
     """Return active adherence exception codes."""
     codes = AdherenceException.query.filter_by(is_active=True)\
@@ -439,7 +439,7 @@ def list_codes():
 # ── API: list coded attendance events for a date ──────────────
 
 @attendance_bp.route("/api/events", methods=["POST"])
-@login_required
+@supervisor_required
 def list_events():
     """Return manually coded attendance events for a date (and optionally LOB)."""
     data = request.get_json(silent=True) or {}
@@ -466,7 +466,7 @@ def list_events():
 # ── API: create / update / delete attendance event ────────────
 
 @attendance_bp.route("/api/events/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_event():
     """Create or update an attendance event."""
     user = get_current_user()
@@ -524,7 +524,7 @@ def save_event():
 
 
 @attendance_bp.route("/api/events/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_event():
     """Delete an attendance event."""
     user = get_current_user()
@@ -550,7 +550,7 @@ def delete_event():
 # ── API: bulk auto-detect + code from schedule ────────────────
 
 @attendance_bp.route("/api/events/auto-detect", methods=["POST"])
-@login_required
+@supervisor_required
 def auto_detect():
     """Auto-detect absences from schedule vs agent status for a date.
     Creates AttendanceEvent records for anyone scheduled but not logged in."""

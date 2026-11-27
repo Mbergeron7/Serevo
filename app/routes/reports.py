@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from flask import Blueprint, jsonify, request, render_template, Response
 from sqlalchemy import func, and_
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import (
     db, Employee, Schedule, PTOEntry, ForecastInterval,
     QualityEvaluation, ShiftSwapRequest, ShiftBid, ShiftPost,
@@ -99,7 +99,7 @@ def _lob_name(emp):
 
 
 @reports_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -109,7 +109,7 @@ def index():
 
 
 @reports_bp.route("/api/summary", methods=["POST"])
-@login_required
+@supervisor_required
 def summary():
     """Return summary metrics for the reports dashboard."""
     user = _require_admin_or_sup()
@@ -285,7 +285,7 @@ def summary():
 
 
 @reports_bp.route("/api/attendance", methods=["POST"])
-@login_required
+@supervisor_required
 def attendance_report():
     """Attendance hours report — actual vs scheduled per employee."""
     user = _require_admin_or_sup()
@@ -343,7 +343,7 @@ def attendance_report():
 
 
 @reports_bp.route("/api/attendance/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def attendance_csv():
     """Download attendance report as CSV."""
     user = _require_admin_or_sup()
@@ -390,7 +390,7 @@ def attendance_csv():
 
 
 @reports_bp.route("/api/summary/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def summary_csv():
     """Download summary KPIs as CSV."""
     user = _require_admin_or_sup()
@@ -457,7 +457,7 @@ def summary_csv():
 # ═══════════════════════════════════════════════════════════════
 
 @reports_bp.route("/api/filters", methods=["POST"])
-@login_required
+@supervisor_required
 def report_filters():
     """Return available filter options: LOBs, team leads, employees."""
     user = _require_admin_or_sup()
@@ -487,7 +487,7 @@ def report_filters():
 # ── 1. Attendance (coded events) ──────────────────────────────
 
 @reports_bp.route("/api/attendance-coded", methods=["POST"])
-@login_required
+@supervisor_required
 def attendance_coded():
     """Attendance report from coded AttendanceEvent records."""
     user = _require_admin_or_sup()
@@ -585,7 +585,7 @@ def attendance_coded():
 
 
 @reports_bp.route("/api/attendance-coded/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def attendance_coded_csv():
     """CSV export of coded attendance events."""
     user = _require_admin_or_sup()
@@ -626,7 +626,7 @@ def attendance_coded_csv():
 # ── 2. Forecast Accuracy ─────────────────────────────────────
 
 @reports_bp.route("/api/forecast-accuracy", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_accuracy():
     """Forecast vs actual volume comparison."""
     user = _require_admin_or_sup()
@@ -765,7 +765,7 @@ def forecast_accuracy():
 
 
 @reports_bp.route("/api/forecast-accuracy/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_accuracy_csv():
     """CSV export of forecast accuracy."""
     user = _require_admin_or_sup()
@@ -818,7 +818,7 @@ def forecast_accuracy_csv():
 # ── 3. Schedule Coverage ─────────────────────────────────────
 
 @reports_bp.route("/api/coverage", methods=["POST"])
-@login_required
+@supervisor_required
 def coverage_report():
     """Schedule coverage: required vs scheduled staffing."""
     user = _require_admin_or_sup()
@@ -962,7 +962,7 @@ def coverage_report():
 
 
 @reports_bp.route("/api/coverage/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def coverage_csv():
     """CSV export of coverage report."""
     user = _require_admin_or_sup()
@@ -990,7 +990,7 @@ def coverage_csv():
 # ── 4. Agent Performance ─────────────────────────────────────
 
 @reports_bp.route("/api/agent-performance", methods=["POST"])
-@login_required
+@supervisor_required
 def agent_performance():
     """Agent scorecard: attendance + quality + hours."""
     user = _require_admin_or_sup()
@@ -1101,7 +1101,7 @@ def agent_performance():
 
 
 @reports_bp.route("/api/agent-performance/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def agent_performance_csv():
     """CSV export of agent performance."""
     user = _require_admin_or_sup()
@@ -1130,7 +1130,7 @@ def agent_performance_csv():
 # ── 5. PTO & Leave ───────────────────────────────────────────
 
 @reports_bp.route("/api/pto-leave", methods=["POST"])
-@login_required
+@supervisor_required
 def pto_leave():
     """PTO and Leave of Absence report."""
     user = _require_admin_or_sup()
@@ -1242,7 +1242,7 @@ def pto_leave():
 
 
 @reports_bp.route("/api/pto-leave/csv", methods=["POST"])
-@login_required
+@supervisor_required
 def pto_leave_csv():
     """CSV export of PTO & Leave."""
     user = _require_admin_or_sup()

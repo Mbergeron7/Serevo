@@ -15,7 +15,7 @@ import uuid
 from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
-from app.auth import login_required, admin_required, get_current_user
+from app.auth import login_required, admin_required, supervisor_required, get_current_user
 from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode, PlanningUnit, org_scope_emp, org_scope_pu, org_scope_schedule
 from app.constants import LOB_ALL_LABEL
 
@@ -98,7 +98,7 @@ def _query_schedules_for_lob(lob, start_date, end_date):
 
 # ── Main view ───────────────────────────────────────────────
 @scheduling_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
 
@@ -156,7 +156,7 @@ def index():
 
 # ── Cascading filter options (API) ─────────────────────────
 @scheduling_bp.route("/filter-options", methods=["POST"])
-@login_required
+@supervisor_required
 def filter_options():
     """Return selections, skills, and shift sequences filtered by LOB.
     When a LOB is selected, only return items linked to employees in that LOB.
@@ -264,7 +264,7 @@ def filter_options():
 
 # ── Generate schedule (API) ─────────────────────────────────
 @scheduling_bp.route("/generate", methods=["POST"])
-@login_required
+@supervisor_required
 def generate():
     """
     Generate shifts + coverage for a LOB and date range.
@@ -359,7 +359,7 @@ def generate():
 
 
 @scheduling_bp.route("/generate/status", methods=["GET"])
-@login_required
+@supervisor_required
 def generate_status():
     """Poll for async schedule generation results."""
     job_id = request.args.get("job_id", "")
@@ -543,7 +543,7 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode, shift_sequ
 
 # ── Coverage data (API) ────────────────────────────────────
 @scheduling_bp.route("/coverage", methods=["POST"])
-@login_required
+@supervisor_required
 def coverage():
     """
     Get coverage analysis for a single date.
@@ -698,7 +698,7 @@ def _demo_forecast_demand(lob, start_date, end_date):
 
 # ── Forecast demand heat map (API) ────────────────────────────
 @scheduling_bp.route("/forecast-demand", methods=["POST"])
-@login_required
+@supervisor_required
 def forecast_demand():
     """Return interval-level forecast demand for a PU and its children over a date range.
 
@@ -882,7 +882,7 @@ def forecast_demand():
 # ═════════════════════════════════════════════════════════════
 
 @scheduling_bp.route("/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_schedule():
     """
     Save a generated schedule to the database.
@@ -1029,7 +1029,7 @@ def save_schedule():
 
 
 @scheduling_bp.route("/load", methods=["POST"])
-@login_required
+@supervisor_required
 def load_schedule():
     """
     Load saved schedule from DB.
@@ -1231,7 +1231,7 @@ def load_schedule():
 
 
 @scheduling_bp.route("/shift/<int:shift_id>", methods=["PUT"])
-@login_required
+@supervisor_required
 def update_shift(shift_id):
     """
     Update a single shift's times, type, or status.
@@ -1269,7 +1269,7 @@ def update_shift(shift_id):
 
 
 @scheduling_bp.route("/shift", methods=["POST"])
-@login_required
+@supervisor_required
 def create_shift():
     """Create a single shift and save it to the DB immediately.
     POST JSON: {employee_id, date, start, end, type, segments?}
@@ -1332,7 +1332,7 @@ def create_shift():
 
 
 @scheduling_bp.route("/shift/<int:shift_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_shift(shift_id):
     """Delete a shift and its segments."""
     _u = get_current_user()
@@ -1353,7 +1353,7 @@ def delete_shift(shift_id):
 
 
 @scheduling_bp.route("/shift/<int:shift_id>/segment", methods=["POST"])
-@login_required
+@supervisor_required
 def add_segment(shift_id):
     """
     Add a segment to a shift.
@@ -1406,7 +1406,7 @@ def add_segment(shift_id):
 
 
 @scheduling_bp.route("/segment/<int:seg_id>", methods=["PUT"])
-@login_required
+@supervisor_required
 def update_segment(seg_id):
     """
     Update a segment.
@@ -1447,7 +1447,7 @@ def update_segment(seg_id):
 
 
 @scheduling_bp.route("/shift/<int:shift_id>/recalc-oncall", methods=["POST"])
-@login_required
+@supervisor_required
 def recalc_oncall(shift_id):
     """Recalculate on-call segments for a shift.
 
@@ -1543,7 +1543,7 @@ def recalc_oncall(shift_id):
 
 
 @scheduling_bp.route("/segment/<int:seg_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def delete_segment(seg_id):
     """Delete a segment."""
     _u = get_current_user()
@@ -1568,7 +1568,7 @@ def delete_segment(seg_id):
 # ═════════════════════════════════════════════════════════════
 
 @scheduling_bp.route("/export", methods=["POST"])
-@login_required
+@supervisor_required
 def export_csv():
     """
     Export schedule to CSV.
@@ -1628,7 +1628,7 @@ def export_csv():
 
 
 @scheduling_bp.route("/export-xlsx", methods=["POST"])
-@login_required
+@supervisor_required
 def export_xlsx():
     """Export schedule to Excel (.xlsx) with formatting."""
     try:
@@ -1708,7 +1708,7 @@ def export_xlsx():
 
 # ── Clear saved schedules ────────────────────────────────────
 @scheduling_bp.route("/clear", methods=["POST"])
-@login_required
+@supervisor_required
 def clear_schedule():
     """
     Delete all saved schedules for a LOB + date range.
@@ -1800,7 +1800,7 @@ def clear_schedule():
 
 # ── Copy Week ─────────────────────────────────────────────
 @scheduling_bp.route("/copy-week", methods=["POST"])
-@login_required
+@supervisor_required
 def copy_week():
     """
     Copy an entire week's schedule to a target week.
@@ -1909,7 +1909,7 @@ def copy_week():
 
 # ── Employees for LOB (API) ───────────────────────────────
 @scheduling_bp.route("/employees", methods=["POST"])
-@login_required
+@supervisor_required
 def employees_for_lob():
     """Return employees filtered by LOB for the employee picker."""
     try:
@@ -1989,7 +1989,7 @@ def employees_for_lob():
 # ── Import schedules from connected WFM system ───────────────
 @scheduling_bp.route("/import/wfm", methods=["POST"])
 @scheduling_bp.route("/import/wfm-api", methods=["POST"])  # backwards compat
-@login_required
+@supervisor_required
 def import_wfm():
     """POST JSON: {lob?, start_date, end_date}
     Pulls schedules from the connected WFM system into Serevo for the range.
@@ -2061,7 +2061,7 @@ def import_wfm():
 
 
 @scheduling_bp.route("/import/wfm/status", methods=["GET"])
-@login_required
+@supervisor_required
 def import_wfm_status():
     """Poll for background import status."""
     from app.capacity import planning as cp
@@ -2082,7 +2082,7 @@ def import_wfm_reset():
 
 # ── Helpers for manual shift entry ──────────────────────────
 @scheduling_bp.route("/segments/auto", methods=["POST"])
-@login_required
+@supervisor_required
 def segments_auto():
     """POST {start, end, type, existing_count?} → {segments:[...]} using the
     segment-code rules (break/lunch placement), staggered by existing_count."""
@@ -2101,7 +2101,7 @@ def segments_auto():
 
 
 @scheduling_bp.route("/shift-templates", methods=["POST"])
-@login_required
+@supervisor_required
 def shift_templates():
     """Active shift templates for the Add Shift picker."""
     user = get_current_user()
@@ -2136,7 +2136,7 @@ def _mins_to_time(m):
 
 
 @scheduling_bp.route("/mass-segment/suggest", methods=["POST"])
-@login_required
+@supervisor_required
 def mass_segment_suggest():
     """
     Suggest optimal segment placements for multiple shifts based on coverage.
@@ -2265,7 +2265,7 @@ def mass_segment_suggest():
 
 
 @scheduling_bp.route("/mass-segment/apply", methods=["POST"])
-@login_required
+@supervisor_required
 def mass_segment_apply():
     """
     Apply segments to multiple shifts at once.
@@ -2505,7 +2505,7 @@ def _optimize_demo_segments(payload):
 
 
 @scheduling_bp.route("/optimize-segments", methods=["POST"])
-@login_required
+@supervisor_required
 def optimize_segments():
     """
     Re-position break and lunch segments across shifts for a day to
@@ -2822,7 +2822,7 @@ def optimize_segments():
 
 
 @scheduling_bp.route("/mass-segment/cross-lob-shifts", methods=["POST"])
-@login_required
+@supervisor_required
 def mass_segment_cross_lob_shifts():
     """
     Fetch shifts across multiple LOBs for a given date, for the cross-LOB mass update.
@@ -2903,7 +2903,7 @@ def mass_segment_cross_lob_shifts():
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_bp.route("/bulk-edit", methods=["POST"])
-@login_required
+@supervisor_required
 def bulk_edit():
     """
     Apply the same change to multiple shifts at once.
@@ -3006,7 +3006,7 @@ def bulk_edit():
 
 
 @scheduling_bp.route("/score", methods=["POST"])
-@login_required
+@supervisor_required
 def get_schedule_score():
     """
     Score the current schedule.
@@ -3079,7 +3079,7 @@ def get_schedule_score():
 
 
 @scheduling_bp.route("/publish", methods=["POST"])
-@login_required
+@supervisor_required
 def publish_schedule():
     """Publish a week's schedule — sends in-app notifications to affected agents."""
     user = get_current_user()
@@ -3152,7 +3152,7 @@ def publish_schedule():
 # ═══════════════════════════════════════════════════════════════
 
 @scheduling_bp.route("/bidding")
-@login_required
+@supervisor_required
 def bidding_page():
     """Dedicated Shift Bidding page."""
     user = get_current_user()
@@ -3166,7 +3166,7 @@ def bidding_page():
                            lobs=lobs)
 
 @scheduling_bp.route("/bidding/generate", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_generate():
     """Generate shift slots for bidding based on LOB hours and employee contracts.
     Unlike regular scheduling which needs requirements data, this builds shifts
@@ -3383,7 +3383,7 @@ def bidding_generate():
 
 
 @scheduling_bp.route("/bidding/open", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_open():
     """Open a bidding window for a generated schedule range."""
     user = get_current_user()
@@ -3458,7 +3458,7 @@ def bidding_open():
 
 
 @scheduling_bp.route("/bidding/close", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_close():
     """Close bidding early."""
     user = get_current_user()
@@ -3490,7 +3490,7 @@ def bidding_close():
 
 
 @scheduling_bp.route("/bidding/status", methods=["GET"])
-@login_required
+@supervisor_required
 def bidding_status():
     """Get bidding window status for a LOB/date range."""
     user = get_current_user()
@@ -3548,7 +3548,7 @@ def bidding_status():
 
 
 @scheduling_bp.route("/bidding/lottery", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_lottery():
     """Run the fair lottery to assign shifts from preferences."""
     user = get_current_user()
@@ -3654,7 +3654,7 @@ def bidding_lottery():
 
 
 @scheduling_bp.route("/bidding/reset", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_reset():
     """Reset lottery — unassign employees from bidding shifts and reopen the window."""
     user = get_current_user()
@@ -3709,7 +3709,7 @@ def bidding_reset():
 
 
 @scheduling_bp.route("/bidding/cancel", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_cancel():
     """Cancel a bidding window — deletes the window, all preferences, and any remaining bidding shifts."""
     user = get_current_user()
@@ -3761,7 +3761,7 @@ def bidding_cancel():
 
 
 @scheduling_bp.route("/bidding/publish", methods=["POST"])
-@login_required
+@supervisor_required
 def bidding_publish():
     """Publish a schedule after lottery and notify agents."""
     user = get_current_user()
@@ -3823,7 +3823,7 @@ def bidding_publish():
 
 
 @scheduling_bp.route("/bidding/bids", methods=["GET"])
-@login_required
+@supervisor_required
 def bidding_bids():
     """Get all bids for a window (manager view)."""
     user = get_current_user()

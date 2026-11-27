@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 
 from flask import Blueprint, request, jsonify
-from app.auth import login_required
+from app.auth import supervisor_required
 from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability, User, org_scope_emp, org_scope_pu
 from app.constants import DEFAULT_TIMEZONE
 
@@ -68,7 +68,7 @@ def _parse_datetime(date_str, time_str):
 # ═══════════════════════════════════════════════════════════════
 
 @manual_entry_bp.route("/employees", methods=["GET"])
-@login_required
+@supervisor_required
 def list_employees():
     """Return all employees as JSON (for modal population)."""
     from app.auth import get_current_user
@@ -116,7 +116,7 @@ def list_employees():
 
 
 @manual_entry_bp.route("/employees/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_employee():
     """Create or update an employee."""
     dg = _demo_guard()
@@ -199,7 +199,7 @@ def save_employee():
 
 
 @manual_entry_bp.route("/employees/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_employee():
     """Permanently delete an employee record (for duplicate cleanup etc.)."""
     dg = _demo_guard()
@@ -234,7 +234,7 @@ def delete_employee():
 # ═══════════════════════════════════════════════════════════════
 
 @manual_entry_bp.route("/planning-units", methods=["GET"])
-@login_required
+@supervisor_required
 def list_planning_units():
     from app.auth import get_current_user
     user = get_current_user()
@@ -248,7 +248,7 @@ def list_planning_units():
 
 
 @manual_entry_bp.route("/skill-groups", methods=["GET"])
-@login_required
+@supervisor_required
 def list_skill_groups():
     from app.auth import get_current_user
     user = get_current_user()
@@ -265,7 +265,7 @@ def list_skill_groups():
 # ═══════════════════════════════════════════════════════════════
 
 @manual_entry_bp.route("/forecast/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_forecast_interval():
     """Create a single forecast interval or a batch."""
     dg = _demo_guard()
@@ -328,7 +328,7 @@ def save_forecast_interval():
 # ═══════════════════════════════════════════════════════════════
 
 @manual_entry_bp.route("/requirements/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_requirement_interval():
     """Create a single requirement interval or a batch."""
     dg = _demo_guard()
@@ -385,7 +385,7 @@ def save_requirement_interval():
 # ═══════════════════════════════════════════════════════════════
 
 @manual_entry_bp.route("/availability/<int:emp_id>", methods=["GET"])
-@login_required
+@supervisor_required
 def get_availability(emp_id):
     """Return availability entries for an employee."""
     from app.auth import get_current_user
@@ -412,7 +412,7 @@ def get_availability(emp_id):
 
 
 @manual_entry_bp.route("/availability/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_availability():
     """Save all 7 days of availability for an employee (bulk upsert)."""
     dg = _demo_guard()
@@ -461,7 +461,7 @@ def save_availability():
 
 
 @manual_entry_bp.route("/availability/employees-with", methods=["GET"])
-@login_required
+@supervisor_required
 def employees_with_availability():
     """Return list of employee IDs that have availability entries."""
     from app.auth import get_current_user

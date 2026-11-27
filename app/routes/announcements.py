@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import db, Announcement, User, org_scope
 
 log = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def _utcnow():
 # ── Management page (admin/supervisor) ─────────────────────
 
 @announce_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -30,7 +30,7 @@ def index():
 # ── Agent-facing: list active announcements ──────────────────
 
 @announce_bp.route("/api/active", methods=["POST"])
-@login_required
+@supervisor_required
 def active_announcements():
     """Return active (non-expired) announcements for the portal."""
     user = get_current_user()
@@ -61,7 +61,7 @@ def active_announcements():
 # ── Supervisor/Admin: manage announcements ───────────────────
 
 @announce_bp.route("/api/list", methods=["POST"])
-@login_required
+@supervisor_required
 def list_announcements():
     """All announcements for management view."""
     user = get_current_user()
@@ -92,7 +92,7 @@ def list_announcements():
 
 
 @announce_bp.route("/api/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_announcement():
     """Create or update an announcement."""
     user = get_current_user()
@@ -155,7 +155,7 @@ def save_announcement():
 
 
 @announce_bp.route("/api/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_announcement():
     """Delete an announcement."""
     user = get_current_user()

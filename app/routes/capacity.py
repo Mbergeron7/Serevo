@@ -12,7 +12,7 @@ import requests
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, jsonify, flash)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.capacity import planning as cp
 from app.constants import LOB_ALL_LABEL
 
@@ -48,7 +48,7 @@ def _get_worksheet(sheet, tab_name):
 
 # ── Control Panel ──────────────────────────────────────────────
 @capacity_bp.route("/panel")
-@login_required
+@supervisor_required
 def panel():
     user = get_current_user()
 
@@ -140,7 +140,7 @@ def panel():
 
 # ── Test Connection endpoint ───────────────────────────────────
 @capacity_bp.route("/test_connection")
-@login_required
+@supervisor_required
 def test_connection():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -157,7 +157,7 @@ def test_connection():
 
 # ── Refresh data from connected WFM system ─────────────────────
 @capacity_bp.route("/refresh", methods=["POST"])
-@login_required
+@supervisor_required
 def refresh():
     user = get_current_user()
     if user and user.get("is_demo"):
@@ -293,7 +293,7 @@ def refresh():
 
 # ── Single-day refresh (avoids Render 30s timeout) ────────────
 @capacity_bp.route("/refresh/day", methods=["POST"])
-@login_required
+@supervisor_required
 def refresh_day():
     """Pull forecast or requirements for ONE day only.
     The frontend loops day-by-day so each request finishes quickly."""
@@ -541,7 +541,7 @@ def _summary_rows(plan, months=None):
 
 
 @capacity_bp.route("/plan")
-@login_required
+@supervisor_required
 def plan_view():
     user = get_current_user()
     try:
@@ -622,14 +622,14 @@ def plan_view():
 
 # ── Capacity Summary (numeric) + Headcount ─────────────────────
 @capacity_bp.route("/")
-@login_required
+@supervisor_required
 def capacity_index():
     """Redirect main capacity page to the plan view."""
     return redirect(url_for("capacity.plan_view"))
 
 
 @capacity_bp.route("/summary")
-@login_required
+@supervisor_required
 def summary_view():
     user = get_current_user()
     try:
@@ -742,7 +742,7 @@ def summary_view():
 
 
 @capacity_bp.route("/summary/export")
-@login_required
+@supervisor_required
 def summary_export():
     """CSV export of the summary rows (opens in Excel)."""
     import csv, io
@@ -777,7 +777,7 @@ def summary_export():
 # ══════════════════════════════════════════════════════════════
 
 @capacity_bp.route("/sources")
-@login_required
+@supervisor_required
 def sources_view():
     """List all data sources with sync status."""
     user = get_current_user()
@@ -797,7 +797,7 @@ def sources_view():
 
 
 @capacity_bp.route("/sources/add", methods=["POST"])
-@login_required
+@supervisor_required
 def sources_add():
     """Create a new data source."""
     dg = _demo_guard()
@@ -833,7 +833,7 @@ def sources_add():
 
 
 @capacity_bp.route("/sources/<int:source_id>", methods=["PUT"])
-@login_required
+@supervisor_required
 def sources_update(source_id):
     """Update an existing data source."""
     dg = _demo_guard()
@@ -861,7 +861,7 @@ def sources_update(source_id):
 
 
 @capacity_bp.route("/sources/<int:source_id>", methods=["DELETE"])
-@login_required
+@supervisor_required
 def sources_delete(source_id):
     """Delete a data source (doesn't delete the ingested data)."""
     dg = _demo_guard()
@@ -880,7 +880,7 @@ def sources_delete(source_id):
 
 
 @capacity_bp.route("/sources/<int:source_id>/sync", methods=["POST"])
-@login_required
+@supervisor_required
 def sources_sync(source_id):
     """Sync one data source now."""
     dg = _demo_guard()
@@ -896,7 +896,7 @@ def sources_sync(source_id):
 
 
 @capacity_bp.route("/sources/sync-all", methods=["POST"])
-@login_required
+@supervisor_required
 def sources_sync_all():
     """Sync all active data sources."""
     dg = _demo_guard()
@@ -916,7 +916,7 @@ def sources_sync_all():
 # ══════════════════════════════════════════════════════════════
 
 @capacity_bp.route("/longrange")
-@login_required
+@supervisor_required
 def longrange_view():
     """1-5 year capacity projection with growth, attrition & hiring plan."""
     user = get_current_user()

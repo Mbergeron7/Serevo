@@ -10,7 +10,7 @@ import time
 import threading
 
 from flask import (Blueprint, render_template, request, jsonify)
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.constants import LOB_ALL_LABEL, to_local
 from app.utils.timezone import get_app_timezone
 
@@ -532,7 +532,7 @@ def _aggregate_service_level(user, date_obj):
 
 # ── Main view ───────────────────────────────────────────────
 @realtime_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     lobs = _all_lobs(user)
@@ -557,7 +557,7 @@ def index():
 
 # ── Combined bundle (snapshot + adherence + service level in one call) ──
 @realtime_bp.route("/api/bundle", methods=["POST"])
-@login_required
+@supervisor_required
 def api_bundle():
     """Single endpoint returning snapshot, adherence, and service-level data.
     Avoids 3 separate round-trips and triples generate_shifts calls."""
@@ -627,7 +627,7 @@ def api_bundle():
 
 # ── Intraday snapshot (API) ────────────────────────────────
 @realtime_bp.route("/snapshot", methods=["POST"])
-@login_required
+@supervisor_required
 def snapshot():
     """
     POST JSON: {lob, date?}
@@ -666,7 +666,7 @@ def snapshot():
 
 # ── Adherence (API) ────────────────────────────────────────
 @realtime_bp.route("/adherence", methods=["POST"])
-@login_required
+@supervisor_required
 def adherence():
     """
     POST JSON: {lob, date?}
@@ -705,7 +705,7 @@ def adherence():
 
 # ── Adherence Timeline (per-agent drill-down) ─────────────
 @realtime_bp.route("/adherence-timeline", methods=["POST"])
-@login_required
+@supervisor_required
 def adherence_timeline():
     """
     POST JSON: {lob, date?, employee_id}
@@ -970,7 +970,7 @@ def _calc_adherence_pct(scheduled, actual, shift_start, shift_end):
 
 # ── Leaderboard / Gamification (API) ──────────────────────
 @realtime_bp.route("/leaderboard", methods=["POST"])
-@login_required
+@supervisor_required
 def leaderboard():
     """
     POST JSON: {lob, date?}
@@ -1101,7 +1101,7 @@ def leaderboard():
 
 # ── Net Staffing (API) ─────────────────────────────────────
 @realtime_bp.route("/net-staffing", methods=["POST"])
-@login_required
+@supervisor_required
 def net_staffing():
     """
     POST JSON: {lob, date?}
@@ -1195,7 +1195,7 @@ def net_staffing():
 
 # ── Service level tracker (API) ────────────────────────────
 @realtime_bp.route("/service-level", methods=["POST"])
-@login_required
+@supervisor_required
 def service_level():
     """
     POST JSON: {lob, date?}
@@ -1238,7 +1238,7 @@ def service_level():
 import random as _random
 
 @realtime_bp.route("/optimize", methods=["POST"])
-@login_required
+@supervisor_required
 def optimize():
     """
     POST JSON: {lob, date?}
@@ -1473,7 +1473,7 @@ def _generate_optimization_recs(intervals, shifts, current_iv, lob, user):
 # ═════════════════════════════════════════════════════════════
 
 @realtime_bp.route("/reports")
-@login_required
+@supervisor_required
 def reports():
     from flask import redirect, url_for
     return redirect(url_for("realtime.index"))
@@ -1516,49 +1516,49 @@ def _run_report(fn):
 
 
 @realtime_bp.route("/reports/forecast", methods=["POST"])
-@login_required
+@supervisor_required
 def report_forecast():
     from app.realtime.reports import forecast_otf_report
     return _run_report(forecast_otf_report)
 
 
 @realtime_bp.route("/reports/interval", methods=["POST"])
-@login_required
+@supervisor_required
 def report_interval():
     from app.realtime.reports import interval_report
     return _run_report(interval_report)
 
 
 @realtime_bp.route("/reports/svl", methods=["POST"])
-@login_required
+@supervisor_required
 def report_svl():
     from app.realtime.reports import service_level_report
     return _run_report(service_level_report)
 
 
 @realtime_bp.route("/reports/absenteeism", methods=["POST"])
-@login_required
+@supervisor_required
 def report_absenteeism():
     from app.realtime.reports import absenteeism_report
     return _run_report(absenteeism_report)
 
 
 @realtime_bp.route("/reports/agent-status", methods=["POST"])
-@login_required
+@supervisor_required
 def report_agent_status():
     from app.realtime.reports import agent_status_report
     return _run_report(agent_status_report)
 
 
 @realtime_bp.route("/reports/efficiency", methods=["POST"])
-@login_required
+@supervisor_required
 def report_efficiency():
     from app.realtime.reports import efficiency_report
     return _run_report(efficiency_report)
 
 
 @realtime_bp.route("/reports/dashboard", methods=["POST"])
-@login_required
+@supervisor_required
 def report_dashboard():
     from app.realtime.reports import combined_dashboard
     return _run_report(combined_dashboard)
@@ -1569,7 +1569,7 @@ def report_dashboard():
 # ═══════════════════════════════════════════════════════════════
 
 @realtime_bp.route("/diagnostics/unmapped-queues", methods=["GET", "POST"])
-@login_required
+@supervisor_required
 def unmapped_queues():
     """Show queue IDs from recent actuals that have no CallRoute mapping."""
     from app.models import db, IntervalActual, CallRoute, PlanningUnit, org_scope_pu
@@ -1633,7 +1633,7 @@ def unmapped_queues():
 # ═══════════════════════════════════════════════════════════════
 
 @realtime_bp.route("/vto-ot")
-@login_required
+@supervisor_required
 def vto_ot_page():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -1644,7 +1644,7 @@ def vto_ot_page():
 
 
 @realtime_bp.route("/vto-ot/list", methods=["POST"])
-@login_required
+@supervisor_required
 def vto_ot_list():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -1679,7 +1679,7 @@ def vto_ot_list():
 
 
 @realtime_bp.route("/vto-ot/save", methods=["POST"])
-@login_required
+@supervisor_required
 def vto_ot_save():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -1748,7 +1748,7 @@ def vto_ot_save():
 
 
 @realtime_bp.route("/vto-ot/cancel", methods=["POST"])
-@login_required
+@supervisor_required
 def vto_ot_cancel():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -1771,7 +1771,7 @@ def vto_ot_cancel():
 # ── Live Agents API ──────────────────────────────────────────
 
 @realtime_bp.route("/api/live-agents", methods=["POST"])
-@login_required
+@supervisor_required
 def api_live_agents():
     """Return live agent status data grouped by LOB."""
     user = get_current_user()
@@ -2028,7 +2028,7 @@ def api_live_agents():
 
 
 @realtime_bp.route("/api/dismiss-unsched", methods=["POST"])
-@login_required
+@supervisor_required
 def api_dismiss_unsched():
     """Dismiss an unscheduled agent from the live view for today."""
     user = get_current_user()
@@ -2045,7 +2045,7 @@ def api_dismiss_unsched():
 
 
 @realtime_bp.route("/api/agent-detail", methods=["POST"])
-@login_required
+@supervisor_required
 def api_agent_detail():
     """Return detailed schedule + timeline for one agent."""
     user = get_current_user()
@@ -2159,7 +2159,7 @@ def api_agent_detail():
 
 
 @realtime_bp.route("/vto-ot/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def vto_ot_delete():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -2185,7 +2185,7 @@ def vto_ot_delete():
 # ═════════════════════════════════════════════════════════════
 
 @realtime_bp.route("/api/vto-ot-suggestions", methods=["POST"])
-@login_required
+@supervisor_required
 def vto_ot_suggestions():
     """Compare scheduled agents vs forecast requirements for the next 4 hours
     and return actionable VTO (overstaffed) / OT (understaffed) suggestions.

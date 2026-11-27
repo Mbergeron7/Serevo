@@ -4,7 +4,7 @@ Approvals — unified inbox for managers to approve/deny PTO, shift bids, and sh
 import logging
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, render_template
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import (
     db, PTOEntry, ShiftBid, ShiftPost, ShiftSwapRequest, Employee,
 )
@@ -26,7 +26,7 @@ def _require_manager():
 # ── Page ────────────────────────────────────────────────────────
 
 @approvals_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -38,7 +38,7 @@ def index():
 # ── Pending counts (badge) ─────────────────────────────────────
 
 @approvals_bp.route("/api/counts", methods=["POST"])
-@login_required
+@supervisor_required
 def pending_counts():
     user = _require_manager()
     if not user:
@@ -66,7 +66,7 @@ def pending_counts():
 # ── PTO list + approve/deny ────────────────────────────────────
 
 @approvals_bp.route("/api/pto", methods=["POST"])
-@login_required
+@supervisor_required
 def list_pto():
     user = _require_manager()
     if not user:
@@ -103,7 +103,7 @@ def list_pto():
 
 
 @approvals_bp.route("/api/pto/decide", methods=["POST"])
-@login_required
+@supervisor_required
 def decide_pto():
     user = _require_manager()
     if not user:
@@ -135,7 +135,7 @@ def decide_pto():
 # ── Shift bids list + approve/deny ─────────────────────────────
 
 @approvals_bp.route("/api/bids", methods=["POST"])
-@login_required
+@supervisor_required
 def list_bids():
     user = _require_manager()
     if not user:
@@ -173,7 +173,7 @@ def list_bids():
 
 
 @approvals_bp.route("/api/bids/decide", methods=["POST"])
-@login_required
+@supervisor_required
 def decide_bid():
     user = _require_manager()
     if not user:
@@ -213,7 +213,7 @@ def decide_bid():
 # ── Shift swaps list + approve/deny ────────────────────────────
 
 @approvals_bp.route("/api/swaps", methods=["POST"])
-@login_required
+@supervisor_required
 def list_swaps():
     user = _require_manager()
     if not user:
@@ -253,7 +253,7 @@ def list_swaps():
 
 
 @approvals_bp.route("/api/swaps/decide", methods=["POST"])
-@login_required
+@supervisor_required
 def decide_swap():
     user = _require_manager()
     if not user:

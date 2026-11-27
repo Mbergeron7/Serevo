@@ -8,7 +8,7 @@ import logging
 from datetime import date, timedelta, datetime
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.constants import LOB_ALL_LABEL
 from app.models import (
     db, Employee, Schedule, PTOEntry, PlanningUnit, ShiftSegment,
@@ -20,7 +20,7 @@ team_cal_bp = Blueprint("team_calendar", __name__, url_prefix="/team-calendar")
 
 
 @team_cal_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -30,7 +30,7 @@ def index():
 
 
 @team_cal_bp.route("/api/data", methods=["POST"])
-@login_required
+@supervisor_required
 def api_data():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):

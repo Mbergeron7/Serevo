@@ -6,7 +6,7 @@ import logging
 from io import BytesIO
 
 from flask import Blueprint, render_template, request, jsonify, send_file
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import db, Employee, EmployeeDocument, User, org_scope_emp
 
 log = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def _check_role(user):
 
 
 @employee_docs_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not _check_role(user):
@@ -41,7 +41,7 @@ def index():
 
 
 @employee_docs_bp.route("/api/list", methods=["POST"])
-@login_required
+@supervisor_required
 def list_docs():
     user = get_current_user()
     if not _check_role(user):
@@ -84,7 +84,7 @@ def list_docs():
 
 
 @employee_docs_bp.route("/api/upload", methods=["POST"])
-@login_required
+@supervisor_required
 def upload_doc():
     user = get_current_user()
     if not _check_role(user):
@@ -130,7 +130,7 @@ def upload_doc():
 
 
 @employee_docs_bp.route("/api/download/<int:doc_id>")
-@login_required
+@supervisor_required
 def download_doc(doc_id):
     user = get_current_user()
     if not _check_role(user):
@@ -154,7 +154,7 @@ def download_doc(doc_id):
 
 
 @employee_docs_bp.route("/api/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_doc():
     user = get_current_user()
     if not _check_role(user):

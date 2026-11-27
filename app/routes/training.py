@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import db, TrainingModule, TrainingAssignment, Employee, User, org_scope_emp
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def _check_role(user):
 
 
 @training_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not _check_role(user):
@@ -33,7 +33,7 @@ def index():
 # ── Modules CRUD ──────────────────────────────────────────────
 
 @training_bp.route("/api/modules", methods=["POST"])
-@login_required
+@supervisor_required
 def list_modules():
     user = get_current_user()
     if not _check_role(user):
@@ -63,7 +63,7 @@ def list_modules():
 
 
 @training_bp.route("/api/modules/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_module():
     user = get_current_user()
     if not _check_role(user):
@@ -101,7 +101,7 @@ def save_module():
 
 
 @training_bp.route("/api/modules/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_module():
     user = get_current_user()
     if not _check_role(user):
@@ -122,7 +122,7 @@ def delete_module():
 # ── Assignments ───────────────────────────────────────────────
 
 @training_bp.route("/api/assignments", methods=["POST"])
-@login_required
+@supervisor_required
 def list_assignments():
     user = get_current_user()
     if not _check_role(user):
@@ -167,7 +167,7 @@ def list_assignments():
 
 
 @training_bp.route("/api/assignments/assign", methods=["POST"])
-@login_required
+@supervisor_required
 def assign_training():
     user = get_current_user()
     if not _check_role(user):
@@ -236,7 +236,7 @@ def assign_training():
 
 
 @training_bp.route("/api/assignments/update", methods=["POST"])
-@login_required
+@supervisor_required
 def update_assignment():
     user = get_current_user()
     if not _check_role(user):
@@ -268,7 +268,7 @@ def update_assignment():
 
 
 @training_bp.route("/api/assignments/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_assignment():
     user = get_current_user()
     if not _check_role(user):

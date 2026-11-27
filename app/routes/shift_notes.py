@@ -5,7 +5,7 @@ import logging
 from datetime import date, timedelta, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import login_required, supervisor_required, get_current_user
 from app.models import db, ShiftNote, User
 
 log = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ def _utcnow():
 
 
 @shift_notes_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -26,7 +26,7 @@ def index():
 
 
 @shift_notes_bp.route("/api/list", methods=["POST"])
-@login_required
+@supervisor_required
 def list_notes():
     """Return shift notes for a date range."""
     user = get_current_user()
@@ -70,7 +70,7 @@ def list_notes():
 
 
 @shift_notes_bp.route("/api/save", methods=["POST"])
-@login_required
+@supervisor_required
 def save_note():
     """Create or update a shift note."""
     user = get_current_user()
@@ -108,7 +108,7 @@ def save_note():
 
 
 @shift_notes_bp.route("/api/resolve", methods=["POST"])
-@login_required
+@supervisor_required
 def resolve_note():
     """Toggle resolved status."""
     user = get_current_user()
@@ -128,7 +128,7 @@ def resolve_note():
 
 
 @shift_notes_bp.route("/api/delete", methods=["POST"])
-@login_required
+@supervisor_required
 def delete_note():
     """Delete a shift note."""
     user = get_current_user()

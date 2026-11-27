@@ -8,7 +8,7 @@ import logging
 import datetime as _dt
 
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, admin_required, get_current_user
+from app.auth import login_required, admin_required, supervisor_required, get_current_user
 from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration, PlanningUnit, org_scope_emp
 from app.constants import LOB_ALL_LABEL
 
@@ -19,7 +19,7 @@ quality_bp = Blueprint("quality", __name__, url_prefix="/quality",
 
 
 @quality_bp.route("/")
-@login_required
+@supervisor_required
 def index():
     user = get_current_user()
     lobs = [pu.name for pu in PlanningUnit.get_all_active()]
@@ -28,7 +28,7 @@ def index():
 
 # ── API: list evaluations ──────────────────────────────────────
 @quality_bp.route("/api/evaluations", methods=["POST"])
-@login_required
+@supervisor_required
 def api_evaluations():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
@@ -66,7 +66,7 @@ def api_evaluations():
 
 # ── API: dashboard stats ───────────────────────────────────────
 @quality_bp.route("/api/dashboard", methods=["POST"])
-@login_required
+@supervisor_required
 def api_dashboard():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
@@ -123,7 +123,7 @@ def api_dashboard():
 
 # ── API: save evaluation ───────────────────────────────────────
 @quality_bp.route("/api/evaluations/save", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def api_eval_save():
     user = get_current_user()
@@ -169,7 +169,7 @@ def api_eval_save():
 
 # ── API: delete evaluation ─────────────────────────────────────
 @quality_bp.route("/api/evaluations/delete", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def api_eval_delete():
     user = get_current_user()
@@ -199,7 +199,7 @@ import secrets as _secrets
 # ── Integration management (admin) ───────────────────────────
 
 @quality_bp.route("/api/integrations", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def api_integrations_list():
     """List configured analytics integrations."""
@@ -214,7 +214,7 @@ def api_integrations_list():
 
 
 @quality_bp.route("/api/integrations/save", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def api_integration_save():
     """Create or update an analytics integration."""
@@ -255,7 +255,7 @@ def api_integration_save():
 
 
 @quality_bp.route("/api/integrations/delete", methods=["POST"])
-@login_required
+@supervisor_required
 @admin_required
 def api_integration_delete():
     """Delete an analytics integration."""
@@ -396,7 +396,7 @@ def webhook_receive(webhook_key):
 # ── Agent performance merge (QM + adherence) ─────────────────
 
 @quality_bp.route("/api/agent-performance", methods=["POST"])
-@login_required
+@supervisor_required
 def api_agent_performance():
     """
     Merge quality scores with adherence data per agent.

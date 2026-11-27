@@ -4,7 +4,7 @@ Audit Log — admin-only view of all system activity.
 import logging
 from datetime import date, timedelta
 from flask import Blueprint, render_template, request, jsonify
-from app.auth import login_required, get_current_user
+from app.auth import admin_required, get_current_user
 from app.models import AuditLog
 
 log = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ audit_bp = Blueprint("audit", __name__, url_prefix="/audit-log")
 
 
 @audit_bp.route("/")
-@login_required
+@admin_required
 def index():
     user = get_current_user()
     if not user or user.get("role") != "admin":
@@ -21,7 +21,7 @@ def index():
 
 
 @audit_bp.route("/api/entries", methods=["POST"])
-@login_required
+@admin_required
 def list_entries():
     user = get_current_user()
     if not user or user.get("role") != "admin":
