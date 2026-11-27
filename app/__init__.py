@@ -146,6 +146,26 @@ def create_app():
         # The legacy _ensure_columns block was removed — run
         # `flask db upgrade` to apply any pending schema changes.
 
+    # Seed default organization if none exists
+    try:
+        from app.models import Organization
+        with app.app_context():
+            if Organization.query.first() is None:
+                default_org = Organization(
+                    name=cfg.BRAND_NAME or "Serevo",
+                    slug="default",
+                    timezone="America/Toronto",
+                )
+                db.session.add(default_org)
+                db.session.commit()
+                log.info("Seeded default organization: %s", default_org.name)
+    except Exception as e:
+        log.warning(f"seed_default_org() failed (may be expected on first run): {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
     # Seed the demo user if it doesn't exist (may fail on first run
     # before the is_demo migration has been applied — that's fine)
     try:
@@ -215,6 +235,7 @@ def create_app():
     from app.routes.scheduling_config import scheduling_config_bp
     from app.routes.realtime_sync import realtime_sync_bp
     from app.routes.rosters import rosters_bp
+    from app.routes.organizations import org_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -247,6 +268,7 @@ def create_app():
     app.register_blueprint(scheduling_config_bp)
     app.register_blueprint(realtime_sync_bp)
     app.register_blueprint(rosters_bp)
+    app.register_blueprint(org_bp)
 
     # Exempt blueprints whose POST endpoints are called via fetch() with
     # JSON payloads.  CSRF tokens are unnecessary for JSON requests —
@@ -260,7 +282,7 @@ def create_app():
         attendance_bp, announce_bp, payroll_bp, shift_notes_bp,
         employee_docs_bp, training_bp, support_bp, wfm_tickets_bp,
         scheduling_config_bp, realtime_sync_bp, notif_bp, search_bp,
-        agent_bp, audit_bp, rosters_bp,
+        agent_bp, audit_bp, rosters_bp, org_bp,
     ]:
         csrf.exempt(bp)
 

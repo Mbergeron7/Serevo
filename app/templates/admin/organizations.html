@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Organizations — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<style>
+  .org-page { max-width:960px; margin:0 auto; }
+  .org-page h1 { margin:0 0 4px; }
+  .org-page .subtitle { color:var(--text-muted); margin:0 0 1.5rem; font-size:.88rem; }
+  .org-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  .org-table th { text-align:left; padding:10px 12px; border-bottom:2px solid var(--border); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }
+  .org-table td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  .org-table tr:hover td { background:var(--hover); }
+  .org-name { font-weight:600; color:var(--text-primary); }
+  .org-slug { font-family:monospace; font-size:.8rem; color:var(--text-muted); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; }
+  .badge-active { background:#dcfce7; color:#15803d; }
+  .badge-inactive { background:#fee2e2; color:#991b1b; }
+  .org-actions { display:flex; gap:6px; }
+  .org-actions button { padding:4px 10px; font-size:.78rem; border-radius:4px; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-primary); }
+  .org-actions button:hover { background:var(--hover); }
+  .org-actions button.danger { color:#dc2626; }
+  .create-form { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; margin-bottom:1.5rem; }
+  .create-form h3 { margin:0 0 1rem; font-size:.95rem; }
+  .form-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .form-row .field { flex:1; min-width:160px; }
+  .form-row label { display:block; font-size:.78rem; font-weight:600; color:var(--text-muted); margin-bottom:4px; }
+  .form-row input { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:.88rem; background:var(--surface); color:var(--text-primary); }
+  .btn-create { padding:8px 20px; background:var(--brand-accent); color:#fff; border:none; border-radius:6px; font-size:.88rem; font-weight:600; cursor:pointer; }
+  .btn-create:hover { opacity:.9; }
+  /* User drawer */
+  .user-drawer { display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; margin:1rem 0; }
+  .user-drawer.open { display:block; }
+  .user-drawer h3 { margin:0 0 .8rem; font-size:.95rem; }
+  .user-list { list-style:none; padding:0; margin:0; }
+  .user-list li { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:.85rem; }
+  .user-list li:last-child { border-bottom:0; }
+  #createMsg { margin-top:8px; font-size:.82rem; }
+</style>
+
+<div class="org-page">
+  <h1>Organizations</h1>
+  <p class="subtitle">Manage client organizations. Each org has its own data, users, and settings.</p>
+
+  <!-- Create Form -->
+  <div class="create-form">
+    <h3>➕ Create Organization</h3>
+    <div class="form-row">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="orgName" placeholder="Acme Contact Centre">
+      </div>
+      <div class="field">
+        <label>Slug (URL-safe)</label>
+        <input type="text" id="orgSlug" placeholder="acme">
+      </div>
+      <div class="field">
+        <label>Timezone</label>
+        <input type="text" id="orgTz" placeholder="America/Toronto" value="America/Toronto">
+      </div>
+      <div class="field">
+        <label>Domain (optional)</label>
+        <input type="text" id="orgDomain" placeholder="acme.com">
+      </div>
+      <button class="btn-create" onclick="createOrg()">Create</button>
+    </div>
+    <div id="createMsg"></div>
+  </div>
+
+  <!-- Org Table -->
+  <div class="card" style="overflow-x:auto;">
+    <table class="org-table">
+      <thead>
+        <tr>
+          <th>Organization</th>
+          <th>Slug</th>
+          <th>Timezone</th>
+          <th>Users</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for org in orgs %}
+        <tr>
+          <td class="org-name">{{ org.name }}</td>
+          <td class="org-slug">{{ org.slug }}</td>
+          <td>{{ org.timezone }}</td>
+          <td>{{ org.user_count }}</td>
+          <td><span class="badge {{ 'badge-active' if org.is_active else 'badge-inactive' }}">{{ 'Active' if org.is_active else 'Inactive' }}</span></td>
+          <td>{{ org.created_at.strftime('%Y-%m-%d') if org.created_at else '—' }}</td>
+          <td class="org-actions">
+            <button onclick="toggleUsers({{ org.id }}, '{{ org.name }}')">Users</button>
+            <button onclick="switchToOrg({{ org.id }}, '{{ org.name }}')">Switch</button>
+            {% if org.user_count == 0 %}
+            <button class="danger" onclick="deleteOrg({{ org.id }}, '{{ org.name }}')">Delete</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not orgs %}
+        <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:2rem;">No organizations yet. Create one above.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- User Drawer (populated via JS) -->
+  <div class="user-drawer" id="userDrawer">
+    <h3 id="userDrawerTitle">Users</h3>
+    <div id="userDrawerBody"></div>
+  </div>
+</div>
+
+<script>
+const csrf = document.querySelector('meta[name=csrf-token]')?.content || '';
+const hdrs = {'Content-Type':'application/json'};
+if (csrf) hdrs['X-CSRFToken'] = csrf;
+
+async function createOrg() {
+  const name = document.getElementById('orgName').value.trim();
+  const slug = document.getElementById('orgSlug').value.trim();
+  const tz = document.getElementById('orgTz').value.trim();
+  const domain = document.getElementById('orgDomain').value.trim();
+  const msg = document.getElementById('createMsg');
+  if (!name) { msg.innerHTML = '<span style="color:#dc2626;">Name is required.</span>'; return; }
+  const r = await fetch('/admin/orgs/create', {method:'POST', headers:hdrs, body:JSON.stringify({name, slug, timezone:tz, domain})});
+  const d = await r.json();
+  if (d.success) {
+    msg.innerHTML = '<span style="color:#16a34a;">✓ Created "' + d.name + '"</span>';
+    setTimeout(() => location.reload(), 800);
+  } else {
+    msg.innerHTML = '<span style="color:#dc2626;">' + d.error + '</span>';
+  }
+}
+
+async function switchToOrg(orgId, orgName) {
+  const r = await fetch('/admin/orgs/switch', {method:'POST', headers:hdrs, body:JSON.stringify({org_id:orgId})});
+  const d = await r.json();
+  if (d.success) {
+    location.href = '/';
+  }
+}
+
+async function deleteOrg(orgId, orgName) {
+  if (!confirm('Delete organization "' + orgName + '"? This cannot be undone.')) return;
+  const r = await fetch('/admin/orgs/' + orgId + '/delete', {method:'POST', headers:hdrs});
+  const d = await r.json();
+  if (d.success) location.reload();
+  else alert(d.error);
+}
+
+async function toggleUsers(orgId, orgName) {
+  const drawer = document.getElementById('userDrawer');
+  const title = document.getElementById('userDrawerTitle');
+  const body = document.getElementById('userDrawerBody');
+  if (drawer.classList.contains('open') && drawer.dataset.orgId == orgId) {
+    drawer.classList.remove('open');
+    return;
+  }
+  drawer.dataset.orgId = orgId;
+  title.textContent = 'Users — ' + orgName;
+  body.innerHTML = '<p style="color:var(--text-muted); font-size:.85rem;">Loading...</p>';
+  drawer.classList.add('open');
+
+  const r = await fetch('/admin/orgs/' + orgId + '/users', {headers:hdrs});
+  const d = await r.json();
+  if (!d.success) { body.innerHTML = '<p style="color:#dc2626;">Error loading users.</p>'; return; }
+
+  let html = '';
+  if (d.users.length) {
+    html += '<p style="font-size:.82rem; color:var(--text-muted); margin-bottom:8px;">Assigned (' + d.users.length + ')</p><ul class="user-list">';
+    d.users.forEach(u => {
+      html += '<li><span>' + u.name + ' <span style="color:var(--text-muted);">(' + u.email + ', ' + u.role + ')</span></span>';
+      html += '<button onclick="assignUser(' + orgId + ',' + u.id + ',\'remove\')" style="font-size:.75rem; padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--surface); color:#dc2626;">Remove</button></li>';
+    });
+    html += '</ul>';
+  } else {
+    html += '<p style="font-size:.85rem; color:var(--text-muted);">No users assigned yet.</p>';
+  }
+
+  if (d.unassigned.length) {
+    html += '<p style="font-size:.82rem; color:var(--text-muted); margin:12px 0 8px;">Available to assign</p><ul class="user-list">';
+    d.unassigned.forEach(u => {
+      html += '<li><span>' + u.name + ' <span style="color:var(--text-muted);">(' + u.email + ')</span></span>';
+      html += '<button onclick="assignUser(' + orgId + ',' + u.id + ',\'assign\')" style="font-size:.75rem; padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--surface); color:var(--brand-accent);">Assign</button></li>';
+    });
+    html += '</ul>';
+  }
+  body.innerHTML = html;
+}
+
+async function assignUser(orgId, userId, action) {
+  const r = await fetch('/admin/orgs/' + orgId + '/assign-user', {method:'POST', headers:hdrs, body:JSON.stringify({user_id:userId, action})});
+  const d = await r.json();
+  if (d.success) {
+    toggleUsers(orgId, document.getElementById('userDrawerTitle').textContent.replace('Users — ', ''));
+    // Slight delay then re-toggle to refresh
+    setTimeout(() => toggleUsers(orgId, document.getElementById('userDrawerTitle').textContent.replace('Users — ', '')), 100);
+  }
+}
+
+// Auto-fill slug from name
+document.getElementById('orgName').addEventListener('input', function() {
+  const slugInput = document.getElementById('orgSlug');
+  if (!slugInput.dataset.manual) {
+    slugInput.value = this.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
+  }
+});
+document.getElementById('orgSlug').addEventListener('input', function() { this.dataset.manual = '1'; });
+</script>
+{% endblock %}

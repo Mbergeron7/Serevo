@@ -22,16 +22,33 @@ db = SQLAlchemy()
 
 class Organization(db.Model):
     """Tenant container. All data-bearing models should eventually carry
-    an organization_id FK so a single database can serve multiple clients.
-    Currently single-tenant; this model lays the groundwork."""
+    an organization_id FK so a single database can serve multiple clients."""
     __tablename__ = "organizations"
 
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(120), unique=True, nullable=False)
-    slug        = db.Column(db.String(60), unique=True, nullable=False)   # URL-safe identifier
-    timezone    = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
-    is_active   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=_utcnow)
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(120), unique=True, nullable=False)
+    slug          = db.Column(db.String(60), unique=True, nullable=False)   # URL-safe identifier
+    timezone      = db.Column(db.String(60), default=DEFAULT_TIMEZONE)
+    domain        = db.Column(db.String(200), nullable=True)               # client's domain (optional)
+    logo_url      = db.Column(db.String(500), nullable=True)               # client logo URL
+    settings_json = db.Column(db.Text, default="{}")                       # per-org config (JSON)
+    is_active     = db.Column(db.Boolean, default=True)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+
+    @property
+    def settings(self):
+        try:
+            return json.loads(self.settings_json or "{}")
+        except (json.JSONDecodeError, ValueError):
+            return {}
+
+    @settings.setter
+    def settings(self, val):
+        self.settings_json = json.dumps(val)
+
+    @property
+    def user_count(self):
+        return len(self.users) if self.users else 0
 
     def __repr__(self):
         return f"<Organization {self.slug}>"
@@ -44,21 +61,24 @@ class Organization(db.Model):
 class User(db.Model):
     __tablename__ = "users"
 
-    id            = db.Column(db.Integer, primary_key=True)
-    email         = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=True)  # nullable for demo accounts
-    display_name  = db.Column(db.String(120), nullable=False, default="")
-    role          = db.Column(db.String(20), nullable=False, default="supervisor")  # supervisor | admin | agent
-    is_demo       = db.Column(db.Boolean, default=False)
-    is_active     = db.Column(db.Boolean, default=True)
-    oauth_provider = db.Column(db.String(30), nullable=True)   # "google", "microsoft", etc.
-    oauth_id       = db.Column(db.String(255), nullable=True)  # provider's unique user ID
-    employee_id   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
-    wfm_access    = db.Column(db.Boolean, default=False)  # grants access to WFM ticketing tool
-    created_at    = db.Column(db.DateTime, default=_utcnow)
-    updated_at    = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+    id              = db.Column(db.Integer, primary_key=True)
+    email           = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash   = db.Column(db.String(255), nullable=True)  # nullable for demo accounts
+    display_name    = db.Column(db.String(120), nullable=False, default="")
+    role            = db.Column(db.String(20), nullable=False, default="supervisor")  # supervisor | admin | agent
+    is_demo         = db.Column(db.Boolean, default=False)
+    is_active       = db.Column(db.Boolean, default=True)
+    is_superadmin   = db.Column(db.Boolean, default=False)      # cross-org platform admin
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=True, index=True)
+    oauth_provider  = db.Column(db.String(30), nullable=True)   # "google", "microsoft", etc.
+    oauth_id        = db.Column(db.String(255), nullable=True)  # provider's unique user ID
+    employee_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    wfm_access      = db.Column(db.Boolean, default=False)  # grants access to WFM ticketing tool
+    created_at      = db.Column(db.DateTime, default=_utcnow)
+    updated_at      = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     employee      = db.relationship("Employee", backref="user_account", foreign_keys=[employee_id])
+    organization  = db.relationship("Organization", backref="users")
 
     def __repr__(self):
         return f"<User {self.email}>"

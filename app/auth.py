@@ -39,6 +39,27 @@ def get_current_user():
             emp_id = u.employee_id
         except Exception:
             pass
+        # Multi-tenant: resolve active organization
+        is_superadmin = False
+        try:
+            is_superadmin = bool(u.is_superadmin)
+        except Exception:
+            pass
+        org_id = session.get("active_org_id")
+        if not org_id:
+            try:
+                org_id = u.organization_id
+            except Exception:
+                pass
+        org_name = None
+        if org_id:
+            try:
+                from app.models import Organization
+                org = Organization.query.get(org_id)
+                if org:
+                    org_name = org.name
+            except Exception:
+                pass
         return {
             "id": u.id,
             "email": u.email,
@@ -50,6 +71,9 @@ def get_current_user():
             "employee_id": emp_id,
             "is_demo": _is_demo_user(u),
             "wfm_access": getattr(u, "wfm_access", False) or False,
+            "is_superadmin": is_superadmin,
+            "organization_id": org_id,
+            "organization_name": org_name,
         }
     except Exception:
         return None
@@ -105,6 +129,23 @@ def agent_required(f):
         if not user:
             return redirect(url_for("auth.login", next=request.path))
         if not user.get("is_agent") or not user.get("employee_id"):
+            return redirect("/")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def superadmin_required(f):
+    """Only allow platform super-admins (cross-org access)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            if _is_api_request():
+                return jsonify({"success": False, "error": "Not authenticated"}), 401
+            return redirect(url_for("auth.login", next=request.path))
+        if not user.get("is_superadmin"):
+            if _is_api_request():
+                return jsonify({"success": False, "error": "Super-admin access required"}), 403
             return redirect("/")
         return f(*args, **kwargs)
     return decorated
