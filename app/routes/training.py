@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
-from app.models import db, TrainingModule, TrainingAssignment, Employee, User
+from app.models import db, TrainingModule, TrainingAssignment, Employee, User, org_scope_emp
 
 log = logging.getLogger(__name__)
 training_bp = Blueprint("training", __name__, url_prefix="/training")
@@ -26,7 +26,7 @@ def index():
     user = get_current_user()
     if not _check_role(user):
         return "Forbidden", 403
-    employees = Employee.query.filter(Employee.status == "Active").order_by(Employee.last_name).all()
+    employees = org_scope_emp().filter(Employee.status == "Active").order_by(Employee.last_name).all()
     return render_template("training/index.html", user=user, employees=employees)
 
 

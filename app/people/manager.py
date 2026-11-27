@@ -117,10 +117,8 @@ def _get_employees_from_db():
     if cache_key in _emp_cache and now - _emp_cache_ts.get(cache_key, 0) < _EMP_CACHE_TTL:
         return _emp_cache[cache_key], None
     try:
-        from app.models import db, Employee
-        q = Employee.query
-        if _org_id:
-            q = q.filter(db.or_(Employee.organization_id == _org_id, Employee.organization_id.is_(None)))
+        from app.models import org_scope_emp, Employee
+        q = org_scope_emp()
         emps = q.order_by(Employee.last_name, Employee.first_name).all()
         if emps:
             # One-time back-fill: if some employees lack a planning_unit_id,

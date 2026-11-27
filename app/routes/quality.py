@@ -9,7 +9,7 @@ import datetime as _dt
 
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration, PlanningUnit
+from app.models import db, QualityEvaluation, Employee, AnalyticsIntegration, PlanningUnit, org_scope_emp
 from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.quality")
@@ -328,7 +328,7 @@ def webhook_receive(webhook_key):
             if employee_id:
                 employee = Employee.query.get(int(employee_id))
             if not employee and agent_ext_id:
-                employee = Employee.query.filter(
+                employee = org_scope_emp().filter(
                     (Employee.external_id_1 == str(agent_ext_id)) |
                     (Employee.external_id_2 == str(agent_ext_id))
                 ).first()

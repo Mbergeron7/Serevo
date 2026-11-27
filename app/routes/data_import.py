@@ -447,7 +447,8 @@ def bulk_actuals_chunk(job_id):
         with open(path, encoding="utf-8-sig") as f:
             job["_rows"] = list(csv.DictReader(f))
         os.remove(path)
-        job["_pu_map"] = {pu.name.lower(): pu.id for pu in PlanningUnit.query.all()}
+        from app.models import org_scope_pu
+        job["_pu_map"] = {pu.name.lower(): pu.id for pu in org_scope_pu().all()}
 
     rows = job["_rows"]
     pu_map = job["_pu_map"]
@@ -708,8 +709,8 @@ def process_chunk(job_id):
 @admin_required
 def debug_employees_all():
     """Diagnostic page: show all employees with key fields."""
-    from app.models import Employee
-    emps = Employee.query.order_by(Employee.employee_id).all()
+    from app.models import Employee, org_scope_emp
+    emps = org_scope_emp().order_by(Employee.employee_id).all()
     rows = []
     for e in emps:
         rows.append({
@@ -907,7 +908,8 @@ def _debug_capacity_alignment_inner():
                     for m in LobMapping.query.all()}
 
     # 2. Planning Units
-    pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    from app.models import org_scope_pu
+    pus = org_scope_pu().order_by(PlanningUnit.name).all()
     pu_id_to_name = {pu.id: pu.name for pu in pus}
     pu_info = {}
     for pu in pus:
@@ -934,8 +936,9 @@ def _debug_capacity_alignment_inner():
     _, last_day = calendar.monthrange(year, month)
     last_of_month = datetime.date(year, month, last_day)
 
+    from app.models import org_scope_emp
     employees = (
-        Employee.query
+        org_scope_emp()
         .filter(Employee.planning_unit_id.isnot(None))
         .filter(~Employee.status.in_(["Terminated", "terminated",
                                        "Deleted", "deleted"]))
@@ -2957,8 +2960,8 @@ def preview_sheet_sync():
                              if str(r.get("Status", "")).strip() == "Active")
 
     # Check how many already exist in DB
-    from app.models import Employee
-    existing_ids = {e.employee_id for e in Employee.query.with_entities(Employee.employee_id).all()}
+    from app.models import Employee, org_scope_emp
+    existing_ids = {e.employee_id for e in org_scope_emp().with_entities(Employee.employee_id).all()}
     sheet_ids = {str(r.get("Employee ID", "")).strip() for r in records}
     new_count = len(sheet_ids - existing_ids)
     update_count = len(sheet_ids & existing_ids)

@@ -7,7 +7,7 @@ from io import BytesIO
 
 from flask import Blueprint, render_template, request, jsonify, send_file
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, EmployeeDocument, User
+from app.models import db, Employee, EmployeeDocument, User, org_scope_emp
 
 log = logging.getLogger(__name__)
 employee_docs_bp = Blueprint("employee_docs", __name__, url_prefix="/employee-docs")
@@ -36,7 +36,7 @@ def index():
     user = get_current_user()
     if not _check_role(user):
         return "Forbidden", 403
-    employees = Employee.query.filter(Employee.status == "Active").order_by(Employee.last_name).all()
+    employees = org_scope_emp().filter(Employee.status == "Active").order_by(Employee.last_name).all()
     return render_template("employee_docs/index.html", user=user, employees=employees)
 
 

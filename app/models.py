@@ -16,6 +16,43 @@ from app.constants import DEFAULT_TIMEZONE
 db = SQLAlchemy()
 
 
+def _get_active_org_id():
+    """Return the active org_id from the Flask session, or None."""
+    try:
+        from flask import session as flask_session
+        org_id = flask_session.get("active_org_id")
+        if not org_id:
+            user_id = flask_session.get("user_id")
+            if user_id:
+                row = db.session.execute(
+                    db.text("SELECT organization_id FROM users WHERE id = :uid"),
+                    {"uid": user_id},
+                ).first()
+                if row:
+                    org_id = row[0]
+        return org_id
+    except (RuntimeError, Exception):
+        return None
+
+
+def org_scope_emp(query=None):
+    """Return an Employee query scoped to the active org."""
+    q = query if query is not None else Employee.query
+    org_id = _get_active_org_id()
+    if org_id:
+        q = q.filter(db.or_(Employee.organization_id == org_id, Employee.organization_id.is_(None)))
+    return q
+
+
+def org_scope_pu(query=None):
+    """Return a PlanningUnit query scoped to the active org."""
+    q = query if query is not None else PlanningUnit.query
+    org_id = _get_active_org_id()
+    if org_id:
+        q = q.filter(db.or_(PlanningUnit.organization_id == org_id, PlanningUnit.organization_id.is_(None)))
+    return q
+
+
 # ═══════════════════════════════════════════════════════════════
 # ORGANIZATION — Multi-tenancy foundation
 # ═══════════════════════════════════════════════════════════════

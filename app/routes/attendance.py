@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from app.auth import login_required, get_current_user
 from sqlalchemy import func
-from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException
+from app.models import db, Employee, TimeClock, Schedule, AttendanceEvent, AdherenceException, org_scope_emp, org_scope_pu
 from app.constants import DEFAULT_TIMEZONE, to_local
 
 log = logging.getLogger("serevo.attendance")
@@ -181,7 +181,7 @@ def dashboard():
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
     from app.models import PlanningUnit
-    planning_units = PlanningUnit.query.order_by(PlanningUnit.name).all()
+    planning_units = org_scope_pu().order_by(PlanningUnit.name).all()
     return render_template("attendance/index.html", user=user, planning_units=planning_units)
 
 
@@ -211,9 +211,9 @@ def api_dashboard():
     if lob_filter:
         # Filter by LOB (planning unit name)
         from app.models import PlanningUnit
-        pu = PlanningUnit.query.filter_by(name=lob_filter).first()
+        pu = org_scope_pu().filter_by(name=lob_filter).first()
         if pu:
-            lob_emp_ids = [e.id for e in Employee.query.filter_by(planning_unit_id=pu.id).all()]
+            lob_emp_ids = [e.id for e in org_scope_emp().filter_by(planning_unit_id=pu.id).all()]
             q = q.filter(TimeClock.employee_id.in_(lob_emp_ids) if lob_emp_ids else db.false())
     entries = q.order_by(TimeClock.clock_in).all()
 
@@ -617,7 +617,7 @@ def auto_detect():
     # Build employee name → DB id lookup
     emp_lookup = {}
     try:
-        emps = Employee.query.filter_by(status="Active").all()
+        emps = org_scope_emp().filter_by(status="Active").all()
         for emp in emps:
             emp_lookup[emp.full_name.lower()] = emp.id
             if emp.employee_id:

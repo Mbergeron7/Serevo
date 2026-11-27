@@ -9,7 +9,7 @@ from datetime import date, timedelta, datetime, timezone
 
 from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User
+from app.models import db, Employee, TimeClock, Schedule, PTOEntry, User, org_scope_emp
 
 log = logging.getLogger(__name__)
 payroll_bp = Blueprint("payroll", __name__, url_prefix="/payroll")
@@ -35,7 +35,7 @@ def list_employees():
         from app.demo_data import get_demo_payroll_employees
         return jsonify(employees=get_demo_payroll_employees())
     try:
-        q = Employee.query.order_by(Employee.last_name, Employee.first_name)
+        q = org_scope_emp().order_by(Employee.last_name, Employee.first_name)
         active_only = request.args.get("active_only", "1")
         if active_only == "1":
             q = q.filter(Employee.status == "Active")
@@ -125,7 +125,7 @@ def payroll_summary():
     elif filter_pu:
         pu_id_list = [int(filter_pu)]
     if pu_id_list:
-        pu_emp_ids = {e.id for e in Employee.query.filter(Employee.planning_unit_id.in_(pu_id_list)).all()}
+        pu_emp_ids = {e.id for e in org_scope_emp().filter(Employee.planning_unit_id.in_(pu_id_list)).all()}
 
     # Aggregate by employee
     emp_data = {}

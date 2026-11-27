@@ -715,7 +715,8 @@ def users():
     from app.models import User, Employee
     try:
         all_users = User.query.order_by(User.created_at.desc()).all()
-        all_employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()
+        from app.models import org_scope_emp
+        all_employees = org_scope_emp().filter_by(status="Active").order_by(Employee.last_name).all()
     except Exception as e:
         log.warning(f"users query failed: {e}")
         from app.models import db

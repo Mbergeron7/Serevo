@@ -931,7 +931,7 @@ def agents_by_lob():
             {"id": i, "name": n, "ext_id": ""} for i, n in enumerate(agents, 1)
         ])
 
-    from app.models import Employee, RosterGroup, RosterMember
+    from app.models import Employee, RosterGroup, RosterMember, org_scope_emp
 
     emp_list = []
     pu_id = int(lob_id) if lob_id and str(lob_id).isdigit() else None
@@ -939,7 +939,7 @@ def agents_by_lob():
     # 1) Direct: employees assigned to this planning unit
     if pu_id:
         try:
-            employees = Employee.query.filter_by(
+            employees = org_scope_emp().filter_by(
                 planning_unit_id=pu_id, status="Active"
             ).order_by(Employee.last_name, Employee.first_name).all()
             emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
@@ -964,7 +964,7 @@ def agents_by_lob():
     # 3) Fallback: all active employees
     if not emp_list:
         try:
-            employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
+            employees = org_scope_emp().filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
             emp_list = [{"id": e.id, "name": e.full_name, "ext_id": e.employee_id or ""} for e in employees]
         except Exception:
             pass

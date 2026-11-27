@@ -1572,7 +1572,7 @@ def report_dashboard():
 @login_required
 def unmapped_queues():
     """Show queue IDs from recent actuals that have no CallRoute mapping."""
-    from app.models import db, IntervalActual, CallRoute, PlanningUnit
+    from app.models import db, IntervalActual, CallRoute, PlanningUnit, org_scope_pu
     from datetime import date, datetime, timedelta
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
@@ -1638,7 +1638,7 @@ def vto_ot_page():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    from app.models import PlanningUnit
+    from app.models import PlanningUnit, org_scope_pu
     lobs = [pu.name for pu in PlanningUnit.get_all_active()]
     return render_template("realtime/vto_ot.html", user=user, lobs=lobs)
 
@@ -1649,7 +1649,7 @@ def vto_ot_list():
     user = get_current_user()
     if not user or user.get("role") not in ("admin", "supervisor"):
         return jsonify(error="Forbidden"), 403
-    from app.models import VTOOTPost, VTOOTSignup, Employee
+    from app.models import VTOOTPost, VTOOTSignup, Employee, org_scope_emp
     from datetime import date, timedelta
 
     payload = request.get_json(silent=True) or {}
@@ -1686,7 +1686,7 @@ def vto_ot_save():
         return jsonify(error="Forbidden"), 403
     if user.get("is_demo"):
         return jsonify(success=True, message="Demo mode")
-    from app.models import db, VTOOTPost, PlanningUnit
+    from app.models import db, VTOOTPost, PlanningUnit, org_scope_pu
     from datetime import datetime as dt
 
     payload = request.get_json(silent=True) or {}
@@ -1705,7 +1705,7 @@ def vto_ot_save():
 
     pu_id = None
     if lob:
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        pu = org_scope_pu().filter_by(name=lob).first()
         if pu:
             pu_id = pu.id
 
@@ -1793,7 +1793,7 @@ def api_live_agents():
                 return jsonify(_la_data)
 
     try:
-        from app.models import db, Employee, Schedule, ShiftSegment
+        from app.models import db, Employee, Schedule, ShiftSegment, org_scope_emp
 
         agent_now, now_est = _get_live_agents_from_sheet()
 
@@ -1805,7 +1805,7 @@ def api_live_agents():
 
         # Load active employees and build lookup by all ID fields
         # (CP user_id can match external_id_1, external_id_2, or employee_id)
-        employees = Employee.query.filter_by(status="Active").all()
+        employees = org_scope_emp().filter_by(status="Active").all()
         ext_id_map = {}   # external id → Employee
         emp_id_set = set() # all employee IDs for schedule query
         for emp in employees:
@@ -2063,7 +2063,7 @@ def api_agent_detail():
 
     # Real data: look up agent's schedule + current status from sheet
     try:
-        from app.models import db, Employee, Schedule
+        from app.models import db, Employee, Schedule, org_scope_emp
         from zoneinfo import ZoneInfo
         tz = get_app_timezone()
         now_est = datetime.datetime.now(tz).replace(tzinfo=None)
@@ -2071,7 +2071,7 @@ def api_agent_detail():
 
         # Find the employee by uid — match against all external ID fields
         emp = None
-        employees = Employee.query.filter_by(status="Active").all()
+        employees = org_scope_emp().filter_by(status="Active").all()
         for e in employees:
             if (e.external_id_1 and e.external_id_1.strip() == uid) or \
                (getattr(e, "external_id_2", None) and e.external_id_2.strip() == uid) or \
@@ -2195,7 +2195,8 @@ def vto_ot_suggestions():
     try:
         from app.models import (db, Schedule, ForecastInterval,
                                 RequirementInterval, PlanningUnit,
-                                EmployeePlanningUnit, Employee)
+                                EmployeePlanningUnit, Employee,
+                                org_scope_emp, org_scope_pu)
 
         payload = request.get_json(silent=True) or {}
         lob = (payload.get("lob") or "").strip() or LOB_ALL_LABEL
@@ -2214,14 +2215,14 @@ def vto_ot_suggestions():
                 lname = lname.strip()
                 if not lname or lname == LOB_ALL_LABEL:
                     continue
-                pu = PlanningUnit.query.filter(
+                pu = org_scope_pu().filter(
                     db.func.lower(PlanningUnit.name) == lname.lower()
                 ).first()
                 if pu:
                     pu_ids.append(pu.id)
         if not pu_ids:
             # All LOBs
-            pu_ids = [p.id for p in PlanningUnit.query.filter_by(is_active=True).all()]
+            pu_ids = [p.id for p in org_scope_pu().filter_by(is_active=True).all()]
 
         # Determine time window: now → +4 hours in 30-min intervals
         tz = get_app_timezone()
@@ -2253,7 +2254,7 @@ def vto_ot_suggestions():
             ).count()
 
             # Also count null-PU schedules for employees in these PUs
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
             ).all()}
             assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(

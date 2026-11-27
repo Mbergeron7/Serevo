@@ -12,6 +12,7 @@ from app.auth import login_required, get_current_user
 from app.constants import LOB_ALL_LABEL
 from app.models import (
     db, Employee, Schedule, PTOEntry, PlanningUnit, ShiftSegment,
+    org_scope_emp, org_scope_pu,
 )
 
 log = logging.getLogger("serevo.team_calendar")
@@ -71,14 +72,14 @@ def api_data():
     if lob_list:
         employees = []
         for _lname in lob_list:
-            pu = PlanningUnit.query.filter_by(name=_lname).first()
+            pu = org_scope_pu().filter_by(name=_lname).first()
             if pu:
                 employees.extend(Employee.employees_for_planning_unit(pu.id, week_start))
         # deduplicate by id
         seen = set()
         employees = [e for e in employees if e.id not in seen and not seen.add(e.id)]
     else:
-        employees = Employee.query.filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
+        employees = org_scope_emp().filter_by(status="Active").order_by(Employee.last_name, Employee.first_name).all()
 
     # Get schedules for the week
     sched_q = Schedule.query.filter(
@@ -86,7 +87,7 @@ def api_data():
         Schedule.schedule_date <= week_end,
     )
     if lob_list:
-        pu_ids = [pu.id for _lname in lob_list for pu in [PlanningUnit.query.filter_by(name=_lname).first()] if pu]
+        pu_ids = [pu.id for _lname in lob_list for pu in [org_scope_pu().filter_by(name=_lname).first()] if pu]
         if pu_ids:
             sched_q = sched_q.filter(Schedule.planning_unit_id.in_(pu_ids))
 

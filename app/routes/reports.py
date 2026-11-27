@@ -14,7 +14,7 @@ from app.models import (
     QualityEvaluation, ShiftSwapRequest, ShiftBid, ShiftPost,
     PlanningUnit, TimeClock, AttendanceEvent, AdherenceException,
     IntervalActual, RequirementInterval, LeaveOfAbsence,
-    EmployeePlanningUnit,
+    EmployeePlanningUnit, org_scope_emp, org_scope_pu,
 )
 
 log = logging.getLogger(__name__)
@@ -59,19 +59,19 @@ def _filter_employees(start_d, end_d, lob, team_lead, employee_id):
     EmployeePlanningUnit junction table so multi-PU assignments and
     recent PU changes are reflected immediately.
     """
-    q = Employee.query.filter_by(status="Active")
+    q = org_scope_emp().filter_by(status="Active")
     if employee_id:
         q = q.filter(Employee.id == int(employee_id))
     if lob:
         # Support comma-separated LOB names
         lob_names = [l.strip() for l in lob.split(",") if l.strip()]
         if lob_names:
-            pu_ids = [pu.id for pu in PlanningUnit.query.filter(
+            pu_ids = [pu.id for pu in org_scope_pu().filter(
                 db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
             ).all()]
             if pu_ids:
                 # Include employees via direct PU AND via junction table
-                direct_ids = {e.id for e in Employee.query.filter(
+                direct_ids = {e.id for e in org_scope_emp().filter(
                     Employee.planning_unit_id.in_(pu_ids),
                     Employee.status == "Active",
                 ).all()}
@@ -468,16 +468,16 @@ def report_filters():
         return jsonify(get_demo_report_filters())
 
     lobs = [{"id": pu.id, "name": pu.name}
-            for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+            for pu in org_scope_pu().filter_by(is_active=True).order_by(PlanningUnit.name).all()]
 
-    tls = [r[0] for r in db.session.query(Employee.team_lead).filter(
+    tls = [r[0] for r in org_scope_emp().with_entities(Employee.team_lead).filter(
         Employee.status == "Active",
         Employee.team_lead.isnot(None),
         Employee.team_lead != "",
     ).distinct().order_by(Employee.team_lead).all()]
 
     emps = [{"id": e.id, "name": e.full_name, "employee_id": e.employee_id}
-            for e in Employee.query.filter_by(status="Active")
+            for e in org_scope_emp().filter_by(status="Active")
             .order_by(Employee.last_name, Employee.first_name).all()]
 
     return jsonify(success=True, lobs=lobs, team_leads=tls, employees=emps)
@@ -660,7 +660,7 @@ def forecast_accuracy():
         pu_ids = None
         if lob:
             lob_names = [l.strip() for l in lob.split(",") if l.strip()]
-            pus = PlanningUnit.query.filter(
+            pus = org_scope_pu().filter(
                 db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
             ).all()
             pu_ids = [p.id for p in pus] if pus else []
@@ -720,9 +720,9 @@ def forecast_accuracy():
         # By LOB breakdown
         rows = []
         if pu_ids is not None:
-            pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all()
+            pus = org_scope_pu().filter(PlanningUnit.id.in_(pu_ids)).all()
         else:
-            pus = PlanningUnit.query.filter_by(is_active=True).all()
+            pus = org_scope_pu().filter_by(is_active=True).all()
         if pus:
             for pu in pus:
                 fc_lob_q = db.session.query(func.coalesce(func.sum(ForecastInterval.offered), 0)).filter(
@@ -780,7 +780,7 @@ def forecast_accuracy_csv():
 
     pu_ids = None
     if lob:
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         pu_ids = [pu.id] if pu else []
 
     fc_q = db.session.query(
@@ -841,7 +841,7 @@ def coverage_report():
         pu_ids = None
         if lob:
             lob_names = [l.strip() for l in lob.split(",") if l.strip()]
-            pus_match = PlanningUnit.query.filter(
+            pus_match = org_scope_pu().filter(
                 db.func.lower(PlanningUnit.name).in_([n.lower() for n in lob_names])
             ).all()
             pu_ids = [p.id for p in pus_match] if pus_match else []
@@ -918,9 +918,9 @@ def coverage_report():
         # By LOB
         rows = []
         if pu_ids is not None:
-            lob_pus = PlanningUnit.query.filter(PlanningUnit.id.in_(pu_ids)).all()
+            lob_pus = org_scope_pu().filter(PlanningUnit.id.in_(pu_ids)).all()
         else:
-            lob_pus = PlanningUnit.query.filter_by(is_active=True).all()
+            lob_pus = org_scope_pu().filter_by(is_active=True).all()
         if lob_pus:
             for pu in lob_pus:
                 # Average and peak required per interval for this LOB

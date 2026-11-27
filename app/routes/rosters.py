@@ -14,7 +14,7 @@ from flask import Blueprint, render_template, request, jsonify, Response
 from app.auth import login_required, admin_required, get_current_user
 from app.models import (db, RosterGroup, RosterMember, RosterSlot,
                          RosterRotationState, Employee, PlanningUnit, Schedule,
-                         SpecialDay)
+                         SpecialDay, org_scope_emp)
 from app.scheduling.roster_engine import (
     generate_roster, publish_roster, clear_roster_schedules, get_roster_calendar,
 )
@@ -49,7 +49,7 @@ def api_planning_units():
 @login_required
 def api_employees():
     pu_id = request.args.get("planning_unit_id", type=int)
-    q = Employee.query.filter_by(status="Active")
+    q = org_scope_emp().filter_by(status="Active")
     if pu_id:
         q = q.filter_by(planning_unit_id=pu_id)
     emps = q.order_by(Employee.last_name, Employee.first_name).all()

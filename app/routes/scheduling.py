@@ -16,7 +16,7 @@ from collections import defaultdict
 from flask import (Blueprint, render_template, request, jsonify,
                    Response)
 from app.auth import login_required, admin_required, get_current_user
-from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode
+from app.models import db, Schedule, ShiftSegment, Employee, SegmentCode, PlanningUnit, org_scope_emp, org_scope_pu
 from app.constants import LOB_ALL_LABEL
 
 log = logging.getLogger("serevo.scheduling")
@@ -63,17 +63,17 @@ def _query_schedules_for_lob(lob, start_date, end_date):
     if lob_list:
         pu_ids = []
         for lname in lob_list:
-            pu = PlanningUnit.query.filter(
+            pu = org_scope_pu().filter(
                 db.func.lower(PlanningUnit.name) == lname.lower()
             ).first()
             if pu:
                 pu_ids.append(pu.id)
         if not pu_ids:
             return []
-        direct_emp_ids = {e.id for e in Employee.query.filter(
+        direct_emp_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
         ).all()}
-        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+        assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
             EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
         ).all()}
         emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -192,7 +192,7 @@ def filter_options():
             # Find PUs for selected LOBs
             pu_ids = []
             for lname in lob_list:
-                pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lname.lower()).first()
+                pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lname.lower()).first()
                 if pu:
                     pu_ids.append(pu.id)
                     if pu.is_multi_activity:
@@ -201,7 +201,7 @@ def filter_options():
                 return jsonify({"success": True, "selections": [], "skills": [], "shift_sequences": []})
 
             # Get employee IDs in these LOBs
-            emp_ids = [e.id for e in Employee.query.filter(
+            emp_ids = [e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids),
                 Employee.status.notin_(["Inactive", "Terminated", "Deleted"]),
             ).all()]
@@ -464,14 +464,14 @@ def _do_generate(lob, start_date, end_date, shift_hrs, emp_ids, mode, shift_sequ
     existing_by_day = {}
     if mode == "fill":
         from app.models import PlanningUnit, EmployeePlanningUnit
-        pu = PlanningUnit.query.filter(
+        pu = org_scope_pu().filter(
             db.func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if pu:
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id == pu.id, Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
                 EmployeePlanningUnit.planning_unit_id == pu.id,
             ).all()}
             emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -624,7 +624,7 @@ def coverage():
             from app.models import PlanningUnit, LOBSetting
             from app.data_source import normalize_lob
             lob_norm = normalize_lob(str(lob).strip())
-            pu = PlanningUnit.query.filter_by(name=lob_norm).first()
+            pu = org_scope_pu().filter_by(name=lob_norm).first()
             if pu and pu.lob_setting and pu.lob_setting.service_level_target:
                 coverage_target = round(pu.lob_setting.service_level_target * 100, 1)
         except Exception:
@@ -727,12 +727,12 @@ def forecast_demand():
             return _demo_forecast_demand(lob, start_date, end_date)
 
         # Find the planning unit
-        unit = PlanningUnit.query.filter(
+        unit = org_scope_pu().filter(
             sa_func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not unit:
             lob_normalized = normalize_lob(lob)
-            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+            unit = org_scope_pu().filter_by(name=lob_normalized).first()
         if not unit:
             return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
 
@@ -833,7 +833,7 @@ def forecast_demand():
                 # Count scheduled agents per interval (include null-PU schedules)
                 if intervals:
                     from app.models import EmployeePlanningUnit as _EPU
-                    _d_eids = {e.id for e in Employee.query.filter(
+                    _d_eids = {e.id for e in org_scope_emp().filter(
                         Employee.planning_unit_id == pu.id, Employee.status == "Active").all()}
                     _a_eids = {ep.employee_id for ep in _EPU.query.filter(
                         _EPU.planning_unit_id == pu.id).all()}
@@ -917,7 +917,7 @@ def save_schedule():
             # Specific LOB — find PU and clear its schedules + null-PU schedules
             pu_ids = []
             for lname in lob_list:
-                pu = PlanningUnit.query.filter(
+                pu = org_scope_pu().filter(
                     db.func.lower(PlanningUnit.name) == lname.lower()
                 ).first()
                 if pu:
@@ -925,10 +925,10 @@ def save_schedule():
             pu_id = pu_ids[0] if len(pu_ids) == 1 else None
 
             if pu_ids:
-                direct_emp_ids = {e.id for e in Employee.query.filter(
+                direct_emp_ids = {e.id for e in org_scope_emp().filter(
                     Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
                 ).all()}
-                assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+                assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
                     EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
                 ).all()}
                 emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -957,7 +957,7 @@ def save_schedule():
         ext_ids = [str(s.get("employee_id", "")).strip() for s in shifts if s.get("employee_id")]
         emp_lookup = {}
         if ext_ids:
-            for emp in Employee.query.filter(Employee.employee_id.in_(ext_ids)).all():
+            for emp in org_scope_emp().filter(Employee.employee_id.in_(ext_ids)).all():
                 emp_lookup[emp.employee_id] = emp
 
         saved = 0
@@ -1077,7 +1077,7 @@ def load_schedule():
         if lob_list:
             pu_ids = []
             for lname in lob_list:
-                pu = PlanningUnit.query.filter(
+                pu = org_scope_pu().filter(
                     db.func.lower(PlanningUnit.name) == lname.lower()
                 ).first()
                 if pu:
@@ -1087,10 +1087,10 @@ def load_schedule():
             # Include schedules assigned to the PU OR belonging to employees in the PU
             # Check both Employee.planning_unit_id AND EmployeePlanningUnit assignments
             from app.models import EmployeePlanningUnit
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
                 EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
                 db.or_(EmployeePlanningUnit.valid_to.is_(None),
                        EmployeePlanningUnit.valid_to >= start_date),
@@ -1145,7 +1145,7 @@ def load_schedule():
                 agent_now, _ = _get_live_agents_from_sheet()
 
                 # Build ext-id → agent_now lookup
-                active_emps = Employee.query.filter_by(status="Active").all()
+                active_emps = org_scope_emp().filter_by(status="Active").all()
                 ext_to_emp_id = {}
                 emp_id_to_ext = {}
                 for emp in active_emps:
@@ -1289,7 +1289,7 @@ def create_shift():
             return jsonify({"success": False, "error": "employee_id, date, start, end required"})
 
         sched_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        emp = Employee.query.filter_by(employee_id=emp_ext_id).first()
+        emp = org_scope_emp().filter_by(employee_id=emp_ext_id).first()
         if not emp:
             return jsonify({"success": False, "error": f"Employee {emp_ext_id} not found"})
 
@@ -1745,7 +1745,7 @@ def clear_schedule():
             # Specific LOB(s) selected — find their PU ids
             pu_ids = []
             for lname in lob_list:
-                pu = PlanningUnit.query.filter(
+                pu = org_scope_pu().filter(
                     db.func.lower(PlanningUnit.name) == lname.lower()
                 ).first()
                 if pu:
@@ -1755,10 +1755,10 @@ def clear_schedule():
                 return jsonify({"success": True, "deleted": 0})
 
             # Find all employees in these PUs (direct + assigned)
-            direct_emp_ids = {e.id for e in Employee.query.filter(
+            direct_emp_ids = {e.id for e in org_scope_emp().filter(
                 Employee.planning_unit_id.in_(pu_ids), Employee.status == "Active"
             ).all()}
-            assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+            assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
                 EmployeePlanningUnit.planning_unit_id.in_(pu_ids),
             ).all()}
             emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -1828,17 +1828,17 @@ def copy_week():
                             "message": "Week copied (demo mode)."})
 
         from app.models import PlanningUnit, EmployeePlanningUnit, ShiftSegment
-        pu = PlanningUnit.query.filter(
+        pu = org_scope_pu().filter(
             db.func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not pu:
             return jsonify({"success": False, "error": "Planning unit not found"})
 
         # Build employee set for this PU (includes multi-PU employees)
-        direct_emp_ids = {e.id for e in Employee.query.filter(
+        direct_emp_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id == pu.id, Employee.status == "Active"
         ).all()}
-        assigned_emp_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+        assigned_emp_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
             EmployeePlanningUnit.planning_unit_id == pu.id,
         ).all()}
         emp_ids_in_pu = list(direct_emp_ids | assigned_emp_ids)
@@ -2844,7 +2844,7 @@ def mass_segment_cross_lob_shifts():
         # Get planning unit IDs for the requested LOBs
         pu_ids = []
         for lob_name in lobs:
-            pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob_name.lower()).first()
+            pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob_name.lower()).first()
             if pu:
                 pu_ids.append(pu.id)
 
@@ -3035,7 +3035,7 @@ def get_schedule_score():
         end_dt = datetime.datetime.strptime(end or start, "%Y-%m-%d").date()
 
         # Load saved schedule
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        pu = org_scope_pu().filter_by(name=lob).first()
         sched_filter = [
             Schedule.schedule_date >= start_dt,
             Schedule.schedule_date <= end_dt,
@@ -3107,7 +3107,7 @@ def publish_schedule():
         Schedule.schedule_date <= end_dt,
     )
     if lob:
-        pu = PlanningUnit.query.filter_by(name=lob).first()
+        pu = org_scope_pu().filter_by(name=lob).first()
         if pu:
             q = q.filter_by(planning_unit_id=pu.id)
 
@@ -3161,7 +3161,7 @@ def bidding_page():
         return render_template("scheduling/bidding.html",
                                lobs=list(DEMO_LOBS))
     from app.models import PlanningUnit
-    lobs = [pu.name for pu in PlanningUnit.query.filter_by(is_active=True).order_by(PlanningUnit.name).all()]
+    lobs = [pu.name for pu in org_scope_pu().filter_by(is_active=True).order_by(PlanningUnit.name).all()]
     return render_template("scheduling/bidding.html",
                            lobs=lobs)
 
@@ -3200,7 +3200,7 @@ def bidding_generate():
 
     try:
         from app.models import PlanningUnit, LOBSetting, EmployeePlanningUnit, PTOEntry
-        pu = PlanningUnit.query.filter(
+        pu = org_scope_pu().filter(
             db.func.lower(PlanningUnit.name) == lob_name.lower()
         ).first()
         if not pu:
@@ -3211,14 +3211,14 @@ def bidding_generate():
         default_shift_hrs = lob_set.default_shift_hrs if lob_set else 8.0
 
         # Get active employees in this LOB
-        direct_ids = {e.id for e in Employee.query.filter(
+        direct_ids = {e.id for e in org_scope_emp().filter(
             Employee.planning_unit_id == pu.id, Employee.status == "Active"
         ).all()}
-        assigned_ids = {epu.employee_id for epu in EmployeePlanningUnit.query.filter(
+        assigned_ids = {epu.employee_id for epu in Employeeorg_scope_pu().filter(
             EmployeePlanningUnit.planning_unit_id == pu.id
         ).all()}
         all_emp_ids = list(direct_ids | assigned_ids)
-        employees = Employee.query.filter(
+        employees = org_scope_emp().filter(
             Employee.id.in_(all_emp_ids), Employee.status == "Active"
         ).all() if all_emp_ids else []
 
@@ -3414,7 +3414,7 @@ def bidding_open():
 
     pu = None
     if lob and lob.lower() != "all":
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if not pu:
             return jsonify(success=False, error=f"Planning unit '{lob}' not found")
 
@@ -3529,7 +3529,7 @@ def bidding_status():
         BiddingWindow.end_date == end_dt,
     )
     if lob and lob.lower() != "all":
-        pu = PlanningUnit.query.filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
+        pu = org_scope_pu().filter(db.func.lower(PlanningUnit.name) == lob.lower()).first()
         if pu:
             q = q.filter(BiddingWindow.planning_unit_id == pu.id)
 

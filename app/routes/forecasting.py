@@ -245,12 +245,12 @@ def generate():
         is_demo_user = user and user.get("is_demo")
         if not is_demo_user and os.environ.get("DATA_SOURCE", "").strip().lower() == "postgres":
             try:
-                from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit
+                from app.models import db, ForecastInterval, RequirementInterval, PlanningUnit, org_scope_pu
                 from app.data_source import normalize_lob
                 from sqlalchemy import func as sa_func
 
                 lob_normalized = normalize_lob(lob)
-                unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+                unit = org_scope_pu().filter_by(name=lob_normalized).first()
                 if not unit:
                     unit = PlanningUnit(name=lob_normalized)
                     db.session.add(unit)
@@ -529,7 +529,7 @@ def forecast_api_data():
     Returns: {success, daily: [{date, offered, aht, agents_required, is_historic}], totals: {...}}
     """
     from app.models import (db, ForecastInterval, RequirementInterval,
-                            PlanningUnit, IntervalActual)
+                            PlanningUnit, IntervalActual, org_scope_pu)
     from app.data_source import normalize_lob
     from sqlalchemy import func as sa_func
     from collections import defaultdict
@@ -586,12 +586,12 @@ def forecast_api_data():
         from app.models import CallRoute
 
         # First try exact name match (finds sub-PUs like "PS Care FR")
-        unit = PlanningUnit.query.filter(
+        unit = org_scope_pu().filter(
             sa_func.lower(PlanningUnit.name) == lob.lower()
         ).first()
         if not unit:
             lob_normalized = normalize_lob(lob)
-            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+            unit = org_scope_pu().filter_by(name=lob_normalized).first()
         if not unit:
             return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
 
@@ -762,7 +762,7 @@ def forecast_api_intervals():
     Returns: {success, intervals: [{time, offered, aht, agents_required}]}
     """
     from app.models import (ForecastInterval, RequirementInterval,
-                            PlanningUnit, IntervalActual)
+                            PlanningUnit, IntervalActual, org_scope_pu)
     from app.data_source import normalize_lob
     from sqlalchemy import func as sa_func
 
@@ -796,14 +796,14 @@ def forecast_api_intervals():
         from app.models import CallRoute
 
         # First try exact name match (finds sub-PUs like "PS Care FR")
-        unit = PlanningUnit.query.filter(
+        unit = org_scope_pu().filter(
             sa_func.lower(PlanningUnit.name) == lob.lower()
         ).first()
 
         # Fall back to normalized name if no exact match
         if not unit:
             lob_normalized = normalize_lob(lob)
-            unit = PlanningUnit.query.filter_by(name=lob_normalized).first()
+            unit = org_scope_pu().filter_by(name=lob_normalized).first()
 
         if not unit:
             return jsonify({"success": False, "error": f"No planning unit found for '{lob}'"})
@@ -1093,7 +1093,7 @@ def reforecast_alerts():
 @login_required
 def list_scenarios():
     """List saved forecast scenarios for a LOB + year."""
-    from app.models import ForecastScenario, PlanningUnit
+    from app.models import ForecastScenario, PlanningUnit, org_scope_pu
     user = get_current_user()
 
     if user and user.get("is_demo"):
@@ -1113,7 +1113,7 @@ def list_scenarios():
 
     from app.data_source import normalize_lob
     lob_n = normalize_lob(lob)
-    unit = PlanningUnit.query.filter_by(name=lob_n).first()
+    unit = org_scope_pu().filter_by(name=lob_n).first()
     if not unit:
         return jsonify(success=True, scenarios=[])
 
@@ -1128,7 +1128,7 @@ def list_scenarios():
 @login_required
 def save_scenario():
     """Save current forecast settings as a named scenario."""
-    from app.models import db, ForecastScenario, PlanningUnit
+    from app.models import db, ForecastScenario, PlanningUnit, org_scope_pu
     dg = _demo_guard()
     if dg:
         return dg
@@ -1149,7 +1149,7 @@ def save_scenario():
 
     year = int(payload.get("year", dt.now(ZoneInfo(_get_tz())).year))
     lob_n = normalize_lob(lob)
-    unit = PlanningUnit.query.filter_by(name=lob_n).first()
+    unit = org_scope_pu().filter_by(name=lob_n).first()
     if not unit:
         unit = PlanningUnit(name=lob_n)
         db.session.add(unit)

@@ -33,13 +33,13 @@ def planning_units_page():
     if user and user.get("is_demo"):
         from app.demo_data import get_demo_planning_units_config
         return render_template("settings/planning_units.html", items=get_demo_planning_units_config(), activities=[])
-    from app.models import PlanningUnit, Employee, SegmentCode
+    from app.models import PlanningUnit, Employee, SegmentCode, org_scope_pu, org_scope_emp
     try:
-        pus = PlanningUnit.query.order_by(PlanningUnit.name).all()
+        pus = org_scope_pu().order_by(PlanningUnit.name).all()
         items = []
         for pu in pus:
             d = pu.to_dict()
-            d["employee_count"] = Employee.query.filter_by(planning_unit_id=pu.id).count()
+            d["employee_count"] = org_scope_emp().filter_by(planning_unit_id=pu.id).count()
             items.append(d)
         activities = [s.to_dict() for s in SegmentCode.query.filter_by(is_active=True).order_by(SegmentCode.label).all()]
         from app.models import PlanningCalendar

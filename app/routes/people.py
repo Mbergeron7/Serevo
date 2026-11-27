@@ -22,7 +22,8 @@ from app.models import (db, EmployeeAvailability, Schedule, Contract,
                         EmployeeQuartile, WeekTimePattern,
                         AttendanceEvent, AdherenceException,
                         PTOEntry, TimeOffType,
-                        LeaveOfAbsence, LEAVE_TYPES, Accommodation)
+                        LeaveOfAbsence, LEAVE_TYPES, Accommodation,
+                        org_scope_emp)
 
 log = logging.getLogger("serevo.people")
 
@@ -327,7 +328,7 @@ def loa():
 
     emp_list = []
     try:
-        emps = Employee.query.filter(Employee.status != "Terminated").order_by(Employee.last_name).all()
+        emps = org_scope_emp().filter(Employee.status != "Terminated").order_by(Employee.last_name).all()
         emp_list = [{"id": e.id, "name": e.full_name} for e in emps]
     except Exception:
         pass
@@ -426,7 +427,7 @@ def delete_pto():
 @login_required
 def api_names():
     # Return DB employees with IDs for dropdowns
-    emps = Employee.query.filter(Employee.status.in_(["Active", "active"])).order_by(Employee.last_name, Employee.first_name).all()
+    emps = org_scope_emp().filter(Employee.status.in_(["Active", "active"])).order_by(Employee.last_name, Employee.first_name).all()
     if emps:
         return jsonify({"names": [{"id": e.id, "name": e.full_name} for e in emps]})
     # Fallback to sheets-based names
@@ -1618,7 +1619,7 @@ def pto_impact():
     lob_name = pu.name
 
     # Count active employees in this LOB
-    active_count = Employee.query.filter_by(
+    active_count = org_scope_emp().filter_by(
         planning_unit_id=pu.id, status="Active"
     ).count()
 

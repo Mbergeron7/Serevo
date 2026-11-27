@@ -15,7 +15,7 @@ from app.models import (db, DayModel, WeekTimePattern, WeekTimePatternDayModel,
                         WorkTimePatternModel, WorkTimePatternModelPattern,
                         EmployeeQuartile,
                         Employee, PlanningUnit, ShiftTemplate,
-                        Activity)
+                        Activity, org_scope_emp)
 
 log = logging.getLogger("serevo.scheduling_config")
 
@@ -381,7 +381,7 @@ def supporting_data():
     try:
         emps = [{"id": e.id, "employee_id": e.employee_id, "name": e.full_name,
                  "planning_unit_id": e.planning_unit_id}
-                for e in Employee.query.filter_by(status="Active").order_by(Employee.last_name).all()]
+                for e in org_scope_emp().filter_by(status="Active").order_by(Employee.last_name).all()]
     except Exception:
         emps = []
     return jsonify(success=True, planning_units=pus, shift_templates=sts, activities=acts, employees=emps,

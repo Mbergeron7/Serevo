@@ -35,6 +35,8 @@ from app.models import (
     PlanningUnit,
     SegmentCode,
     db,
+    org_scope_emp,
+    org_scope_pu,
 )
 
 log = logging.getLogger("serevo.realtime_sync")

@@ -10,7 +10,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from app.auth import login_required
-from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability, User
+from app.models import db, Employee, PlanningUnit, ForecastInterval, RequirementInterval, EmployeeAvailability, User, org_scope_emp, org_scope_pu
 from app.constants import DEFAULT_TIMEZONE
 
 log = logging.getLogger("serevo.manual_entry")
@@ -33,7 +33,7 @@ def _get_or_create_unit(name):
     name = (name or "").strip()
     if not name:
         return None
-    unit = PlanningUnit.query.filter_by(name=name).first()
+    unit = org_scope_pu().filter_by(name=name).first()
     if not unit:
         unit = PlanningUnit(name=name)
         db.session.add(unit)
@@ -89,7 +89,7 @@ def list_employees():
             "timezone": e.get("Timezone", DEFAULT_TIMEZONE),
             "schedule_excluded": bool(e.get("Schedule Excluded")),
         } for i, e in enumerate(DEMO_EMPLOYEES)]})
-    emps = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+    emps = org_scope_emp().order_by(Employee.last_name, Employee.first_name).all()
     result = []
     for e in emps:
         pu = e.planning_unit
@@ -144,7 +144,7 @@ def save_employee():
                 return jsonify({"success": False, "error": "Employee not found."})
         else:
             # Check if employee_id already exists — if so, update it
-            existing = Employee.query.filter_by(employee_id=emp_id_str).first()
+            existing = org_scope_emp().filter_by(employee_id=emp_id_str).first()
             if existing:
                 emp = existing  # update existing record
             else:

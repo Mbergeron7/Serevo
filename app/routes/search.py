@@ -6,7 +6,7 @@ from datetime import date
 from flask import Blueprint, request, jsonify
 from sqlalchemy import or_
 from app.auth import login_required, get_current_user
-from app.models import db, Employee, Schedule, PTOEntry, PlanningUnit
+from app.models import db, Employee, Schedule, PTOEntry, PlanningUnit, org_scope_emp, org_scope_pu
 
 log = logging.getLogger(__name__)
 search_bp = Blueprint("search", __name__, url_prefix="/search")
@@ -35,7 +35,7 @@ def query():
 
     try:
         # Search employees
-        employees = Employee.query.filter(
+        employees = org_scope_emp().filter(
             or_(
                 Employee.first_name.ilike(search_term),
                 Employee.last_name.ilike(search_term),
@@ -57,12 +57,12 @@ def query():
 
         # Search planning units
         if user.get("role") in ("admin", "supervisor"):
-            units = PlanningUnit.query.filter(
+            units = org_scope_pu().filter(
                 PlanningUnit.name.ilike(search_term),
                 PlanningUnit.is_active == True
             ).limit(4).all()
             for pu in units:
-                emp_count = Employee.query.filter_by(
+                emp_count = org_scope_emp().filter_by(
                     planning_unit_id=pu.id, status="Active"
                 ).count()
                 results.append({

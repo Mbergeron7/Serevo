@@ -9,7 +9,7 @@ from datetime import date
 
 from flask import Blueprint, render_template, redirect, session
 from app.auth import get_current_user
-from app.models import db, Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest, CallRoute, IntervalActual, AppSetting
+from app.models import Employee, PlanningUnit, Schedule, PTOEntry, ShiftBid, ShiftSwapRequest, CallRoute, IntervalActual, AppSetting
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -33,13 +33,9 @@ def index():
         from app.models import ForecastInterval
         today = date.today()
         try:
-            from app.auth import get_active_org_id
-            _org_id = get_active_org_id()
-            emp_q = Employee.query
-            if _org_id:
-                emp_q = emp_q.filter(db.or_(Employee.organization_id == _org_id, Employee.organization_id.is_(None)))
-            emp_count = emp_q.count()
-            pu_count = len(PlanningUnit.get_all_active(org_id=_org_id))
+            from app.models import org_scope_emp
+            emp_count = org_scope_emp().count()
+            pu_count = len(PlanningUnit.get_all_active())
             from app.models import TimeClock
             live_stats = {
                 "total_employees": emp_count,

@@ -120,11 +120,11 @@ def panel():
 
     # Employee count from Serevo's own roster (API pulls land here)
     try:
-        from app.models import Employee
-        db_count = Employee.query.filter(Employee.status != "Inactive").count()
+        from app.models import Employee, org_scope_emp
+        db_count = org_scope_emp().filter(Employee.status != "Inactive").count()
         if db_count:
             status["emp_count"] = db_count
-            latest = Employee.query.order_by(Employee.updated_at.desc()).first() if hasattr(Employee, "updated_at") else None
+            latest = org_scope_emp().order_by(Employee.updated_at.desc()).first() if hasattr(Employee, "updated_at") else None
             status["emp_updated"] = latest.updated_at.strftime("%Y-%m-%d %H:%M") if latest and latest.updated_at else "in database"
     except Exception:
         log.warning("Failed to query employee count from DB", exc_info=True)
@@ -557,9 +557,9 @@ def plan_view():
         # If no plan data for this year, still show all configured LOBs
         if not all_lobs and not (user and user.get("is_demo")):
             try:
-                from app.models import PlanningUnit
+                from app.models import PlanningUnit, org_scope_pu
                 all_lobs = sorted(
-                    pu.name for pu in PlanningUnit.query
+                    pu.name for pu in org_scope_pu()
                     .filter_by(is_active=True).order_by(PlanningUnit.name).all()
                 )
             except Exception:
@@ -647,9 +647,9 @@ def summary_view():
         # If no plan data for this year, still show all configured LOBs
         if not all_lobs and not (user and user.get("is_demo")):
             try:
-                from app.models import PlanningUnit
+                from app.models import PlanningUnit, org_scope_pu
                 all_lobs = sorted(
-                    pu.name for pu in PlanningUnit.query
+                    pu.name for pu in org_scope_pu()
                     .filter_by(is_active=True).order_by(PlanningUnit.name).all()
                 )
             except Exception:
