@@ -13,6 +13,18 @@ from flask_bcrypt import Bcrypt
 from flask_wtf.csrf import CSRFProtect
 from config import cfg
 
+# Rate limiter — uses in-memory storage (suitable for single-instance Render)
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=[],  # no global limit — applied per-route
+        storage_uri="memory://",
+    )
+except ImportError:
+    limiter = None
+
 # Configure root serevo logger — ensures all serevo.* logs go to stdout
 _serevo_logger = logging.getLogger("serevo")
 if not _serevo_logger.handlers:
@@ -90,6 +102,8 @@ def create_app():
         static_folder="static",
     )
     app.secret_key = cfg.SECRET_KEY
+    if app.secret_key == "change-me":
+        log.warning("⚠️  WFM_SECRET_KEY is using the default value — set it in your environment for production!")
 
     # ---- session security ----
     app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -109,6 +123,8 @@ def create_app():
     db.init_app(app)
     bcrypt.init_app(app)
     csrf.init_app(app)
+    if limiter:
+        limiter.init_app(app)
 
     from flask_migrate import Migrate
     Migrate(app, db)
@@ -248,6 +264,12 @@ def create_app():
     ]:
         csrf.exempt(bp)
 
+    # ---- rate limiting on sensitive endpoints ----
+    if limiter:
+        limiter.limit("5 per minute")(app.view_functions["auth.login"])
+        limiter.limit("3 per minute")(app.view_functions["auth.setup"])
+        limiter.limit("3 per minute")(app.view_functions["auth.admin_setup"])
+
     # ---- APScheduler: periodic realtime data sync ----
     _start_scheduler(app)
 
@@ -256,6 +278,13 @@ def create_app():
         """True when the caller expects JSON, not an HTML error page."""
         from app.auth import _is_api_request
         return _is_api_request()
+
+    @app.errorhandler(429)
+    def rate_limit_exceeded(e):
+        if _wants_json():
+            return jsonify({"success": False, "error": "Too many requests. Please wait a moment and try again."}), 429
+        from flask import render_template
+        return "<h2>Too many requests</h2><p>Please wait a moment and try again.</p>", 429
 
     @app.errorhandler(400)
     def bad_request(e):
@@ -292,9 +321,20 @@ def create_app():
         from flask import render_template
         return render_template("500.html"), 500
 
-    # ---- prevent browser caching of HTML pages ----
+    # ---- security headers + prevent browser caching of HTML pages ----
     @app.after_request
-    def _no_cache_html(response):
+    def _security_headers(response):
+        # Prevent clickjacking
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        # Prevent MIME-type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # XSS protection (legacy browsers)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # Referrer policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Permissions policy — disable unused browser features
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # No cache for HTML pages
         if response.content_type and "text/html" in response.content_type:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"

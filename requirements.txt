@@ -17,6 +17,7 @@ flask-migrate~=4.0
 psycopg2-binary~=2.9
 flask-bcrypt~=1.0
 flask-wtf~=1.2
+flask-limiter~=3.5
 
 # ML forecasting
 scikit-learn~=1.4
