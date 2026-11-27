@@ -607,9 +607,11 @@ def auto_detect():
     try:
         report = absenteeism_report(lobs, d, user=user)
     except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
         db.session.rollback()
-        log.error(f"Auto-detect absenteeism_report error: {e}", exc_info=True)
-        return jsonify(error=f"Report failed: {str(e)[:200]}"), 500
+        log.error(f"Auto-detect absenteeism_report error: {tb}")
+        return jsonify(error=f"Report failed: {str(e)[:300]}", traceback=tb[-500:]), 500
 
     log.info(f"Auto-detect for {d}: absent={len(report.get('absent', []))}, "
              f"late={len(report.get('late', []))}, early={len(report.get('early_leave', []))}, "
